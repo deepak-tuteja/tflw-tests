@@ -1,0 +1,14 @@
+# sessions.tflw — the `shopper` session showcases tflw's cookie-based auth transport (the
+# `admin` bearer session is exercised throughout the rest of this suite). Both tests opt into
+# the same session; its login runs once for the whole run, not once per test (SPEC §3.3).
+
+test "shopper session applies its cookie automatically" as shopper
+  api auth GET /auth/profile
+  expect status equals 200
+  expect body.user.email equals env(USER_EMAIL)
+  expect body.user.role equals "user"
+
+test "shopper session is reused across tests, not re-established" as shopper
+  api auth GET /auth/profile
+  expect status equals 200
+  expect body.user.role equals "user"

@@ -1,0 +1,22 @@
+{
+  "name": "testflow-tests",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Purpose-built API + UI showcase app for tflw (testFlow) — its dogfood/acceptance target.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Deepak Tuteja <tuteja123@gmail.com>",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "refresh-tflw": "node scripts/refresh-tflw.mjs",
+    "start:core": "node api/core/server.js",
+    "start:auth": "node api/auth/server.js",
+    "start:frontend": "node frontend/server.js",
+    "test": "tflw run"
+  },
+  "dependencies": {
+    "tflw": "file:vendor/tflw-0.1.0.tgz"
+  }
+}

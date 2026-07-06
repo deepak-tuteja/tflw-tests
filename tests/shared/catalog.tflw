@@ -1,0 +1,9 @@
+# Shared action (P#17): creates a product under the calling test's own auth (its session
+# headers or manually-set headers both apply, since the action's steps splice into the same
+# test), gives back its id.
+
+action create product(name, price, category)
+  api POST /products body { name: {name}, price: {price}, category: {category} }
+  expect status equals 201
+  capture body.id as id
+  give id

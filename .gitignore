@@ -1,0 +1,6 @@
+node_modules/
+report/
+*.log
+.env
+vendor/*.tgz
+.testflow-tests.pids

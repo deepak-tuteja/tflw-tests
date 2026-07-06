@@ -1,0 +1,21 @@
+# auth.tflw — bearer login happens on the `auth` service, the captured token is then used
+# against the `core` (default) service's admin-only writes: cross-service capture-chaining,
+# the payoff of tflw's named-service config (SPEC §3.2).
+
+test "creating a product without a token is rejected"
+  api POST /products body { name: "Sneaky Widget", price: 1, category: "misc" }
+  expect status equals 401
+
+test "bearer login on auth authorizes a write on core"
+  api auth POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.token as token
+
+  api POST /products body { name: unique("Auth Widget"), price: 12.5, category: "misc" }
+    header "Authorization" is "Bearer {token}"
+  expect status equals 201
+  capture body.id as productId
+
+  api DELETE /products/{productId}
+    header "Authorization" is "Bearer {token}"
+  expect status equals 200

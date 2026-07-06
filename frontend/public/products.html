@@ -1,0 +1,143 @@
+<meta charset="utf-8">
+<title>testFlow-tests — Products</title>
+<link rel="stylesheet" href="/styles.css">
+
+<nav>
+  <a href="/products.html">Products</a>
+  <a href="/profile.html">Profile</a>
+  <button id="logout-btn">Log Out</button>
+</nav>
+
+<h1>Products</h1>
+<table>
+  <thead>
+    <tr><th>Name</th><th>Price</th><th>Category</th><th>In stock</th><th></th></tr>
+  </thead>
+  <tbody id="product-rows"></tbody>
+</table>
+
+<section id="admin-form-section" hidden>
+  <h2 id="form-heading">Add Product</h2>
+  <form id="product-form">
+    <input type="hidden" id="edit-id">
+
+    <label for="name">Name</label>
+    <input id="name" name="name" required>
+
+    <label for="price">Price</label>
+    <input id="price" name="price" type="number" step="0.01" min="0" required>
+
+    <label for="category">Category</label>
+    <input id="category" name="category" placeholder="electronics" required>
+
+    <label for="inStock">
+      <input id="inStock" name="inStock" type="checkbox" style="display:inline;width:auto" checked>
+      In stock
+    </label>
+
+    <button type="submit" id="submit-btn">Create Product</button>
+  </form>
+</section>
+
+<dialog id="confirm-dialog">
+  <p id="confirm-message">Delete this product?</p>
+  <button id="confirm-yes">Confirm</button>
+  <button id="confirm-no">Cancel</button>
+</dialog>
+
+<div id="toast"></div>
+
+<script type="module">
+  import { requireLogin, logout, authHeaders, showToast, CORE_BASE } from '/app.js';
+
+  const user = await requireLogin();
+  const isAdmin = user?.role === 'admin';
+  if (isAdmin) document.getElementById('admin-form-section').hidden = false;
+
+  document.getElementById('logout-btn').addEventListener('click', async () => {
+    await logout();
+    window.location.href = '/index.html';
+  });
+
+  async function loadProducts() {
+    const res = await fetch(`${CORE_BASE}/products`);
+    const { products } = await res.json();
+    const rows = document.getElementById('product-rows');
+    rows.innerHTML = '';
+    for (const p of products) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${p.name}</td>
+        <td>$${p.price.toFixed(2)}</td>
+        <td>${p.category}</td>
+        <td>${p.inStock ? 'Yes' : 'No'}</td>
+        <td>${isAdmin ? `<button data-edit="${p.id}">Edit</button> <button data-delete="${p.id}">Delete</button>` : ''}</td>
+      `;
+      rows.appendChild(tr);
+    }
+    if (isAdmin) {
+      rows.querySelectorAll('[data-edit]').forEach((btn) =>
+        btn.addEventListener('click', () => startEdit(products.find((p) => p.id === btn.dataset.edit)))
+      );
+      rows.querySelectorAll('[data-delete]').forEach((btn) =>
+        btn.addEventListener('click', () => confirmDelete(products.find((p) => p.id === btn.dataset.delete)))
+      );
+    }
+  }
+
+  function startEdit(product) {
+    document.getElementById('form-heading').textContent = `Edit ${product.name}`;
+    document.getElementById('submit-btn').textContent = 'Save Changes';
+    document.getElementById('edit-id').value = product.id;
+    document.getElementById('name').value = product.name;
+    document.getElementById('price').value = product.price;
+    document.getElementById('category').value = product.category;
+    document.getElementById('inStock').checked = product.inStock;
+  }
+
+  function confirmDelete(product) {
+    const dialog = document.getElementById('confirm-dialog');
+    document.getElementById('confirm-message').textContent = `Delete "${product.name}"?`;
+    dialog.showModal();
+    const onYes = async () => {
+      await fetch(`${CORE_BASE}/products/${product.id}`, { method: 'DELETE', headers: authHeaders() });
+      showToast(`Deleted ${product.name}`);
+      dialog.close();
+      cleanup();
+      loadProducts();
+    };
+    const onNo = () => { dialog.close(); cleanup(); };
+    function cleanup() {
+      document.getElementById('confirm-yes').removeEventListener('click', onYes);
+      document.getElementById('confirm-no').removeEventListener('click', onNo);
+    }
+    document.getElementById('confirm-yes').addEventListener('click', onYes);
+    document.getElementById('confirm-no').addEventListener('click', onNo);
+  }
+
+  document.getElementById('product-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('edit-id').value;
+    const body = {
+      name: document.getElementById('name').value,
+      price: Number(document.getElementById('price').value),
+      category: document.getElementById('category').value,
+      inStock: document.getElementById('inStock').checked,
+    };
+    const url = id ? `${CORE_BASE}/products/${id}` : `${CORE_BASE}/products`;
+    const method = id ? 'PUT' : 'POST';
+    await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(body),
+    });
+    showToast(id ? 'Product updated' : 'Product created');
+    e.target.reset();
+    document.getElementById('edit-id').value = '';
+    document.getElementById('form-heading').textContent = 'Add Product';
+    document.getElementById('submit-btn').textContent = 'Create Product';
+    loadProducts();
+  });
+
+  loadProducts();
+</script>

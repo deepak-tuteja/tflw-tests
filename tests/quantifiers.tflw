@@ -1,0 +1,17 @@
+# quantifiers.tflw — `any`/`all` over the array-returning /orders endpoint.
+
+test "quantifiers over the orders list" as admin
+  api POST /products body { name: unique("Quant Widget"), price: 5, category: "misc" }
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /orders body { productId: {productId}, qty: 3 }
+  expect status equals 201
+
+  api POST /orders body { productId: {productId}, qty: 1 }
+  expect status equals 201
+
+  api GET /orders
+  expect status equals 200
+  expect all body.orders.total is greater than 0
+  expect any body.orders.qty equals 3
