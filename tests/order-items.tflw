@@ -1,8 +1,6 @@
 # order-items.tflw — the nested `/orders/{id}/items` sub-resource (plan_v2.md Part A), scoped by
 # the same ownership rule as its parent order.
 
-use "./helpers/find-item.ts"
-
 before
   api GET /categories
   expect status equals 200
@@ -44,8 +42,8 @@ test "a nested items read is scoped exactly like the parent order"
     header "Authorization" is "Bearer {userBToken}"
   expect status equals 403
 
-@gaps @jsonpath
-test "asserting one item's quantity in a multi-item order needs a JS helper, not two independent `any`s"
+@jsonpath
+test "asserting one specific item's quantity in a multi-item order is a single correlated check"
   api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
   expect status equals 200
   capture body.accessToken as adminToken
@@ -72,13 +70,14 @@ test "asserting one item's quantity in a multi-item order needs a JS helper, not
   # These two independent `any`s each pass on their own — but neither one proves productIdA's item
   # specifically is the one with quantity 2 (each could be "satisfied" by the *other* item and
   # still both pass; SPEC §6.3's quantifiers check one field per element, not a correlated pair).
+  # Kept here deliberately as the "looks right, isn't" trap — see the real check right below.
   expect any body.productId equals "{productIdA}"
   expect any body.quantity equals 2
 
-  capture body as items
-  # Throws (failing the test) if productIdA's own item doesn't actually have quantity 2 — the
-  # correlated check a real JSONPath filter (`$.items[?(@.productId=='...')].quantity`) would
-  # express in one statement.
-  let result = assert item quantity(items, productIdA, 2)
-  # Ideal (doesn't exist today):
-  #   expect any body[?(@.productId == "{productIdA}")].quantity equals 2
+  # The actual correlated check, once you know to look for it (TFLW-GAPS.md gap #3's resolution,
+  # 2026-07-07): `any`/`all` quantify over whole array elements when the subject path stops AT the
+  # array itself, not narrowed to one field — so pairing the quantifier with `matches subset {...}`
+  # checks both fields against the *same* element in one statement, no JS helper needed. No new
+  # syntax; this composition already shipped alongside gap #2's fix (PLAN.md decision 88) and was
+  # simply never tried against a correlated-pair case until now.
+  expect any body matches subset { productId: "{productIdA}", quantity: 2 }

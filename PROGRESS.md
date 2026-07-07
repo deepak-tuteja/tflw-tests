@@ -29,6 +29,7 @@ longer apply. See the v2 tracker below.
 | M4 — Async & query cluster | ✅ | 2026-07-07 | 2026-07-07 |
 | M5 — Gap-provoking scenarios + TFLW-GAPS.md | ✅ | 2026-07-07 | 2026-07-07 |
 | M6 — realistic-scale gap hunting | ✅ | 2026-07-07 | 2026-07-07 |
+| M7 — gap #3 resolved (no code change) + gap #8 fixed upstream, consumed here | ✅ | 2026-07-07 | 2026-07-07 |
 
 ---
 
@@ -608,6 +609,63 @@ seed/entity/endpoint changes), 2026-07-07:
 
 Per the plan's checkpoint instruction: stopping here to report the merged, re-prioritized backlog
 (existing #3-#7 + new #8-#10) to the user before starting the one-gap-at-a-time fix cadence.
+
+## M7 — gap #3 resolved (no code change) + gap #8 fixed upstream, consumed here ✅
+
+The user reviewed M6's backlog and picked the fix-cadence order: gap #3 (re-flagged top priority
+after re-reading `tests/large-order.tflw`'s own JS-helper workaround) first, then gap #8. Gap #3
+turned out to need no `testFlow/` change at all — `PLAN.md` decision 89; gap #8 got a real fix —
+decision 90.
+
+**Gap #3 — correlated array-element predicates:**
+- [x] Confirmed via a fresh read of `evaluateQuantified` (`interpreter.ts`) + `subsetMatch`
+      (`matcher.ts`) together, plus `packages/runtime/test/quantifiers.test.ts`'s existing (already
+      passing) `` `any`/`all` compose with `matches subset {...}` `` test: `any`/`all` already pass
+      the *whole* array element to the matcher whenever the subject path stops at the array, so
+      `expect any body matches subset { productId: "X", quantity: N }` correlates both fields on
+      the same element today, in the already-published grammar.
+- [x] `tests/order-items.tflw`: demo test dropped its `@gaps` tag, renamed, and its
+      `let result = assert item quantity(...)` JS-helper line replaced by the one-line
+      `expect any body matches subset {...}` (the two individually-passing `any` lines are kept
+      just above it, deliberately, as the "looks right, isn't" trap for a reader).
+- [x] `tests/large-order.tflw`: identical treatment at 61-item volume.
+- [x] `tests/helpers/find-item.ts` deleted — no longer used anywhere in this suite.
+- [x] `TFLW-GAPS.md`: gap #3 moved from **Ranked** to a new **Resolved (no tflw code change
+      needed)** section (distinct from **Fixed**, which is reserved for an actual `testFlow/`
+      change); its full original writeup kept as a historical `## 3.` pointer, same pattern as #1/#2.
+
+**Gap #8 — untruncated failure diffs:**
+- [x] `testFlow/packages/runtime/src/matcher.ts`: fixed 2000-char `truncate()` applied to every
+      failure message's `expected`/`got` text; `matches subset {...}` additionally gets a
+      subset-aware diff (`subsetMismatches()`) reporting only the mismatched/missing keys (dotted
+      paths for nested mismatches) instead of the whole actual object, via a new optional
+      `RawMatch.gotOverride`.
+- [x] `testFlow/SPEC.md` §6.6 (new); `testFlow/PLAN.md` decision 90; `testFlow/PROGRESS.md` M2.14.
+- [x] 3 new tests in `testFlow/packages/runtime/test/matchers.test.ts`; full `packages/runtime`
+      suite 130→133 passed, `packages/lang` unaffected at 146 passed, `tsc` clean.
+- [x] Refreshed the vendored tarball here (`node scripts/refresh-tflw.mjs`, then the known
+      stale-lockfile workaround — `rm -rf node_modules package-lock.json && npm install`, since the
+      version number didn't change) and confirmed the new bundle actually contains the fix
+      (`grep -c "MAX_DIFF_CHARS\|subsetMismatches\|gotOverride" node_modules/tflw/dist/cli.js` → 8).
+- [x] `TFLW-GAPS.md`: gap #8 moved to **Fixed**, same pattern as #1/#2; original writeup (the exact
+      11,248-char evidence, the superseded `max diff N` proposed syntax) kept as a historical `## 8.`
+      pointer.
+
+**Verified by:** fresh `node cli.mjs stop && node cli.mjs start` after the tarball refresh,
+2026-07-07:
+1. `npx tflw check` → `23 files checked, no problems found.`
+2. `npx tflw run --tag jsonpath` (isolated) → `PASS 3/3 passed`, confirming the rewritten
+   `order-items.tflw`/`large-order.tflw` correlated checks work against the real API.
+3. `npx tflw run` (full suite, fresh restart) → `PASS 77/77 passed`. One incidental flake was
+   observed on an *earlier* full run before the tarball refresh (`schema-and-shape.tflw`'s cached
+   5s-TTL admin session raced real wall-clock time across ~15 prior `as admin` tests) — reproduced
+   in isolation as passing instantly, and a second full-suite run came back clean; a pre-existing
+   timing margin unrelated to this session's changes, not a regression.
+4. Fresh restart again, `npx tflw run --workers 4` → `PASS 77/77 passed`.
+5. `npx tflw run tests/.demo-fail/*.tflw --tag demofail` → the former 11,248-char line is now capped
+   at 2000 chars with a `(truncated, showing 2000 of 11009 chars — see report.html for the full
+   response body)` marker, and the subset diff correctly narrowed to just the two mismatched keys
+   (`status`, `items`) — the unrelated envelope fields (`id`, `userId`, …) no longer appear at all.
 
 ---
 

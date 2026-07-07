@@ -5,9 +5,9 @@
 # (`productA`) also carrying quantity 37 — real ambiguity at volume, not just at toy scale: two
 # independent `any`s ("some item has this productId" / "some item has this quantity") each pass
 # on their own, but neither proves *productA's own item* is the one with quantity 37 — it could
-# just as easily be satisfied by the filler item that happens to share that value.
-
-use "./helpers/find-item.ts"
+# just as easily be satisfied by the filler item that happens to share that value. Resolved the
+# same way as order-items.tflw (gap #3, 2026-07-07): `any` + `matches subset {...}` correlates both
+# fields on one element, at 61-item volume just as cleanly as at 2.
 
 before
   api GET /categories
@@ -46,14 +46,13 @@ test "a 61-item order round-trips correctly at real volume, not toy volume"
   expect body has count 61
 
   # Both pass independently — but neither proves *productA's own item* is the one with quantity
-  # 37 (the filler item at the same quantity value could just as easily be the match).
+  # 37 (the filler item at the same quantity value could just as easily be the match). Kept as the
+  # "looks right, isn't" trap, same as order-items.tflw.
   expect any body.productId equals "{productA}"
   expect any body.quantity equals 37
 
-  capture body as items
-  # Throws (failing the test) if productA's own item doesn't actually have quantity 37 — the
-  # correlated check a real JSONPath filter (`$.items[?(@.productId=='...')].quantity`) would
-  # express in one statement, now proven at real volume (61 items to search, not 2).
-  let result = assert item quantity(items, productA, 37)
-  # Ideal (doesn't exist today):
-  #   expect any body[?(@.productId == "{productA}")].quantity equals 37
+  # The real correlated check, at 61-item volume: `any` quantifies over whole array elements when
+  # the subject path stops at the array itself, so pairing it with `matches subset {...}` checks
+  # both fields against the *same* element in one statement — no JS helper, no per-element scan
+  # written by hand, and no slower at 61 items than at 2.
+  expect any body matches subset { productId: "{productA}", quantity: 37 }

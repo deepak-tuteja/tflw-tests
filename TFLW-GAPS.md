@@ -4,11 +4,12 @@
 folded in here, re-verified against the finished v2 suite, and joined by three new findings M5
 specifically went looking for (gaps #1-#7, two since fixed) and three more from M6's
 realistic-scale gap hunting (gaps #8-#10, plan_v2.md Part D — large templated bodies, a long
-multi-hop request chain, a second auth scheme, and a deliberate large-body failure). Per
-plan_v2.md Part C/D: **tflw itself (`testFlow/`) is not touched by this document** — these are
-backlog notes for a future testFlow session (see `testFlow/PLAN.md`'s new milestone stub), not
-fixes. Every entry below was built and verified against the real, running v2 API — none of this is
-speculative.
+multi-hop request chain, a second auth scheme, and a deliberate large-body failure). Every entry
+below was built and verified against the real, running v2 API — none of this is speculative. Gaps
+#1, #2, and #8 are fixed; **#3 turned out to already be expressible** with tflw's existing shipped
+grammar (no code change needed — see [Resolved](#resolved-no-tflw-code-change-needed)) once
+`any`/`all` is paired with `matches subset {...}` instead of narrowing the path to one field —
+everything else remains a backlog note for a future session, not yet touched in `testFlow/`.
 
 **Criterion for "real gap":** the scenario is legitimately declarative — an ordinary assertion or
 data-shape check, not a loop/branch/state-machine a language that deliberately has neither (SPEC
@@ -18,19 +19,20 @@ retry backoff logic) are listed separately as **confirmed-by-design**, not ranke
 ## Ranked
 
 Gap numbers are stable identifiers (cross-referenced from `testFlow/PLAN.md`'s decision log and
-this repo's own task tracking) — a fixed gap keeps its number rather than the table renumbering
-around it. See **Fixed**, below, for #1 and #2.
+this repo's own task tracking) — a fixed/resolved gap keeps its number rather than the table
+renumbering around it. See **Fixed**, below, for #1, #2, and #8, and **Resolved**, below, for #3 (no
+tflw code change — an existing composition covers it).
 
 | # | Gap | Severity × Frequency | Proof |
 |---|---|---|---|
 | 1 | ~~No cookie-subject / cookie-jar~~ | — | **✅ Fixed — see [Fixed](#fixed) below** |
 | 2 | ~~No partial-object / subtree JSON matching~~ | — | **✅ Fixed — see [Fixed](#fixed) below** |
-| 3 | Correlated array-element JSON-path predicates | **High × Low** — low occurrence, but the failure mode is a *silent false pass*, not a visible error | `tests/order-items.tflw`'s last test |
+| 3 | ~~Correlated array-element JSON-path predicates~~ | — | **✅ Resolved — see [Resolved](#resolved-no-tflw-code-change-needed) below** |
 | 4 | `wait until api` cannot carry per-step headers | **Medium × Low-Medium** — blocks any poll needing per-attempt auth (async jobs, token-expiry chains) | `tests/.checkonly/wait-until-headers.tflw` (parse-time), `tests/token-expiry.tflw` (the real scenario it forces) |
 | 5 | No `Retry-After`-aware retry | **Medium × Low** — only recurs where the API rate-limits, but that's a common real pattern | `tests/reviews.tflw`'s two `@ratelimit` tests |
 | 6 | No schema/contract validation against `/openapi.json` | **Medium × Low** — high potential value, low current occurrence (few endpoints document response schemas yet) | `tests/schema-and-shape.tflw` |
 | 7 | Only one `session` may be opted into per test | **Low × High** — trivial one-line workaround, but recurs constantly | `tests/authz.tflw`, `tests/order-items.tflw`, `tests/jobs.tflw`, `tests/reviews.tflw`, `tests/http-maturity.tflw` |
-| 8 | Failure diffs are completely untruncated, no per-field ignore/exclude | **High × Medium** — any large-body assertion failure dumps an unreadable wall of JSON; recurs any time a suite's bodies grow past toy size | `tests/.demo-fail/large-response-diff.tflw` |
+| 8 | ~~Failure diffs are completely untruncated, no per-field ignore/exclude~~ | — | **✅ Fixed — see [Fixed](#fixed) below** |
 | 9 | No `base64(...)` (or general string-transform) generator function | **Medium × Low** — only blocks a declarative HTTP Basic `Authorization` header; the multi-scheme guard itself works fine once the header exists | `tests/basic-auth.tflw`, `tests/helpers/basic-auth.ts` |
 | 10 | `upload "..." as "field"` can't specify or infer a file's Content-Type | **Medium × Low** — only matters when a test cares about the *received* MIME type, but the workaround (none — it's always `application/octet-stream`) can't be worked around at all, not even via JS | `tests/body-types.tflw` |
 
@@ -87,6 +89,67 @@ untouched.
 **Verified 2026-07-07:** fresh `node cli.mjs stop && node cli.mjs start`, `npx tflw check` (16
 files, no problems), `npx tflw run` — `PASS 61/61 passed`, repeated clean under `--workers 4` on
 another fresh restart.
+
+### 8. Failure diffs are completely untruncated, no per-field ignore/exclude — ✅ fixed in tflw 0.1.0 (2026-07-07)
+
+Shipped as `testFlow/PLAN.md` decision 90: `runtime/src/matcher.ts` gained a fixed 2000-char
+`truncate()` cap applied to every failure message's `expected`/`got` text (a hardcoded default, not
+new config surface — P#13), plus a more targeted improvement for `matches subset {...}`:
+`subsetMismatches()` walks the same shape the matcher already checks but reports only the keys that
+are actually missing or wrong (dotted paths for nested mismatches), instead of the whole actual
+object. Full writeup lives in `testFlow/SPEC.md` §6.6 and `testFlow/PROGRESS.md`'s M2.14.
+
+**What changed here in response:** nothing in this repo's own `.tflw` files needed to change —
+`tests/.demo-fail/large-response-diff.tflw` is deliberately still failing (it's a demo-fail
+fixture), and its failure message is what proves the fix.
+
+**Verified 2026-07-07:** fresh `node cli.mjs stop && node cli.mjs start`, `npx tflw check` (23
+files, no problems), `npx tflw run` — `PASS 77/77 passed`, repeated clean under `--workers 4` on
+another fresh restart. `npx tflw run tests/.demo-fail/*.tflw --tag demofail` re-ran the exact
+former-11,248-char scenario: the message is now capped at 2000 characters with a clear `(truncated,
+showing 2000 of 11009 chars — see report.html for the full response body)` marker, and the subset
+diff itself correctly narrowed to only the two mismatched keys (`status`, `items`) rather than the
+whole envelope (`id`, `userId`, etc. no longer appear at all) — the remaining length comes from
+`items` itself being the mismatched value (a real 61-item array), not from re-dumping fields that
+already matched.
+
+## Resolved (no tflw code change needed)
+
+### 3. Correlated array-element JSON-path predicates — ✅ resolved (2026-07-07), no tflw change
+
+The original writeup (kept as historical record at [§3 below](#3-correlated-array-element-json-path-predicates))
+was itself correct about the symptom — `expect any body.productId equals "X"` and `expect any
+body.quantity equals 2` can each be satisfied by a *different* element and still both pass — but
+wrong about the fix requiring new grammar. tflw already ships the fix, as a side effect of gap #2's
+`matches subset {...}` (decision 88): `any`/`all` quantify over **whole array elements** whenever
+the subject path stops *at* the array itself rather than being narrowed to one field
+(`evaluateQuantified`, `packages/runtime/src/interpreter.ts`, confirmed by reading the quantifier's
+path-consumption logic together with `subsetMatch` in `packages/runtime/src/matcher.ts` — the
+matcher receives the whole element object when no path segments remain past the array, and
+`subsetMatch` correctly checks multiple keys against that one object). So instead of narrowing to
+`body.productId` and `body.quantity` separately, stopping at the array and asserting a subset
+correlates both fields on the same element in one statement:
+
+```
+expect any body matches subset { productId: "{productIdA}", quantity: 2 }
+```
+
+This was never tried against a correlated-pair case before now — decision 88's own log entry
+mentions the `any`/`all` composition only in passing ("composes with `any`/`all` for free") without
+calling out that it specifically subsumes gap #3. `packages/runtime/test/quantifiers.test.ts`
+already had a passing unit test proving this composition (`` `any`/`all` compose with `matches
+subset {...}` ``) — it just hadn't been connected to the gap #3 finding until this session.
+
+**What changed here in response:** `tests/order-items.tflw`'s demo test dropped its `@gaps` tag,
+renamed to describe the real fix, and its `let result = assert item quantity(...)` JS-helper line
+was replaced by the one-line `expect any body matches subset {...}` above (the two independent,
+individually-passing `any` lines are kept just above it, deliberately, as the "looks right, isn't"
+trap for a reader). `tests/large-order.tflw` got the identical treatment at 61-item volume — same
+one-line fix, no slower at scale. `tests/helpers/find-item.ts` (the JS workaround) is deleted; it's
+no longer used anywhere in this suite.
+
+**Verified 2026-07-07:** see the M7 entry in `PROGRESS.md` for the fresh-restart / `tflw check` /
+`tflw run` / `--workers 4` evidence.
 
 ## Confirmed-by-design (not gaps)
 
@@ -218,38 +281,23 @@ expect body matches subset { type: "about:blank", title: "Unprocessable Entity",
 `pm.expect`), and RestAssured's partial-JSON-schema validation all support this natively — tflw's
 `equals`/`contains` pair is the narrower of the two common patterns.
 
-## 3. Correlated array-element JSON-path predicates
+## 3. Correlated array-element JSON-path predicates — ✅ resolved, see [Resolved](#resolved-no-tflw-code-change-needed) above
+
+This section is kept as the original gap writeup (the symptom description was accurate; the
+"needs new grammar" conclusion was not) for historical record — see the Resolved section above for
+what actually fixes it and why, with no `testFlow/` code change.
 
 `any`/`all` (SPEC §6.3) each check **one field per array element**, independently. Two separate
 `any` assertions — `expect any body.productId equals "X"` and `expect any body.quantity equals
 2` — can each be satisfied by a **different** element and still both pass, proving nothing about
-whether the item with `productId=X` actually has `quantity=2`. Confirmed by reading
-`evaluateQuantified` (`packages/runtime/src/interpreter.ts`): the quantifier maps each array
-element through the *same single remaining path*, matcher-per-element, with no way to correlate
-two fields on the same matched element. `tests/order-items.tflw`'s last test builds a genuine
-two-distinct-item order specifically to make this observable, then falls back to a JS `find()`
-helper (`tests/helpers/find-item.ts`) to do the correlated check for real.
+whether the item with `productId=X` actually has `quantity=2`. `tests/order-items.tflw`'s demo test
+(and `tests/large-order.tflw` at 61-item volume) built a genuine multi-item order specifically to
+make this observable.
 
-This is ranked above gaps #4-#7 despite low frequency because the failure mode is **a silent false
-pass**, not a visible error — a test author who doesn't know about this can ship a scenario that
-looks like it verifies a specific item's quantity and doesn't.
-
-**Rescaled to real volume (M6, 2026-07-07):** `tests/large-order.tflw` reproduces the exact same
-false-pass risk at 61 items instead of 2 (60 filler-product line items plus one distinct-product
-line item, both able to coincidentally share a quantity value) — same `find-item.ts` JS-helper
-workaround, now proven to still be necessary (and still correct) at app-scale volume, not just a
-toy 2-item case. Nothing about the gap itself changed; this is evidence the finding generalizes,
-not a new finding.
-
-**Proposed syntax:** a JSONPath-style filter predicate inside the quantifier's path:
-
-```
-expect any body[?(@.productId == "{productIdA}")].quantity equals 2
-```
-
-**Cross-check:** real JSONPath (used by RestAssured's `jp.query()`, Playwright via custom JS,
-`jsonpath-plus`) supports `[?(@.field==value)]` filter expressions natively — tflw's quantifiers
-are a deliberately smaller, closed subset (P#13) that doesn't cover this case.
+**Originally proposed syntax** (superseded — not needed): a JSONPath-style filter predicate inside
+the quantifier's path, `expect any body[?(@.productId == "{productIdA}")].quantity equals 2`. The
+actual fix uses tflw's existing grammar instead: `expect any body matches subset { productId: "X",
+quantity: 2 }`.
 
 ## 4. `wait until api` cannot carry per-step headers
 
@@ -351,37 +399,34 @@ test "..." as admin, userA
 separate variables for as many identities as needed) — mostly notable because it wasn't obvious
 from SPEC prose alone until this suite hit it dozens of times.
 
-## 8. Failure diffs are completely untruncated, no per-field ignore/exclude
+## 8. Failure diffs are completely untruncated, no per-field ignore/exclude — ✅ fixed, see [Fixed](#fixed) above
+
+This section is kept as the original gap writeup (the exact 11,248-char evidence, and the
+originally-proposed `max diff N` clause syntax) for historical record — the gap itself is closed as
+of tflw 0.1.0 (2026-07-07). The shipped fix (decision 90) uses a hardcoded default cap plus a
+subset-aware mismatch diff instead of the `max diff N` per-`expect` clause proposed below — no new
+grammar, same minimal-footprint pattern as decisions 87/88.
 
 Found deliberately, per plan_v2.md Part D decision 5: `tests/.demo-fail/large-response-diff.tflw`
 asserts a wrong shape against a real 61-item order response
-(`tests/large-order.tflw`/`tests/payloads/large-order.json`'s same fixture). Confirmed by reading
-`packages/runtime/src/matcher.ts:130-134`: the mismatch message is built from a bare
-`JSON.stringify(actual)`, no length cap, no configurable per-field ignore/exclude list. Running it
-for real produces **one 11,248-character line** — the entire 61-item order (every id, every
-`unitPrice`, every nested field) dumped flat into the CLI and `report/report.html` alike:
+(`tests/large-order.tflw`/`tests/payloads/large-order.json`'s same fixture). The mismatch message
+used to be built from a bare `JSON.stringify(actual)`, no length cap, no configurable per-field
+ignore/exclude list, producing **one 11,248-character line** — the entire 61-item order (every id,
+every `unitPrice`, every nested field) dumped flat into the CLI and `report/report.html` alike:
 
 ```
 expect body matches subset { status: "definitely-not-a-real-status", items: "definitely-not-an-array" }
   expected body to match subset {"status":"definitely-not-a-real-status","items":"definitely-not-an-array"}, but got {"id":"7b70b1b7-...","userId":"...","status":"pending",...,"items":[{"id":"...","quantity":1,"unitPrice":"3.00"},{...60 more items...}]}
 ```
 
-Ranked above gaps #9-#10 despite being a reporting-ergonomics finding rather than a missing
-request/assertion capability: it recurs *every time* a large-body assertion fails, not just in one
-narrow scenario, and actively works against the person debugging the failure — the opposite of
-what a test failure message is for.
-
-**Proposed syntax:** a per-`expect`/global truncation length plus a subset-aware diff that only
-prints the *mismatched* keys (already partially possible in principle for `matches subset`, since
-the matcher already knows which literal keys it checked):
+**Originally proposed syntax** (superseded — not needed): a per-`expect` `max diff N` clause.
 
 ```
 expect body matches subset { status: "...", items: "..." } max diff 2000
 ```
 
 **Cross-check:** Jest's snapshot diffs truncate long strings/arrays by default and highlight only
-the changed lines; Playwright's expect diffs are similarly bounded. A bare untruncated
-`JSON.stringify` on failure is the outlier, not the norm, once bodies grow past toy size.
+the changed lines; Playwright's expect diffs are similarly bounded.
 
 ## 9. No `base64(...)` (or general string-transform) generator function
 
