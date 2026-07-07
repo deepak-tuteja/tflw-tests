@@ -1,21 +1,53 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
   PreconditionFailedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Product } from '../entities/product.entity';
 import { CategoriesService } from '../categories/categories.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { FindProductsQueryDto } from './dto/find-products-query.dto';
 import { isForeignKeyViolation } from '../common/db-errors';
 
 // ETag values are just the row's version number, quoted per RFC7232 — opaque to the client,
 // meaningful only as an equality check against what this API itself issued.
 export function etagFor(product: Product): string {
   return `"${product.version}"`;
+}
+
+export interface PaginatedProducts {
+  data: Product[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+const SORTABLE_COLUMNS: Record<string, string> = {
+  name: 'product.name',
+  price: 'product.price',
+  stock: 'product.stock',
+};
+
+function applySort(qb: SelectQueryBuilder<Product>, sort: string | undefined): void {
+  if (!sort) {
+    qb.orderBy('product.name', 'ASC');
+    return;
+  }
+  const descending = sort.startsWith('-');
+  const field = descending ? sort.slice(1) : sort;
+  const column = SORTABLE_COLUMNS[field];
+  if (!column) {
+    throw new BadRequestException(
+      `cannot sort by "${field}" — choose one of ${Object.keys(SORTABLE_COLUMNS).join(', ')}`,
+    );
+  }
+  qb.orderBy(column, descending ? 'DESC' : 'ASC');
 }
 
 @Injectable()
@@ -25,8 +57,42 @@ export class ProductsService {
     private readonly categories: CategoriesService,
   ) {}
 
-  findAll(): Promise<Product[]> {
-    return this.products.find({ order: { name: 'ASC' } });
+  // Filter (categoryId), full-text search (q), sort, and offset pagination (page+pageSize) —
+  // plan_v2.md Cluster 4's query cluster. page/pageSize are only meaningful together; when
+  // neither is given this returns a bare array, the same shape M1-M3's tests already assert.
+  async findAll(query: FindProductsQueryDto): Promise<Product[] | PaginatedProducts> {
+    const qb = this.products.createQueryBuilder('product');
+
+    if (query.categoryId) {
+      qb.andWhere('product.category_id = :categoryId', { categoryId: query.categoryId });
+    }
+    if (query.q) {
+      qb.andWhere(
+        `to_tsvector('english', product.name || ' ' || product.description) @@ plainto_tsquery('english', :q)`,
+        { q: query.q },
+      );
+    }
+
+    const paginated = query.page !== undefined && query.pageSize !== undefined;
+    const total = paginated ? await qb.clone().getCount() : undefined;
+
+    applySort(qb, query.sort);
+    if (paginated) {
+      qb.skip((query.page! - 1) * query.pageSize!).take(query.pageSize!);
+    }
+
+    const data = await qb.getMany();
+
+    if (paginated) {
+      return {
+        data,
+        page: query.page!,
+        pageSize: query.pageSize!,
+        total: total!,
+        totalPages: Math.max(1, Math.ceil(total! / query.pageSize!)),
+      };
+    }
+    return data;
   }
 
   async findOne(id: string): Promise<Product> {

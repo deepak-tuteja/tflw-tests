@@ -13,6 +13,8 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { AuthedUser } from '../auth/guards/bearer-auth.guard';
 import { UserRole } from '../entities/user.entity';
 import { isUniqueViolation } from '../common/db-errors';
+import { JobsService } from '../jobs/jobs.service';
+import { Job } from '../entities/job.entity';
 
 export interface CreateOrderResult {
   order: Order;
@@ -25,7 +27,15 @@ export class OrdersService {
     @InjectRepository(Order) private readonly orders: Repository<Order>,
     @InjectRepository(OrderItem) private readonly orderItems: Repository<OrderItem>,
     @InjectRepository(Product) private readonly products: Repository<Product>,
+    private readonly jobsService: JobsService,
   ) {}
+
+  // Admin-only trigger (enforced by the controller's @Roles guard) for the 202-Accepted async
+  // job cluster; findOneScoped still gives a clean 404 for a bad id.
+  async fulfill(id: string, requester: AuthedUser): Promise<Job> {
+    const order = await this.findOneScoped(id, requester);
+    return this.jobsService.startFulfillment(order);
+  }
 
   // Idempotency-Key (RFC-style, order-creation cluster): a repeated key returns the order that
   // key already produced instead of creating a duplicate. Scoped to the requesting user — reusing

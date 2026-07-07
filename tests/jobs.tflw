@@ -1,0 +1,100 @@
+# jobs.tflw — plan_v2.md Cluster 4's 202-Accepted async job: `POST /orders/:id/fulfill` (admin
+# only — a warehouse action, not a customer one) kicks off real background work and returns
+# immediately; `GET /jobs/:id` is the pollable handle, exercised via `wait until api` (same
+# construct v1's order-workflow.tflw used, now against a genuine job resource instead of an
+# order that silently self-transitioned on its own timer).
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+@workflow
+test "an order progresses through fulfillment via a real async job, polled to completion" as admin
+  api POST /products body { name: unique("Workflow Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+  expect status equals 201
+  expect body.status equals "pending"
+  capture body.id as orderId
+
+  api POST /orders/{orderId}/fulfill
+  expect status equals 202
+  expect header "location" matches "/v1/jobs/"
+  expect body.status equals "processing"
+  capture body.jobId as jobId
+
+  wait until api GET /jobs/{jobId}
+    expect body.status equals "completed"
+
+  api GET /orders/{orderId}
+  expect status equals 200
+  expect body.status equals "fulfilled"
+
+@workflow @authz
+test "only an admin can trigger fulfillment" as admin
+  api POST /products body { name: unique("Self-service Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as userAToken
+
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as orderId
+
+  api POST /orders/{orderId}/fulfill
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 403
+
+@workflow @authz
+test "a job is scoped to its order's owner, just like the order itself" as admin
+  api POST /products body { name: unique("Scoped Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as userAToken
+
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as orderId
+
+  api POST /orders/{orderId}/fulfill
+  expect status equals 202
+  capture body.jobId as jobId
+
+  api POST /auth/login body { email: env(USER_B_EMAIL), password: env(USER_B_PW) }
+  expect status equals 200
+  capture body.accessToken as userBToken
+
+  api GET /jobs/{jobId}
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 403
+
+  api GET /jobs/{jobId}
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+
+@workflow @statusVariety
+test "fulfilling an order that isn't pending is a conflict, not a duplicate job" as admin
+  api POST /products body { name: unique("Already-fulfilling Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+  expect status equals 201
+  capture body.id as orderId
+
+  api POST /orders/{orderId}/fulfill
+  expect status equals 202
+
+  api POST /orders/{orderId}/fulfill
+  expect status equals 409

@@ -26,7 +26,7 @@ longer apply. See the v2 tracker below.
 | M1 — Auth & authz cluster | ✅ | 2026-07-07 | 2026-07-07 |
 | M2 — Errors & schema-contract cluster | ✅ | 2026-07-07 | 2026-07-07 |
 | M3 — HTTP maturity & cookies cluster | ✅ | 2026-07-07 | 2026-07-07 |
-| M4 — Async & query cluster | ⬜ | — | — |
+| M4 — Async & query cluster | ✅ | 2026-07-07 | 2026-07-07 |
 | M5 — Gap-provoking scenarios + TFLW-GAPS.md | ⬜ | — | — |
 
 ---
@@ -290,6 +290,91 @@ against the live stack, 2026-07-07:
     again.
 12. No new `TFLW-FEATURE-GAPS.md` entry from M3 — conditional requests, idempotency-key replay,
     405/409/406/415, and the second named service were all cleanly expressible declaratively.
+
+---
+
+## v2 M4 — Async & query cluster ✅
+
+- [x] **202-Accepted async job** (`Job` entity + `AddJobs` migration — a real table, generated via
+      `migration:generate` against a temp Postgres, not hand-written): `POST /orders/:id/fulfill`
+      (admin-only — a warehouse action) validates the order is `pending` (else `409`), transitions
+      it to `processing` **synchronously** before responding (so an immediate repeat call race
+      can't slip past the check — see bug #1 below), returns `202` with a `Location: /v1/jobs/:id`
+      header and `{jobId, status}` body, then continues `processing → ready → fulfilled` as real
+      fire-and-forget background work (small real delays, not instant). `GET /jobs/:id` is the
+      pollable handle, scoped to its order's owner exactly like the order itself (403 for anyone
+      else, admin sees all) — exercised via `wait until api`, the same construct v1's
+      order-workflow.tflw used, now against a genuine job resource instead of an order that
+      silently self-transitioned on its own timer.
+- [x] **Rate limiting + `Retry-After`** on `POST /products/:id/reviews` (a new nested-resource
+      hot path — see below): an in-memory sliding-window `RateLimitGuard` (3 requests/second),
+      keyed by `(user id, product id)` rather than user id alone so parallel tests against their
+      own fresh products never share a window — the suite's per-test-unique-facet isolation model,
+      not a test-only header. Ported v1's `rate-limit.tflw` two-test shape (429 assertion, then a
+      JS-escape-hatch `sleepAndRetry` honoring the real `Retry-After` value) onto it.
+- [x] **New `ReviewsModule`** — `GET/POST /products/:id/reviews`, the plan's "nested list
+      endpoint": creating enforces the existing `Unique(['userId','productId'])` DB constraint via
+      a `409` (not a duplicate row); reads are public and **cursor (keyset) paginated**
+      (`created_at, id` tie-break) with a `Link: <...>; rel="next"` response header when more
+      results exist — the plan's other pagination style, deliberately different from products'
+      offset pagination so the suite demonstrates both.
+- [x] **Filter/sort/full-text search on `GET /products`** (`FindProductsQueryDto`): `categoryId`
+      filter, `sort=name|-name|price|-price|stock|-stock` (unrecognized field → `400`, not a
+      silent no-op), `q=<term>` full-text search via Postgres `to_tsvector`/`plainto_tsquery`.
+      `page`+`pageSize` (both required together) switch the response into a
+      `{data,page,pageSize,total,totalPages}` envelope; absent, the bare-array shape M1-M3's tests
+      already assert is unchanged.
+- [x] **Isolation-model adaptation, noted explicitly**: plan_v2.md's isolation model says pagination
+      tests should each use "a unique category" as their per-test facet — but M2/M3 already made
+      categories read-only (seeded only, `POST /categories` is a genuine `405`). Substituted a
+      unique full-text search term (`q=<tag>` embedded in each test's own product names) as the
+      per-test facet instead: it gives the identical exact-count, collision-free isolation
+      guarantee the plan is actually after, without reopening that earlier decision, and doubles
+      as its own test of the search feature.
+- [x] Ported `tests/.pending-v2-port/{order-workflow,pagination,rate-limit}.tflw` onto the v2 API
+      as `tests/jobs.tflw`, `tests/product-query.tflw`, and folded rate-limiting into
+      `tests/reviews.tflw` (new); updated `tests/helpers/paginate.ts` for the v2 base URL and
+      `{data,totalPages}` response shape (`X-Test-NS` header replaced by the `q` search-term
+      facet); `tests/helpers/sleep-and-retry.ts` reused verbatim (already generic).
+
+**Verified by:** fresh `node cli.mjs stop && node cli.mjs start` (clean DB, migrations included the
+new `AddJobs` migration), then `tflw run` against the live stack, 2026-07-07:
+1. **Async job**: create a product+order (`pending`) → `POST /orders/:id/fulfill` → `202` +
+   `Location: /v1/jobs/<id>` + `body.status: "processing"`; `wait until api GET /jobs/:id` reaches
+   `"completed"`; the order itself is then `"fulfilled"`. Only an admin can trigger it (`403` for
+   the owning customer). A job is scoped like its order (`403` for a different user, `200` for the
+   owner). Fulfilling a non-pending order → `409`.
+2. **Rate limiting**: 3 invalid-body (`rating:0`, `422` each — the guard runs before validation,
+   so each attempt still burns a window slot without creating a real review) requests followed by
+   a 4th → `429` with `Retry-After` matching `^[0-9]+$`; capturing that value, waiting it out via
+   the JS helper, then a valid request → `201` (first real review, proving the window reset).
+3. **Reviews (nested resource)**: create + read-back via the nested list; a second review from the
+   same user on the same product → `409` with `body.detail contains "already reviewed"`; no auth →
+   `401`; 3 reviewers (admin + 2 users) with `limit=2` → page 1 has 2 items + a `Link` header
+   matching `rel="next"`; following the captured `nextCursor` → the true remaining 1 item, no
+   duplicate/missing row.
+4. **Product query**: `q=<tag>&sort=price`/`sort=-price` order 3 same-tagged products correctly;
+   combined `q`+`categoryId` still returns exactly 3; an unrecognized `sort` value → `400`; offset
+   pagination over 5 same-tagged products reports `total:5`, `totalPages:3`, exact per-page
+   counts; the JS-escape-hatch page-walk's aggregated count matches the same facet's `total`.
+5. **One bug caught by this verification pass itself**: the cursor-pagination test's second page
+   initially returned the previous page's boundary row again (a duplicate). Root cause: Postgres's
+   `now()` (populating `created_at`) has microsecond precision, but the cursor is encoded from a
+   JS `Date` (millisecond precision only) — the boundary row's own `created_at > :cursor` came out
+   true against the millisecond-truncated cursor value, since its real sub-millisecond remainder
+   was nonzero. Fixed by truncating the column to milliseconds (`date_trunc('milliseconds', ...)`)
+   on both sides of the comparison; re-verified clean.
+6. **`npx tflw check`**: `13 files checked, no problems found`.
+7. **`npx tflw run`** on a freshly-restarted stack: `PASS 55/55 passed`, exit 0 (41 carried over
+   from M0–M3 + 14 new M4 tests).
+8. **Parallel-safety**: repeated fresh-restart + run with `--workers 4` → `PASS 55/55 passed`
+   again — including the rate-limit tests (whose window-keying by `(user,product)` was the main
+   parallel-safety risk in this milestone) and the async-job test (whose real ~600ms background
+   delay was the main timing risk).
+9. No new `TFLW-FEATURE-GAPS.md` entry from M4 beyond what v1 already logged (the page-walk
+   escape hatch and `Retry-After`-aware retry, both already gaps #1/#2, now just re-proven against
+   the v2 API) — everything newly built (async job polling, cursor pagination + Link header,
+   filter/sort/search) was cleanly expressible declaratively.
 
 ---
 

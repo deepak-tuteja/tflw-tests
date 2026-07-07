@@ -55,4 +55,19 @@ export class OrdersController {
     const order = await this.orders.findOneScoped(id, user);
     return order.items;
   }
+
+  // 202-Accepted async job (M4): the fulfillment itself happens after this request returns —
+  // the response is just the pollable job handle, via `Location` and the body alike.
+  @Post(':id/fulfill')
+  @Roles(UserRole.ADMIN)
+  async fulfill(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthedUser,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const job = await this.orders.fulfill(id, user);
+    res.status(202);
+    res.setHeader('Location', `/v1/jobs/${job.id}`);
+    return { jobId: job.id, status: job.status };
+  }
 }

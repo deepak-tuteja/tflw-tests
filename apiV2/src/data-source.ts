@@ -7,6 +7,7 @@ import { Order } from './entities/order.entity';
 import { OrderItem } from './entities/order-item.entity';
 import { Review } from './entities/review.entity';
 import { TokenRecord } from './entities/token-record.entity';
+import { Job } from './entities/job.entity';
 
 // Used by both the TypeORM CLI (migration:generate/run) and NestJS's
 // TypeOrmModule.forRootAsync at bootstrap, so schema/migrations never drift
@@ -18,7 +19,7 @@ const AppDataSource = new DataSource({
   username: process.env.DB_USER ?? 'postgres',
   password: process.env.DB_PASSWORD ?? 'postgres',
   database: process.env.DB_NAME ?? 'testflow_tests',
-  entities: [User, Category, Product, Order, OrderItem, Review, TokenRecord],
+  entities: [User, Category, Product, Order, OrderItem, Review, TokenRecord, Job],
   migrations: [__dirname + '/migrations/*.{js,ts}'],
   synchronize: false,
 });

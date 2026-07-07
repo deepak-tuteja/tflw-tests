@@ -6,11 +6,13 @@ import { Product } from '../entities/product.entity';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
 import { AuthModule } from '../auth/auth.module';
+import { JobsModule } from '../jobs/jobs.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Order, OrderItem, Product]),
     AuthModule,
+    JobsModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService],

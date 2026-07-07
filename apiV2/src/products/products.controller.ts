@@ -10,6 +10,7 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   Res,
   UseGuards,
 } from '@nestjs/common';
@@ -18,6 +19,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { ProductsService, etagFor } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { FindProductsQueryDto } from './dto/find-products-query.dto';
 import { AnyAuthGuard } from '../auth/guards/any-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -30,8 +32,8 @@ export class ProductsController {
   constructor(private readonly products: ProductsService) {}
 
   @Get()
-  findAll() {
-    return this.products.findAll();
+  findAll(@Query() query: FindProductsQueryDto) {
+    return this.products.findAll(query);
   }
 
   // ETag/If-None-Match conditional GET (RFC7232): a client holding the same version it already

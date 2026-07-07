@@ -1,0 +1,164 @@
+# reviews.tflw — plan_v2.md Cluster 4's nested list endpoint (`GET/POST
+# /products/:id/reviews`), cursor (keyset) pagination with a `Link` response header, and the
+# rate-limited hot path (`POST .../reviews`, keyed per user+product so parallel tests against
+# their own fresh products never share a rate-limit window). Every test creates its own product
+# rather than reviewing a shared seeded one, so the unique(userId, productId) review constraint
+# can never collide across parallel files/workers.
+
+use "./helpers/sleep-and-retry.ts"
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as userAToken
+
+@reviews @crud
+test "creating a review, then reading it back via the nested list"
+  api POST /products body { name: unique("Reviewable Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /products/{productId}/reviews body { rating: 5, comment: "Great product" }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  expect body.rating equals 5
+
+  api GET /products/{productId}/reviews
+  expect status equals 200
+  expect body.data has count 1
+  expect body.data[0].rating equals 5
+  expect body.nextCursor equals null
+
+@reviews
+test "reviewing the same product twice is a conflict, not a duplicate row"
+  api POST /products body { name: unique("Double-reviewed Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /products/{productId}/reviews body { rating: 4 }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+
+  api POST /products/{productId}/reviews body { rating: 2 }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 409
+  expect body.detail contains "already reviewed"
+
+@reviews
+test "reviewing a product without auth is rejected"
+  api POST /products body { name: unique("Guarded Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /products/{productId}/reviews body { rating: 3 }
+  expect status equals 401
+
+@reviews @pagination
+test "the nested reviews list is cursor-paginated with a Link header on the next page"
+  api POST /products body { name: unique("Popular Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /auth/login body { email: env(USER_B_EMAIL), password: env(USER_B_PW) }
+  expect status equals 200
+  capture body.accessToken as userBToken
+
+  api POST /products/{productId}/reviews body { rating: 5 }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+
+  api POST /products/{productId}/reviews body { rating: 3 }
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 201
+
+  api POST /products/{productId}/reviews body { rating: 4 }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+
+  api GET /products/{productId}/reviews?limit=2
+  expect status equals 200
+  expect body.data has count 2
+  expect header "link" matches "rel=\"next\""
+  capture body.nextCursor as cursor
+
+  api GET /products/{productId}/reviews?limit=2&cursor={cursor}
+  expect status equals 200
+  expect body.data has count 1
+  expect body.nextCursor equals null
+
+@reviews @ratelimit
+test "exceeding the review rate limit returns 429 with a Retry-After header"
+  # Deliberately invalid bodies (rating 0 fails Min(1)): the rate-limit guard runs before
+  # validation, so each attempt still burns a window slot without ever creating a real review —
+  # keeps this test independent of the unique(userId, productId) conflict case above.
+  api POST /products body { name: unique("Rate-limited Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /auth/login body { email: env(USER_B_EMAIL), password: env(USER_B_PW) }
+  expect status equals 200
+  capture body.accessToken as userBToken
+
+  api POST /products/{productId}/reviews body { rating: 0 }
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 422
+
+  api POST /products/{productId}/reviews body { rating: 0 }
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 422
+
+  api POST /products/{productId}/reviews body { rating: 0 }
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 422
+
+  api POST /products/{productId}/reviews body { rating: 0 }
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 429
+  expect header "Retry-After" matches "^[0-9]+$"
+
+@reviews @ratelimit
+test "a JS helper can honor Retry-After, and the follow-up request then succeeds"
+  api POST /products body { name: unique("Retry-honoring Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /auth/login body { email: env(USER_B_EMAIL), password: env(USER_B_PW) }
+  expect status equals 200
+  capture body.accessToken as userBToken
+
+  api POST /products/{productId}/reviews body { rating: 0 }
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 422
+
+  api POST /products/{productId}/reviews body { rating: 0 }
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 422
+
+  api POST /products/{productId}/reviews body { rating: 0 }
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 422
+
+  api POST /products/{productId}/reviews body { rating: 0 }
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 429
+  capture header "Retry-After" as retryAfterSeconds
+
+  let waited = sleep and retry(retryAfterSeconds)
+
+  api POST /products/{productId}/reviews body { rating: 5, comment: "worth the wait" }
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 201

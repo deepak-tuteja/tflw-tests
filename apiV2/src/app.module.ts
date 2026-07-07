@@ -13,6 +13,9 @@ import { Order } from './entities/order.entity';
 import { OrderItem } from './entities/order-item.entity';
 import { Review } from './entities/review.entity';
 import { TokenRecord } from './entities/token-record.entity';
+import { Job } from './entities/job.entity';
+import { JobsModule } from './jobs/jobs.module';
+import { ReviewsModule } from './reviews/reviews.module';
 
 @Module({
   imports: [
@@ -26,7 +29,7 @@ import { TokenRecord } from './entities/token-record.entity';
         username: config.get<string>('DB_USER', 'postgres'),
         password: config.get<string>('DB_PASSWORD', 'postgres'),
         database: config.get<string>('DB_NAME', 'testflow_tests'),
-        entities: [User, Category, Product, Order, OrderItem, Review, TokenRecord],
+        entities: [User, Category, Product, Order, OrderItem, Review, TokenRecord, Job],
         // Migrations run as a separate step (cli.mjs's start sequence);
         // the app never mutates schema on its own.
         synchronize: false,
@@ -37,6 +40,8 @@ import { TokenRecord } from './entities/token-record.entity';
     CategoriesModule,
     ProductsModule,
     OrdersModule,
+    JobsModule,
+    ReviewsModule,
   ],
 })
 export class AppModule {}
