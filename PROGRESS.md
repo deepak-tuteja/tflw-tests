@@ -33,6 +33,7 @@ longer apply. See the v2 tracker below.
 | M8 — verbose step logging + always-on live failure diff, consumed here | ✅ | 2026-07-07 | 2026-07-07 |
 | M9 — report.html per-file sidebar tree + tabs, consumed here | ✅ | 2026-07-07 | 2026-07-07 |
 | M10 — `tflw docs [topic]` cheatsheet, consumed here | ✅ | 2026-07-07 | 2026-07-07 |
+| M11 — `check --format json` + `run --only`, consumed here | ✅ | 2026-07-07 | 2026-07-07 |
 
 ---
 
@@ -738,6 +739,20 @@ decision 93. Pure CLI addition: no grammar, no `.tflw` files to update.
 **Verified by:** fresh `node cli.mjs stop && node cli.mjs start`, then `npx tflw run` → `PASS
 77/77 passed` (clean this time — no repeat of the M6-M9 admin-session timing flake, confirming
 this track carries no execution-path risk at all, only a new standalone command).
+
+## M11 — `check --format json` + `run --only`, consumed here ✅
+
+Last of the four `/grill-me` UX/tooling tracks scoped 2026-07-07 — `testFlow/PLAN.md` decision 94
+(the VS Code extension itself isn't consumed here at all, since it's a separate package never
+vendored via the `tflw` npm tarball; only its two CLI prerequisites are).
+
+- [x] Refreshed the vendored tarball (`npm run refresh-tflw` + the stale-lockfile workaround).
+- [x] `npx tflw check --format json tests/crud-lifecycle.tflw --env local` → `[]` against a real
+      clean file in this suite.
+- [x] `npx tflw run --only "full product CRUD lifecycle" --no-color` → `PASS 1/1 passed`, exactly
+      the one named test, against the real running API.
+
+**Verified by:** fresh restart, `npx tflw run --workers 4` → `PASS 77/77 passed`.
 
 ## M1 — API showcase ✅
 
