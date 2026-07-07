@@ -1,0 +1,19 @@
+# retry-exhausted.tflw — DEMO-FAIL FIXTURE (PLAN M1.5): an intentionally-failing showcase of
+# tflw's exhausted-retry reporting. `retry 1` gives 2 total attempts against a widget that needs
+# 3 to succeed — a genuine hard failure, not a flaky pass.
+#
+# Lives in a dot-prefixed directory (along with the rest of tests/.demo-fail/) so a bare
+# `tflw run`/`tflw check` never discovers it — tflw's `discoverTests` skips any dot-prefixed
+# entry, and there's no ignore-glob config key, so this is the only way to keep an
+# intentionally-failing fixture out of the default green run. Run explicitly:
+#   npx tflw run tests/.demo-fail/*.tflw --tag demofail
+
+before
+  let ns = random string 12
+
+@demofail @retryexhausted
+test "flaky-widget never recovers within a too-small retry budget" as admin retry 1
+  let key = random string 8
+  api POST /flaky-widget body { key: {key}, name: "Doomed Thing" }
+    header "X-Test-NS" is "{ns}"
+  expect status equals 201

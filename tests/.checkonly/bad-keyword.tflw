@@ -1,0 +1,13 @@
+# bad-keyword.tflw — CHECK-ONLY FIXTURE (PLAN M1.5): a typo'd step keyword, deliberately invalid
+# syntax that never parses — demonstrates `tflw check`'s teaching diagnostic (TF011: unrecognised
+# statement keyword, "did you mean `expect`?").
+#
+# This file (and the rest of tests/.checkonly/) is invalid .tflw and would break a bare `tflw
+# run`/`tflw check` if it lived anywhere non-dot — `tflw check` shares the exact same
+# discovery/validation path as `tflw run` (both skip dot-prefixed entries). Demonstrate it with an
+# explicit file argument only:
+#   npx tflw check tests/.checkonly/bad-keyword.tflw
+
+test "a typo'd step keyword"
+  api GET /health
+  expct status equals 200

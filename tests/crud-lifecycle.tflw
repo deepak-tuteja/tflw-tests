@@ -1,22 +1,38 @@
 # crud-lifecycle.tflw — full create/read/update/delete against `core`, as the `admin` bearer
 # session.
 
+before
+  let ns = random string 12
+
+@crud
 test "full product CRUD lifecycle" as admin
   api POST /products body { name: unique("Lifecycle Widget"), price: 15, category: "misc", inStock: true }
+    header "X-Test-NS" is "{ns}"
   expect status equals 201
   expect body.inStock equals true
   capture body.id as id
 
   api GET /products/{id}
+    header "X-Test-NS" is "{ns}"
   expect status equals 200
   expect body.category equals "misc"
 
   api PUT /products/{id} body { price: 20 }
+    header "X-Test-NS" is "{ns}"
   expect status equals 200
   expect body.price equals 20
 
   api DELETE /products/{id}
+    header "X-Test-NS" is "{ns}"
   expect status equals 200
 
   api GET /products/{id}
+    header "X-Test-NS" is "{ns}"
   expect status equals 404
+
+@crud
+test "creating a product with a missing field is rejected" as admin
+  api POST /products body { name: "Incomplete Widget", price: 9 }
+    header "X-Test-NS" is "{ns}"
+  expect status equals 400
+  expect body.error contains "required"

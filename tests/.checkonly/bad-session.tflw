@@ -1,0 +1,10 @@
+# bad-session.tflw — CHECK-ONLY FIXTURE (PLAN M1.5): a test opting into a session that no
+# `session` block declares — demonstrates `tflw check`'s teaching diagnostic (TF028: a `test …
+# as <session>` name not declared by any `session` block).
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/bad-session.tflw
+
+test "opts into an undeclared session" as ghost
+  api GET /health
+  expect status equals 200

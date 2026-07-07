@@ -1,0 +1,70 @@
+# rate-limit.tflw — POST /rate-limited-widget enforces a per-namespace sliding window (3
+# requests/second); over budget it returns 429 + a `Retry-After` header. `retry N` (SPEC §4.4) is
+# fixed-count only — it can't read a response header to schedule its next attempt — so honoring
+# `Retry-After` needs the JS escape hatch. Logged as TFLW-FEATURE-GAPS.md #2.
+
+use "./helpers/sleep-and-retry.ts"
+
+before
+  let ns = random string 12
+
+@ratelimit
+test "exceeding the rate limit returns 429 with a Retry-After header"
+  api auth POST /auth/login body { email: env(USER_EMAIL), password: env(USER_PW) }
+  expect status equals 200
+  capture body.token as token
+
+  api POST /rate-limited-widget
+    header "Authorization" is "Bearer {token}"
+    header "X-Test-NS" is "{ns}"
+  expect status equals 201
+
+  api POST /rate-limited-widget
+    header "Authorization" is "Bearer {token}"
+    header "X-Test-NS" is "{ns}"
+  expect status equals 201
+
+  api POST /rate-limited-widget
+    header "Authorization" is "Bearer {token}"
+    header "X-Test-NS" is "{ns}"
+  expect status equals 201
+
+  api POST /rate-limited-widget
+    header "Authorization" is "Bearer {token}"
+    header "X-Test-NS" is "{ns}"
+  expect status equals 429
+  expect header "Retry-After" matches "^[0-9]+$"
+
+@ratelimit
+test "a JS helper can honor Retry-After, and the follow-up request then succeeds"
+  api auth POST /auth/login body { email: env(USER_EMAIL), password: env(USER_PW) }
+  expect status equals 200
+  capture body.token as token
+
+  api POST /rate-limited-widget
+    header "Authorization" is "Bearer {token}"
+    header "X-Test-NS" is "{ns}"
+  expect status equals 201
+
+  api POST /rate-limited-widget
+    header "Authorization" is "Bearer {token}"
+    header "X-Test-NS" is "{ns}"
+  expect status equals 201
+
+  api POST /rate-limited-widget
+    header "Authorization" is "Bearer {token}"
+    header "X-Test-NS" is "{ns}"
+  expect status equals 201
+
+  api POST /rate-limited-widget
+    header "Authorization" is "Bearer {token}"
+    header "X-Test-NS" is "{ns}"
+  expect status equals 429
+  capture header "Retry-After" as retryAfterSeconds
+
+  let waited = sleep and retry(retryAfterSeconds)
+
+  api POST /rate-limited-widget
+    header "Authorization" is "Bearer {token}"
+    header "X-Test-NS" is "{ns}"
+  expect status equals 201

@@ -1,16 +1,23 @@
 # data-tables.tflw — `with each`, inline and file-backed, one reported case per row.
 
+before
+  let ns = random string 12
+
+@crud @tables
 with each
   | name        | price | category     |
   | "Table Pen" | 1.5   | "stationery" |
   | "Table Mug" | 6     | "kitchen"    |
 test "creates {name} via an inline data table" as admin
   api POST /products body { name: {name}, price: {price}, category: {category} }
+    header "X-Test-NS" is "{ns}"
   expect status equals 201
   expect body.category equals {category}
 
+@crud @tables
 with each from "./data/products.json"
 test "creates {name} via a file-backed data table" as admin
   api POST /products body { name: {name}, price: {price}, category: {category} }
+    header "X-Test-NS" is "{ns}"
   expect status equals 201
   expect body.price equals {price}

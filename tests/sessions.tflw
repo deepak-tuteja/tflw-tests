@@ -1,14 +1,35 @@
 # sessions.tflw — the `shopper` session showcases tflw's cookie-based auth transport (the
-# `admin` bearer session is exercised throughout the rest of this suite). Both tests opt into
-# the same session; its login runs once for the whole run, not once per test (SPEC §3.3).
+# `admin` bearer session is exercised throughout the rest of this suite). Both cached-session
+# tests opt into the same session; its login runs once for the whole run, not once per test
+# (SPEC §3.3). Auth-only file — no `X-Test-NS` hook, since `api/auth`'s user/session state has
+# no shared-mutable-state race today (registrations use `unique email`, sessions are keyed by a
+# random UUID).
 
+@auth @sessions
 test "shopper session applies its cookie automatically" as shopper
   api auth GET /auth/profile
   expect status equals 200
   expect body.user.email equals env(USER_EMAIL)
   expect body.user.role equals "user"
 
+@auth @sessions
 test "shopper session is reused across tests, not re-established" as shopper
   api auth GET /auth/profile
   expect status equals 200
   expect body.user.role equals "user"
+
+@auth @sessions
+test "logging out invalidates the session cookie"
+  # Inline ad hoc login (not the cached `shopper` session) so logging out here can't poison the
+  # shared session cache other tests in this file rely on.
+  api auth POST /auth/session-login body { email: env(USER_EMAIL), password: env(USER_PW) }
+  expect status equals 200
+  capture body.sessionId as sid
+
+  api auth POST /auth/logout
+    header "Cookie" is "tf_sid={sid}"
+  expect status equals 200
+
+  api auth GET /auth/profile
+    header "Cookie" is "tf_sid={sid}"
+  expect status equals 401

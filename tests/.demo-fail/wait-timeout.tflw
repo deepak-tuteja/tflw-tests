@@ -1,0 +1,24 @@
+# wait-timeout.tflw — DEMO-FAIL FIXTURE (PLAN M1.5): `wait until api` polling for a status the
+# order state machine never produces — a real timeout failure, showing tflw's timeout diagnostic.
+# `tflw.config`'s `defaults: timeout wait 5s` keeps this fast (~5s) instead of the runtime's 30s
+# default, comfortably above the real order-workflow's ~1.5s completion time.
+#
+# No `X-Test-NS` header here — `wait until api` steps can't carry per-step headers (see
+# order-workflow.tflw's note; also logged in TFLW-FEATURE-GAPS.md #3) — safe to skip anyway since
+# this test only ever looks up its own order by its unique id, never a list.
+#
+# Run explicitly (dot-directory, invisible to a bare `tflw run`/`tflw check`):
+#   npx tflw run tests/.demo-fail/*.tflw --tag demofail
+
+@demofail @waittimeout
+test "an order never reaches a status the workflow doesn't produce" as admin
+  api POST /products body { name: unique("Timeout Widget"), price: 5, category: "misc" }
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /orders body { productId: {productId}, qty: 1 }
+  expect status equals 201
+  capture body.id as orderId
+
+  wait until api GET /orders/{orderId}
+    expect body.status equals "cancelled"

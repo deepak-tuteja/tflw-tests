@@ -1,0 +1,10 @@
+# unknown-matcher.tflw — CHECK-ONLY FIXTURE (PLAN M1.5): a typo'd matcher (`eq` instead of
+# `equals`) — demonstrates `tflw check`'s teaching diagnostic (TF014: unrecognised matcher after a
+# subject, "did you mean" one of `equals, contains, matches, is …, has …`).
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/unknown-matcher.tflw
+
+test "a typo'd matcher"
+  api GET /health
+  expect status eq 200

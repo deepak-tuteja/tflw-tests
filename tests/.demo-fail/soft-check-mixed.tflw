@@ -1,0 +1,14 @@
+# soft-check-mixed.tflw — DEMO-FAIL FIXTURE (PLAN M1.5): two passing and two failing soft
+# `check`s in one test — a soft check (unlike `expect`) doesn't fail fast, so all 4 checks run and
+# each shows as its own pass/fail row in the report.
+#
+# Run explicitly (dot-directory, invisible to a bare `tflw run`/`tflw check`):
+#   npx tflw run tests/.demo-fail/*.tflw --tag demofail
+
+@demofail @softmixed
+test "two passing and two failing soft checks in one test"
+  api GET /health
+  check status equals 200
+  check status equals 999
+  check body.status equals "OK"
+  check body.status equals "NOPE"

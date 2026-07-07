@@ -4,12 +4,17 @@
 import "./shared/catalog.tflw"
 use "./helpers/receipt.ts"
 
+before
+  let ns = random string 12
+
+@crud @actions
 test "action + JS escape hatch: create, receipt, delete" as admin
   let productName = unique("Action Widget")
-  let productId = create product(productName, 22.5, "misc")
+  let productId = create product(productName, 22.5, "misc", ns)
 
   let receipt = make receipt(productId, 22.5)
 
   api DELETE /products/{productId}
     header "X-Receipt" is "{receipt}"
+    header "X-Test-NS" is "{ns}"
   expect status equals 200

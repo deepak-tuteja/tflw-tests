@@ -1,11 +1,23 @@
 # auth.tflw — bearer login happens on the `auth` service, the captured token is then used
 # against the `core` (default) service's admin-only writes: cross-service capture-chaining,
 # the payoff of tflw's named-service config (SPEC §3.2).
+#
+# `ns` (PLAN M1.5): a random per-test namespace threaded via `X-Test-NS` on every `core` step, so
+# this file's writes never collide with another file's under `--workers N`. Lives in a per-each
+# `before` hook (shares scope with the test it precedes) rather than `before file` (its own
+# isolated scope, invisible to tests — SPEC §4.2); `random`, not `unique`, because a value a retry
+# needs to reuse identically must replay, not advance (SPEC §7.2).
 
+before
+  let ns = random string 12
+
+@auth @crud
 test "creating a product without a token is rejected"
   api POST /products body { name: "Sneaky Widget", price: 1, category: "misc" }
+    header "X-Test-NS" is "{ns}"
   expect status equals 401
 
+@auth @crud
 test "bearer login on auth authorizes a write on core"
   api auth POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
   expect status equals 200
@@ -13,9 +25,22 @@ test "bearer login on auth authorizes a write on core"
 
   api POST /products body { name: unique("Auth Widget"), price: 12.5, category: "misc" }
     header "Authorization" is "Bearer {token}"
+    header "X-Test-NS" is "{ns}"
   expect status equals 201
   capture body.id as productId
 
   api DELETE /products/{productId}
     header "Authorization" is "Bearer {token}"
+    header "X-Test-NS" is "{ns}"
   expect status equals 200
+
+@auth @crud
+test "a non-admin bearer cannot create a product"
+  api auth POST /auth/login body { email: env(USER_EMAIL), password: env(USER_PW) }
+  expect status equals 200
+  capture body.token as token
+
+  api POST /products body { name: "Should Be Forbidden", price: 1, category: "misc" }
+    header "Authorization" is "Bearer {token}"
+    header "X-Test-NS" is "{ns}"
+  expect status equals 403

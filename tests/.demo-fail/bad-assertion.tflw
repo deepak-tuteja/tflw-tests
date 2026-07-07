@@ -1,0 +1,11 @@
+# bad-assertion.tflw — DEMO-FAIL FIXTURE (PLAN M1.5): a deliberately wrong assertion against a
+# real, passing endpoint — isolates what a plain hard-check-failure report row looks like,
+# distinct from a timeout or an exhausted-retry failure.
+#
+# Run explicitly (dot-directory, invisible to a bare `tflw run`/`tflw check`):
+#   npx tflw run tests/.demo-fail/*.tflw --tag demofail
+
+@demofail @badassertion
+test "a deliberately wrong status expectation against a real passing endpoint"
+  api GET /health
+  expect status equals 999

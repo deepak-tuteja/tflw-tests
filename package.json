@@ -4,6 +4,10 @@
   "private": true,
   "description": "Purpose-built API + UI showcase app for tflw (testFlow) — its dogfood/acceptance target.",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepak-tuteja/tflw-tests.git"
+  },
   "license": "MIT",
   "author": "Deepak Tuteja <tuteja123@gmail.com>",
   "engines": {

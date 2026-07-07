@@ -1,20 +1,13 @@
 # retry-and-flake.tflw — transient-failure showcase: `retry N` against a per-key flaky endpoint
-# (fails twice, then succeeds), and `wait until api` polling an eventual-consistency endpoint.
+# (fails twice, then succeeds). The order-workflow `wait until api` scenario now lives in
+# order-workflow.tflw, rewritten for the multi-stage status vocabulary (PLAN M1.5).
 
+before
+  let ns = random string 12
+
+@flaky
 test "flaky-widget succeeds after retrying" as admin retry 2
   let key = random string 8
   api POST /flaky-widget body { key: {key}, name: "Flaky Thing" }
+    header "X-Test-NS" is "{ns}"
   expect status equals 201
-
-test "order becomes ready after processing" as admin
-  api POST /products body { name: unique("Wait Widget"), price: 8, category: "misc" }
-  expect status equals 201
-  capture body.id as productId
-
-  api POST /orders body { productId: {productId}, qty: 2 }
-  expect status equals 201
-  expect body.status equals "processing"
-  capture body.id as orderId
-
-  wait until api GET /orders/{orderId}
-    expect body.status equals "ready"

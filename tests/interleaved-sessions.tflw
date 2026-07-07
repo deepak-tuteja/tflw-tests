@@ -1,0 +1,41 @@
+# interleaved-sessions.tflw — two identities live in one test: the cached `admin` bearer session
+# and an inline ad hoc `shopper` cookie login (tflw only allows one `as <session>` per test — a
+# second identity has to log in ad hoc rather than opt into `shopper` a second time). Proves
+# namespacing/session isolation holds with two identities active at once.
+#
+# Note: the shopper's cookie only authenticates against `auth` — `api/core`'s `requireAuth` reads
+# an `Authorization` bearer header only, never a cookie — so "interleaved" here means alternating
+# calls between the two identities within a single test, not both writing to the same core
+# resource concurrently.
+
+before
+  let ns = random string 12
+
+@sessions @interleave
+test "admin and shopper are both live in one test" as admin
+  api auth POST /auth/session-login body { email: env(USER_EMAIL), password: env(USER_PW) }
+  expect status equals 200
+  capture body.sessionId as sid
+
+  api auth GET /auth/profile
+    header "Cookie" is "tf_sid={sid}"
+  expect status equals 200
+  expect body.user.role equals "user"
+
+  api POST /products body { name: unique("Interleave Widget"), price: 8, category: "misc" }
+    header "X-Test-NS" is "{ns}"
+  expect status equals 201
+  capture body.id as productId
+
+  api auth GET /auth/profile
+    header "Cookie" is "tf_sid={sid}"
+  expect status equals 200
+  expect body.user.email equals env(USER_EMAIL)
+
+  api POST /orders body { productId: {productId}, qty: 1 }
+    header "X-Test-NS" is "{ns}"
+  expect status equals 201
+
+  api DELETE /products/{productId}
+    header "X-Test-NS" is "{ns}"
+  expect status equals 200
