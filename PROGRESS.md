@@ -31,6 +31,7 @@ longer apply. See the v2 tracker below.
 | M6 — realistic-scale gap hunting | ✅ | 2026-07-07 | 2026-07-07 |
 | M7 — gap #3 resolved (no code change) + gap #8 fixed upstream, consumed here | ✅ | 2026-07-07 | 2026-07-07 |
 | M8 — verbose step logging + always-on live failure diff, consumed here | ✅ | 2026-07-07 | 2026-07-07 |
+| M9 — report.html per-file sidebar tree + tabs, consumed here | ✅ | 2026-07-07 | 2026-07-07 |
 
 ---
 
@@ -697,6 +698,30 @@ adopt — just a tarball refresh + a real-suite sanity run.
    affect parallel correctness.
 3. `npx tflw run tests/crud-lifecycle.tflw --verbose --no-color` → one indented line per step
    (api/expect/capture/header), each with the step's real detail and duration, exactly as designed.
+
+## M9 — report.html per-file sidebar tree + tabs, consumed here ✅
+
+Third of four `/grill-me` UX/tooling tracks scoped 2026-07-07 — `testFlow/PLAN.md` decision 92.
+Pure reporter/CLI change: no grammar, no `.tflw` files to update — a tarball refresh + real-browser
+verification against this suite's own actual multi-file report.
+
+- [x] Refreshed the vendored tarball (`npm run refresh-tflw` + the stale-lockfile workaround) and
+      confirmed the new bundle contains it (`grep -c "filegroup\|TestSlot\|tf-filter"
+      node_modules/tflw/dist/cli.js` → 11).
+
+**Verified by:** fresh `node cli.mjs stop && node cli.mjs start`, then `npx tflw run` (full 77-test
+suite; the same pre-existing `schema-and-shape.tflw` admin-session timing flake from M6-M8
+reproduced again, not a regression). Opened the resulting `report/report.html` in a real Chromium
+tab (served over a local `python3 -m http.server`, since Playwright's sandbox blocks `file://`) via
+Playwright MCP and confirmed, live, against this suite's actual 23-file/77-test report:
+- Zero console errors (beyond an unrelated browser-requested `favicon.ico` 404).
+- `schema-and-shape.tflw`'s file group auto-expanded (it has the run's only 2 failures) with both
+  failing tests listed; every other file group started collapsed.
+- The first failing test's panel was active on load, diff visible inline.
+- Clicking a test link in a different (collapsed) file group expanded that group and switched
+  `<main>` to that test's panel.
+- Typing "lifecycle" into the filter box narrowed the sidebar to only `crud-lifecycle.tflw`.
+- Clicking the "Failed" status toggle narrowed the sidebar to only `schema-and-shape.tflw`.
 
 ## M1 — API showcase ✅
 
