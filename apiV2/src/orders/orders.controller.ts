@@ -36,4 +36,12 @@ export class OrdersController {
   findOne(@Param('id') id: string, @CurrentUser() user: AuthedUser) {
     return this.orders.findOneScoped(id, user);
   }
+
+  // Nested sub-resource (plan_v2.md Part A) — same ownership scoping as the parent, just
+  // projected down to the line items.
+  @Get(':id/items')
+  async findItems(@Param('id') id: string, @CurrentUser() user: AuthedUser) {
+    const order = await this.orders.findOneScoped(id, user);
+    return order.items;
+  }
 }

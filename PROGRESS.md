@@ -24,7 +24,7 @@ longer apply. See the v2 tracker below.
 |---|---|---|---|
 | M0 — NestJS+Postgres+Docker scaffold | ✅ | 2026-07-07 | 2026-07-07 |
 | M1 — Auth & authz cluster | ✅ | 2026-07-07 | 2026-07-07 |
-| M2 — Errors & schema-contract cluster | ⬜ | — | — |
+| M2 — Errors & schema-contract cluster | ✅ | 2026-07-07 | 2026-07-07 |
 | M3 — HTTP maturity & cookies cluster | ⬜ | — | — |
 | M4 — Async & query cluster | ⬜ | — | — |
 | M5 — Gap-provoking scenarios + TFLW-GAPS.md | ⬜ | — | — |
@@ -152,6 +152,72 @@ longer apply. See the v2 tracker below.
    service" artifact already documented in M1.5's verification. A fresh `stop`/`start` between
    runs (or a single run, as CI would do) is clean every time — confirmed 3/3 on fresh restarts,
    including once under `--workers 4`.
+
+---
+
+## v2 M2 — Errors & schema-contract cluster ✅
+
+- [x] `ProblemDetailsFilter` — a global `@Catch()` exception filter rendering every thrown error
+      (Nest `HttpException`s and anything unanticipated, e.g. a raw Postgres FK-violation) as
+      RFC7807 `application/problem+json`: `{type: 'about:blank', title, status, detail,
+      ...(errors if present)}`. 5xx responses are logged server-side via `Logger`; the response
+      body itself stays generic for those, never leaking a stack trace.
+- [x] `ValidationProblemException`/`toValidationProblem()` — a custom `ValidationPipe`
+      `exceptionFactory` that flattens class-validator's nested `ValidationError[]` (including
+      `err.children`) into a flat `{field, message}[]` and throws a `422 Unprocessable Entity`
+      (not Nest's default `400`) carrying that array as `errors`, picked up by the filter above.
+- [x] `CategoriesModule` — minimal read-only `GET /categories` (`assertExists(id)` throws
+      `NotFoundException` for FK validation elsewhere); exists purely so tests can capture a real
+      category UUID for product creation, now that categories are a real FK relationship rather
+      than free-text.
+- [x] `ProductsModule` promoted from M1's read-only stub to full CRUD: `POST /`, `PATCH /:id`,
+      `DELETE /:id` (`204`), all `AnyAuthGuard` + `RolesGuard(@Roles(ADMIN))`; `GET /` and `GET
+      /:id` stay public. `CreateProductDto`/`UpdateProductDto` (the latter `PartialType`-derived)
+      validate `name` (non-empty string), `price`/`stock` (numeric, `Min(0)`), `categoryId`
+      (`IsUUID`), each field annotated with `@ApiProperty()` for the OpenAPI spec.
+- [x] Nested sub-resource: `GET /orders/:id/items` — reuses `OrdersService.findOneScoped` so it
+      inherits the exact same ownership rule as its parent (`403` for a non-owning, non-admin
+      caller), then returns just the `items` array; proves nested resources don't need their own
+      parallel authz logic when they can borrow the parent's.
+- [x] Ported/rewrote `.tflw` files against the real Postgres-backed schema (categories are now FK
+      UUIDs, not free-text): `crud-lifecycle.tflw` (full CRUD + 401/403/422-field-detail/404-shape
+      negative cases + a `random`-generated-fields case folded in from the old `generators.tflw`),
+      `data-tables.tflw` (`with each`, inline and file-backed, `{categoryId}` resolved from the
+      enclosing `before` hook), `actions-and-helpers.tflw` (shared `action` + JS `use` escape
+      hatch, chained in one flow), `order-items.tflw` (new — nested-resource read + its
+      ownership-scoping negative case). `tests/data/products.json` dropped its old free-text
+      `category` field to match.
+- [x] Deliberately out of scope for M2 (belongs to M3's "HTTP maturity & cookies cluster" per
+      plan_v2.md): 409 Conflict semantics, 405/406/415, ETag/If-Match, Idempotency-Key. Confirmed
+      the FK-RESTRICT delete-with-references case (deleting a product still referenced by an
+      order item) doesn't crash the server uncaught — `ProblemDetailsFilter`'s untyped `@Catch()`
+      renders it as a generic (if imprecise) `500` problem+json body — precise handling deferred
+      to M3 as planned.
+
+**Verified by:** fresh `node cli.mjs stop && node cli.mjs start` (clean DB), then curl'd directly
+and via `tflw run` against the live stack, 2026-07-07:
+1. **RFC7807 shape**: every error response (401/403/404/422/500) comes back
+   `Content-Type: application/problem+json` with `{type: 'about:blank', title, status, detail}`;
+   422s additionally carry a `errors: [{field, message}, ...]` array.
+2. **Full CRUD lifecycle** (admin bearer): create → `201` with the posted fields echoed; read →
+   `200`; update (`PATCH price`) → `200` with the new price; delete → `204`; re-read after delete
+   → `404` with the RFC7807 shape, not a stack trace.
+3. **Authz on mutation**: `POST /products` with no token → `401`; with a non-admin bearer → `403`.
+4. **Validation**: `POST /products` with `name: ""`, `price: -5`, `categoryId: "not-a-uuid"` →
+   `422` with all three fields present in `errors[].field`.
+5. **Nested resource + its own ownership scoping**: user A creates an order, reads
+   `GET /orders/:id/items` → `200` with the correct item(s); user B (non-owner, non-admin) hitting
+   the same nested route → `403`, proving it inherits the parent's authz rather than being an
+   open sub-resource.
+6. **`npx tflw check`**: `8 files checked, no problems found`.
+7. **`npx tflw run`** on a freshly-restarted stack: `PASS 30/30 passed`, exit 0 (17 carried over
+   from M1 + 13 new/rewritten M2 tests).
+8. **Parallel-safety**: repeated the same fresh-restart + run cycle with `--workers 4` →
+   `PASS 30/30 passed` again, confirming M2's new tests don't introduce cross-worker collisions
+   (no shared unique-constraint fields written by concurrent product-creation tests).
+9. No new `TFLW-FEATURE-GAPS.md` entry from M2 — RFC7807 errors, field-level validation detail,
+   and nested resources were all cleanly expressible declaratively; nothing here forced a JS
+   escape hatch or exposed a DSL gap.
 
 ---
 

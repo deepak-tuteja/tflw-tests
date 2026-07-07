@@ -1,0 +1,71 @@
+# crud-lifecycle.tflw — full product create/read/update/delete against v2's real Postgres-backed
+# API, as the `admin` bearer session, plus the validation/authz negative cases RFC7807 makes
+# worth asserting shape on (not just a status code).
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+@crud
+test "full product CRUD lifecycle" as admin
+  api POST /products body { name: unique("Lifecycle Widget"), price: 15, stock: 10, categoryId: {categoryId} }
+  expect status equals 201
+  expect body.stock equals 10
+  capture body.id as id
+
+  api GET /products/{id}
+  expect status equals 200
+  expect body.categoryId equals "{categoryId}"
+
+  api PATCH /products/{id} body { price: 20 }
+  expect status equals 200
+  expect body.price equals "20"
+
+  api DELETE /products/{id}
+  expect status equals 204
+
+  api GET /products/{id}
+  expect status equals 404
+  expect body.type equals "about:blank"
+  expect body.title equals "Not Found"
+
+@crud
+test "creating a product without a token is rejected"
+  api POST /products body { name: "Sneaky Widget", price: 1, stock: 1, categoryId: {categoryId} }
+  expect status equals 401
+
+@crud
+test "a non-admin bearer cannot create a product"
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as token
+
+  api POST /products body { name: "Should Be Forbidden", price: 1, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {token}"
+  expect status equals 403
+
+@crud
+test "creating a product with invalid fields returns RFC7807 field-level detail" as admin
+  api POST /products body { name: "", price: -5, stock: 1, categoryId: "not-a-uuid" }
+  expect status equals 422
+  expect body.type equals "about:blank"
+  expect body.title equals "Unprocessable Entity"
+  expect any body.errors.field equals "name"
+  expect any body.errors.field equals "price"
+  expect any body.errors.field equals "categoryId"
+
+@crud
+test "reading a nonexistent product returns a well-formed 404, not a stack trace"
+  api GET /products/00000000-0000-0000-0000-000000000000
+  expect status equals 404
+  expect body.status equals 404
+  expect body.detail contains "not found"
+
+@crud
+test "creates a product with random generated fields" as admin
+  let productName = unique("Random Widget")
+  let productPrice = random decimal 5 to 50
+  api POST /products body { name: {productName}, price: {productPrice}, stock: 5, categoryId: {categoryId} }
+  expect status equals 201
+  expect body.name equals "{productName}"

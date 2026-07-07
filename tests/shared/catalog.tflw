@@ -1,0 +1,10 @@
+# Shared action (P#17): creates a product under the calling test's own auth (its session headers
+# or manually-set headers both apply, since the action's steps splice into the same test), gives
+# back its id. Actions get their own scope, no closures over the caller (SPEC §8) — `categoryId`
+# is an explicit parameter, not implicit scope.
+
+action create product(name, price, stock, categoryId)
+  api POST /products body { name: {name}, price: {price}, stock: {stock}, categoryId: {categoryId} }
+  expect status equals 201
+  capture body.id as id
+  give id

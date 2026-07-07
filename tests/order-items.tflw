@@ -1,0 +1,43 @@
+# order-items.tflw — the nested `/orders/{id}/items` sub-resource (plan_v2.md Part A), scoped by
+# the same ownership rule as its parent order.
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api GET /products
+  expect status equals 200
+  capture body[0].id as productId
+
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as userAToken
+
+  api POST /auth/login body { email: env(USER_B_EMAIL), password: env(USER_B_PW) }
+  expect status equals 200
+  capture body.accessToken as userBToken
+
+@crud
+test "reading an order's nested items reflects what was ordered"
+  api POST /orders body { items: [{ productId: {productId}, quantity: 4 }] }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as orderId
+
+  api GET /orders/{orderId}/items
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  expect body has count 1
+  expect all body.quantity equals 4
+
+@crud @authz
+test "a nested items read is scoped exactly like the parent order"
+  api POST /orders body { items: [{ productId: {productId}, quantity: 2 }] }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as orderId
+
+  api GET /orders/{orderId}/items
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 403

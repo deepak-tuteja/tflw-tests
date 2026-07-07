@@ -5,6 +5,7 @@ import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { ProductsModule } from './products/products.module';
 import { OrdersModule } from './orders/orders.module';
+import { CategoriesModule } from './categories/categories.module';
 import { User } from './entities/user.entity';
 import { Category } from './entities/category.entity';
 import { Product } from './entities/product.entity';
@@ -33,6 +34,7 @@ import { TokenRecord } from './entities/token-record.entity';
     }),
     HealthModule,
     AuthModule,
+    CategoriesModule,
     ProductsModule,
     OrdersModule,
   ],

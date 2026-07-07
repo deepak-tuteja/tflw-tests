@@ -1,9 +1,25 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { ProductsService } from './products.service';
+import { CreateProductDto } from './dto/create-product.dto';
+import { UpdateProductDto } from './dto/update-product.dto';
+import { AnyAuthGuard } from '../auth/guards/any-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../entities/user.entity';
 
-// Read-only in M1 — just enough for order-creation tests to look up a real product id.
-// Full CRUD + validation lands in M2, ETag/If-Match in M3.
+// Reads are public (browsing a catalog needs no auth); writes are admin-only.
+// ETag/If-Match optimistic concurrency on reads/updates lands in M3.
 @ApiTags('products')
 @Controller('products')
 export class ProductsController {
@@ -17,5 +33,27 @@ export class ProductsController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.products.findOne(id);
+  }
+
+  @Post()
+  @UseGuards(AnyAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  create(@Body() dto: CreateProductDto) {
+    return this.products.create(dto);
+  }
+
+  @Patch(':id')
+  @UseGuards(AnyAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  update(@Param('id') id: string, @Body() dto: UpdateProductDto) {
+    return this.products.update(id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @UseGuards(AnyAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async remove(@Param('id') id: string) {
+    await this.products.remove(id);
   }
 }
