@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-testflow_tests}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    # No named/host volume — an ephemeral per-run DB is the isolation model
+    # (plan_v2.md Part A); `node cli.mjs stop` runs `down -v` so every
+    # `start` begins from a clean database.
+
+  api:
+    build:
+      context: ./apiV2
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-testflow_tests}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev-access-secret-change-me}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-refresh-secret-change-me}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-5s}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-1h}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_PW: ${ADMIN_PW:-admin-pw-123}
+      USER_A_EMAIL: ${USER_A_EMAIL:-alice@example.com}
+      USER_A_PW: ${USER_A_PW:-alice-pw-123}
+      USER_B_EMAIL: ${USER_B_EMAIL:-bob@example.com}
+      USER_B_PW: ${USER_B_PW:-bob-pw-123}
+      PORT: 4001
+    ports:
+      - "4001:4001"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4001/v1/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 20

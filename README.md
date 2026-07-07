@@ -1,18 +1,24 @@
 # testFlow-tests
 
-A purpose-built API + UI showcase app for [tflw](../testFlow) — a testing-only DSL/CLI. This
-project exists solely to give tflw's current and upcoming features something real to run
-against; it replaces `automationTestPOC` as tflw's dogfood/acceptance target.
+A purpose-built, realistic e-commerce API (NestJS + Postgres, Dockerized) for
+[tflw](../testFlow) — a testing-only DSL/CLI. This project exists solely to give tflw's current
+and upcoming features something real to run against, and to surface genuine tflw DSL gaps by
+writing the scenarios a user would naturally reach for. See `plan_v2.md` for the full v2 rewrite
+plan and `PROGRESS.md` for build status.
+
+> **v2 rewrite in progress (2026-07-07):** the plain-Node `api/core`+`api/auth`+`frontend` app has
+> been retired in favor of `apiV2/` (NestJS+Postgres, Dockerized). `tests/*.tflw` still target the
+> old API shape and are red until they're ported starting M1 — expected during the rewrite, not a
+> regression. See `plan_v2.md`'s milestone phasing.
 
 ## Layout
 
 ```
-api/core/            products/orders CRUD, a 4-stage order workflow, pagination, rate limiting,
-                     batch create, a flaky endpoint, an array-returning endpoint — all
-                     namespaced per `X-Test-NS` header for parallel-safe test isolation
-api/auth/            bearer-token login + cookie-session login
-frontend/            plain HTML/JS pages (no build step) — ready for tflw's browser half (M3)
-tests/               .tflw test files, one per feature/scenario
+apiV2/               NestJS + TypeORM + Postgres e-commerce API — users/categories/products/
+                     orders/order_items/reviews; migrations + deterministic idempotent seed
+                     run on container start; /v1 prefix; OpenAPI at /openapi.json + /docs
+docker-compose.yml   postgres (ephemeral per-run volume) + api, healthchecked
+tests/               .tflw test files, one per feature/scenario (being ported to v2, M1-M5)
 tests/helpers/       JS escape-hatch helpers (page-walk, Retry-After sleep-and-retry, etc.)
 tests/shared/        actions shared across files (e.g. `create product`)
 tests/.demo-fail/    intentionally-failing fixtures, tag-gated + dot-dir-excluded from `tflw run`
@@ -20,20 +26,20 @@ tests/.checkonly/    invalid-syntax fixtures, demonstrated via `tflw check <file
 tflw.config          services, sessions, env, `defaults: timeout wait 5s`
 vendor/              npm-packed tflw tarball (regenerated, not committed)
 scripts/             refresh-tflw.mjs
-TFLW-FEATURE-GAPS.md genuine tflw DSL gaps found while building this suite
+TFLW-FEATURE-GAPS.md genuine tflw DSL gaps found while building the v1 (plain-Node) suite
 ```
 
 ## Setup
 
 ```sh
+cp .env.example .env   # Postgres creds, JWT secrets, seeded admin/userA/userB credentials
+node cli.mjs start     # docker compose up -d --build --wait (postgres + api on :4001)
 npm run refresh-tflw   # packs ../testFlow/packages/cli and installs the tarball
-npm run start:core     # :4001
-npm run start:auth     # :4002
-npm run start:frontend # :4000
-npx tflw run           # runs tests/*.tflw against the running services
+npx tflw run           # runs tests/*.tflw against the running api
+node cli.mjs stop      # docker compose down -v — drops the DB too (ephemeral per-run isolation)
 ```
 
-Or use the `testflow-tests-app` skill to start/stop the three processes.
+Or use the `testflow-tests-app` skill to start/stop the stack.
 
 ## Reporting
 

@@ -10,10 +10,71 @@ with real evidence before marking it done.
 |---|---|---|---|
 | M1 — API showcase | ✅ | 2026-07-06 | 2026-07-06 |
 | M1.5 — parallel-safety, negative cases & richer scenarios | ✅ | 2026-07-06 | 2026-07-07 |
-| M2 — UI showcase | ⬜ | — | — |
-| M3 — watch-mode showcase | ⬜ | — | — |
-| M4 — reuse-pass showcase | ⬜ | — | — |
-| M5 — full acceptance parity | ⬜ | — | — |
+| ~~M2 — UI showcase~~ / ~~M3 — watch-mode~~ / ~~M4 — reuse-pass~~ / ~~M5 — full acceptance parity~~ | superseded | — | — |
+
+**Superseded 2026-07-07** by `plan_v2.md` — the v2 rewrite (NestJS+Postgres, dogfood gap-discovery)
+retires the plain-Node app, so the old M2–M5 UI/watch-mode/reuse-pass/acceptance milestones no
+longer apply. See the v2 tracker below.
+
+---
+
+## v2 rewrite — realistic Dockerized API (plan_v2.md)
+
+| Milestone | Status | Started | Finished |
+|---|---|---|---|
+| M0 — NestJS+Postgres+Docker scaffold | ✅ | 2026-07-07 | 2026-07-07 |
+| M1 — Auth & authz cluster | ⬜ | — | — |
+| M2 — Errors & schema-contract cluster | ⬜ | — | — |
+| M3 — HTTP maturity & cookies cluster | ⬜ | — | — |
+| M4 — Async & query cluster | ⬜ | — | — |
+| M5 — Gap-provoking scenarios + TFLW-GAPS.md | ⬜ | — | — |
+
+---
+
+## M0 — NestJS+Postgres+Docker scaffold ✅
+
+- [x] `apiV2/` NestJS project (TypeORM + `pg`, `@nestjs/config`, `@nestjs/swagger`,
+      `@nestjs/jwt`+`@nestjs/passport` installed ahead of M1, `class-validator`/`class-transformer`,
+      `cookie-parser`, `bcrypt`)
+- [x] Domain entities: `User` (role enum), `Category`, `Product` (FK→category, `@VersionColumn`
+      for the M3 ETag/If-Match cluster), `Order` (FK→user, nullable-unique `idempotencyKey` for
+      the M3 cluster — Postgres treats NULLs as distinct so non-idempotent requests never
+      collide), `OrderItem` (FK→order+product, price snapshot), `Review` (unique per user+product)
+- [x] `src/data-source.ts` (shared by the TypeORM CLI and `TypeOrmModule.forRootAsync`) +
+      generated `InitSchema` migration, applied cleanly against a real Postgres
+- [x] `src/seed/seed.ts` — deterministic, idempotent (upsert-by-natural-key) seed: admin + two
+      distinct users (alice/bob, for M1's cross-user authz tests), 3 categories, 5 products
+- [x] `GET /v1/health` (checks DB via `SELECT 1`), global `/v1` prefix, global `ValidationPipe`
+- [x] OpenAPI via `@nestjs/swagger`: spec at `/openapi.json`, UI at `/docs` (both outside the
+      `/v1` prefix, as Swagger mounts directly rather than as a controller)
+- [x] `Dockerfile` (node:22-alpine, single-stage, `npm ci && npm run build`) + `docker-entrypoint.sh`
+      (migration:run → seed → `node dist/main.js`) + `docker-compose.yml` (postgres healthchecked,
+      no named volume — ephemeral per-run DB per plan_v2.md's isolation model; api depends on
+      postgres's healthcheck, itself healthchecked via `wget` on `/v1/health`)
+- [x] `cli.mjs` rewritten to wrap `docker compose up -d --build --wait` / `down -v` / `ps` — same
+      `start|stop|status` CLI contract, so the `testflow-tests-app` skill needed no logic changes
+      (description text updated in both `.claude/skills/` and `.pi/skills/`, plus root `CLAUDE.md`)
+- [x] Retired `api/core`, `api/auth`, `frontend`, the old plain-Node `cli.mjs`; root `package.json`
+      scripts trimmed (`start:core`/`start:auth`/`start:frontend` removed); `.env`/`.env.example`
+      updated to the v2 shape (DB creds, JWT secrets, admin+userA+userB credentials)
+
+**Verified by:** full stack brought up twice via `node cli.mjs start`/`stop` against real Docker
+(2026-07-07):
+1. `docker compose up -d --build --wait` builds the image, waits for both `postgres` and `api`
+   healthchecks — both report `Healthy`.
+2. `curl /v1/health` → `200 {"status":"ok","db":"ok"}`; `curl /openapi.json` → `200`; `curl /docs`
+   → `200`.
+3. `psql` against the running container confirms the seed ran: 3 users
+   (`admin@example.com`/admin, `alice@example.com`/user, `bob@example.com`/user), 5 products
+   across 3 categories.
+4. Seed idempotency confirmed independently (pre-Docker, against a temporary local Postgres):
+   running `npm run seed` twice left row counts unchanged (3 users, 5 products) — no duplicates.
+5. **Ephemeral-per-run isolation proven**: `node cli.mjs stop` (→ `docker compose down -v`)
+   removes both containers, the network, *and* the postgres volume; a subsequent
+   `node cli.mjs start` rebuilds from scratch, re-runs migrations+seed, and `select count(*) from
+   users` again reports exactly 3 — confirming no state survives a stop/start cycle.
+6. `node cli.mjs status` (→ `docker compose ps`) reports nothing when stopped, both containers
+   when started.
 
 ---
 

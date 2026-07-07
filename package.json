@@ -2,7 +2,7 @@
   "name": "testflow-tests",
   "version": "0.1.0",
   "private": true,
-  "description": "Purpose-built API + UI showcase app for tflw (testFlow) — its dogfood/acceptance target.",
+  "description": "Purpose-built realistic e-commerce API (NestJS+Postgres, Dockerized) for tflw (testFlow) — its dogfood/acceptance target and DSL gap-discovery instrument.",
   "type": "module",
   "repository": {
     "type": "git",
@@ -15,9 +15,6 @@
   },
   "scripts": {
     "refresh-tflw": "node scripts/refresh-tflw.mjs",
-    "start:core": "node api/core/server.js",
-    "start:auth": "node api/auth/server.js",
-    "start:frontend": "node frontend/server.js",
     "test": "tflw run"
   },
   "dependencies": {
