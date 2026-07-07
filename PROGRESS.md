@@ -30,6 +30,7 @@ longer apply. See the v2 tracker below.
 | M5 — Gap-provoking scenarios + TFLW-GAPS.md | ✅ | 2026-07-07 | 2026-07-07 |
 | M6 — realistic-scale gap hunting | ✅ | 2026-07-07 | 2026-07-07 |
 | M7 — gap #3 resolved (no code change) + gap #8 fixed upstream, consumed here | ✅ | 2026-07-07 | 2026-07-07 |
+| M8 — verbose step logging + always-on live failure diff, consumed here | ✅ | 2026-07-07 | 2026-07-07 |
 
 ---
 
@@ -668,6 +669,34 @@ decision 90.
    (`status`, `items`) — the unrelated envelope fields (`id`, `userId`, …) no longer appear at all.
 
 ---
+
+## M8 — verbose step logging + always-on live failure diff, consumed here ✅
+
+First of four `/grill-me` UX/tooling tracks scoped 2026-07-07 (report.html tabs, VS Code extension,
+general UX, verbose logging) — `testFlow/PLAN.md` decision 91. Pure CLI-console change: no new
+grammar, no change to `report.html`/`junit.xml`, nothing for this suite's own `.tflw` files to
+adopt — just a tarball refresh + a real-suite sanity run.
+
+- [x] Refreshed the vendored tarball (`npm run refresh-tflw` + the known stale-lockfile workaround —
+      `rm -rf node_modules package-lock.json && npm install`, version number unchanged) and
+      confirmed the new bundle contains the fix (`grep -c "MAX_DIFF_CHARS\|bufferedEmit\|
+      useBufferedVerbose" node_modules/tflw/dist/cli.js` → 6).
+
+**Verified by:** fresh `node cli.mjs stop && node cli.mjs start`, 2026-07-07:
+1. `npx tflw run` (full suite, no flags, fresh restart) → 2 failures in `schema-and-shape.tflw`'s
+   `as admin` tests (401 instead of expected status) — the exact same pre-existing cumulative-
+   timing issue documented in M6/M7 (the cached `admin` session's 5s TTL racing real wall-clock
+   time across ~15 prior `as admin` tests before this file runs), reproduced again on a second
+   fresh-restart run, then confirmed as *not* a regression by running `npx tflw run tests/
+   schema-and-shape.tflw` alone — both tests pass in under 120ms. Also newly visible in this run's
+   own output: the failing tests' diffs now print live (`✗ ... \n    expected status to equal 422,
+   but got 401`), which is exactly decision 91's new default behavior working correctly end-to-end
+   against the real API.
+2. Fresh restart, `npx tflw run --workers 4` (no flags) → `PASS 77/77 passed` — confirms the
+   flake above is timing-margin-dependent, not a real defect, and that this track's changes don't
+   affect parallel correctness.
+3. `npx tflw run tests/crud-lifecycle.tflw --verbose --no-color` → one indented line per step
+   (api/expect/capture/header), each with the step's real detail and duration, exactly as designed.
 
 ## M1 — API showcase ✅
 
