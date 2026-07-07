@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -11,6 +12,12 @@ import { Product } from '../entities/product.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { AuthedUser } from '../auth/guards/bearer-auth.guard';
 import { UserRole } from '../entities/user.entity';
+import { isUniqueViolation } from '../common/db-errors';
+
+export interface CreateOrderResult {
+  order: Order;
+  created: boolean;
+}
 
 @Injectable()
 export class OrdersService {
@@ -20,7 +27,21 @@ export class OrdersService {
     @InjectRepository(Product) private readonly products: Repository<Product>,
   ) {}
 
-  async create(userId: string, dto: CreateOrderDto): Promise<Order> {
+  // Idempotency-Key (RFC-style, order-creation cluster): a repeated key returns the order that
+  // key already produced instead of creating a duplicate. Scoped to the requesting user — reusing
+  // someone else's key is a genuine conflict, not a valid replay. Postgres's `idempotency_key`
+  // unique constraint treats NULLs as distinct, so requests with no key never collide with each
+  // other; the constraint (not this pre-check) is what makes a concurrent duplicate safe.
+  async create(
+    userId: string,
+    dto: CreateOrderDto,
+    idempotencyKey?: string,
+  ): Promise<CreateOrderResult> {
+    if (idempotencyKey) {
+      const existing = await this.findByIdempotencyKey(idempotencyKey);
+      if (existing) return this.replayOrConflict(existing, userId);
+    }
+
     const items = await Promise.all(
       dto.items.map(async (item) => {
         const product = await this.products.findOne({ where: { id: item.productId } });
@@ -35,8 +56,30 @@ export class OrdersService {
       }),
     );
 
-    const order = this.orders.create({ userId, items });
-    return this.orders.save(order);
+    const order = this.orders.create({ userId, items, idempotencyKey: idempotencyKey ?? null });
+    try {
+      const saved = await this.orders.save(order);
+      return { order: saved, created: true };
+    } catch (err) {
+      if (idempotencyKey && isUniqueViolation(err)) {
+        // Lost the race to a concurrent request using the same key — replay its result instead
+        // of surfacing the constraint violation.
+        const existing = await this.findByIdempotencyKey(idempotencyKey);
+        if (existing) return this.replayOrConflict(existing, userId);
+      }
+      throw err;
+    }
+  }
+
+  private findByIdempotencyKey(idempotencyKey: string): Promise<Order | null> {
+    return this.orders.findOne({ where: { idempotencyKey }, relations: { items: true } });
+  }
+
+  private replayOrConflict(existing: Order, userId: string): CreateOrderResult {
+    if (existing.userId !== userId) {
+      throw new ConflictException('this Idempotency-Key was already used by another request');
+    }
+    return { order: existing, created: false };
   }
 
   findOwn(userId: string): Promise<Order[]> {

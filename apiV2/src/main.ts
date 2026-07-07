@@ -5,11 +5,13 @@ import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { ProblemDetailsFilter } from './common/problem-details.filter';
 import { toValidationProblem } from './common/validation-problem.exception';
+import { contentNegotiation } from './common/content-negotiation.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.use(cookieParser());
+  app.use(contentNegotiation);
   app.setGlobalPrefix('v1');
   app.useGlobalFilters(new ProblemDetailsFilter());
   app.useGlobalPipes(

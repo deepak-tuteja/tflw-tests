@@ -25,7 +25,7 @@ longer apply. See the v2 tracker below.
 | M0 — NestJS+Postgres+Docker scaffold | ✅ | 2026-07-07 | 2026-07-07 |
 | M1 — Auth & authz cluster | ✅ | 2026-07-07 | 2026-07-07 |
 | M2 — Errors & schema-contract cluster | ✅ | 2026-07-07 | 2026-07-07 |
-| M3 — HTTP maturity & cookies cluster | ⬜ | — | — |
+| M3 — HTTP maturity & cookies cluster | ✅ | 2026-07-07 | 2026-07-07 |
 | M4 — Async & query cluster | ⬜ | — | — |
 | M5 — Gap-provoking scenarios + TFLW-GAPS.md | ⬜ | — | — |
 
@@ -218,6 +218,78 @@ and via `tflw run` against the live stack, 2026-07-07:
 9. No new `TFLW-FEATURE-GAPS.md` entry from M2 — RFC7807 errors, field-level validation detail,
    and nested resources were all cleanly expressible declaratively; nothing here forced a JS
    escape hatch or exposed a DSL gap.
+
+---
+
+## v2 M3 — HTTP maturity & cookies cluster ✅
+
+- [x] **ETag / If-Match optimistic concurrency on products.** `Product.version` (a
+      `@VersionColumn`, already present since M0's `InitSchema` migration — no new migration
+      needed) backs an opaque `"<version>"` ETag. `GET /products/:id` and the create/update
+      responses all set it; a matching `If-None-Match` on `GET` returns a bodyless `304`. `PATCH`
+      honors `If-Match` only when the caller sends it (a courtesy check, not a mandatory lock): a
+      stale value is `412 Precondition Failed`, a current one succeeds and returns the bumped
+      ETag.
+- [x] **Idempotency-Key on order creation** (`Order.idempotencyKey`, already a unique column since
+      M0 — Postgres treats `NULL` as distinct so keyless requests never collide). A repeated key
+      from the *same* user returns the original order (`200`, not `201` — the status code itself
+      tells a replaying client whether anything new happened); a concurrent duplicate that loses
+      the unique-constraint race gets the same replay instead of an error; a key reused by a
+      *different* user is treated as a genuine `409 Conflict`, not a valid replay.
+- [x] **Genuine `405 Method Not Allowed`** for verbs a resource deliberately doesn't support,
+      rather than letting routing fall through to a bare `404` (Express/Nest don't do this
+      automatically — it needs an explicit handler): `PUT /products/:id` (only partial `PATCH` is
+      supported) and all of `POST /categories` / `PATCH /categories/:id` / `DELETE
+      /categories/:id` (categories are read-only in this API).
+- [x] **Genuine `409 Conflict`** for the FK-restrict-delete case M2 explicitly deferred: deleting a
+      product still referenced by an order item now catches the Postgres FK-violation
+      (`ProductsService.remove`, via a new `common/db-errors.ts` `isForeignKeyViolation()` helper)
+      and throws `ConflictException` instead of leaking a generic 500.
+- [x] **Content negotiation (406/415)** via a global Express middleware
+      (`common/content-negotiation.middleware.ts`, registered in `main.ts` ahead of Nest's router,
+      since Nest's exception filters don't see errors thrown from raw `app.use()` middleware): an
+      `Accept` the API can't satisfy → `406`; a body-bearing request whose `Content-Type` isn't
+      `application/json` → `415`. Both render the same RFC7807 shape as everything else, built
+      by hand in the middleware rather than via `ProblemDetailsFilter` for that same reason.
+- [x] **`/v1` versioning as a real routing boundary, not just a URL convention** — a second named
+      service (`api root "http://localhost:4001"`) added to `tflw.config` alongside the default
+      `/v1`-prefixed one, reaching the Swagger/OpenAPI mount (`@nestjs/swagger`'s `setup()`
+      deliberately mounts outside whatever global prefix is set) and proving a versioned-only
+      route genuinely 404s when hit unversioned, rather than the prefix being decorative.
+- [x] New `tests/http-maturity.tflw` (ETag/If-Match ×2, 405 ×2, 409, Idempotency-Key ×2, 406, 415 —
+      9 tests) and `tests/versioning.tflw` (2 tests) — both `as admin` except where a specific
+      identity matters (the cross-user Idempotency-Key conflict needs two distinct users, same
+      pattern as M1's authz tests).
+
+**Verified by:** fresh `node cli.mjs stop && node cli.mjs start` (clean DB), then `tflw run`
+against the live stack, 2026-07-07:
+1. **ETag/If-None-Match**: create a product, capture its `ETag`; a plain re-`GET` returns the same
+   value; the same value sent back as `If-None-Match` → `304`.
+2. **If-Match**: `PATCH` with the just-captured (current) ETag → `200` with a new ETag; the same
+   *stale* ETag replayed on a second `PATCH` → `412`; the fresh ETag from the successful `PATCH`
+   → `200` again.
+3. **405s**: `PUT /products/:id` → `405`; `POST`/`PATCH`/`DELETE` on `/categories` → `405` each.
+4. **409 (FK-restrict)**: create a product, order it, then `DELETE` the product → `409` with
+   `body.detail contains "referenced"`, not a 500 or a stack trace.
+5. **Idempotency-Key**: same key replayed by the same user → second response is `200` with the
+   *same* `body.id` as the first `201`; the same key replayed by a *different* user → `409`.
+6. **Content negotiation**: `GET /products` with `Accept: application/xml` → `406`; `POST
+   /products` with `Content-Type: text/plain` and a raw text body → `415`.
+7. **Versioning**: `api root GET /openapi.json` → `200` with `body.openapi` containing `"3."`;
+   `api root GET /health` → `404` (the unversioned root has no route there); the same path through
+   the default `/v1`-prefixed service → `200`.
+8. **One bug caught by this verification pass itself**: the first live run showed the ETag tests
+   failing — `ProductsController.create` wasn't setting the `ETag` header, so the captured
+   "current" ETag was actually Express's own auto-generated weak hash of the response body, not
+   this API's version-based one, causing a spurious `412` on what should've been a fresh update.
+   Fixed by setting `ETag` on the create response too, matching read/update; re-verified clean.
+9. **`npx tflw check`**: `10 files checked, no problems found`.
+10. **`npx tflw run`** on a freshly-restarted stack: `PASS 41/41 passed`, exit 0 (30 carried over
+    from M0–M2 + 11 new M3 tests).
+11. **Parallel-safety**: repeated fresh-restart + run with `--workers 4` → `PASS 41/41 passed`
+    again.
+12. No new `TFLW-FEATURE-GAPS.md` entry from M3 — conditional requests, idempotency-key replay,
+    405/409/406/415, and the second named service were all cleanly expressible declaratively.
 
 ---
 

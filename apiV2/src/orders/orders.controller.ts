@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Post, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiTags } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -15,9 +16,19 @@ import { UserRole } from '../entities/user.entity';
 export class OrdersController {
   constructor(private readonly orders: OrdersService) {}
 
+  // Idempotency-Key (M3): a repeated key on a repeated request returns the original order (200)
+  // instead of creating a duplicate (201) — the status code itself tells a replaying client
+  // whether anything new happened.
   @Post()
-  create(@CurrentUser() user: AuthedUser, @Body() dto: CreateOrderDto) {
-    return this.orders.create(user.id, dto);
+  async create(
+    @CurrentUser() user: AuthedUser,
+    @Body() dto: CreateOrderDto,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { order, created } = await this.orders.create(user.id, dto, idempotencyKey);
+    res.status(created ? 201 : 200);
+    return order;
   }
 
   @Get()

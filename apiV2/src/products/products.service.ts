@@ -1,10 +1,22 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+  PreconditionFailedException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Product } from '../entities/product.entity';
 import { CategoriesService } from '../categories/categories.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { isForeignKeyViolation } from '../common/db-errors';
+
+// ETag values are just the row's version number, quoted per RFC7232 — opaque to the client,
+// meaningful only as an equality check against what this API itself issued.
+export function etagFor(product: Product): string {
+  return `"${product.version}"`;
+}
 
 @Injectable()
 export class ProductsService {
@@ -35,8 +47,18 @@ export class ProductsService {
     return this.products.save(product);
   }
 
-  async update(id: string, dto: UpdateProductDto): Promise<Product> {
+  async update(id: string, dto: UpdateProductDto, ifMatch?: string): Promise<Product> {
     const product = await this.findOne(id);
+
+    // Conditional-request check (RFC7232 §3.1): only enforced when the caller sends If-Match at
+    // all, so plain unconditional PATCHes keep working — this is optimistic concurrency, not a
+    // mandatory lock.
+    if (ifMatch !== undefined && ifMatch !== etagFor(product)) {
+      throw new PreconditionFailedException(
+        'product has been modified since you last read it — refetch and retry with its current ETag',
+      );
+    }
+
     if (dto.categoryId) await this.categories.assertExists(dto.categoryId);
 
     if (dto.name !== undefined) product.name = dto.name;
@@ -50,6 +72,15 @@ export class ProductsService {
 
   async remove(id: string): Promise<void> {
     const product = await this.findOne(id);
-    await this.products.remove(product);
+    try {
+      await this.products.remove(product);
+    } catch (err) {
+      if (isForeignKeyViolation(err)) {
+        throw new ConflictException(
+          'product is referenced by existing order items and cannot be deleted',
+        );
+      }
+      throw err;
+    }
   }
 }

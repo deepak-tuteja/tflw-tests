@@ -1,0 +1,20 @@
+# versioning.tflw — plan_v2.md Cluster 3's "/v1 versioning (a second named service base path)":
+# the `root` named service (tflw.config) hits the app without the `/v1` prefix baked into the
+# default service's base URL, so these tests can prove the prefix is a real routing boundary
+# (an unversioned request to a versioned-only route 404s) rather than just a URL convention nobody
+# checks — and reach the Swagger/OpenAPI mount, which NestJS deliberately serves outside it.
+
+@versioning
+test "the OpenAPI spec is served outside the versioned prefix"
+  api root GET /openapi.json
+  expect status equals 200
+  expect body.openapi contains "3."
+
+@versioning
+test "a versioned-only route 404s when hit through the unversioned root"
+  api root GET /health
+  expect status equals 404
+
+  api GET /health
+  expect status equals 200
+  expect body.status equals "ok"
