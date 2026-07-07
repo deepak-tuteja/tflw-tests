@@ -14,15 +14,44 @@ retry backoff logic) are listed separately as **confirmed-by-design**, not ranke
 
 ## Ranked
 
+Gap numbers are stable identifiers (cross-referenced from `testFlow/PLAN.md`'s decision log and
+this repo's own task tracking) — a fixed gap keeps its number rather than the table renumbering
+around it. See **Fixed**, below, for #1.
+
 | # | Gap | Severity × Frequency | Proof |
 |---|---|---|---|
-| 1 | No cookie-subject / cookie-jar | **High × Medium** — hard crash, not a graceful degradation, but contained to multi-cookie auth flows | `tests/.gaps/cookie-jar.tflw` (executable failure) |
+| 1 | ~~No cookie-subject / cookie-jar~~ | — | **✅ Fixed — see [Fixed](#fixed) below** |
 | 2 | No partial-object / subtree JSON matching | **Medium × High** — recurs in nearly every error-shape or structural assertion in the suite | `tests/schema-and-shape.tflw` |
 | 3 | Correlated array-element JSON-path predicates | **High × Low** — low occurrence, but the failure mode is a *silent false pass*, not a visible error | `tests/order-items.tflw`'s last test |
 | 4 | `wait until api` cannot carry per-step headers | **Medium × Low-Medium** — blocks any poll needing per-attempt auth (async jobs, token-expiry chains) | `tests/.checkonly/wait-until-headers.tflw` (parse-time), `tests/token-expiry.tflw` (the real scenario it forces) |
 | 5 | No `Retry-After`-aware retry | **Medium × Low** — only recurs where the API rate-limits, but that's a common real pattern | `tests/reviews.tflw`'s two `@ratelimit` tests |
 | 6 | No schema/contract validation against `/openapi.json` | **Medium × Low** — high potential value, low current occurrence (few endpoints document response schemas yet) | `tests/schema-and-shape.tflw` |
 | 7 | Only one `session` may be opted into per test | **Low × High** — trivial one-line workaround, but recurs constantly | `tests/authz.tflw`, `tests/order-items.tflw`, `tests/jobs.tflw`, `tests/reviews.tflw`, `tests/http-maturity.tflw` |
+
+## Fixed
+
+### 1. No cookie-subject / cookie-jar — ✅ fixed in tflw 0.1.0 (2026-07-07)
+
+Shipped as `testFlow/PLAN.md` decision 87: `EvalCtx` gained an automatic `cookieJar` (new
+`packages/runtime/src/cookieJar.ts`), auto-threaded through every `api`/`wait until api` step, a
+`session` block's own run, and any action call — no new grammar. Full writeup lives in
+`testFlow/SPEC.md` §3.3's new "Cookie jar (P#33)" subsection and `testFlow/PROGRESS.md`'s M2.11.
+
+**What changed here in response:** `tflw.config`'s `shopper` session dropped its manual `capture
+header "set-cookie"`/`header "Cookie" is …` lines entirely (the jar does it automatically);
+`tests/sessions.tflw`'s two CSRF tests dropped the same manual capture/replay for their own
+sequential logins (the jar carries the cookie forward across a test's own steps too, not just
+across a cached session); the logout test *deliberately kept* its manual capture/replay (see its
+own comment — it needs the stale, pre-logout cookie value specifically, to prove server-side
+revocation rather than "the jar correctly cleared it"). The former `tests/.gaps/cookie-jar.tflw`
+(an intentionally-failing fixture proving the crash) was replaced by `tests/cookie-jar.tflw` in
+the ordinary suite, now proving the fix: the exact former-crash scenario
+(`/auth/session-login-full`'s dual `Set-Cookie`) with zero `capture`/`header` at all, plus a second
+test confirming the *second* cookie (`session_refresh`) is independently tracked and usable too.
+
+**Verified 2026-07-07:** fresh `node cli.mjs stop && node cli.mjs start`, `npx tflw check` (16
+files, no problems), `npx tflw run` — `PASS 61/61 passed` (59 carried over + the new
+`cookie-jar.tflw`'s 2 tests), repeated clean under `--workers 4` on another fresh restart.
 
 ## Confirmed-by-design (not gaps)
 
@@ -56,7 +85,12 @@ actually built — worth recording so a future session doesn't re-investigate th
 
 ---
 
-## 1. No cookie-subject / cookie-jar
+## 1. No cookie-subject / cookie-jar — ✅ fixed, see [Fixed](#fixed) above
+
+This section is kept as the original gap writeup (proposed syntax, cross-check, and the exact
+crash it used to cause) for historical record — the gap itself is closed as of tflw 0.1.0
+(2026-07-07); this repo's own `tests/.gaps/cookie-jar.tflw` no longer exists (moved to
+`tests/cookie-jar.tflw`, now a passing proof).
 
 `capture header "set-cookie" as x` captures every `Set-Cookie` line, newline-joined if there's
 more than one (SPEC §5.4, decision 61) — correct for *reading* them, but there's no declarative

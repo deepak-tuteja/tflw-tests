@@ -451,6 +451,41 @@ check` against the live stack, 2026-07-07:
 
 ---
 
+## Post-M5 — TFLW-GAPS.md gap #1 fixed upstream, consumed here (2026-07-07) ✅
+
+`testFlow` shipped a first-class automatic cookie jar (decision 87, closing gap #1 — see that
+repo's `PLAN.md`/`PROGRESS.md` M2.11/`SPEC.md` §3.3) directly in response to this suite's own M5
+gap-provoking pass. Consumed here the same day:
+
+- [x] `npm run refresh-tflw` repacked the vendored tarball from testFlow's rebuilt `packages/cli`
+      — required a manual `rm -rf node_modules package-lock.json && npm install` (not just the
+      script's own `npm install` step) since the tarball's filename/version were unchanged
+      (`tflw@0.1.0`, pre-1.0 so no version bump), and npm's lockfile-pinned integrity hash treated
+      the identical-looking `file:` dependency spec as already-satisfied rather than diffing the
+      actual tarball bytes — worth remembering for any future same-version tarball refresh.
+- [x] `tflw.config`'s `shopper` session and `tests/sessions.tflw`'s two CSRF tests dropped their
+      manual `capture header "set-cookie"`/`header "Cookie" is …` lines — the jar carries cookies
+      forward automatically now, both across a cached session and across one test's own sequential
+      steps. The logout test's manual capture/replay was deliberately kept (see its own comment):
+      it needs the *stale*, pre-logout cookie value specifically, to prove server-side revocation
+      rather than "the jar correctly cleared it after a real logout."
+- [x] `tests/.gaps/cookie-jar.tflw` (an intentionally-failing fixture proving the old crash) was
+      replaced by `tests/cookie-jar.tflw` in the ordinary suite — the exact former-crash scenario,
+      now passing with zero `capture`/`header` at all, plus a second test proving the *second*
+      cookie (`session_refresh`) is independently tracked too.
+- [x] `TFLW-GAPS.md` gap #1 marked fixed (a new "Fixed" section, cross-referencing testFlow's
+      decision 87) rather than renumbering the remaining 6 gaps — gap numbers stay stable
+      identifiers.
+
+**Verified by:** fresh `node cli.mjs stop && node cli.mjs start`, `npx tflw check` → `16 files
+checked, no problems found`, `npx tflw run` → `PASS 61/61 passed` (59 carried over + 2 new), and
+`--workers 4` on another fresh restart → `PASS 61/61 passed` again. (An intermediate run against a
+long-lived, non-restarted stack showed 5 failures — confirmed as the already-documented
+`unique(...)` cross-run-collision artifact from repeated manual runs during the tarball-refresh
+debugging above, not a regression; clean on every fresh restart.)
+
+---
+
 ## M1 — API showcase ✅
 
 Scaffolded via a `/grill-me` session (2026-07-06) that resolved testFlow-tests/ replacing

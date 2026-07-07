@@ -1,12 +1,14 @@
 # sessions.tflw — the `shopper` session showcases tflw's cookie-based auth transport (the
 # `admin` bearer session is exercised throughout auth.tflw/authz.tflw). Its login runs once for
-# the whole run, not once per test (SPEC §3.3), and only ever sets a single Set-Cookie
-# (`/auth/session-login`'s response) — capturing `header "set-cookie"` and replaying it as a
-# plain `Cookie` header stays fully declarative because there's nothing to merge across lines.
+# the whole run, not once per test (SPEC §3.3), and cookies are auto-tracked by tflw's automatic
+# cookie jar (shipped in tflw 0.1.0's M5 gap-fix pass, TFLW-GAPS.md #1) — no manual `capture
+# header "set-cookie"`/`header "Cookie" is …` needed for ordinary login-then-use flows.
 #
-# CSRF-protected mutations and the second (`session_refresh`) cookie need the csrfToken/cookie
-# values a bare session opt-in doesn't expose to the test body, so those get an ad hoc login
-# instead of `as shopper` — same "inline login" pattern auth.tflw uses for the bearer transport.
+# CSRF-protected mutations need the csrfToken a bare session opt-in doesn't expose to the test
+# body, so that one gets an ad hoc login instead of `as shopper` — same "inline login" pattern
+# auth.tflw uses for the bearer transport. The logout test deliberately keeps its manual
+# capture/replay (see its own comment: it needs the *stale*, pre-logout cookie value specifically,
+# which the jar would otherwise correctly clear after a real logout).
 
 @auth @sessions
 test "shopper session applies its cookie automatically" as shopper
@@ -25,21 +27,18 @@ test "shopper session is reused across tests, not re-established" as shopper
 test "a cookie-authed mutation without a CSRF token is rejected"
   api POST /auth/session-login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
   expect status equals 200
-  capture header "set-cookie" as setCookie
 
   api GET /products
   expect status equals 200
   capture body[0].id as productId
 
   api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
-    header "Cookie" is "{setCookie}"
   expect status equals 403
 
 @auth @sessions
 test "a cookie-authed mutation with a matching CSRF token succeeds"
   api POST /auth/session-login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
   expect status equals 200
-  capture header "set-cookie" as setCookie
   capture body.csrfToken as csrf
 
   api GET /products
@@ -47,14 +46,17 @@ test "a cookie-authed mutation with a matching CSRF token succeeds"
   capture body[0].id as productId
 
   api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
-    header "Cookie" is "{setCookie}"
     header "X-CSRF-Token" is "{csrf}"
   expect status equals 201
 
 @auth @sessions
 test "logging out invalidates the session cookie"
   # Inline ad hoc login (not the cached `shopper` session) so logging out here can't poison the
-  # shared session cache other tests in this file rely on.
+  # shared session cache other tests in this file rely on. Manual capture/replay is deliberate
+  # here, not a leftover: `session-logout` itself clears the cookie (a real `Set-Cookie: session=;
+  # Max-Age=0`), so the automatic jar would correctly drop it too — replaying the *stale* captured
+  # value afterward is exactly what proves server-side revocation (the `jti` check against
+  # `token_records`) rather than merely "no cookie was sent."
   api POST /auth/session-login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
   expect status equals 200
   capture header "set-cookie" as setCookie

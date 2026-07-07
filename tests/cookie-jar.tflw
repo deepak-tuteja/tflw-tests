@@ -1,0 +1,28 @@
+# cookie-jar.tflw — proof that TFLW-GAPS.md gap #1 ("no cookie-subject / cookie-jar") is fixed,
+# not just a demo of the old failure. Until tflw 0.1.0's M5 gap-fix pass, replaying a captured
+# dual `Set-Cookie` response (`/auth/session-login-full` sets both `session` and
+# `session_refresh` at once) as a single `Cookie` header was a genuine hard crash — the
+# newline-joined multi-`Set-Cookie` capture embeds a literal `\n` in an HTTP header value, which
+# the WHATWG Headers API rejects outright (`Headers.append: "...\n..." is an invalid header
+# value`). Confirmed empirically both ways: this file used to live at `tests/.gaps/cookie-jar.tflw`
+# as an *intentionally-failing* fixture (excluded from the default run) proving the crash; it now
+# lives here, in the ordinary suite, proving the fix — no `capture`/`header` at all, tflw's
+# automatic cookie jar (SPEC §3.3, P#33) tracks both cookies by name and sends them back as one
+# proper `Cookie` header on its own.
+
+@auth @cookiejar
+test "a dual Set-Cookie login no longer crashes replaying its cookies — both carry forward automatically"
+  api POST /auth/session-login-full body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+
+  api GET /auth/profile
+  expect status equals 200
+  expect body.email equals env(USER_A_EMAIL)
+
+@auth @cookiejar
+test "session-refresh also works from the auto-tracked jar with no manual cookie replay"
+  api POST /auth/session-login-full body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+
+  api POST /auth/session-refresh
+  expect status equals 200
