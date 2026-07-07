@@ -1,0 +1,39 @@
+# token-expiry.tflw — M5 gap-provoking scenario: a real access-token expiry → refresh chain
+# (JWT_ACCESS_TTL=5s, a genuine short TTL, not a mocked clock). The natural declarative way to
+# express this would be `wait until api GET /auth/profile` with the expiring token attached as a
+# per-step header — but `wait until api` can't carry per-step headers at all (TFLW-FEATURE-GAPS.md
+# #3, confirmed against the parser; see also tests/.checkonly/wait-until-headers.tflw for the
+# parse-time proof). The workaround: a JS helper does the actual waiting, then a plain `api` step
+# (which *can* carry a header) re-checks. Runs for real (~5s), not simulated — same "real timers,
+# not fake" standard as this suite's async-job cluster (M4).
+
+use "./helpers/wait-seconds.ts"
+
+@gaps @tokenexpiry
+test "an access token genuinely expires at its configured TTL, and refresh recovers"
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as accessToken
+  capture body.refreshToken as refreshToken
+
+  api GET /auth/profile
+    header "Authorization" is "Bearer {accessToken}"
+  expect status equals 200
+
+  let waited = wait seconds(6)
+
+  # Ideal (doesn't exist today) — would need `wait until api` to accept per-step headers:
+  #   wait until api GET /auth/profile
+  #     header "Authorization" is "Bearer {accessToken}"
+  #     expect status equals 401
+  api GET /auth/profile
+    header "Authorization" is "Bearer {accessToken}"
+  expect status equals 401
+
+  api POST /auth/refresh body { refreshToken: "{refreshToken}" }
+  expect status equals 200
+  capture body.accessToken as freshToken
+
+  api GET /auth/profile
+    header "Authorization" is "Bearer {freshToken}"
+  expect status equals 200

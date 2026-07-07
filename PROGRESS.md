@@ -27,7 +27,7 @@ longer apply. See the v2 tracker below.
 | M2 — Errors & schema-contract cluster | ✅ | 2026-07-07 | 2026-07-07 |
 | M3 — HTTP maturity & cookies cluster | ✅ | 2026-07-07 | 2026-07-07 |
 | M4 — Async & query cluster | ✅ | 2026-07-07 | 2026-07-07 |
-| M5 — Gap-provoking scenarios + TFLW-GAPS.md | ⬜ | — | — |
+| M5 — Gap-provoking scenarios + TFLW-GAPS.md | ✅ | 2026-07-07 | 2026-07-07 |
 
 ---
 
@@ -375,6 +375,79 @@ new `AddJobs` migration), then `tflw run` against the live stack, 2026-07-07:
    escape hatch and `Retry-After`-aware retry, both already gaps #1/#2, now just re-proven against
    the v2 API) — everything newly built (async job polling, cursor pagination + Link header,
    filter/sort/search) was cleanly expressible declaratively.
+
+---
+
+## v2 M5 — Gap-provoking scenarios + TFLW-GAPS.md deliverable ✅
+
+- [x] **New gap-provoking scenarios**, each with a working escape-hatch/N-statement version *and*
+      an "ideal syntax" comment (plan_v2.md Part B's evidence pattern):
+  - `tests/schema-and-shape.tflw` — partial-object/subtree RFC7807 shape assertion (N `expect`
+    statements today) and schema validation against `/openapi.json` (`tests/helpers/schema-
+    check.ts`, a minimal hand-rolled validator, no ajv dependency — throws to fail the test, same
+    as every other "call itself is the assertion" JS helper in this suite).
+  - `tests/order-items.tflw` (extended) — a genuine two-distinct-item order proving `any`/`all`
+    quantifiers can't correlate two fields on the same array element (two independent `any`s can
+    each be satisfied by a *different* item and still both pass); `tests/helpers/find-item.ts`
+    does the real correlated check.
+  - `tests/token-expiry.tflw` (new) — a real `JWT_ACCESS_TTL=5s` expiry → refresh chain (not
+    mocked), the concrete scenario that needs `wait until api` to carry a per-poll bearer header;
+    `tests/helpers/wait-seconds.ts` is the fixed-delay workaround.
+  - `apiV2/src/products/dto/product-response.dto.ts` + `@ApiOkResponse` on `GET /products/:id` —
+    a small, additive, swagger-only DTO so `/openapi.json` actually documents a response schema
+    for `schema-and-shape.tflw` to validate against (zero runtime behavior change).
+- [x] **`tests/.gaps/cookie-jar.tflw`** (new dot-dir, plan_v2.md Part B's "can't-express-at-all →
+      `.gaps/`" convention) — executable proof that gap #5 (no cookie subject) is a genuine hard
+      failure: replaying a dual `Set-Cookie` capture as a `Cookie` header throws
+      `Headers.append: "...\n..." is an invalid header value`, confirmed empirically against the
+      live API, not just reasoned about.
+- [x] **`tests/.checkonly/wait-until-headers.tflw`** (new) — the parse-time companion proof for
+      the same gap family (#4 in the new ranking): attaching a `header` line under `wait until
+      api` is `TF010`, not a runtime issue — confirmed by actually running `tflw check` against it.
+- [x] **Fixed two stale `tests/.demo-fail/` fixtures** found while auditing dot-dirs for this
+      milestone: `retry-exhausted.tflw` (referenced v1's retired `/flaky-widget` dummy endpoint)
+      and `wait-timeout.tflw` (used v1's free-text `category` field) — both had been invisible to
+      every `tflw check`/`run` since M0 (dot-dirs are excluded from default discovery), so neither
+      M0-M4's "keep the suite green" discipline ever caught their staleness. Ported onto the v2
+      schema; both still demonstrate their intended reporting behavior.
+- [x] **`TFLW-GAPS.md`** (new, successor to `TFLW-FEATURE-GAPS.md`, which is now a one-line
+      redirect stub): a ranked table of 7 gaps (the original 5 re-verified + folded in, plus 2 new
+      — partial-object matching and correlated JSON-path predicates, discovered by actually trying
+      to write the scenarios above), each with severity×frequency, a proof link, proposed syntax,
+      and a cross-check against a mainstream tool (Postman/Jest/RestAssured/Playwright). Also
+      records two candidates that turned out **not** to be gaps once built (Idempotency-Key and
+      ETag/If-Match ergonomics — both fully declarative in M3, zero JS) and the confirmed-by-design
+      findings (page-walk, no-`sleep`) kept separate from the ranked list per the plan's criterion
+      ("declarative/ergonomic, not a loop/branch punt").
+- [x] **`testFlow/PLAN.md` milestone stub** — a new **M8 — API-hardening / declarative-
+      expressiveness (proposed, not implemented)** entry in the sibling tflw repo, listing the same
+      7 ranked gaps as actionable items and noting which promote an existing SPEC §16 parking-lot
+      entry (P#33 cookie subject, P#14 partial-object matching, P#3 OpenAPI/contract) versus
+      proposing a wholly new one (correlated JSON-path, `wait until api` headers, `Retry-After`
+      retry, 2nd session per test). No grammar/runtime/SPEC edits — confirmed by leaving every
+      other file in that repo untouched, including pre-existing unrelated uncommitted work found
+      already in progress there (SPEC.md + several packages files) that this milestone correctly
+      left alone. `PLAN.md` itself turned out to be `.gitignore`'d in that repo (local planning
+      artifact, not published) — the edit stands on disk with nothing to commit.
+
+**Verified by:** fresh `node cli.mjs stop && node cli.mjs start` (clean DB), then `tflw run`/`tflw
+check` against the live stack, 2026-07-07:
+1. **`npx tflw check`** (default discovery, unaffected by the new dot-dirs): `15 files checked, no
+   problems found`.
+2. **`npx tflw run`** on a freshly-restarted stack: `PASS 59/59 passed`, exit 0 (55 carried over
+   from M0-M4 + 4 new gap-provoking tests in the default suite; `token-expiry.tflw`'s real ~6s wait
+   included, total run time ~10s).
+3. **Parallel-safety**: repeated fresh-restart + run with `--workers 4` → `PASS 59/59 passed`
+   again.
+4. **`.gaps/` runs as intended**: `npx tflw run tests/.gaps/cookie-jar.tflw` → `FAIL 0/1 passed`,
+   the exact predicted `Headers.append` error — a real failure, not a graceful 4xx.
+5. **`.checkonly/` checks as intended**: `npx tflw check tests/.checkonly/*.tflw` → all 4
+   diagnostics fire correctly (`TF011`/`TF028`/`TF014` from the original M1.5 fixtures, plus the
+   new `TF010` for the `wait until api` + `header` combination).
+6. **`.demo-fail/` still demos correctly after the v2-schema fixes**: `npx tflw run
+   tests/.demo-fail/*.tflw --tag demofail` → `FAIL 0/4 passed`, each failure showing its intended
+   reporting shape (hard-fail, retry-exhausted, soft-check-mixed ×2, wait-timeout).
+7. This is the **final milestone** in plan_v2.md's phasing — M0 through M5 are all ✅.
 
 ---
 

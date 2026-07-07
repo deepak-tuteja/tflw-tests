@@ -1,6 +1,12 @@
-# retry-exhausted.tflw — DEMO-FAIL FIXTURE (PLAN M1.5): an intentionally-failing showcase of
-# tflw's exhausted-retry reporting. `retry 1` gives 2 total attempts against a widget that needs
-# 3 to succeed — a genuine hard failure, not a flaky pass.
+# retry-exhausted.tflw — DEMO-FAIL FIXTURE (PLAN M1.5; updated M5 for the v2 API — v1's
+# stateful `/flaky-widget` dummy endpoint doesn't exist in v2, and this file was never ported
+# since dot-dirs are invisible to the `tflw check`/`run` that kept every M0-M4 milestone green):
+# an intentionally-failing showcase of tflw's exhausted-retry reporting. A route that never
+# exists gives a deterministic, always-failing request — `retry 1` gives 2 total attempts, both
+# failing identically, a genuine hard failure and not a flaky pass. (v1's version demonstrated the
+# same reporting shape against a request that *could* have succeeded on a later attempt; a
+# deterministic 404 shows the same "every attempt's evidence" report structure just as well,
+# without needing a dedicated stateful endpoint solely for this demo.)
 #
 # Lives in a dot-prefixed directory (along with the rest of tests/.demo-fail/) so a bare
 # `tflw run`/`tflw check` never discovers it — tflw's `discoverTests` skips any dot-prefixed
@@ -8,12 +14,7 @@
 # intentionally-failing fixture out of the default green run. Run explicitly:
 #   npx tflw run tests/.demo-fail/*.tflw --tag demofail
 
-before
-  let ns = random string 12
-
 @demofail @retryexhausted
-test "flaky-widget never recovers within a too-small retry budget" as admin retry 1
-  let key = random string 8
-  api POST /flaky-widget body { key: {key}, name: "Doomed Thing" }
-    header "X-Test-NS" is "{ns}"
+test "a route that never exists never recovers within a too-small retry budget" retry 1
+  api POST /this-route-does-not-exist body { name: "Doomed Thing" }
   expect status equals 201

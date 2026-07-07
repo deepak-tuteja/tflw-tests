@@ -1,22 +1,31 @@
-# wait-timeout.tflw — DEMO-FAIL FIXTURE (PLAN M1.5): `wait until api` polling for a status the
-# order state machine never produces — a real timeout failure, showing tflw's timeout diagnostic.
-# `tflw.config`'s `defaults: timeout wait 5s` keeps this fast (~5s) instead of the runtime's 30s
-# default, comfortably above the real order-workflow's ~1.5s completion time.
+# wait-timeout.tflw — DEMO-FAIL FIXTURE (PLAN M1.5; updated M5 for the v2 schema — this file was
+# stale against v1's free-text `category` field and hadn't been touched since the v2 rewrite,
+# since dot-dirs are invisible to the `tflw check`/`run` that kept every M0-M4 milestone green):
+# `wait until api` polling for an order status the real fulfillment flow never produces — a real
+# timeout failure, showing tflw's timeout diagnostic. `tflw.config`'s `defaults: timeout wait 5s`
+# keeps this fast (~5s) instead of the runtime's 30s default, comfortably above the real
+# fulfillment job's ~300ms completion time (M4's jobs.tflw).
 #
-# No `X-Test-NS` header here — `wait until api` steps can't carry per-step headers (see
-# order-workflow.tflw's note; also logged in TFLW-FEATURE-GAPS.md #3) — safe to skip anyway since
-# this test only ever looks up its own order by its unique id, never a list.
+# No per-poll header here — `wait until api` steps can't carry per-step headers (TFLW-FEATURE-
+# GAPS.md #3; see tests/token-expiry.tflw and tests/.checkonly/wait-until-headers.tflw for the
+# real scenario and parse-time proof this forces) — safe to skip anyway since this test only ever
+# looks up its own order by its unique id, never a list.
 #
 # Run explicitly (dot-directory, invisible to a bare `tflw run`/`tflw check`):
 #   npx tflw run tests/.demo-fail/*.tflw --tag demofail
 
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
 @demofail @waittimeout
-test "an order never reaches a status the workflow doesn't produce" as admin
-  api POST /products body { name: unique("Timeout Widget"), price: 5, category: "misc" }
+test "an order never reaches a status the fulfillment flow doesn't produce" as admin
+  api POST /products body { name: unique("Timeout Widget"), price: 5, stock: 1, categoryId: {categoryId} }
   expect status equals 201
   capture body.id as productId
 
-  api POST /orders body { productId: {productId}, qty: 1 }
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
   expect status equals 201
   capture body.id as orderId
 

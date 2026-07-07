@@ -1,0 +1,31 @@
+# cookie-jar.tflw — GAP-PROVOKING FIXTURE (M5, plan_v2.md Part B): executable proof that
+# TFLW-FEATURE-GAPS.md #5 ("no cookie-subject / cookie-jar") is a genuine hard failure, not just a
+# theoretical one. `/auth/session-login-full` sets two `Set-Cookie` headers; tflw's `capture
+# header "set-cookie"` joins them with a literal `\n` (the only way to preserve both values from
+# one capture — see `packages/runtime/src/http.ts`). Replaying that capture as a single `Cookie`
+# header on a later request embeds the `\n` directly in an HTTP header value, which the WHATWG
+# Headers API rejects outright:
+#
+#   request failed: GET .../auth/profile — Headers.append: "session=...\nsession_refresh=..." is
+#   an invalid header value.
+#
+# Confirmed empirically 2026-07-07 (not just reasoned about): this is a real `FAIL 0/1`, not a
+# parse error and not a graceful 4xx — the request never leaves the process. There is no
+# escape-hatch workaround *inside* a `session` block (which disallows `use`/`action` calls); one
+# exists ad hoc for a non-cached login (parse the joined string, split on `\n`, take just the
+# `name=value` prefix before the first `;`, re-join with `; `) but nothing this suite already
+# needed built that path, since `sessions.tflw`'s dual-cookie test only ever asserts on the raw
+# header rather than chaining it forward.
+#
+# Run explicitly (dot-directory, excluded from the default `tflw run`/`check`, same convention as
+# tests/.demo-fail/):
+#   npx tflw run tests/.gaps/cookie-jar.tflw
+
+test "dual Set-Cookie replayed as one Cookie header is a hard failure, not a graceful one"
+  api POST /auth/session-login-full body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture header "set-cookie" as setCookie
+
+  api GET /auth/profile
+    header "Cookie" is "{setCookie}"
+  expect status equals 200
