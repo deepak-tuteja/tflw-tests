@@ -16,12 +16,12 @@ retry backoff logic) are listed separately as **confirmed-by-design**, not ranke
 
 Gap numbers are stable identifiers (cross-referenced from `testFlow/PLAN.md`'s decision log and
 this repo's own task tracking) — a fixed gap keeps its number rather than the table renumbering
-around it. See **Fixed**, below, for #1.
+around it. See **Fixed**, below, for #1 and #2.
 
 | # | Gap | Severity × Frequency | Proof |
 |---|---|---|---|
 | 1 | ~~No cookie-subject / cookie-jar~~ | — | **✅ Fixed — see [Fixed](#fixed) below** |
-| 2 | No partial-object / subtree JSON matching | **Medium × High** — recurs in nearly every error-shape or structural assertion in the suite | `tests/schema-and-shape.tflw` |
+| 2 | ~~No partial-object / subtree JSON matching~~ | — | **✅ Fixed — see [Fixed](#fixed) below** |
 | 3 | Correlated array-element JSON-path predicates | **High × Low** — low occurrence, but the failure mode is a *silent false pass*, not a visible error | `tests/order-items.tflw`'s last test |
 | 4 | `wait until api` cannot carry per-step headers | **Medium × Low-Medium** — blocks any poll needing per-attempt auth (async jobs, token-expiry chains) | `tests/.checkonly/wait-until-headers.tflw` (parse-time), `tests/token-expiry.tflw` (the real scenario it forces) |
 | 5 | No `Retry-After`-aware retry | **Medium × Low** — only recurs where the API rate-limits, but that's a common real pattern | `tests/reviews.tflw`'s two `@ratelimit` tests |
@@ -52,6 +52,35 @@ test confirming the *second* cookie (`session_refresh`) is independently tracked
 **Verified 2026-07-07:** fresh `node cli.mjs stop && node cli.mjs start`, `npx tflw check` (16
 files, no problems), `npx tflw run` — `PASS 61/61 passed` (59 carried over + the new
 `cookie-jar.tflw`'s 2 tests), repeated clean under `--workers 4` on another fresh restart.
+
+### 2. No partial-object / subtree JSON matching — ✅ fixed in tflw 0.1.0 (2026-07-07)
+
+Shipped as `testFlow/PLAN.md` decision 88: a new `matches subset {...}` matcher — `MatcherName`
+gained `matchesSubset`, the parser reuses the existing `{...}` object-literal grammar (no new
+subject or production), and `runtime/src/matcher.ts`'s `subsetMatch()` checks every key/value in
+the literal is present on the actual object (recursing into nested objects, requiring full
+equality on nested arrays), ignoring any keys the actual object has that the literal doesn't
+mention. Full writeup lives in `testFlow/SPEC.md` §6.3.1 and `testFlow/PROGRESS.md`'s M2.12.
+
+**What changed here in response:** `tests/schema-and-shape.tflw`'s gap-demo test (previously
+`@gaps @shape`, three separate `expect body.<field> equals <value>` lines plus a commented-out
+"ideal syntax" line) now uses that exact "ideal syntax" for real — `@shape` only, one `expect body
+matches subset { type: "about:blank", title: "Unprocessable Entity", status: 422 }` line — and its
+comment explains why a `matches subset` literal, unlike a full `equals`, can ignore the
+legitimately variable `errors` array while still asserting the rest of the shape. The same pattern
+replaced the two-line `body.type equals`/`body.title equals` pairs in `crud-lifecycle.tflw` (2
+occurrences) and `http-maturity.tflw` (5 occurrences: 412, 405, 409, 406, 415), folding in `status`
+too where it wasn't already asserted separately — every RFC7807 filter response has the same
+`{type,title,status,detail,errors?}` shape (`apiV2/src/common/problem-details.filter.ts`), so the
+three-key subset is the natural "assert the whole envelope in one line" check. Assertions that pair
+`equals` on structural fields with a `contains` on `detail` (a substring check `matches subset`
+deliberately doesn't support — it's an equals-only partial match, §6.3.1) kept their separate
+`body.detail contains "..."` line; `reviews.tflw`'s 409 test only ever asserted `detail`, so it was
+untouched.
+
+**Verified 2026-07-07:** fresh `node cli.mjs stop && node cli.mjs start`, `npx tflw check` (16
+files, no problems), `npx tflw run` — `PASS 61/61 passed`, repeated clean under `--workers 4` on
+another fresh restart.
 
 ## Confirmed-by-design (not gaps)
 
@@ -133,7 +162,11 @@ session shopper
 persistent cookie jar automatically across requests in the same session — tflw's raw-header-
 capture model is the outlier here, not the norm.
 
-## 2. No partial-object / subtree JSON matching
+## 2. No partial-object / subtree JSON matching — ✅ fixed, see [Fixed](#fixed) above
+
+This section is kept as the original gap writeup (proposed syntax, cross-check) for historical
+record — the gap itself is closed as of tflw 0.1.0 (2026-07-07); the proposed syntax below is
+exactly what shipped, and `tests/schema-and-shape.tflw`'s demo test now uses it for real.
 
 `equals` does a full deep-equal (exact match, every field); `contains` only works on strings
 (substring) and arrays (element deep-equal) — there is no "this object has at least these

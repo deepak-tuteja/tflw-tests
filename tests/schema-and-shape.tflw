@@ -1,8 +1,10 @@
 # schema-and-shape.tflw — M5 gap-provoking scenarios (plan_v2.md Part B): partial-object/subtree
-# matching and schema/contract validation against `/openapi.json`. Both are recognized-but-
-# deferred in tflw's own SPEC §16 parking lot (P#14, P#3) — this file gives each a concrete,
-# working scenario (the escape-hatch route that keeps the suite green) plus an "ideal syntax"
-# comment showing what we wish we could write instead. See TFLW-GAPS.md for the ranked writeup.
+# matching and schema/contract validation against `/openapi.json`. Both started out recognized-
+# but-deferred in tflw's own SPEC §16 parking lot (P#14, P#3). Partial-object matching shipped in
+# tflw 0.1.0's M5 gap-fix pass (`matches subset {...}`, TFLW-GAPS.md gap #2) — its test below now
+# uses the real thing instead of the old one-statement-per-field escape hatch. Schema/contract
+# validation (P#3, gap #6) is still open — that test still needs the JS helper. See TFLW-GAPS.md
+# for the full ranked writeup.
 
 use "./helpers/schema-check.ts"
 
@@ -11,19 +13,16 @@ before
   expect status equals 200
   capture body[0].id as categoryId
 
-@gaps @shape
-test "asserting a full RFC7807 error shape today needs one statement per field" as admin
+@shape
+test "asserting a full RFC7807 error shape in one structural statement" as admin
   api POST /products body { name: "", price: -5, stock: 1, categoryId: "not-a-uuid" }
   expect status equals 422
-  # No way to assert "this object contains at least these key/value pairs" in a single statement
-  # (SPEC §16 P#14, "partial-object JSON matching") — each field needs its own `expect`, and
-  # there's no way to ignore the (legitimately variable) `errors` array while still asserting the
-  # rest of the shape in one go.
-  expect body.type equals "about:blank"
-  expect body.title equals "Unprocessable Entity"
-  expect body.status equals 422
-  # Ideal (doesn't exist today):
-  #   expect body matches subset { type: "about:blank", title: "Unprocessable Entity", status: 422 }
+  # `matches subset {...}` (tflw 0.1.0, TFLW-GAPS.md gap #2): asserts these three key/value pairs
+  # in one statement and ignores everything else on the body — including the legitimately
+  # variable `errors` array, which a full `equals` deep-compare could never let through. The old
+  # route (one `expect body.<field> equals <value>` line per field) still works; it's just no
+  # longer the only way.
+  expect body matches subset { type: "about:blank", title: "Unprocessable Entity", status: 422 }
 
 @gaps @schema
 test "validating a response against its own documented OpenAPI schema needs a JS helper" as admin

@@ -484,6 +484,35 @@ long-lived, non-restarted stack showed 5 failures — confirmed as the already-d
 `unique(...)` cross-run-collision artifact from repeated manual runs during the tarball-refresh
 debugging above, not a regression; clean on every fresh restart.)
 
+## Post-M5 — TFLW-GAPS.md gap #2 fixed upstream, consumed here (2026-07-07) ✅
+
+`testFlow` shipped `matches subset {...}` (decision 88, closing gap #2 — see that repo's
+`PLAN.md`/`PROGRESS.md` M2.12/`SPEC.md` §6.3.1) directly in response to this suite's own M5
+gap-provoking pass. Consumed here the same day:
+
+- [x] `npm run refresh-tflw` repacked the tarball again; hit the *exact same* stale-install gotcha
+      as gap #1's consumption (same unchanged `tflw@0.1.0` version number) — confirmed via
+      `grep -c subsetMatch node_modules/tflw/dist/cli.js` returning `0` right after the script's
+      own `npm install` step, `5` inside the freshly-packed tarball itself. Same fix: `rm -rf
+      node_modules package-lock.json && npm install`, confirmed by the grep count rising to `5`.
+- [x] `tests/schema-and-shape.tflw`'s gap-demo test (previously `@gaps @shape`) now uses the real
+      `matches subset { type: "about:blank", title: "Unprocessable Entity", status: 422 }` in place
+      of its old three-line `equals`-per-field form and its commented-out "ideal syntax" line — the
+      `@gaps` tag dropped since it's no longer demonstrating an open gap (the schema/contract test
+      below it, still `@gaps @schema`, is untouched — gap #6 stays open).
+- [x] The same two-line `body.type equals "..."` / `body.title equals "..."` pattern was folded
+      into one `matches subset {...}` line (adding `status` too) in `crud-lifecycle.tflw` (2
+      occurrences: 404, 422) and `http-maturity.tflw` (5 occurrences: 412, 405, 409, 406, 415).
+      Assertions pairing a structural field with a `contains` substring check on `detail` kept that
+      line separate (`matches subset` is equals-only per key, by design); `reviews.tflw`'s 409 test
+      only ever asserted `detail`, so nothing there needed changing.
+- [x] `TFLW-GAPS.md` gap #2 marked fixed (folded into the existing "Fixed" section alongside gap
+      #1, cross-referencing testFlow's decision 88) rather than renumbering the remaining 5 gaps.
+
+**Verified by:** fresh `node cli.mjs stop && node cli.mjs start`, `npx tflw check` → `16 files
+checked, no problems found`, `npx tflw run` → `PASS 61/61 passed`, and `--workers 4` on another
+fresh restart → `PASS 61/61 passed` again.
+
 ---
 
 ## M1 — API showcase ✅

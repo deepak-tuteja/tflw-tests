@@ -27,8 +27,7 @@ test "full product CRUD lifecycle" as admin
 
   api GET /products/{id}
   expect status equals 404
-  expect body.type equals "about:blank"
-  expect body.title equals "Not Found"
+  expect body matches subset { type: "about:blank", title: "Not Found", status: 404 }
 
 @crud
 test "creating a product without a token is rejected"
@@ -49,8 +48,7 @@ test "a non-admin bearer cannot create a product"
 test "creating a product with invalid fields returns RFC7807 field-level detail" as admin
   api POST /products body { name: "", price: -5, stock: 1, categoryId: "not-a-uuid" }
   expect status equals 422
-  expect body.type equals "about:blank"
-  expect body.title equals "Unprocessable Entity"
+  expect body matches subset { type: "about:blank", title: "Unprocessable Entity", status: 422 }
   expect any body.errors.field equals "name"
   expect any body.errors.field equals "price"
   expect any body.errors.field equals "categoryId"

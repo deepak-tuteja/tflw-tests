@@ -38,8 +38,7 @@ test "product If-Match: a stale ETag is rejected with 412, a fresh one succeeds"
   api PATCH /products/{id} body { price: 5 }
     header "If-Match" is "{etag}"
   expect status equals 412
-  expect body.type equals "about:blank"
-  expect body.title equals "Precondition Failed"
+  expect body matches subset { type: "about:blank", title: "Precondition Failed", status: 412 }
 
   api PATCH /products/{id} body { price: 7 }
     header "If-Match" is "{etag2}"
@@ -54,8 +53,7 @@ test "a full-replace PUT on a product is a genuine 405, not a 404" as admin
 
   api PUT /products/{id} body { name: "Replaced", price: 1, stock: 1, categoryId: {categoryId} }
   expect status equals 405
-  expect body.type equals "about:blank"
-  expect body.title equals "Method Not Allowed"
+  expect body matches subset { type: "about:blank", title: "Method Not Allowed", status: 405 }
 
 @httpMaturity @statusVariety
 test "mutating a category returns 405 — categories are read-only in this API"
@@ -79,8 +77,7 @@ test "deleting a product still referenced by an order returns 409, not a stack t
 
   api DELETE /products/{productId}
   expect status equals 409
-  expect body.type equals "about:blank"
-  expect body.title equals "Conflict"
+  expect body matches subset { type: "about:blank", title: "Conflict", status: 409 }
   expect body.detail contains "referenced"
 
 @httpMaturity @idempotency
@@ -132,13 +129,11 @@ test "requesting an unsupported representation returns 406"
   api GET /products
     header "Accept" is "application/xml"
   expect status equals 406
-  expect body.type equals "about:blank"
-  expect body.title equals "Not Acceptable"
+  expect body matches subset { type: "about:blank", title: "Not Acceptable", status: 406 }
 
 @httpMaturity @contentNegotiation
 test "posting a non-JSON content type to a JSON endpoint returns 415"
   api POST /products body text "not-json-data"
     header "Content-Type" is "text/plain"
   expect status equals 415
-  expect body.type equals "about:blank"
-  expect body.title equals "Unsupported Media Type"
+  expect body matches subset { type: "about:blank", title: "Unsupported Media Type", status: 415 }
