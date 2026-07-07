@@ -32,6 +32,7 @@ longer apply. See the v2 tracker below.
 | M7 — gap #3 resolved (no code change) + gap #8 fixed upstream, consumed here | ✅ | 2026-07-07 | 2026-07-07 |
 | M8 — verbose step logging + always-on live failure diff, consumed here | ✅ | 2026-07-07 | 2026-07-07 |
 | M9 — report.html per-file sidebar tree + tabs, consumed here | ✅ | 2026-07-07 | 2026-07-07 |
+| M10 — `tflw docs [topic]` cheatsheet, consumed here | ✅ | 2026-07-07 | 2026-07-07 |
 
 ---
 
@@ -722,6 +723,21 @@ Playwright MCP and confirmed, live, against this suite's actual 23-file/77-test 
   `<main>` to that test's panel.
 - Typing "lifecycle" into the filter box narrowed the sidebar to only `crud-lifecycle.tflw`.
 - Clicking the "Failed" status toggle narrowed the sidebar to only `schema-and-shape.tflw`.
+
+## M10 — `tflw docs [topic]` cheatsheet, consumed here ✅
+
+Fourth and last of the four `/grill-me` UX/tooling tracks scoped 2026-07-07 — `testFlow/PLAN.md`
+decision 93. Pure CLI addition: no grammar, no `.tflw` files to update.
+
+- [x] Refreshed the vendored tarball (`npm run refresh-tflw` + the stale-lockfile workaround).
+- [x] Confirmed `tflw docs`/`tflw docs config` work correctly from the actually-installed
+      `node_modules/tflw` (which only ships `dist/`, `LICENSE`, `package.json`, `README.md` —
+      **no SPEC.md**), proving the generated cheatsheet data is truly baked into `dist/cli.js` at
+      build time and never read from SPEC.md at runtime.
+
+**Verified by:** fresh `node cli.mjs stop && node cli.mjs start`, then `npx tflw run` → `PASS
+77/77 passed` (clean this time — no repeat of the M6-M9 admin-session timing flake, confirming
+this track carries no execution-path risk at all, only a new standalone command).
 
 ## M1 — API showcase ✅
 
