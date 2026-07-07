@@ -1,0 +1,67 @@
+# authz.tflw — user-scoped resources ("your orders != my orders"): three distinct identities
+# (admin + two ordinary users, seeded by apiV2's seed script) prove ownership-scoping is a real
+# authorization check, not just "any authenticated user can see anything". RBAC (role-gated
+# endpoints) is covered in auth.tflw (`/orders/all`); this file is about per-resource ownership.
+#
+# All three identities log in ad hoc rather than via a cached `session` — the `admin`/`shopper`
+# config sessions are user A/admin only, and this file specifically needs a *third*, uncached
+# identity (user B) in the same test as user A's, which a session block can't do (SPEC §3.3: one
+# session per test).
+
+before
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as userAToken
+
+  api POST /auth/login body { email: env(USER_B_EMAIL), password: env(USER_B_PW) }
+  expect status equals 200
+  capture body.accessToken as userBToken
+
+  api GET /products
+  expect status equals 200
+  capture body[0].id as productId
+
+@authz
+test "user B cannot read user A's order"
+  api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as orderId
+
+  api GET /orders/{orderId}
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 403
+
+@authz
+test "user A can read her own order"
+  api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as orderId
+
+  api GET /orders/{orderId}
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  expect body.status equals "pending"
+
+@authz
+test "an admin can read any user's order" as admin
+  api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 201
+  capture body.id as orderId
+
+  api GET /orders/{orderId}
+  expect status equals 200
+
+@authz
+test "user A only sees her own orders in her order list, never user B's"
+  api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 201
+  capture body.id as bOrderId
+
+  api GET /orders
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  expect all body.id not equals "{bOrderId}"

@@ -23,7 +23,7 @@ longer apply. See the v2 tracker below.
 | Milestone | Status | Started | Finished |
 |---|---|---|---|
 | M0 — NestJS+Postgres+Docker scaffold | ✅ | 2026-07-07 | 2026-07-07 |
-| M1 — Auth & authz cluster | ⬜ | — | — |
+| M1 — Auth & authz cluster | ✅ | 2026-07-07 | 2026-07-07 |
 | M2 — Errors & schema-contract cluster | ⬜ | — | — |
 | M3 — HTTP maturity & cookies cluster | ⬜ | — | — |
 | M4 — Async & query cluster | ⬜ | — | — |
@@ -75,6 +75,83 @@ longer apply. See the v2 tracker below.
    users` again reports exactly 3 — confirming no state survives a stop/start cycle.
 6. `node cli.mjs status` (→ `docker compose ps`) reports nothing when stopped, both containers
    when started.
+
+---
+
+## v2 M1 — Auth & authz cluster ✅
+
+- [x] `TokenRecord` entity (`token_records` table) — one row per issued *revocable* token,
+      shared by all three token families (bearer refresh, cookie session, cookie
+      session_refresh); a `AddTokenRecords` migration applied cleanly. Renamed from an initial
+      `RefreshToken`-only design once the cookie session itself needed real logout invalidation,
+      not just client-side cookie clearing.
+- [x] `TokensService` — four token families on two secrets: access-class (`access` bearer +
+      `session` cookie) signed with `JWT_ACCESS_SECRET`; refresh-class (`refresh` bearer +
+      `session_refresh` cookie) signed with `JWT_REFRESH_SECRET`. Each carries its own TTL
+      (`JWT_ACCESS_TTL=5s`, `JWT_REFRESH_TTL=1h`, `JWT_SESSION_TTL=1h`,
+      `JWT_SESSION_REFRESH_TTL=2h`) and a `typ` claim so one can't be replayed as another even
+      though the signature would still verify.
+- [x] `AuthService`/`AuthController` — `POST /auth/register|login|refresh|logout`, `GET
+      /auth/profile` (bearer); `POST /auth/session-login|session-refresh|session-logout` (cookie,
+      single Set-Cookie — used by tflw.config's cached `shopper` session) + `POST
+      /auth/session-login-full` (cookie, dual Set-Cookie: session + session_refresh, for the
+      dedicated refresh-cookie realism test only — kept off the shared session path specifically
+      so replaying the captured `set-cookie` header as a plain `Cookie` header stays declarative;
+      see plan_v2.md Part A / TFLW-FEATURE-GAPS.md)
+- [x] Guards: `BearerAuthGuard`, `SessionAuthGuard` (+ CSRF check on mutating methods via
+      `X-CSRF-Token` against a claim embedded in the session JWT), `AnyAuthGuard` (either
+      transport), `RolesGuard` (+ `@Roles()`/`@CurrentUser()` decorators)
+- [x] Minimal `ProductsModule` (read-only: `GET /products`, `GET /products/:id`) and
+      `OrdersModule` (`POST /orders`, `GET /orders` (own), `GET /orders/all` (admin-only, RBAC),
+      `GET /orders/:id` (owner-or-admin, 403 otherwise)) — just enough surface to prove
+      user-scoped-resource authz; full CRUD/validation/nested-resource richness is M2's job
+- [x] `tflw.config` rewritten for the single Dockerized service (`/v1` baked into the env's base
+      URL, no more separate named `auth` service); `admin` session (bearer) and `shopper` session
+      (cookie, single Set-Cookie only)
+- [x] Ported/added `.tflw` files: `auth.tflw` (register/login/refresh-rotation/logout/RBAC/401),
+      `sessions.tflw` (cookie login/profile/CSRF-protected mutation/logout-invalidation/dual-cookie
+      attributes), `authz.tflw` (new — cross-user 403, owner/admin 200, own-orders-list scoping)
+- [x] Not-yet-ported v1 files (target the retired API entirely; belong to M2–M4's clusters) moved
+      to `tests/.pending-v2-port/` (dot-dir, excluded from default `tflw run`/`check`, same
+      convention as `.demo-fail`/`.checkonly`) rather than left broken in the active suite —
+      preserves the content for reference when each cluster ports it back
+
+**Verified by:** fresh `node cli.mjs stop && node cli.mjs start` (clean DB), then curl'd and
+`tflw run` against the live stack, 2026-07-07:
+1. **Bearer flow**: register → 201 with a working access token; login with wrong password → 401;
+   `GET /auth/profile` with no token → 401; access token genuinely expires at its configured
+   5s TTL (`sleep 6` then profile → 401); `POST /auth/refresh` mints a new working pair and
+   **revokes the old refresh token** (reusing it afterward → 401, proving rotation, not just
+   reissue); `POST /auth/logout` revokes the refresh token immediately (next refresh attempt with
+   it → 401).
+2. **RBAC**: non-admin bearer hitting `GET /orders/all` → 403; admin → 200.
+3. **User-scoped ownership**: alice creates an order; alice reads it → 200; bob (a different
+   seeded user) reads it → 403; admin reads it → 200 — proving the 403 is a real ownership check,
+   not "any authenticated user can see anything."
+4. **Cookie session flow**: `POST /auth/session-login` sets exactly **one** Set-Cookie
+   (`session`, HttpOnly, SameSite=Lax, Max-Age=3600) and the body contains only `{userId,
+   csrfToken}` — never the session secret itself. Cookie-authed `GET /auth/profile` → 200.
+   Mutating `POST /orders` via cookie **without** `X-CSRF-Token` → 403; **with** the matching
+   token → 201.
+5. **Genuine session-logout invalidation** (not just client-side cookie clearing): captured the
+   raw `session` cookie value, called `POST /auth/session-logout`, then replayed the *same*
+   captured cookie value directly against `GET /auth/profile` → 401. This only works because the
+   session token carries a `jti` resolved against `token_records` on every request, same
+   revocation mechanism as bearer refresh.
+6. **`session-login-full`** sets two Set-Cookie headers (`session` HttpOnly/SameSite=Lax/Max-Age
+   3600, `session_refresh` HttpOnly/SameSite=Strict/Max-Age=7200); `POST /auth/session-refresh`
+   with a live `session_refresh` cookie reissues a **single** new `session` Set-Cookie (never
+   re-sends session_refresh, keeping the refresh flow chainable in a plain declarative test); with
+   no `session_refresh` cookie at all → 401.
+7. **tflw suite**: `npx tflw check` → `3 files checked, no problems found`; `npx tflw run` on a
+   freshly-restarted stack → `PASS 17/17 passed`, exit 0.
+8. **Known, already-precedented flake** (not a regression): re-running the full suite repeatedly
+   against the same still-live stack (no restart in between) occasionally 409s on
+   `auth.tflw`'s `unique email` registration test — the exact "`unique(...)`'s within-a-run-only
+   distinctness guarantee, exhausted by many manual reruns against a long-lived, non-restarted
+   service" artifact already documented in M1.5's verification. A fresh `stop`/`start` between
+   runs (or a single run, as CI would do) is clean every time — confirmed 3/3 on fresh restarts,
+   including once under `--workers 4`.
 
 ---
 

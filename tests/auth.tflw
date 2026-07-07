@@ -1,46 +1,70 @@
-# auth.tflw — bearer login happens on the `auth` service, the captured token is then used
-# against the `core` (default) service's admin-only writes: cross-service capture-chaining,
-# the payoff of tflw's named-service config (SPEC §3.2).
-#
-# `ns` (PLAN M1.5): a random per-test namespace threaded via `X-Test-NS` on every `core` step, so
-# this file's writes never collide with another file's under `--workers N`. Lives in a per-each
-# `before` hook (shares scope with the test it precedes) rather than `before file` (its own
-# isolated scope, invisible to tests — SPEC §4.2); `random`, not `unique`, because a value a retry
-# needs to reuse identically must replay, not advance (SPEC §7.2).
+# auth.tflw — the bearer transport: register/login/refresh/logout/profile, real short-TTL access
+# tokens (JWT_ACCESS_TTL=5s), refresh rotation + reuse-after-rotation rejection, and RBAC
+# (admin-only /orders/all). The `admin` session (config-level bearer login, cached for the whole
+# run) covers ordinary admin-authed calls elsewhere; this file exercises the auth endpoints
+# themselves, so most tests log in ad hoc instead of using the cached session.
 
-before
-  let ns = random string 12
+@auth
+test "registering a new user returns a working bearer pair"
+  api POST /auth/register body { name: unique("Auth User"), email: unique email, password: "reg-Pass-123" }
+  expect status equals 201
+  capture body.accessToken as accessToken
 
-@auth @crud
-test "creating a product without a token is rejected"
-  api POST /products body { name: "Sneaky Widget", price: 1, category: "misc" }
-    header "X-Test-NS" is "{ns}"
+  api GET /auth/profile
+    header "Authorization" is "Bearer {accessToken}"
+  expect status equals 200
+  expect body.role equals "user"
+
+@auth
+test "logging in with the wrong password is rejected"
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: "definitely-wrong" }
   expect status equals 401
 
-@auth @crud
-test "bearer login on auth authorizes a write on core"
-  api auth POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+@auth
+test "accessing profile without a token is rejected"
+  api GET /auth/profile
+  expect status equals 401
+
+@auth @authz
+test "a non-admin bearer cannot list all orders"
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
   expect status equals 200
-  capture body.token as token
+  capture body.accessToken as token
 
-  api POST /products body { name: unique("Auth Widget"), price: 12.5, category: "misc" }
+  api GET /orders/all
     header "Authorization" is "Bearer {token}"
-    header "X-Test-NS" is "{ns}"
-  expect status equals 201
-  capture body.id as productId
-
-  api DELETE /products/{productId}
-    header "Authorization" is "Bearer {token}"
-    header "X-Test-NS" is "{ns}"
-  expect status equals 200
-
-@auth @crud
-test "a non-admin bearer cannot create a product"
-  api auth POST /auth/login body { email: env(USER_EMAIL), password: env(USER_PW) }
-  expect status equals 200
-  capture body.token as token
-
-  api POST /products body { name: "Should Be Forbidden", price: 1, category: "misc" }
-    header "Authorization" is "Bearer {token}"
-    header "X-Test-NS" is "{ns}"
   expect status equals 403
+
+@auth @authz
+test "an admin bearer can list all orders" as admin
+  api GET /orders/all
+  expect status equals 200
+
+@auth
+test "refresh mints a new access token and rotates the refresh token, retiring the old one"
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.refreshToken as oldRefresh
+
+  api POST /auth/refresh body { refreshToken: "{oldRefresh}" }
+  expect status equals 200
+  capture body.accessToken as newAccess
+
+  api GET /auth/profile
+    header "Authorization" is "Bearer {newAccess}"
+  expect status equals 200
+
+  api POST /auth/refresh body { refreshToken: "{oldRefresh}" }
+  expect status equals 401
+
+@auth
+test "logout revokes the refresh token"
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.refreshToken as refreshToken
+
+  api POST /auth/logout body { refreshToken: "{refreshToken}" }
+  expect status equals 200
+
+  api POST /auth/refresh body { refreshToken: "{refreshToken}" }
+  expect status equals 401

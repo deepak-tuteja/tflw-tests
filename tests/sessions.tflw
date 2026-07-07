@@ -1,35 +1,77 @@
 # sessions.tflw — the `shopper` session showcases tflw's cookie-based auth transport (the
-# `admin` bearer session is exercised throughout the rest of this suite). Both cached-session
-# tests opt into the same session; its login runs once for the whole run, not once per test
-# (SPEC §3.3). Auth-only file — no `X-Test-NS` hook, since `api/auth`'s user/session state has
-# no shared-mutable-state race today (registrations use `unique email`, sessions are keyed by a
-# random UUID).
+# `admin` bearer session is exercised throughout auth.tflw/authz.tflw). Its login runs once for
+# the whole run, not once per test (SPEC §3.3), and only ever sets a single Set-Cookie
+# (`/auth/session-login`'s response) — capturing `header "set-cookie"` and replaying it as a
+# plain `Cookie` header stays fully declarative because there's nothing to merge across lines.
+#
+# CSRF-protected mutations and the second (`session_refresh`) cookie need the csrfToken/cookie
+# values a bare session opt-in doesn't expose to the test body, so those get an ad hoc login
+# instead of `as shopper` — same "inline login" pattern auth.tflw uses for the bearer transport.
 
 @auth @sessions
 test "shopper session applies its cookie automatically" as shopper
-  api auth GET /auth/profile
+  api GET /auth/profile
   expect status equals 200
-  expect body.user.email equals env(USER_EMAIL)
-  expect body.user.role equals "user"
+  expect body.email equals env(USER_A_EMAIL)
+  expect body.role equals "user"
 
 @auth @sessions
 test "shopper session is reused across tests, not re-established" as shopper
-  api auth GET /auth/profile
+  api GET /auth/profile
   expect status equals 200
-  expect body.user.role equals "user"
+  expect body.role equals "user"
+
+@auth @sessions
+test "a cookie-authed mutation without a CSRF token is rejected"
+  api POST /auth/session-login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture header "set-cookie" as setCookie
+
+  api GET /products
+  expect status equals 200
+  capture body[0].id as productId
+
+  api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
+    header "Cookie" is "{setCookie}"
+  expect status equals 403
+
+@auth @sessions
+test "a cookie-authed mutation with a matching CSRF token succeeds"
+  api POST /auth/session-login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture header "set-cookie" as setCookie
+  capture body.csrfToken as csrf
+
+  api GET /products
+  expect status equals 200
+  capture body[0].id as productId
+
+  api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
+    header "Cookie" is "{setCookie}"
+    header "X-CSRF-Token" is "{csrf}"
+  expect status equals 201
 
 @auth @sessions
 test "logging out invalidates the session cookie"
   # Inline ad hoc login (not the cached `shopper` session) so logging out here can't poison the
   # shared session cache other tests in this file rely on.
-  api auth POST /auth/session-login body { email: env(USER_EMAIL), password: env(USER_PW) }
+  api POST /auth/session-login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
   expect status equals 200
-  capture body.sessionId as sid
+  capture header "set-cookie" as setCookie
 
-  api auth POST /auth/logout
-    header "Cookie" is "tf_sid={sid}"
+  api POST /auth/session-logout
+    header "Cookie" is "{setCookie}"
   expect status equals 200
 
-  api auth GET /auth/profile
-    header "Cookie" is "tf_sid={sid}"
+  api GET /auth/profile
+    header "Cookie" is "{setCookie}"
   expect status equals 401
+
+@auth @sessions
+test "session-login-full also issues a session_refresh cookie with its own attributes"
+  api POST /auth/session-login-full body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  expect header "set-cookie" matches "session="
+  expect header "set-cookie" matches "session_refresh="
+  expect header "set-cookie" matches "HttpOnly"
+  expect header "set-cookie" matches "SameSite=Strict"

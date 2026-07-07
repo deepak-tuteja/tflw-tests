@@ -47,3 +47,22 @@ needing both `wait until api` *and* list-safety would have no clean way to combi
 `test ... as <session>` is a single optional clause — genuinely interleaving a second identity in
 one test (`tests/interleaved-sessions.tflw`) requires an inline ad hoc login rather than a second
 `as <name>` clause. Easily worked around; noted since it wasn't obvious from SPEC prose alone.
+
+## 5. No cookie-subject / cookie-jar (discovered building v2's M1 auth cluster)
+
+`capture header "set-cookie" as x` captures every `Set-Cookie` line, newline-joined if there's more
+than one (SPEC §5.4, decision 61) — correct for *reading* them, but there's no declarative way to
+turn that back into a `Cookie` header a real cookie jar would send (attribute-stripped, one line,
+last-value-wins per name). Reusing the whole raw capture as a `Cookie` header value happens to work
+when a response sets **exactly one** cookie (`cookie-parser` tolerantly parses the leftover
+`Path=/`/`HttpOnly`/etc. as junk keys alongside the real one) — that's the pattern
+`tflw.config`'s `shopper` session and most of `sessions.tflw` rely on. It stops working the moment a
+response sets **two or more** cookies at once (e.g. `/auth/session-login-full`'s `session` +
+`session_refresh`): the newline-joined capture would put a literal `\n` inside an HTTP header
+value, which real HTTP clients reject outright as header injection — not a graceful failure, a hard
+error. `sessions.tflw`'s dual-cookie test works around this by only ever *asserting* on the raw
+`set-cookie` capture (regex matches for `HttpOnly`/`SameSite`/attributes) rather than trying to
+chain it into a further request. A first-class cookie subject (SPEC §16 parking lot P#33) — one
+that tracks cookies by name, applies `Set-Cookie` attribute semantics, and re-serializes only
+name=value pairs on the next request — is a real, recurring gap, not a branching/computation punt;
+ranked properly in M5's `TFLW-GAPS.md` once the full v2 suite has surfaced every recurrence.
