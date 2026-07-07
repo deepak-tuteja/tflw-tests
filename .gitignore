@@ -4,3 +4,12 @@ report/
 .env
 vendor/*.tgz
 .testflow-tests.pids
+
+# Internal dev-tracking docs (decision log + build tracker + gap-discovery findings) — same
+# approach as ../testFlow's own .gitignore: not part of the public project, local planning
+# artifacts only.
+PLAN.md
+plan_v2.md
+PROGRESS.md
+TFLW-GAPS.md
+TFLW-FEATURE-GAPS.md
