@@ -51,7 +51,16 @@ async function seed() {
     console.log(`seeded user: ${u.email} (${u.role})`);
   }
 
-  const categories = ['Electronics', 'Books', 'Home & Kitchen'];
+  const categories = [
+    'Electronics',
+    'Books',
+    'Home & Kitchen',
+    // Widened for M6 (plan_v2.md Part D decision 1) — gives the catalog real
+    // filter/sort/search volume without inventing a new domain.
+    'Sports & Outdoors',
+    'Toys & Games',
+    'Office Supplies',
+  ];
   const categoryEntities: Record<string, Category> = {};
   for (const name of categories) {
     let cat = await categoryRepo.findOne({ where: { name } });
@@ -84,6 +93,33 @@ async function seed() {
     );
     console.log(`seeded product: ${p.name}`);
   }
+
+  // Bulk catalog (M6, plan_v2.md Part D decision 4): ~120 generated products round-robined
+  // across the widened category list, deterministic + idempotent (upsert-by-name) so re-running
+  // the seed on every container start never duplicates rows. Every 10th item's description
+  // carries a distinctive keyword so `large-catalog.tflw` has an exact, stable full-text-search
+  // count to assert against.
+  const BULK_COUNT = 120;
+  for (let i = 1; i <= BULK_COUNT; i++) {
+    const name = `Bulk Item ${i}`;
+    const existing = await productRepo.findOne({ where: { name } });
+    if (existing) continue;
+    const category = categories[i % categories.length];
+    const searchable = i % 10 === 0;
+    const description = searchable
+      ? `${name} — bulk seeded catalog item featuring gadgetronic technology`
+      : `${name} — bulk seeded catalog item`;
+    await productRepo.save(
+      productRepo.create({
+        name,
+        description,
+        price: (5 + (i % 50) + 0.99).toFixed(2),
+        stock: 10 + (i % 90),
+        categoryId: categoryEntities[category].id,
+      }),
+    );
+  }
+  console.log(`seeded bulk catalog: ${BULK_COUNT} products`);
 
   await ds.destroy();
   console.log('seed complete');

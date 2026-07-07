@@ -1,0 +1,92 @@
+# request-chain.tflw — M6 (plan_v2.md Part D decision 7): a genuinely long chain (8 hops:
+# category -> product -> order -> order -> order -> order -> fetch -> patch-item using data read
+# back -> review referencing patched data -> fetch-and-cross-check) that deliberately covers all
+# four combinations of the interpolation matrix on the same multi-field body (CreateOrderDto's
+# `{productId, quantity}`), each hop threading real response data — not just ids in URL paths —
+# into the next request's body:
+#   - inline body, partial replacement   (productId is a hole, quantity is static)
+#   - inline body, complete replacement  (both fields are holes)
+#   - `body from` file, partial replacement (payloads/chain-partial.json)
+#   - `body from` file, complete replacement (payloads/chain-full.json)
+# `body from` + `{var}` interpolation already worked (packages/lang/src/parser.ts:809-826,
+# packages/runtime/src/interpreter.ts:743-753) — this exercises it at the scale/shape a real
+# multi-hop flow actually needs, not just a single isolated call.
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as userAToken
+
+@chain @jsonpath
+test "an 8-hop chain threads real response data forward through all four body-interpolation forms"
+  # Hop 1-2: category -> two distinct products, both fed forward into every later hop.
+  api POST /products body { name: unique("Chain Product A"), price: 9.99, stock: 50, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productA
+
+  api POST /products body { name: unique("Chain Product B"), price: 14.5, stock: 50, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productB
+
+  # Hop 3: order, INLINE body, PARTIAL replacement (productId is a hole, quantity is static).
+  api POST /orders body { items: [{ productId: {productA}, quantity: 3 }] }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as orderId1
+  capture body.items[0].quantity as qty
+
+  # Hop 4: order, INLINE body, COMPLETE replacement (every value a hole — `qty` came from hop 3's
+  # own response, not a literal).
+  api POST /orders body { items: [{ productId: {productA}, quantity: {qty} }] }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as orderId2
+
+  # Hop 5: order, `body from` file, PARTIAL replacement (chain-partial.json mixes a static
+  # quantity with a holed productId).
+  api POST /orders body from "./payloads/chain-partial.json"
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as orderId3
+  capture body.items[0].quantity as qtyForFile
+
+  # Hop 6: order, `body from` file, COMPLETE replacement (chain-full.json is a full template —
+  # every value a hole, `qtyForFile` threaded forward from hop 5's own response).
+  api POST /orders body from "./payloads/chain-full.json"
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as orderId4
+
+  # Hop 7: fetch -> patch-item using data read back (the item id comes from the fetch, not a
+  # literal known ahead of time).
+  api GET /orders/{orderId4}/items
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  capture body[0].id as itemId4
+
+  api PATCH /orders/{orderId4}/items/{itemId4} body { quantity: 12 }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  capture body.quantity as finalQty
+
+  # Hop 8: review referencing patched data (the comment embeds the quantity the PATCH itself just
+  # returned), then fetch-and-cross-check.
+  api POST /products/{productB}/reviews body { rating: 5, comment: "final quantity was {finalQty}" }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as reviewId
+
+  api GET /products/{productB}/reviews
+  expect status equals 200
+  expect any body.data.id equals "{reviewId}"
+  expect any body.data.comment contains "{finalQty}"

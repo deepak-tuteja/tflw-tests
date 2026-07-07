@@ -49,7 +49,9 @@ export class AuthService {
     return this.issueBearerPair(user);
   }
 
-  private async validateCredentials(email: string, password: string): Promise<User> {
+  // Public: also used by AnyAuthGuard's HTTP Basic branch (M6, plan_v2.md Part D decision 9) —
+  // the same credential check as bearer/session login, just reached via a different transport.
+  async validateCredentials(email: string, password: string): Promise<User> {
     const user = await this.users.findOne({ where: { email } });
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       throw new UnauthorizedException('invalid email or password');

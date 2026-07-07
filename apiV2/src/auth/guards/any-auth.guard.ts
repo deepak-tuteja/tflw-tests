@@ -8,17 +8,20 @@ import {
 import { Request } from 'express';
 import { TokensService } from '../tokens.service';
 import { TokenRecordsService } from '../token-records.service';
+import { AuthService } from '../auth.service';
 import { AuthedUser } from './bearer-auth.guard';
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-// Accepts either transport — most storefront-style resources (orders, reviews) are reachable
-// from a bearer-authed admin tool and a cookie-authed shopper session alike.
+// Accepts any of three transports — most storefront-style resources (orders, reviews) are
+// reachable from a bearer-authed admin tool, a cookie-authed shopper session, or (M6, plan_v2.md
+// Part D decision 9) a classic HTTP Basic client, all alike.
 @Injectable()
 export class AnyAuthGuard implements CanActivate {
   constructor(
     private readonly tokens: TokensService,
     private readonly tokenRecords: TokenRecordsService,
+    private readonly auth: AuthService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -29,6 +32,15 @@ export class AnyAuthGuard implements CanActivate {
     if (header?.startsWith('Bearer ')) {
       const decoded = await this.tokens.verify(header.slice('Bearer '.length), 'access');
       (req as Request & { user: AuthedUser }).user = { id: decoded.sub, role: decoded.role! };
+      return true;
+    }
+
+    if (header?.startsWith('Basic ')) {
+      const [email, password] = Buffer.from(header.slice('Basic '.length), 'base64')
+        .toString('utf8')
+        .split(':');
+      const user = await this.auth.validateCredentials(email ?? '', password ?? '');
+      (req as Request & { user: AuthedUser }).user = { id: user.id, role: user.role };
       return true;
     }
 
@@ -45,6 +57,6 @@ export class AnyAuthGuard implements CanActivate {
       return true;
     }
 
-    throw new UnauthorizedException('missing bearer token or session cookie');
+    throw new UnauthorizedException('missing bearer token, session cookie, or Basic credentials');
   }
 }

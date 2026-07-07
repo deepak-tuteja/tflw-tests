@@ -136,6 +136,16 @@ export class ProductsService {
     return this.products.save(product);
   }
 
+  // Product-image upload (M6): metadata only, no real file persistence/serving (see
+  // Product entity's comment for why).
+  async attachImage(id: string, file: Express.Multer.File): Promise<Product> {
+    const product = await this.findOne(id);
+    product.imageFilename = file.originalname;
+    product.imageMimeType = file.mimetype;
+    product.imageSizeBytes = file.size;
+    return this.products.save(product);
+  }
+
   async remove(id: string): Promise<void> {
     const product = await this.findOne(id);
     try {

@@ -2,6 +2,24 @@ import type { NextFunction, Request, Response } from 'express';
 
 const METHODS_WITH_BODY = new Set(['POST', 'PATCH', 'PUT']);
 
+// M6 (plan_v2.md Part D decision 8): two routes deliberately accept a non-JSON Content-Type,
+// same "branch on the specific route" approach the rest of this gate already uses — everything
+// else on the API stays JSON-only.
+const EXTRA_ALLOWED_CONTENT_TYPES: Record<string, string[]> = {
+  'POST /v1/auth/login': ['application/x-www-form-urlencoded'],
+  'POST /v1/products/:id/image': ['multipart/form-data'],
+};
+
+function extraAllowedContentTypes(method: string, path: string): string[] {
+  if (method === 'POST' && path === '/v1/auth/login') {
+    return EXTRA_ALLOWED_CONTENT_TYPES['POST /v1/auth/login'];
+  }
+  if (method === 'POST' && /^\/v1\/products\/[^/]+\/image$/.test(path)) {
+    return EXTRA_ALLOWED_CONTENT_TYPES['POST /v1/products/:id/image'];
+  }
+  return [];
+}
+
 // Global content-negotiation gate (406/415), applied before routing so every endpoint gets the
 // same behavior without repeating it per-controller. Kept deliberately narrow: this API only ever
 // produces/consumes JSON, so anything else is rejected up front rather than left to whatever a
@@ -27,7 +45,12 @@ export function contentNegotiation(req: Request, res: Response, next: NextFuncti
   const hasBody = METHODS_WITH_BODY.has(req.method) && Number(req.headers['content-length'] ?? 0) > 0;
   if (hasBody) {
     const contentType = req.headers['content-type'];
-    if (typeof contentType !== 'string' || !contentType.includes('application/json')) {
+    const extraAllowed = extraAllowedContentTypes(req.method, req.path);
+    const allowed =
+      typeof contentType === 'string' &&
+      (contentType.includes('application/json') ||
+        extraAllowed.some((allowedType) => contentType.includes(allowedType)));
+    if (!allowed) {
       res.status(415).type('application/problem+json').json({
         type: 'about:blank',
         title: 'Unsupported Media Type',

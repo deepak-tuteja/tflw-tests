@@ -10,6 +10,7 @@ import { Order } from '../entities/order.entity';
 import { OrderItem } from '../entities/order-item.entity';
 import { Product } from '../entities/product.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { UpdateOrderItemDto } from './dto/update-order-item.dto';
 import { AuthedUser } from '../auth/guards/bearer-auth.guard';
 import { UserRole } from '../entities/user.entity';
 import { isUniqueViolation } from '../common/db-errors';
@@ -82,7 +83,10 @@ export class OrdersService {
   }
 
   private findByIdempotencyKey(idempotencyKey: string): Promise<Order | null> {
-    return this.orders.findOne({ where: { idempotencyKey }, relations: { items: true } });
+    return this.orders.findOne({
+      where: { idempotencyKey },
+      relations: { items: { product: { category: true } } },
+    });
   }
 
   private replayOrConflict(existing: Order, userId: string): CreateOrderResult {
@@ -95,14 +99,16 @@ export class OrdersService {
   findOwn(userId: string): Promise<Order[]> {
     return this.orders.find({
       where: { userId },
-      relations: { items: true },
+      // 3-level nesting (M6, plan_v2.md Part D decision 2): order -> items[] ->
+      // product{name,price,category{name}}, on every order read.
+      relations: { items: { product: { category: true } } },
       order: { createdAt: 'DESC' },
     });
   }
 
   findAllAdmin(): Promise<Order[]> {
     return this.orders.find({
-      relations: { items: true },
+      relations: { items: { product: { category: true } } },
       order: { createdAt: 'DESC' },
     });
   }
@@ -110,12 +116,32 @@ export class OrdersService {
   async findOneScoped(id: string, requester: AuthedUser): Promise<Order> {
     const order = await this.orders.findOne({
       where: { id },
-      relations: { items: true },
+      relations: { items: { product: { category: true } } },
     });
     if (!order) throw new NotFoundException('order not found');
     if (requester.role !== UserRole.ADMIN && order.userId !== requester.id) {
       throw new ForbiddenException('not your order');
     }
     return order;
+  }
+
+  // PATCH /orders/:id/items/:itemId (M6, plan_v2.md Part D decision 3a) — a real nested-resource
+  // partial update. Reuses findOneScoped's ownership/404 rule, then locates the item within the
+  // already-scoped order (a 404 for an itemId that doesn't belong to *this* order, same as any
+  // other scoped-nested-resource miss). Deliberately no ETag/If-Match here — OrderItem carries no
+  // VersionColumn, out of scope this round (plan_v2.md Part D decision 3).
+  async updateItem(
+    orderId: string,
+    itemId: string,
+    dto: UpdateOrderItemDto,
+    requester: AuthedUser,
+  ): Promise<OrderItem> {
+    const order = await this.findOneScoped(orderId, requester);
+    const item = order.items.find((it) => it.id === itemId);
+    if (!item) throw new NotFoundException('order item not found');
+
+    if (dto.quantity !== undefined) item.quantity = dto.quantity;
+
+    return this.orderItems.save(item);
   }
 }

@@ -1,0 +1,42 @@
+# large-catalog.tflw — M6 (plan_v2.md Part D): pages/filters/sorts/searches the now-substantial
+# bulk-seeded catalog (~120 generated products, apiV2/src/seed/seed.ts) at realistic volume using
+# count/quantifier assertions instead of listing every row. Reads only — the bulk catalog is
+# deterministic, idempotent seed data, so exact counts stay parallel-safe under `--workers`
+# without any per-test unique facet of its own (unlike product-query.tflw's ad hoc products,
+# nothing here is mutated by this file or any other).
+
+use "./helpers/find-category.ts"
+
+@catalog @query @large
+test "full-text search over the bulk catalog returns an exact count at real volume"
+  api GET /products?q=gadgetronic
+  expect status equals 200
+  expect body has count 12
+  expect all body.description contains "gadgetronic"
+
+  api GET /products?q=gadgetronic&page=1&pageSize=4
+  expect status equals 200
+  expect body.total equals 12
+  expect body.totalPages equals 3
+  expect body.data has count 4
+
+  api GET /products?q=gadgetronic&page=3&pageSize=4
+  expect status equals 200
+  expect body.data has count 4
+
+  api GET /products?q=gadgetronic&sort=price
+  expect status equals 200
+  expect body[0].price equals "5.99"
+  expect body[11].price equals "45.99"
+
+@catalog @query @large
+test "filtering by a bulk-only category returns an exact count at real volume"
+  api GET /categories
+  expect status equals 200
+  capture body as categories
+  let officeCategoryId = find category id(categories, "Office Supplies")
+
+  api GET /products?categoryId={officeCategoryId}&page=1&pageSize=50
+  expect status equals 200
+  expect body.total equals 20
+  expect all body.data.categoryId equals "{officeCategoryId}"

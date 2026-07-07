@@ -12,10 +12,13 @@ import {
   Put,
   Query,
   Res,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
-import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { ApiConsumes, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { ProductsService, etagFor } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -88,6 +91,17 @@ export class ProductsController {
     const updated = await this.products.update(id, dto, ifMatch);
     res.setHeader('ETag', etagFor(updated));
     return updated;
+  }
+
+  // Multipart upload (M6, plan_v2.md Part D decision 8) — admin-only, metadata-only (see
+  // ProductsService.attachImage's comment).
+  @Post(':id/image')
+  @ApiConsumes('multipart/form-data')
+  @UseGuards(AnyAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @UseInterceptors(FileInterceptor('image'))
+  attachImage(@Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
+    return this.products.attachImage(id, file);
   }
 
   @Delete(':id')

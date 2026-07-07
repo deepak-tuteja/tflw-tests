@@ -28,6 +28,7 @@ longer apply. See the v2 tracker below.
 | M3 — HTTP maturity & cookies cluster | ✅ | 2026-07-07 | 2026-07-07 |
 | M4 — Async & query cluster | ✅ | 2026-07-07 | 2026-07-07 |
 | M5 — Gap-provoking scenarios + TFLW-GAPS.md | ✅ | 2026-07-07 | 2026-07-07 |
+| M6 — realistic-scale gap hunting | ✅ | 2026-07-07 | 2026-07-07 |
 
 ---
 
@@ -512,6 +513,101 @@ gap-provoking pass. Consumed here the same day:
 **Verified by:** fresh `node cli.mjs stop && node cli.mjs start`, `npx tflw check` → `16 files
 checked, no problems found`, `npx tflw run` → `PASS 61/61 passed`, and `--workers 4` on another
 fresh restart → `PASS 61/61 passed` again.
+
+## M6 — realistic-scale gap hunting ✅
+
+Scoped via a `/grill-me` session (2026-07-07, `plan_v2.md` Part D): investigation-first, same
+North Star as M5 — **no tflw code changes this round**. Stretched the existing e-commerce domain
+(no new resource) toward realistic scale/shape: large JSON bodies, a long chain threading real
+response data into request bodies, mixed request-body content types, and a second auth scheme.
+
+- [x] **Seed expansion** (`apiV2/src/seed/seed.ts`) — 3 new categories (Sports & Outdoors, Toys &
+      Games, Office Supplies; 6 total) and ~120 deterministic, idempotent bulk products
+      round-robined across all 6 (exactly 20 per category since 120/6), every 10th one carrying a
+      `gadgetronic` keyword (12 matches) for a stable full-text-search count.
+- [x] **3-level nested embedding** (`apiV2/src/orders/orders.service.ts`) — `findOneScoped`/
+      `findOwn`/`findAllAdmin` deepened `relations: { items: true }` to
+      `relations: { items: { product: { category: true } } }`; no migration (relation columns
+      already existed).
+- [x] **`PATCH /orders/:id/items/:itemId`** (new) — `UpdateOrderItemDto { quantity? }`, reuses
+      `findOneScoped`'s ownership/404, then locates the item within the order (404 if it doesn't
+      belong there). Deliberately no ETag/If-Match — `OrderItem` has no `VersionColumn`.
+- [x] **Form-urlencoded login** — `POST /auth/login` now also accepts
+      `application/x-www-form-urlencoded` (`contentNegotiation` middleware branches on the
+      specific route, same pattern as its existing 406/415 cluster); Nest's default body parsers
+      already handled the parsing, so the same `LoginDto`/controller method needed no changes.
+- [x] **`POST /products/:id/image`** (new, admin-only, multipart) — `FileInterceptor('image')`,
+      metadata only (`imageFilename`/`imageMimeType`/`imageSizeBytes`, 3 new nullable columns +
+      migration `1783452512249-AddProductImageMeta`) — no real file persistence, matching the
+      async-jobs "simulate the realistic surface" pattern. Needed `@types/multer` (devDependency;
+      `multer` itself was already present transitively via `@nestjs/platform-express`).
+- [x] **HTTP Basic auth** — `AnyAuthGuard` extended with a third branch (`Authorization: Basic
+      base64(email:password)`), reusing `AuthService.validateCredentials` (made public, and
+      `AuthService` added to `AuthModule`'s `exports` — required for any other module's
+      `@UseGuards(AnyAuthGuard)` to resolve the guard's own new dependency; caught via a real
+      `UnknownDependenciesException` on first boot, not assumed).
+- [x] **`tests/large-order.tflw`** (new) — a 61-item order via `body from` (60 filler-product
+      lines + 1 distinct-product line, both able to share a quantity value), rescaling gap #3's
+      correlated-predicate false-pass risk from 2 items to real volume; same `find-item.ts` JS
+      helper, still necessary and still correct at scale.
+- [x] **`tests/large-catalog.tflw`** (new) — exact-count full-text search (12/12, page math over
+      them) and exact-count category filtering (20, a bulk-only category) against the ~125-product
+      catalog, using count/quantifier assertions instead of listing every row.
+- [x] **`tests/order-item-patch.tflw`** (new) — the new nested-item PATCH: happy path via `matches
+      subset` on just the patched item, cross-user 403, nonexistent-item 404.
+- [x] **`tests/token-refresh-lifecycle.tflw`** (new; named/ordered deliberately — see below) —
+      three full expire→refresh→continue cycles in one test (~18s real wall time), plus proving a
+      once-rotated refresh token is genuinely revoked (401) on replay, not just superseded.
+- [x] **`tests/request-chain.tflw`** (new) — an 8-hop chain (2 products → 4 orders covering all
+      four body-interpolation-matrix combinations: inline-partial, inline-complete, file-partial
+      via `tests/payloads/chain-partial.json`, file-complete via `chain-full.json` → fetch →
+      patch-item using the fetched item id → review embedding the patch's own returned quantity →
+      fetch-and-cross-check), each hop threading real response data forward, not just ids in URLs.
+- [x] **`tests/body-types.tflw`** (new) — `form email=…,password=…` login (success + wrong
+      password + a plain-JSON contrast test) and `upload "./payloads/sample.png" as "image"`
+      (success + non-admin 403); discovered live that the upload lands as
+      `application/octet-stream`, never the file's real MIME type (new gap #10).
+- [x] **`tests/basic-auth.tflw`** (new) — Basic success, wrong password (401), non-admin RBAC
+      (403), via `tests/helpers/basic-auth.ts` (tflw has no `base64(...)` generator — new gap #9).
+- [x] **`tests/.demo-fail/large-response-diff.tflw`** (new) — one deliberate failing assertion
+      against the real 61-item order; captured **11,248 characters on one line**, untruncated, no
+      per-field ignore list (new gap #8).
+- [x] **`TFLW-GAPS.md`** updated: gap #3 rescaled-evidence note (still open, now proven at 61-item
+      volume); "Evaluated, found not to be gaps" gained 3 entries (`body from` at scale + full
+      interpolation matrix, the repeated refresh lifecycle, HTTP Basic via the existing guard);
+      3 new ranked gaps appended (#8 untruncated diffs, #9 no base64 generator, #10 upload
+      Content-Type) — gap numbers stay stable, nothing renumbered.
+- [x] **Found and fixed one real bug during verification, not just testing**: `AnyAuthGuard`
+      wouldn't boot at all after adding `AuthService` as a constructor dependency —
+      `UnknownDependenciesException` on every module using the guard, because `AuthService` wasn't
+      in `AuthModule`'s `exports` array. Fixed by exporting it; would have blocked M6 entirely, not
+      a test-only issue.
+- [x] **Test-ordering fix, not a product bug**: `tests/token-refresh-lifecycle.tflw`'s ~18s of
+      real delay, if it ran before `schema-and-shape.tflw` in the default alphabetical file order,
+      expired the suite-wide cached `admin` **session**'s 5s-TTL bearer token before
+      `schema-and-shape.tflw`'s `as admin` tests ran, breaking them (a genuine interaction between
+      a real short-TTL cached session and a new long-delay test, not present before this
+      milestone). Fixed by naming the file so it sorts right after `tests/token-expiry.tflw` —
+      once every `as admin`/`as shopper` test in the suite has already run.
+
+**Verified by:** fresh `node cli.mjs stop && node cli.mjs start` (rebuilds `apiV2` with the
+seed/entity/endpoint changes), 2026-07-07:
+1. `npx tflw check` → `23 files checked, no problems found.`
+2. `npx tflw run` → `PASS 77/77 passed` (61 carried over + 16 new: large-order ×1, large-catalog
+   ×2, order-item-patch ×3, token-refresh-lifecycle ×1, request-chain ×1, body-types ×5,
+   basic-auth ×3) — `.demo-fail/` correctly excluded from default discovery.
+3. `npx tflw run tests/.demo-fail/large-response-diff.tflw --tag demofail` → `FAIL 0/1 passed`, a
+   single 11,248-character failure line, captured as real evidence for gap #8 (both in the CLI
+   output and `report/report.html`, 3 occurrences of the literal mismatch text).
+4. Fresh `node cli.mjs stop && node cli.mjs start` again, then `npx tflw run --workers 4` →
+   `PASS 77/77 passed` — confirms the new bulk-seeded/large-body scale doesn't break parallel-
+   safety.
+5. Manual `curl` smoke tests against each new endpoint (form-urlencoded login, Basic auth on
+   `GET /orders/all`, multipart image upload, order-item PATCH) before writing the `.tflw` proofs,
+   to separate backend bugs from test-authoring bugs while iterating.
+
+Per the plan's checkpoint instruction: stopping here to report the merged, re-prioritized backlog
+(existing #3-#7 + new #8-#10) to the user before starting the one-gap-at-a-time fix cadence.
 
 ---
 

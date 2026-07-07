@@ -165,3 +165,139 @@ Each milestone keeps the ported subset of the suite green before adding the next
 - `node cli.mjs stop` tears the stack down cleanly.
 - Confirm `TFLW-GAPS.md` is ranked with per-gap proof links, and the `testFlow/PLAN.md` stub is
   present and clearly marked "proposed, not implemented".
+
+---
+
+## Part D — M6: realistic-scale gap hunting (planned, not yet built)
+
+Gaps #1 (cookie jar) and #2 (partial-object matching) from M5's `TFLW-GAPS.md` are fixed in tflw
+and dogfooded here. 5 gaps remain (#3-#7), already ranked with proof fixtures. This round extends
+gap-hunting toward realistic-scale scenarios — large JSON bodies, long chains of requests where one
+response's data becomes the next request's body, mixed request-body types, and a second auth
+scheme — before resuming the one-gap-at-a-time fix cadence on the combined backlog. Same North
+Star as M5: **no tflw code changes this round** — this is investigation, mirroring M5's shape.
+Scoped via a `/grill-me` session, 2026-07-07.
+
+### Decisions locked during grilling
+1. **Sequencing:** investigate first (build these scenarios, discover/rank whatever gaps surface),
+   *then* merge into the existing #3-#7 backlog and resume the one-gap-at-a-time fix cadence — not
+   finish #3-#7 first.
+2. **Domain:** stretch the existing e-commerce domain rather than introduce a new resource —
+   reuses all existing auth/session/error infra.
+3. **Partial-replace need** turned out to be two distinct things once unpacked: (a) a real
+   nested-resource `PATCH /orders/:id/items/:itemId` endpoint (doesn't exist today — PATCH is
+   shallow-field-only everywhere, and there's no way to update one item inside an order's items
+   array without resending the whole array), and (b) a captured value from one response
+   substituted into a large external JSON template consumed by a later request — which turned out
+   to **already work** (`body from "./payloads/x.json"` + `{var}` interpolation,
+   `packages/lang/src/parser.ts:809-826`, `packages/runtime/src/interpreter.ts:743-753`) and just
+   needs to be exercised at real scale, not designed.
+4. **Scale:** realistic app-scale — tens to low hundreds (50-200 array elements, 3-4 levels deep
+   nesting), not thousands. True large-N (thousands+) would need real bulk-seed infra that doesn't
+   exist and risks conflating "DSL expressiveness gap" with "this is slow because it's a lot of
+   data" — a different, non-language problem.
+5. **Response verification:** deliberately probe two things found during grounding — gap #3
+   (correlated array-element predicates) rescaled to realistic volume, and a genuinely new
+   candidate: failure diffs are completely untruncated
+   (`packages/runtime/src/matcher.ts:130-134`, bare `JSON.stringify`, no length cap, no per-field
+   ignore/exclude) — a large nested mismatch produces a wall of unreadable JSON today. At least one
+   test deliberately fails on a large body on purpose to get real evidence, not a hunch.
+6. **Long-lasting auth** = the refresh lifecycle itself, compressed — short configurable TTLs (like
+   the existing 5s access token) proving a session survives several expire→`POST
+   /auth/refresh`→continue cycles across many sequential requests. *Not* a new "remember me"
+   long-lived token family — the auth module already has real rotation
+   (`apiV2/src/auth/auth.service.ts#refresh`, revokes old jti, issues new pair); no new backend
+   auth-lifetime work needed, just a scenario exercising what's there.
+7. **Long chain of requests:** the existing suite chains ids into URL paths constantly but never
+   chains substantive response *data* into a subsequent request *body* more than 1-2 hops. Add a
+   genuinely long chain (5+ hops: category → product → order → fetch → patch-item using data read
+   back → review referencing patched data → fetch-and-cross-check) that deliberately covers all
+   four combinations of the interpolation matrix, so every case is proven with real chained data:
+   - inline body, **partial** replacement (some fields from a prior response, some static)
+   - inline body, **complete** replacement (every value a `{var}` hole, nothing static)
+   - `body from` file, **partial** replacement (file mixes static fields and holes)
+   - `body from` file, **complete** replacement (file is a full template, every value a hole)
+8. **Request-body-type coverage:** `form k=v` (urlencoded) and `upload "..." as "field"`
+   (multipart) already exist in tflw's grammar (`packages/lang/src/ast.ts:164-184`) but **zero**
+   endpoints in apiV2 accept non-JSON content types today — neither is exercised anywhere in this
+   repo. Fix: `POST /auth/login` also accepts `application/x-www-form-urlencoded` (classic
+   HTML-form login, branching on `Content-Type` the same way the existing 406/415
+   content-negotiation cluster already does); new `POST /products/:id/image` (admin-only,
+   multipart, stores just `filename`/`mimeType`/`sizeBytes` metadata — no real file
+   persistence/serving, matching this repo's "simulate the realistic surface, don't build
+   unnecessary infra" pattern already used for async jobs).
+9. **Auth-type coverage:** bearer (already extensive) and HTTP **Basic** — apiV2 has no Basic guard
+   at all today (only `bearer-auth.guard.ts`/`session-auth.guard.ts`). Extend the existing
+   multi-scheme combinator (`AnyAuthGuard`) to also accept `Authorization: Basic
+   base64(email:password)` against the same user credentials, applied uniformly rather than as a
+   separate parallel surface. tflw has no `base64(...)` generator function, so a declarative Basic
+   header may itself be a real finding (forced JS escape hatch, or confirmed-by-design) — the test
+   is written to surface that either way, not to presuppose the answer.
+
+### apiV2 changes
+1. **Seed expansion** (`apiV2/src/seed/seed.ts`) — keep the 5 hand-written products, add ~120
+   generated ones round-robined across a widened category list (+2-3 categories), same idempotent
+   upsert-by-name pattern. Gives `GET /products` pagination/filter/sort/search real volume.
+2. **Nested embedding in order responses** (`apiV2/src/orders/orders.service.ts`) — deepen
+   `relations: { items: true }` to `relations: { items: { product: { category: true } } }` in
+   `findOneScoped`/`findOwn`/`findAllAdmin`; attach the already-fetched product (with its category)
+   onto each created `OrderItem` in `create()`. `OrderItem.product` and `Product.category` relation
+   columns **already exist** on the entities — this is a `relations`-option change, not a
+   migration. Result: order → items[] → product{name,price,category{name}}, genuine 3-level nesting
+   on every order read.
+3. **`PATCH /orders/:id/items/:itemId`** — same guard/ownership pattern as `GET :id/items` (reuse
+   `findOneScoped`, then locate the item within `order.items`, 404 if it doesn't belong to that
+   order). `UpdateOrderItemDto` — `quantity?: number` only, shallow merge (mirrors `PATCH
+   /products/:id`'s convention). Deliberately no ETag/If-Match concurrency — `OrderItem` has no
+   `VersionColumn` today; out of scope this round.
+4. **Form-urlencoded login**, **product image upload** — see decision 8 above.
+5. **Basic auth** — see decision 9 above.
+
+### testFlow-tests changes
+New `tests/payloads/` directory (sibling to `tests/helpers/`) holding external JSON templates
+consumed via `body from`. New/extended `.tflw` files:
+- `tests/large-order.tflw` — large templated order body via `body from`; verifies the large nested
+  response with `has count` + `matches subset` + `any`/`all` at scale; extends gap #3's existing
+  correlated-predicate proof (`tests/order-items.tflw`) to real volume (50+ items, not 2).
+- `tests/large-catalog.tflw` — pages/filters/sorts/searches the now-substantial catalog at
+  realistic volume using count/quantifier assertions instead of listing every row.
+- `tests/order-item-patch.tflw` — exercises the new nested-item PATCH, verifying just the patched
+  item's new state via `matches subset` without restating the whole order.
+- `tests/refresh-lifecycle.tflw` — compressed-TTL session, several expire→refresh→continue cycles
+  across many sequential requests (reuses `tests/helpers/wait-seconds.ts`'s existing pattern from
+  `token-expiry.tflw`).
+- `tests/.demo-fail/large-response-diff.tflw` — one deliberate, intentionally-failing large-body
+  assertion (mirrors the existing `.demo-fail/` convention), captured specifically to get real
+  `report.html`/error-message evidence of the untruncated-diff behavior.
+- `tests/request-chain.tflw` + `tests/payloads/chain-partial.json` + `tests/payloads/chain-full.json`
+  — the 5+ hop chain covering all four interpolation-matrix combinations (decision 7).
+- `tests/body-types.tflw` — `form email={u}, password={p}` against urlencoded-capable
+  `/auth/login`; `upload "./payloads/sample.png" as "image"` against the new product-image
+  endpoint; alongside existing all-JSON coverage for contrast.
+- `tests/basic-auth.tflw` — exercises Basic auth against an existing bearer-guarded endpoint
+  (e.g. `GET /orders/all` as admin), noting whichever way decision 9's finding lands.
+
+### Deliverable
+- `TFLW-GAPS.md` updated with whatever's actually observed after running the above against the
+  real API: confirmed-working entries (in "Evaluated, found not to be gaps") for whichever of
+  `body from`-at-scale / refresh-lifecycle / Basic-auth-header turn out fully declarative, a ranked
+  new entry for the untruncated-diff/no-ignore-list finding if the deliberate failure confirms it,
+  and a rescaled evidence note on gap #3. Gap numbers stay stable; new findings get the next
+  number(s) after 7.
+- `PROGRESS.md` — new `## M6 — realistic-scale gap hunting` section (mirrors M5's format).
+
+### Verification
+1. Fresh `node cli.mjs stop && node cli.mjs start` (rebuilds apiV2 with the seed/entity/endpoint
+   changes).
+2. `npx tflw check` — all files including new ones parse clean.
+3. `npx tflw run` — full suite green except the intentionally-excluded `.demo-fail/` file.
+4. Manually run `.demo-fail/large-response-diff.tflw` directly to capture real report.html/CLI
+   output as evidence for the diff-size finding.
+5. Repeat `npx tflw run --workers 4` on another fresh restart — confirm the new large/bulk-seeded
+   data doesn't break parallel-safety at the new scale.
+6. Update `TFLW-GAPS.md`/`PROGRESS.md` with actual findings from steps 3-5, not speculative ones.
+7. Commit + push testFlow-tests changes (apiV2 + tests + docs) as one milestone, matching the M1-M5
+   commit convention. Update project memory afterward.
+8. Checkpoint with the user: report the merged, re-prioritized backlog (existing #3-#7 + any new
+   findings) and stop before starting the one-gap-at-a-time fix cadence, per their standing
+   instruction.

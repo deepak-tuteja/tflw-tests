@@ -1,0 +1,71 @@
+# body-types.tflw — M6 (plan_v2.md Part D decision 8): request-body-type coverage. `form k=v`
+# (urlencoded) and `upload "..." as "field"` (multipart) already existed in tflw's grammar
+# (packages/lang/src/ast.ts:164-184) but zero endpoints in apiV2 accepted a non-JSON Content-Type
+# before this milestone — neither was exercised anywhere in this repo. `POST /auth/login` now also
+# accepts `application/x-www-form-urlencoded` (classic HTML-form login); the new
+# `POST /products/:id/image` accepts `multipart/form-data` (admin-only, metadata only — no real
+# file persistence, matching this repo's async-jobs pattern of simulating the realistic surface
+# without unnecessary infra).
+#
+# Discovered running this against the real endpoint: `upload "..." as "field"` has no way to
+# specify (or infer from the file extension) the uploaded file's Content-Type — its multipart
+# builder wraps the file in a type-less `Blob` (packages/runtime/src/interpreter.ts:772,
+# `new Blob([new Uint8Array(buf)])`, no `type` option), so multer always sees
+# `application/octet-stream` regardless of the file's real extension. Asserted below as real
+# observed behavior (see TFLW-GAPS.md for the ranked writeup of this finding).
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+@bodytypes
+test "logging in via classic form-urlencoded works exactly like JSON login"
+  api POST /auth/login form email=env(USER_A_EMAIL), password=env(USER_A_PW)
+  expect status equals 200
+  expect body.accessToken matches "^ey"
+  expect body.refreshToken matches "^ey"
+
+@bodytypes
+test "a form-urlencoded login with the wrong password is rejected just like JSON"
+  api POST /auth/login form email=env(USER_A_EMAIL), password="wrong-password"
+  expect status equals 401
+
+@bodytypes
+test "logging in via ordinary JSON still works, for contrast"
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  expect body.accessToken matches "^ey"
+
+@bodytypes
+test "uploading a product image via multipart/form-data stores just its metadata" as admin
+  api POST /products body { name: unique("Uploadable Widget"), price: 9.99, stock: 3, categoryId: {categoryId} }
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /products/{productId}/image upload "./payloads/sample.png" as "image"
+  expect status equals 201
+  expect body.imageFilename equals "sample.png"
+  # Not "image/png" — see the file-level comment above: `upload` can't specify or infer a
+  # Content-Type, so this is what the server genuinely receives.
+  expect body.imageMimeType equals "application/octet-stream"
+  expect body.imageSizeBytes equals 25
+
+@bodytypes @authz
+test "uploading a product image without admin is rejected"
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as userAToken
+
+  api POST /products body { name: unique("Guarded Upload Widget"), price: 9.99, stock: 3, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /products/{productId}/image upload "./payloads/sample.png" as "image"
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 403

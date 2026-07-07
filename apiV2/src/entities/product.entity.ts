@@ -57,4 +57,16 @@ export class Product {
 
   @OneToMany(() => Review, (review) => review.product)
   reviews: Review[];
+
+  // Product-image metadata only (M6, plan_v2.md Part D decision 8) — no real file
+  // persistence/serving, matching this repo's "simulate the realistic surface, don't build
+  // unnecessary infra" pattern already used for async jobs.
+  @Column({ name: 'image_filename', type: 'varchar', nullable: true })
+  imageFilename: string | null;
+
+  @Column({ name: 'image_mime_type', type: 'varchar', nullable: true })
+  imageMimeType: string | null;
+
+  @Column({ name: 'image_size_bytes', type: 'int', nullable: true })
+  imageSizeBytes: number | null;
 }

@@ -1,0 +1,64 @@
+# order-item-patch.tflw — M6 (plan_v2.md Part D decision 3a): a real nested-resource
+# `PATCH /orders/:id/items/:itemId` (didn't exist before this milestone — PATCH was
+# shallow-field-only everywhere, with no way to update one item inside an order's items array
+# without resending the whole array). Same ownership scoping as the parent order
+# (tests/order-items.tflw); deliberately no ETag/If-Match here — OrderItem carries no
+# VersionColumn, out of scope this round.
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api GET /products
+  expect status equals 200
+  capture body[0].id as productId
+
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as userAToken
+
+  api POST /auth/login body { email: env(USER_B_EMAIL), password: env(USER_B_PW) }
+  expect status equals 200
+  capture body.accessToken as userBToken
+
+@crud @orderitem
+test "patching one item's quantity updates just that item, verified via matches subset"
+  api POST /orders body { items: [{ productId: {productId}, quantity: 2 }] }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as orderId
+  capture body.items[0].id as itemId
+
+  api PATCH /orders/{orderId}/items/{itemId} body { quantity: 9 }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  expect body matches subset { id: "{itemId}", quantity: 9 }
+
+  api GET /orders/{orderId}/items
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  expect any body.quantity equals 9
+
+@crud @orderitem @authz
+test "patching another user's order item is scoped exactly like the parent order"
+  api POST /orders body { items: [{ productId: {productId}, quantity: 2 }] }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as orderId
+  capture body.items[0].id as itemId
+
+  api PATCH /orders/{orderId}/items/{itemId} body { quantity: 5 }
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 403
+
+@crud @orderitem
+test "patching a nonexistent item within a real order is a clean 404, not a stack trace"
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as orderId
+
+  api PATCH /orders/{orderId}/items/00000000-0000-0000-0000-000000000000 body { quantity: 5 }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 404

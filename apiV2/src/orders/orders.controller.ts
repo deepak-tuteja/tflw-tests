@@ -1,8 +1,19 @@
-import { Body, Controller, Get, Headers, Param, Post, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Param,
+  Patch,
+  Post,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { ApiTags } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { UpdateOrderItemDto } from './dto/update-order-item.dto';
 import { AnyAuthGuard } from '../auth/guards/any-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -54,6 +65,19 @@ export class OrdersController {
   async findItems(@Param('id') id: string, @CurrentUser() user: AuthedUser) {
     const order = await this.orders.findOneScoped(id, user);
     return order.items;
+  }
+
+  // Nested-item PATCH (M6, plan_v2.md Part D decision 3a) — same ownership scoping as the parent
+  // order; no @Roles restriction, since a user updating their own order's item is the normal case
+  // (admin covered by findOneScoped's role check too).
+  @Patch(':id/items/:itemId')
+  updateItem(
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+    @Body() dto: UpdateOrderItemDto,
+    @CurrentUser() user: AuthedUser,
+  ) {
+    return this.orders.updateItem(id, itemId, dto, user);
   }
 
   // 202-Accepted async job (M4): the fulfillment itself happens after this request returns —

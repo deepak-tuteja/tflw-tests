@@ -1,0 +1,42 @@
+# large-response-diff.tflw — DEMO-FAIL FIXTURE (M6, plan_v2.md Part D decision 5): one
+# deliberate, intentionally-failing large-body assertion, captured specifically to get real
+# report.html/CLI evidence of the untruncated-diff behavior (packages/runtime/src/matcher.ts:
+# 130-134, bare `JSON.stringify`, no length cap, no per-field ignore/exclude) — a large nested
+# mismatch produces a wall of unreadable JSON today, not a real gap in expressiveness so much as
+# a reporting-ergonomics finding.
+#
+# Run explicitly (dot-directory, invisible to a bare `tflw run`/`tflw check`):
+#   npx tflw run tests/.demo-fail/*.tflw --tag demofail
+
+@demofail @largediff
+test "asserting the wrong shape against a 61-item order dumps an unreadable wall of JSON"
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as userAToken
+
+  api POST /products body { name: unique("Diff-demo Filler"), price: 3, stock: 1000, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /products body { name: unique("Diff-demo Target"), price: 8, stock: 1000, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productA
+
+  api POST /orders body from "../payloads/large-order.json"
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+
+  # Deliberately wrong: the real 61-item response's `status`/`items` bear no resemblance to this
+  # literal, so the failure diff prints the *entire* real order body (61 nested items, each with
+  # its product and category) against it — real evidence of "no truncation, no ignore-list."
+  expect body matches subset { status: "definitely-not-a-real-status", items: "definitely-not-an-array" }

@@ -1,11 +1,14 @@
 # tflw declarative-expressiveness gaps (ranked)
 
 **Successor to `TFLW-FEATURE-GAPS.md`.** That file's five findings (from the M1/M1.5 sessions) are
-folded in here, re-verified against the finished v2 suite, and joined by three new findings
-M5 specifically went looking for. Per plan_v2.md Part C: **tflw itself (`testFlow/`) is not touched
-by this document** — these are backlog notes for a future testFlow session (see
-`testFlow/PLAN.md`'s new milestone stub), not fixes. Every entry below was built and verified
-against the real, running v2 API — none of this is speculative.
+folded in here, re-verified against the finished v2 suite, and joined by three new findings M5
+specifically went looking for (gaps #1-#7, two since fixed) and three more from M6's
+realistic-scale gap hunting (gaps #8-#10, plan_v2.md Part D — large templated bodies, a long
+multi-hop request chain, a second auth scheme, and a deliberate large-body failure). Per
+plan_v2.md Part C/D: **tflw itself (`testFlow/`) is not touched by this document** — these are
+backlog notes for a future testFlow session (see `testFlow/PLAN.md`'s new milestone stub), not
+fixes. Every entry below was built and verified against the real, running v2 API — none of this is
+speculative.
 
 **Criterion for "real gap":** the scenario is legitimately declarative — an ordinary assertion or
 data-shape check, not a loop/branch/state-machine a language that deliberately has neither (SPEC
@@ -27,6 +30,9 @@ around it. See **Fixed**, below, for #1 and #2.
 | 5 | No `Retry-After`-aware retry | **Medium × Low** — only recurs where the API rate-limits, but that's a common real pattern | `tests/reviews.tflw`'s two `@ratelimit` tests |
 | 6 | No schema/contract validation against `/openapi.json` | **Medium × Low** — high potential value, low current occurrence (few endpoints document response schemas yet) | `tests/schema-and-shape.tflw` |
 | 7 | Only one `session` may be opted into per test | **Low × High** — trivial one-line workaround, but recurs constantly | `tests/authz.tflw`, `tests/order-items.tflw`, `tests/jobs.tflw`, `tests/reviews.tflw`, `tests/http-maturity.tflw` |
+| 8 | Failure diffs are completely untruncated, no per-field ignore/exclude | **High × Medium** — any large-body assertion failure dumps an unreadable wall of JSON; recurs any time a suite's bodies grow past toy size | `tests/.demo-fail/large-response-diff.tflw` |
+| 9 | No `base64(...)` (or general string-transform) generator function | **Medium × Low** — only blocks a declarative HTTP Basic `Authorization` header; the multi-scheme guard itself works fine once the header exists | `tests/basic-auth.tflw`, `tests/helpers/basic-auth.ts` |
+| 10 | `upload "..." as "field"` can't specify or infer a file's Content-Type | **Medium × Low** — only matters when a test cares about the *received* MIME type, but the workaround (none — it's always `application/octet-stream`) can't be worked around at all, not even via JS | `tests/body-types.tflw` |
 
 ## Fixed
 
@@ -111,6 +117,32 @@ actually built — worth recording so a future session doesn't re-investigate th
   `api` request to follow it (`tests/reviews.tflw`) is fully declarative. Only *walking every
   page automatically* needs the escape hatch, and that's the same confirmed-by-design fence as
   offset pagination, not a separate gap.
+
+Three more from M6's realistic-scale gap hunting (plan_v2.md Part D) turned out fully declarative
+once actually exercised, at real volume/shape rather than a toy case:
+
+- **`body from` file templates at real volume, all four interpolation-matrix combinations** (M6):
+  inline-partial, inline-complete, file-partial, and file-complete body replacement
+  (`tests/request-chain.tflw`'s 8-hop chain, `tests/large-order.tflw`'s 61-item template) all
+  worked exactly as documented (SPEC §5.2) with zero friction — `{var}` holes interpolate
+  correctly whether there are 2 of them or 61, and whether the surrounding static structure is a
+  single field or a 60-element array. Confirms `packages/lang/src/parser.ts:809-826` /
+  `packages/runtime/src/interpreter.ts:743-753` scale cleanly; this was a real risk worth checking
+  (per plan_v2.md Part D decision 3b), not a hunch.
+- **The refresh lifecycle, repeated several times in one test** (M6): `tests/token-refresh-
+  lifecycle.tflw` chains three full expire→refresh→continue cycles (and confirms a
+  once-rotated refresh token is genuinely revoked, not just superseded, on replay) using only the
+  same JS fixed-delay workaround `tests/token-expiry.tflw` already established for a single cycle
+  — no new gap, and no backend auth-lifetime work was needed (`apiV2/src/auth/auth.service.ts`'s
+  rotation already handled it). The one real interaction this surfaced was operational, not a
+  language gap: this suite's `admin` **session** is a real bearer access token cached once for the
+  whole run under a 5s TTL, so a test with a long real delay must sort after every test that relies
+  on that cached session — hence this file's name (sorts right after `token-expiry.tflw`, once all
+  `as admin`/`as shopper` tests have already run).
+- **HTTP Basic via the existing multi-scheme guard** (M6): once the `Authorization: Basic
+  base64(...)` header value exists, `AnyAuthGuard` accepting it (`tests/basic-auth.tflw`) needed no
+  DSL changes at all — the *only* friction was producing that header value declaratively, tracked
+  separately as gap #9 below.
 
 ---
 
@@ -201,6 +233,13 @@ helper (`tests/helpers/find-item.ts`) to do the correlated check for real.
 This is ranked above gaps #4-#7 despite low frequency because the failure mode is **a silent false
 pass**, not a visible error — a test author who doesn't know about this can ship a scenario that
 looks like it verifies a specific item's quantity and doesn't.
+
+**Rescaled to real volume (M6, 2026-07-07):** `tests/large-order.tflw` reproduces the exact same
+false-pass risk at 61 items instead of 2 (60 filler-product line items plus one distinct-product
+line item, both able to coincidentally share a quantity value) — same `find-item.ts` JS-helper
+workaround, now proven to still be necessary (and still correct) at app-scale volume, not just a
+toy 2-item case. Nothing about the gap itself changed; this is evidence the finding generalizes,
+not a new finding.
 
 **Proposed syntax:** a JSONPath-style filter predicate inside the quantifier's path:
 
@@ -311,3 +350,92 @@ test "..." as admin, userA
 **Cross-check:** not a common named limitation elsewhere (Postman/RestAssured collections just use
 separate variables for as many identities as needed) — mostly notable because it wasn't obvious
 from SPEC prose alone until this suite hit it dozens of times.
+
+## 8. Failure diffs are completely untruncated, no per-field ignore/exclude
+
+Found deliberately, per plan_v2.md Part D decision 5: `tests/.demo-fail/large-response-diff.tflw`
+asserts a wrong shape against a real 61-item order response
+(`tests/large-order.tflw`/`tests/payloads/large-order.json`'s same fixture). Confirmed by reading
+`packages/runtime/src/matcher.ts:130-134`: the mismatch message is built from a bare
+`JSON.stringify(actual)`, no length cap, no configurable per-field ignore/exclude list. Running it
+for real produces **one 11,248-character line** — the entire 61-item order (every id, every
+`unitPrice`, every nested field) dumped flat into the CLI and `report/report.html` alike:
+
+```
+expect body matches subset { status: "definitely-not-a-real-status", items: "definitely-not-an-array" }
+  expected body to match subset {"status":"definitely-not-a-real-status","items":"definitely-not-an-array"}, but got {"id":"7b70b1b7-...","userId":"...","status":"pending",...,"items":[{"id":"...","quantity":1,"unitPrice":"3.00"},{...60 more items...}]}
+```
+
+Ranked above gaps #9-#10 despite being a reporting-ergonomics finding rather than a missing
+request/assertion capability: it recurs *every time* a large-body assertion fails, not just in one
+narrow scenario, and actively works against the person debugging the failure — the opposite of
+what a test failure message is for.
+
+**Proposed syntax:** a per-`expect`/global truncation length plus a subset-aware diff that only
+prints the *mismatched* keys (already partially possible in principle for `matches subset`, since
+the matcher already knows which literal keys it checked):
+
+```
+expect body matches subset { status: "...", items: "..." } max diff 2000
+```
+
+**Cross-check:** Jest's snapshot diffs truncate long strings/arrays by default and highlight only
+the changed lines; Playwright's expect diffs are similarly bounded. A bare untruncated
+`JSON.stringify` on failure is the outlier, not the norm, once bodies grow past toy size.
+
+## 9. No `base64(...)` (or general string-transform) generator function
+
+Found while covering HTTP Basic auth (plan_v2.md Part D decision 9): `apiV2`'s `AnyAuthGuard` now
+accepts `Authorization: Basic base64(email:password)` uniformly alongside bearer/session
+(`tests/basic-auth.tflw`), and that guard itself needed no DSL support at all — the friction is
+entirely upstream, producing the base64-encoded credential value in the first place. tflw's
+generator list (SPEC §5, `unique(...)`, `random number/string/of/like`) has no string-transform
+generator of any kind, so `tests/helpers/basic-auth.ts`'s one-line JS helper
+(`Buffer.from(...).toString('base64')`) is the only route — checked against the parser/AST, there
+is no `Base64Expr`/similar node.
+
+Ranked below gap #8 (this is a single narrow, single-purpose gap, not a recurring reporting
+problem) but above gap #10 (it forces a *whole JS file* for what would otherwise be a one-line
+declarative header, not just an unrecoverable behavior difference): this is arguably a legitimate
+missing **generator** rather than "computation" in the SPEC §7.5 sense — it's a pure, deterministic
+value transform with no branching/looping, the same shape as the generators that already exist.
+
+**Proposed syntax:**
+
+```
+header "Authorization" is "Basic {base64(env(ADMIN_EMAIL) + \":\" + env(ADMIN_PW))}"
+```
+
+(Exact surface syntax is an open question — this presupposes string concatenation exists too,
+which it doesn't either; a narrower, more likely shape is a dedicated two-argument generator:
+`basic credential(email, password)` alongside `unique(...)`/`random ...`.)
+
+**Cross-check:** Postman has a built-in "Basic Auth" auth-type picker that encodes the header for
+you with no scripting; Insomnia and RestAssured both do the same. tflw is the outlier in requiring
+a JS escape hatch for a scheme this standard.
+
+## 10. `upload "..." as "field"` can't specify or infer a file's Content-Type
+
+Found while covering multipart uploads (plan_v2.md Part D decision 8):
+`tests/body-types.tflw`'s upload test expects (and gets) `application/octet-stream` for a `.png`
+file, not `image/png`. Confirmed by reading `packages/runtime/src/interpreter.ts:772`: the
+multipart builder wraps the file in `new Blob([new Uint8Array(buf)])` with no `type` option, so
+multer always falls back to the generic default — there is no way, declarative or JS-escape-hatch,
+to influence this from inside a `.tflw` file (the `upload` step's file-reading is entirely
+runtime-internal, not something a `use`d helper can intercept).
+
+Ranked lowest of the three M6 findings: it only matters when a test specifically wants to assert
+the *received* Content-Type (uncommon — most upload tests care about the file landing intact, not
+its sniffed MIME type), but unlike gaps #3/#9 there is genuinely no workaround at all, not even an
+unergonomic one.
+
+**Proposed syntax:**
+
+```
+upload "./payloads/sample.png" as "image" type "image/png"
+```
+
+**Cross-check:** Postman's form-data file fields let you override the Content-Type per part;
+`curl -F 'image=@sample.png;type=image/png'` and most HTTP client libraries (axios, `got`, Python
+`requests`) all support an explicit per-file MIME type override. tflw inferring nothing at all
+(not even from the file extension) is the narrower behavior.

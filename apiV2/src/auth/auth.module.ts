@@ -25,6 +25,7 @@ import { RolesGuard } from './guards/roles.guard';
     RolesGuard,
   ],
   exports: [
+    AuthService,
     TokensService,
     TokenRecordsService,
     BearerAuthGuard,

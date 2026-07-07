@@ -1,0 +1,72 @@
+# token-refresh-lifecycle.tflw — M6 (plan_v2.md Part D decision 6): the refresh lifecycle itself,
+# compressed — proving a session survives *several* expire→refresh→continue cycles across many
+# sequential requests, not just the single cycle tests/token-expiry.tflw already proves. The auth
+# module already has real rotation (apiV2/src/auth/auth.service.ts#refresh revokes the old jti and
+# issues a new pair) — this just exercises it repeatedly, no new backend auth-lifetime work. Same
+# `wait until api` per-step-header gap as token-expiry.tflw (TFLW-GAPS.md #4) forces the same JS
+# fixed-delay workaround, now used 3 times in one test instead of once.
+
+use "./helpers/wait-seconds.ts"
+
+@gaps @tokenexpiry @lifecycle
+test "a session survives three expire-then-refresh cycles across many sequential requests"
+  api POST /auth/login body { email: env(USER_B_EMAIL), password: env(USER_B_PW) }
+  expect status equals 200
+  capture body.accessToken as accessToken1
+  capture body.refreshToken as refreshToken1
+
+  api GET /auth/profile
+    header "Authorization" is "Bearer {accessToken1}"
+  expect status equals 200
+
+  # Cycle 1
+  let waited1 = wait seconds(6)
+
+  api GET /auth/profile
+    header "Authorization" is "Bearer {accessToken1}"
+  expect status equals 401
+
+  api POST /auth/refresh body { refreshToken: "{refreshToken1}" }
+  expect status equals 200
+  capture body.accessToken as accessToken2
+  capture body.refreshToken as refreshToken2
+
+  api GET /auth/profile
+    header "Authorization" is "Bearer {accessToken2}"
+  expect status equals 200
+
+  # The retired refresh token from cycle 1 is genuinely revoked, not just superseded — replaying
+  # it after it's already been rotated once is rejected exactly like an expired one.
+  api POST /auth/refresh body { refreshToken: "{refreshToken1}" }
+  expect status equals 401
+
+  # Cycle 2
+  let waited2 = wait seconds(6)
+
+  api GET /auth/profile
+    header "Authorization" is "Bearer {accessToken2}"
+  expect status equals 401
+
+  api POST /auth/refresh body { refreshToken: "{refreshToken2}" }
+  expect status equals 200
+  capture body.accessToken as accessToken3
+  capture body.refreshToken as refreshToken3
+
+  api GET /auth/profile
+    header "Authorization" is "Bearer {accessToken3}"
+  expect status equals 200
+
+  # Cycle 3
+  let waited3 = wait seconds(6)
+
+  api GET /auth/profile
+    header "Authorization" is "Bearer {accessToken3}"
+  expect status equals 401
+
+  api POST /auth/refresh body { refreshToken: "{refreshToken3}" }
+  expect status equals 200
+  capture body.accessToken as accessToken4
+
+  api GET /auth/profile
+    header "Authorization" is "Bearer {accessToken4}"
+  expect status equals 200

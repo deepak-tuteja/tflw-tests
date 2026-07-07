@@ -1,0 +1,59 @@
+# large-order.tflw — M6 (plan_v2.md Part D): a large templated order body via `body from`,
+# rescaling gap #3's correlated array-element predicate (tests/order-items.tflw, 2 items) to real
+# app-scale volume — 61 items, not 2. 60 are a single filler product (quantities 1-60, so index
+# 37 among them coincidentally also carries quantity 37); the 61st is a distinct product
+# (`productA`) also carrying quantity 37 — real ambiguity at volume, not just at toy scale: two
+# independent `any`s ("some item has this productId" / "some item has this quantity") each pass
+# on their own, but neither proves *productA's own item* is the one with quantity 37 — it could
+# just as easily be satisfied by the filler item that happens to share that value.
+
+use "./helpers/find-item.ts"
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as userAToken
+
+  api POST /products body { name: unique("Large-order Filler"), price: 3, stock: 1000, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /products body { name: unique("Large-order Target"), price: 8, stock: 1000, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productA
+
+@large @jsonpath
+test "a 61-item order round-trips correctly at real volume, not toy volume"
+  api POST /orders body from "./payloads/large-order.json"
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as orderId
+  expect body.items has count 61
+
+  api GET /orders/{orderId}/items
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  expect body has count 61
+
+  # Both pass independently — but neither proves *productA's own item* is the one with quantity
+  # 37 (the filler item at the same quantity value could just as easily be the match).
+  expect any body.productId equals "{productA}"
+  expect any body.quantity equals 37
+
+  capture body as items
+  # Throws (failing the test) if productA's own item doesn't actually have quantity 37 — the
+  # correlated check a real JSONPath filter (`$.items[?(@.productId=='...')].quantity`) would
+  # express in one statement, now proven at real volume (61 items to search, not 2).
+  let result = assert item quantity(items, productA, 37)
+  # Ideal (doesn't exist today):
+  #   expect any body[?(@.productId == "{productA}")].quantity equals 37
