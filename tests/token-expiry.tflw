@@ -1,11 +1,13 @@
 # token-expiry.tflw — M5 gap-provoking scenario: a real access-token expiry → refresh chain
-# (JWT_ACCESS_TTL=5s, a genuine short TTL, not a mocked clock). The natural declarative way to
-# express this would be `wait until api GET /auth/profile` with the expiring token attached as a
-# per-step header — but `wait until api` can't carry per-step headers at all (TFLW-FEATURE-GAPS.md
-# #3, confirmed against the parser; see also tests/.checkonly/wait-until-headers.tflw for the
-# parse-time proof). The workaround: a JS helper does the actual waiting, then a plain `api` step
-# (which *can* carry a header) re-checks. Runs for real (~5s), not simulated — same "real timers,
-# not fake" standard as this suite's async-job cluster (M4).
+# (JWT_ACCESS_TTL=5s, a genuine short TTL, not a mocked clock). `wait until api` can now carry a
+# per-step header (TFLW-GAPS.md gap #4, fixed by testFlow decision 95) — see tests/jobs.tflw's
+# third test for that proof against a job resource that actually transitions state within the wait
+# budget. Kept as a fixed 6s sleep + one-shot recheck here on purpose: this scenario needs to wait
+# *past* the TTL to observe the 401 (a condition that only ever becomes true once, unlike a job
+# polling toward "completed"), and the default 5s `timeout wait` budget races the same 5s TTL it's
+# testing — a fixed sleep stays the right tool for this one, not a workaround for a missing
+# feature. Runs for real (~6s), not simulated — same "real timers, not fake" standard as this
+# suite's async-job cluster (M4).
 
 use "./helpers/wait-seconds.ts"
 
@@ -22,10 +24,8 @@ test "an access token genuinely expires at its configured TTL, and refresh recov
 
   let waited = wait seconds(6)
 
-  # Ideal (doesn't exist today) — would need `wait until api` to accept per-step headers:
-  #   wait until api GET /auth/profile
-  #     header "Authorization" is "Bearer {accessToken}"
-  #     expect status equals 401
+  # Deliberately a one-shot check, not `wait until api` — see the file header: that construct's
+  # own wait budget would race this test's TTL rather than outlast it.
   api GET /auth/profile
     header "Authorization" is "Bearer {accessToken}"
   expect status equals 401

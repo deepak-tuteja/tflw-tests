@@ -79,9 +79,13 @@ test "a job is scoped to its order's owner, just like the order itself" as admin
     header "Authorization" is "Bearer {userBToken}"
   expect status equals 403
 
-  api GET /jobs/{jobId}
+  # Polls to completion using the owner's own bearer token attached per-step, not the `as admin`
+  # session's implicit auth — proves `wait until api` can carry a header across every attempt
+  # (TFLW-GAPS.md gap #4, fixed by testFlow decision 95). Previously a plain one-shot `api GET`
+  # here only ever checked the very next status, never a real condition to poll for.
+  wait until api GET /jobs/{jobId}
     header "Authorization" is "Bearer {userAToken}"
-  expect status equals 200
+    expect body.status equals "completed"
 
 @workflow @statusVariety
 test "fulfilling an order that isn't pending is a conflict, not a duplicate job" as admin
