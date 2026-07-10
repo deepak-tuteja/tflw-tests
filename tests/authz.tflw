@@ -21,9 +21,17 @@ before
   expect status equals 200
   capture body.accessToken as adminToken
 
-  api GET /products
+  api GET /categories
   expect status equals 200
-  capture body[0].id as productId
+  capture body[0].id as categoryId
+
+  # A dedicated product with its own stock (M15) — this file's 4 tests each order 1 unit; the
+  # old `GET /products` + `body[0].id` grabbed *whatever* product currently sorted first in the
+  # whole catalog, which risks colliding with some other test's low-remaining-stock item.
+  api POST /products body { name: unique("Authz Widget"), price: 10, stock: 10, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
 
 @authz
 test "user B cannot read user A's order"

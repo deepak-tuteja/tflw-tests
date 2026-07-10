@@ -48,6 +48,16 @@ export class Order {
   })
   idempotencyKey: string | null;
 
+  // Coupon record (M15, plan_v2.md Part H decision 4) — set only when `POST /cart/checkout` was
+  // given a valid `couponCode`; `discountAmount` is the computed, persisted discount so a client
+  // never has to recompute it from the coupon's type/value after the fact. Direct `POST /orders`
+  // never sets either (no coupon support on that path).
+  @Column({ name: 'coupon_code', type: 'varchar', nullable: true })
+  couponCode: string | null;
+
+  @Column({ name: 'discount_amount', type: 'numeric', precision: 10, scale: 2, nullable: true })
+  discountAmount: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

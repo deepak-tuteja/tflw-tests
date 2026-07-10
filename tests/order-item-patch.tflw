@@ -10,9 +10,16 @@ before
   expect status equals 200
   capture body[0].id as categoryId
 
-  api GET /products
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
   expect status equals 200
-  capture body[0].id as productId
+  capture body.accessToken as adminToken
+
+  # A dedicated product with its own stock (M15) — the old `GET /products` + `body[0].id` grabbed
+  # *whatever* product currently sorted first in the whole catalog.
+  api POST /products body { name: unique("Order-item-patch Widget"), price: 10, stock: 10, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
 
   api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
   expect status equals 200

@@ -1,0 +1,145 @@
+# cart-checkout.tflw — M15 kitchen-sink (plan_v2.md Part H): shopping cart + the all-or-nothing
+# checkout that enforces stock atomically, exactly once, at the moment of purchase — never at
+# add-to-cart time. `POST /cart/checkout` shares OrdersService's transactional order-creation
+# path with `POST /orders` (decision 5), so a failed checkout leaves both the cart AND every
+# item's stock exactly as they were — genuinely all-or-nothing, not "some items decremented
+# anyway."
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as userAToken
+
+@cart @checkout
+test "cart accepts over-stock quantities; checkout enforces stock atomically, all-or-nothing"
+  api POST /products body { name: unique("Cart Widget A"), price: 10, stock: 2, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productIdA
+
+  api POST /products body { name: unique("Cart Widget B"), price: 5, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productIdB
+
+  # Cart accepts more than is in stock — no enforcement at add-time.
+  api POST /cart/items body { productId: {productIdA}, quantity: 5 }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as itemIdA
+
+  api POST /cart/items body { productId: {productIdB}, quantity: 2 }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+
+  api GET /cart
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  expect body.items has count 2
+  expect any body.items matches subset { productId: "{productIdA}", quantity: 5 }
+
+  # Checkout fails on productA's insufficient stock (2 in stock, 5 requested).
+  api POST /cart/checkout body {}
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 409
+  expect body matches subset { type: "about:blank", title: "Conflict", status: 409 }
+  expect body.detail contains "insufficient stock"
+
+  # All-or-nothing: productB (which DID have enough stock) was never decremented either.
+  api GET /products/{productIdB}
+  expect status equals 200
+  expect body.stock equals 5
+
+  # The cart itself is untouched by the failed checkout — still both items, unchanged quantities.
+  api GET /cart
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  expect body.items has count 2
+
+  # Fix the offending line item down to what's actually in stock, then check out successfully.
+  api PATCH /cart/items/{itemIdA} body { quantity: 2 }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  expect body.quantity equals 2
+
+  api POST /cart/checkout body {}
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  expect body.status equals "pending"
+  expect body.items has count 2
+
+  api GET /products/{productIdA}
+  expect status equals 200
+  expect body.stock equals 0
+
+  api GET /products/{productIdB}
+  expect status equals 200
+  expect body.stock equals 3
+
+  # A successful checkout clears the cart.
+  api GET /cart
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  expect body.items has count 0
+
+@cart
+test "cart items are per-product: adding the same product twice accumulates quantity, and items can be removed"
+  api POST /products body { name: unique("Cart Widget C"), price: 5, stock: 20, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /cart/items body { productId: {productId}, quantity: 3 }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as itemId
+
+  api POST /cart/items body { productId: {productId}, quantity: 4 }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  expect body.id equals "{itemId}"
+  expect body.quantity equals 7
+
+  api DELETE /cart/items/{itemId}
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 204
+
+  api GET /cart
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  expect body.items has count 0
+
+@cart @idempotency
+test "cart checkout honors Idempotency-Key just like direct order creation"
+  api POST /products body { name: unique("Cart Widget D"), price: 5, stock: 10, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /cart/items body { productId: {productId}, quantity: 1 }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+
+  let key = unique("cart-checkout-key")
+
+  api POST /cart/checkout body {}
+    header "Authorization" is "Bearer {userAToken}"
+    header "Idempotency-Key" is "{key}"
+  expect status equals 201
+  capture body.id as orderId
+
+  # The cart is already empty from the first checkout — repeating the same key must not fail on
+  # "cart is empty", it must replay the original order untouched.
+  api POST /cart/checkout body {}
+    header "Authorization" is "Bearer {userAToken}"
+    header "Idempotency-Key" is "{key}"
+  expect status equals 200
+  expect body.id equals "{orderId}"

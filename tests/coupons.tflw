@@ -1,0 +1,175 @@
+# coupons.tflw — M15 kitchen-sink (plan_v2.md Part H): the four independent coupon failure
+# reasons validated atomically at cart checkout, one successful discounted checkout, and the
+# concurrent-oversell proof from decision 2 (stock: 3, 5 concurrent order requests -> exactly 3
+# succeed, 2 get 409). The last one turned out to need the JS escape hatch: `tflw run --workers`
+# parallelizes whole FILES against each other (packages/cli/src/cli.ts's `runWithConcurrency`
+# dispatches one schedulable unit per file), never individual tests/rows within one file, so
+# there's no native way to fire N concurrent requests from a single test — new finding,
+# TFLW-GAPS.md gap #13, proven in tests/helpers/concurrent-orders.ts.
+#
+# Each cart-touching test registers its own fresh shopper (`unique email`) rather than reusing
+# `USER_A_EMAIL` — a cart is only ever cleared by a *successful* checkout, so a shared identity
+# across a file with several deliberately-failing checkouts would carry leftover items forward
+# and silently pollute the next test's subtotal (found the hard way: the discount test's expected
+# 4.00 came back 6.00 the first time, from two earlier tests' rejected-checkout leftovers).
+
+use "./helpers/concurrent-orders.ts"
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+@coupons
+test "an expired coupon is rejected"
+  api POST /products body { name: unique("Coupon Widget A"), price: 20, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  let shopperEmail = unique email
+  api POST /auth/register body { name: "Coupon Shopper", email: {shopperEmail}, password: "coupon-Pass-123" }
+  expect status equals 201
+  capture body.accessToken as shopperToken
+
+  let code = unique("EXPIRED")
+  api POST /coupons body { code: {code}, type: "fixed", value: 5, expiresAt: "2020-01-01T00:00:00Z", minOrderAmount: 0, usageLimit: 10 }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+
+  api POST /cart/items body { productId: {productId}, quantity: 1 }
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 201
+
+  api POST /cart/checkout body { couponCode: {code} }
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 422
+  expect body.detail contains "expired"
+
+@coupons
+test "a coupon below its minimum order amount is rejected"
+  api POST /products body { name: unique("Coupon Widget B"), price: 5, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  let shopperEmail = unique email
+  api POST /auth/register body { name: "Coupon Shopper", email: {shopperEmail}, password: "coupon-Pass-123" }
+  expect status equals 201
+  capture body.accessToken as shopperToken
+
+  let code = unique("MINAMOUNT")
+  api POST /coupons body { code: {code}, type: "fixed", value: 5, expiresAt: "2099-01-01T00:00:00Z", minOrderAmount: 100, usageLimit: 10 }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+
+  api POST /cart/items body { productId: {productId}, quantity: 1 }
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 201
+
+  api POST /cart/checkout body { couponCode: {code} }
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 422
+  expect body.detail contains "minimum"
+
+@coupons
+test "a coupon that has reached its usage limit is rejected"
+  api POST /products body { name: unique("Coupon Widget C"), price: 10, stock: 10, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  let shopperEmail = unique email
+  api POST /auth/register body { name: "Coupon Shopper", email: {shopperEmail}, password: "coupon-Pass-123" }
+  expect status equals 201
+  capture body.accessToken as shopperToken
+
+  let code = unique("LIMIT1")
+  api POST /coupons body { code: {code}, type: "fixed", value: 2, expiresAt: "2099-01-01T00:00:00Z", minOrderAmount: 0, usageLimit: 1 }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+
+  # First redemption succeeds.
+  api POST /cart/items body { productId: {productId}, quantity: 1 }
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 201
+
+  api POST /cart/checkout body { couponCode: {code} }
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 201
+
+  # Second redemption is rejected — the one-use limit is already spent.
+  api POST /cart/items body { productId: {productId}, quantity: 1 }
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 201
+
+  api POST /cart/checkout body { couponCode: {code} }
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 409
+  expect body.detail contains "usage limit"
+
+@coupons
+test "an unknown coupon code is rejected"
+  api POST /products body { name: unique("Coupon Widget D"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  let shopperEmail = unique email
+  api POST /auth/register body { name: "Coupon Shopper", email: {shopperEmail}, password: "coupon-Pass-123" }
+  expect status equals 201
+  capture body.accessToken as shopperToken
+
+  api POST /cart/items body { productId: {productId}, quantity: 1 }
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 201
+
+  api POST /cart/checkout body { couponCode: "totally-not-a-real-code" }
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 404
+  expect body.detail contains "invalid coupon"
+
+@coupons
+test "a valid coupon discounts a successful checkout"
+  api POST /products body { name: unique("Coupon Widget E"), price: 20, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  let shopperEmail = unique email
+  api POST /auth/register body { name: "Coupon Shopper", email: {shopperEmail}, password: "coupon-Pass-123" }
+  expect status equals 201
+  capture body.accessToken as shopperToken
+
+  let code = unique("SAVE10PCT")
+  api POST /coupons body { code: {code}, type: "percent", value: 10, expiresAt: "2099-01-01T00:00:00Z", minOrderAmount: 10, usageLimit: 5 }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+
+  # subtotal = 2 * 20 = 40, 10% off = 4.00 — a fresh shopper's cart guarantees no leftover items
+  # from an earlier deliberately-failed checkout in this same file skew the subtotal.
+  api POST /cart/items body { productId: {productId}, quantity: 2 }
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 201
+
+  api POST /cart/checkout body { couponCode: {code} }
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 201
+  expect body.couponCode equals "{code}"
+  expect body.discountAmount equals "4.00"
+
+@coupons @concurrency
+test "5 concurrent order requests against stock 3 produce exactly 3 successes and 2 conflicts"
+  api POST /products body { name: unique("Oversell Widget"), price: 5, stock: 3, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  # The call itself is the assertion (see file header + helper for why this needs the escape
+  # hatch) — throws, failing the test, if the observed split isn't exactly 3 succeeded / 2
+  # conflicted.
+  let proof = assert concurrent oversell(adminToken, productId, 5, 3)

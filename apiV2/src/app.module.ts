@@ -15,10 +15,15 @@ import { Review } from './entities/review.entity';
 import { TokenRecord } from './entities/token-record.entity';
 import { Job } from './entities/job.entity';
 import { Notification } from './entities/notification.entity';
+import { Coupon } from './entities/coupon.entity';
+import { Cart } from './entities/cart.entity';
+import { CartItem } from './entities/cart-item.entity';
 import { JobsModule } from './jobs/jobs.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { FlakyWidgetModule } from './flaky-widget/flaky-widget.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { CouponsModule } from './coupons/coupons.module';
+import { CartModule } from './cart/cart.module';
 
 @Module({
   imports: [
@@ -32,7 +37,20 @@ import { NotificationsModule } from './notifications/notifications.module';
         username: config.get<string>('DB_USER', 'postgres'),
         password: config.get<string>('DB_PASSWORD', 'postgres'),
         database: config.get<string>('DB_NAME', 'testflow_tests'),
-        entities: [User, Category, Product, Order, OrderItem, Review, TokenRecord, Job, Notification],
+        entities: [
+          User,
+          Category,
+          Product,
+          Order,
+          OrderItem,
+          Review,
+          TokenRecord,
+          Job,
+          Notification,
+          Coupon,
+          Cart,
+          CartItem,
+        ],
         // Migrations run as a separate step (cli.mjs's start sequence);
         // the app never mutates schema on its own.
         synchronize: false,
@@ -47,6 +65,8 @@ import { NotificationsModule } from './notifications/notifications.module';
     ReviewsModule,
     FlakyWidgetModule,
     NotificationsModule,
+    CouponsModule,
+    CartModule,
   ],
 })
 export class AppModule {}

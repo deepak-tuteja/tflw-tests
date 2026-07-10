@@ -22,7 +22,10 @@ before
   expect status equals 200
   capture body.accessToken as userAToken
 
-  api POST /products body { name: unique("Large-order Filler"), price: 3, stock: 1000, categoryId: {categoryId} }
+  # Stock must clear the *sum* of the filler's 60 line-item quantities (1+2+...+60 = 1830, once
+  # M15's atomic per-item stock decrement started actually enforcing it), not just the largest
+  # single line — 5000 is comfortable headroom, not a tight fit.
+  api POST /products body { name: unique("Large-order Filler"), price: 3, stock: 5000, categoryId: {categoryId} }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body.id as productId

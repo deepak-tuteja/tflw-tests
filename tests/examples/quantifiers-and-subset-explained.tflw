@@ -17,12 +17,12 @@ before
 
 @examples @quantifiers
 test "any/all over an array-returning endpoint's items"
-  api POST /products body { name: unique("Quant A"), price: 5, stock: 1, categoryId: {categoryId} }
+  api POST /products body { name: unique("Quant A"), price: 5, stock: 10, categoryId: {categoryId} }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body.id as productIdA
 
-  api POST /products body { name: unique("Quant B"), price: 5, stock: 1, categoryId: {categoryId} }
+  api POST /products body { name: unique("Quant B"), price: 5, stock: 10, categoryId: {categoryId} }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body.id as productIdB

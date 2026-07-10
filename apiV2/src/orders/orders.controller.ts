@@ -37,7 +37,7 @@ export class OrdersController {
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { order, created } = await this.orders.create(user.id, dto, idempotencyKey);
+    const { order, created } = await this.orders.create(user.id, dto.items, idempotencyKey);
     res.status(created ? 201 : 200);
     return order;
   }

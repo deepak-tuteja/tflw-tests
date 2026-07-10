@@ -126,9 +126,12 @@ test "reusing another user's Idempotency-Key is a conflict, not a valid replay"
   expect status equals 200
   capture body.accessToken as userBToken
 
-  api GET /products
-  expect status equals 200
-  capture body[0].id as productId
+  # A dedicated product with its own stock (M15) — the old `GET /products` + `body[0].id` grabbed
+  # *whatever* product currently sorted first in the whole catalog.
+  api POST /products body { name: unique("Cross-user Widget"), price: 10, stock: 10, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
 
   let key = unique("cross-user-key")
 

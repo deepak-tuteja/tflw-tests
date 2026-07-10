@@ -10,6 +10,22 @@
 # capture/replay (see its own comment: it needs the *stale*, pre-logout cookie value specifically,
 # which the jar would otherwise correctly clear after a real logout).
 
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+  # A dedicated product with its own stock (M15) — the old `GET /products` + `body[0].id` grabbed
+  # *whatever* product currently sorted first in the whole catalog.
+  api POST /products body { name: unique("Sessions Widget"), price: 10, stock: 10, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
 @auth @sessions
 test "shopper session applies its cookie automatically" as shopper
   api GET /auth/profile
@@ -28,10 +44,6 @@ test "a cookie-authed mutation without a CSRF token is rejected"
   api POST /auth/session-login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
   expect status equals 200
 
-  api GET /products
-  expect status equals 200
-  capture body[0].id as productId
-
   api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
   expect status equals 403
 
@@ -40,10 +52,6 @@ test "a cookie-authed mutation with a matching CSRF token succeeds"
   api POST /auth/session-login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
   expect status equals 200
   capture body.csrfToken as csrf
-
-  api GET /products
-  expect status equals 200
-  capture body[0].id as productId
 
   api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
     header "X-CSRF-Token" is "{csrf}"

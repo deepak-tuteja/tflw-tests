@@ -3,13 +3,15 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { Order } from '../entities/order.entity';
 import { OrderItem } from '../entities/order-item.entity';
 import { Product } from '../entities/product.entity';
-import { CreateOrderDto } from './dto/create-order.dto';
+import { Coupon, CouponType } from '../entities/coupon.entity';
+import { OrderItemInputDto } from './dto/create-order.dto';
 import { UpdateOrderItemDto } from './dto/update-order-item.dto';
 import { AuthedUser } from '../auth/guards/bearer-auth.guard';
 import { UserRole } from '../entities/user.entity';
@@ -27,7 +29,7 @@ export class OrdersService {
   constructor(
     @InjectRepository(Order) private readonly orders: Repository<Order>,
     @InjectRepository(OrderItem) private readonly orderItems: Repository<OrderItem>,
-    @InjectRepository(Product) private readonly products: Repository<Product>,
+    @InjectDataSource() private readonly dataSource: DataSource,
     private readonly jobsService: JobsService,
   ) {}
 
@@ -43,43 +45,141 @@ export class OrdersService {
   // someone else's key is a genuine conflict, not a valid replay. Postgres's `idempotency_key`
   // unique constraint treats NULLs as distinct, so requests with no key never collide with each
   // other; the constraint (not this pre-check) is what makes a concurrent duplicate safe.
+  //
+  // M15 (plan_v2.md Part H): the whole item-resolution + stock-decrement + coupon-application +
+  // order-insert sequence runs inside one DB transaction — all-or-nothing. Shared by both
+  // `POST /orders` (items from the request body, no coupon) and `POST /cart/checkout`
+  // (CartService builds `items` from the cart's live contents and may pass a `couponCode`), so
+  // stock/coupon logic can't silently diverge between the two entry points.
   async create(
     userId: string,
-    dto: CreateOrderDto,
+    items: OrderItemInputDto[],
     idempotencyKey?: string,
+    couponCode?: string,
   ): Promise<CreateOrderResult> {
     if (idempotencyKey) {
-      const existing = await this.findByIdempotencyKey(idempotencyKey);
-      if (existing) return this.replayOrConflict(existing, userId);
+      const replay = await this.findExistingByIdempotencyKey(idempotencyKey, userId);
+      if (replay) return replay;
     }
 
-    const items = await Promise.all(
-      dto.items.map(async (item) => {
-        const product = await this.products.findOne({ where: { id: item.productId } });
-        if (!product) {
-          throw new NotFoundException(`product ${item.productId} not found`);
-        }
-        return this.orderItems.create({
-          productId: product.id,
-          quantity: item.quantity,
-          unitPrice: product.price,
-        });
-      }),
-    );
-
-    const order = this.orders.create({ userId, items, idempotencyKey: idempotencyKey ?? null });
     try {
-      const saved = await this.orders.save(order);
-      return { order: saved, created: true };
+      const order = await this.dataSource.transaction((manager) =>
+        this.persistOrderAtomically(manager, userId, items, idempotencyKey, couponCode),
+      );
+      return { order, created: true };
     } catch (err) {
       if (idempotencyKey && isUniqueViolation(err)) {
         // Lost the race to a concurrent request using the same key — replay its result instead
         // of surfacing the constraint violation.
-        const existing = await this.findByIdempotencyKey(idempotencyKey);
-        if (existing) return this.replayOrConflict(existing, userId);
+        const replay = await this.findExistingByIdempotencyKey(idempotencyKey, userId);
+        if (replay) return replay;
       }
       throw err;
     }
+  }
+
+  // Exposed (not just used internally by `create`) so a caller building its own request around
+  // an idempotent order — CartService.checkout, specifically — can check for a replay *before*
+  // doing anything that would only be valid for a genuinely new order (like requiring a non-empty
+  // cart: a checkout's cart is already cleared by the original request by the time a legitimate
+  // replay of the same key arrives).
+  async findExistingByIdempotencyKey(
+    idempotencyKey: string,
+    userId: string,
+  ): Promise<CreateOrderResult | null> {
+    const existing = await this.findByIdempotencyKey(idempotencyKey);
+    return existing ? this.replayOrConflict(existing, userId) : null;
+  }
+
+  // Race-safe by construction, not by locking: the conditional `UPDATE ... WHERE stock >= :qty`
+  // only ever succeeds if the row still has enough stock *at the moment it commits*, so two
+  // concurrent transactions racing the same low-stock product can never both decrement past zero
+  // — whichever commits second simply affects 0 rows and throws, rolling back its own attempt
+  // (every item this same order already decremented rolls back with it — genuinely all-or-
+  // nothing, not "some items succeeded, order failed anyway").
+  private async persistOrderAtomically(
+    manager: EntityManager,
+    userId: string,
+    items: OrderItemInputDto[],
+    idempotencyKey: string | undefined,
+    couponCode: string | undefined,
+  ): Promise<Order> {
+    const orderItems: OrderItem[] = [];
+    let subtotal = 0;
+
+    for (const item of items) {
+      const product = await manager.findOne(Product, { where: { id: item.productId } });
+      if (!product) throw new NotFoundException(`product ${item.productId} not found`);
+
+      const result = await manager
+        .createQueryBuilder()
+        .update(Product)
+        .set({ stock: () => 'stock - :qty' })
+        .where('id = :id', { id: item.productId })
+        .andWhere('stock >= :qty')
+        .setParameter('qty', item.quantity)
+        .execute();
+      if (result.affected === 0) {
+        throw new ConflictException(`insufficient stock for product "${product.name}"`);
+      }
+
+      subtotal += Number(product.price) * item.quantity;
+      orderItems.push(
+        manager.create(OrderItem, {
+          productId: product.id,
+          quantity: item.quantity,
+          unitPrice: product.price,
+        }),
+      );
+    }
+
+    const discountAmount = couponCode ? await this.applyCoupon(manager, couponCode, subtotal) : null;
+
+    const order = manager.create(Order, {
+      userId,
+      items: orderItems,
+      idempotencyKey: idempotencyKey ?? null,
+      couponCode: couponCode ?? null,
+      discountAmount,
+    });
+    return manager.save(Order, order);
+  }
+
+  // Same atomic-conditional-update pattern as stock: `usedCount` only increments if the coupon
+  // still has redemptions left *at commit time*, so a usage limit can't be oversold under
+  // concurrent checkouts any more than stock can.
+  private async applyCoupon(
+    manager: EntityManager,
+    code: string,
+    subtotal: number,
+  ): Promise<string> {
+    const coupon = await manager.findOne(Coupon, { where: { code } });
+    if (!coupon) throw new NotFoundException('invalid coupon code');
+    if (coupon.expiresAt.getTime() < Date.now()) {
+      throw new UnprocessableEntityException('this coupon has expired');
+    }
+    if (subtotal < Number(coupon.minOrderAmount)) {
+      throw new UnprocessableEntityException(
+        `order subtotal (${subtotal.toFixed(2)}) is below this coupon's minimum of ${coupon.minOrderAmount}`,
+      );
+    }
+
+    const result = await manager
+      .createQueryBuilder()
+      .update(Coupon)
+      .set({ usedCount: () => 'used_count + 1' })
+      .where('id = :id', { id: coupon.id })
+      .andWhere('used_count < usage_limit')
+      .execute();
+    if (result.affected === 0) {
+      throw new ConflictException('this coupon has reached its usage limit');
+    }
+
+    const discount =
+      coupon.type === CouponType.PERCENT
+        ? (subtotal * Number(coupon.value)) / 100
+        : Number(coupon.value);
+    return discount.toFixed(2);
   }
 
   private findByIdempotencyKey(idempotencyKey: string): Promise<Order | null> {
