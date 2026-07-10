@@ -1,0 +1,58 @@
+# request-shapes-explained.tflw — SPEC §5.1-§5.2: the request line's optional pieces (query
+# params, a per-step `timeout`, per-step `header` lines) and all five body forms. `without
+# redirects` isn't demonstrated here — nothing in this API issues a 3xx to observe it against;
+# see http-maturity.tflw for the closest real 3xx-adjacent behavior (ETag 304s).
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+@examples @requestshapes
+test "inline JSON body — the common case"
+  api POST /products body { name: unique("Shapes Widget"), price: 5, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+
+@examples @requestshapes
+test "query params on the path itself"
+  api GET /products?categoryId={categoryId}&pageSize=1&page=1
+  expect status equals 200
+  expect body.total is greater than 0
+
+@examples @requestshapes
+test "a per-step header overrides/extends whatever the session or config already set"
+  api GET /orders/all
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+
+@examples @requestshapes
+test "form-urlencoded — application/x-www-form-urlencoded, not JSON"
+  api POST /auth/login form email=env(ADMIN_EMAIL), password=env(ADMIN_PW)
+  expect status equals 200
+
+@examples @requestshapes
+test "raw text body — sets no JSON content-type at all"
+  api POST /products body text "not-json-data"
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 415
+
+@examples @requestshapes
+test "multipart upload, optionally alongside form fields"
+  api POST /products body { name: unique("Upload Shapes Widget"), price: 5, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /products/{productId}/image upload "../payloads/sample.png" as "image"
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+
+@examples @requestshapes
+test "a per-step timeout overrides the config default for just this one request"
+  api GET /health timeout 2s
+  expect status equals 200

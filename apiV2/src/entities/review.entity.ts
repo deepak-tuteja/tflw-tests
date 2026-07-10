@@ -42,6 +42,10 @@ export class Review {
   @Column({ type: 'text', default: '' })
   comment: string;
 
+  // Admin/seller reply (M13, plan_v2.md Part F) — nullable, single reply per review (no thread).
+  @Column({ name: 'reply_text', type: 'text', nullable: true })
+  replyText: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

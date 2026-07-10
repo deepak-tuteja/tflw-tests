@@ -1,9 +1,12 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Review } from '../entities/review.entity';
+import { NotificationType } from '../entities/notification.entity';
 import { ProductsService } from '../products/products.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateReviewDto } from './dto/create-review.dto';
+import { ReplyToReviewDto } from './dto/reply-to-review.dto';
 import { isUniqueViolation } from '../common/db-errors';
 import { decodeCursor, encodeCursor } from '../common/cursor';
 
@@ -17,6 +20,7 @@ export class ReviewsService {
   constructor(
     @InjectRepository(Review) private readonly reviews: Repository<Review>,
     private readonly products: ProductsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async create(productId: string, userId: string, dto: CreateReviewDto): Promise<Review> {
@@ -72,5 +76,24 @@ export class ReviewsService {
       : null;
 
     return { data, nextCursor };
+  }
+
+  // Admin/seller reply (M13, plan_v2.md Part F) — flat `/reviews/:id/reply`, not nested under a
+  // product, since a review's id is already globally unique and the reply targets the review
+  // itself, not its product context. Fires a real `review_reply` notification for the review's
+  // author, the same side-effect-only pattern as order-status changes and price drops.
+  async reply(id: string, dto: ReplyToReviewDto): Promise<Review> {
+    const review = await this.reviews.findOne({ where: { id } });
+    if (!review) throw new NotFoundException('review not found');
+
+    review.replyText = dto.replyText;
+    const saved = await this.reviews.save(review);
+
+    await this.notifications.create(review.userId, NotificationType.REVIEW_REPLY, {
+      reviewId: review.id,
+      replyText: dto.replyText,
+    });
+
+    return saved;
   }
 }

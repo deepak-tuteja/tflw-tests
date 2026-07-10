@@ -1,0 +1,22 @@
+# data-tables-explained.tflw — SPEC §4.3: `with each` runs a test once per table row, each case
+# reporting independently and the row's values interpolating into both the test name and the
+# steps. Cells accept any expression, including generators, evaluated fresh per row.
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+@examples @datatables
+with each
+  | label     | price |
+  | "Table A" | 5     |
+  | "Table B" | 15    |
+  | "Table C" | 45    |
+test "creates {label} at price {price}" as admin
+  api POST /products body { name: unique("{label}"), price: {price}, stock: 1, categoryId: {categoryId} }
+  expect status equals 201
+  # The just-created response echoes back exactly the string form sent (no DB round-trip
+  # normalizing it to two decimals yet — see response-subjects-explained.tflw for a GET against
+  # the same resource, which does).
+  expect body.price equals "{price}"

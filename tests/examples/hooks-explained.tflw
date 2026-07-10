@@ -1,0 +1,34 @@
+# hooks-explained.tflw — SPEC §4.2: `before`/`after` run around each test in the file and share
+# that test's scope (a `let`/`capture` anywhere in `before`, the test body, or `after` is visible
+# to the others) — a natural place for cleanup. `before file`/`after file` run once, in their own
+# separate scope, isolated from every test in the file — for side effects only (seeding, warm-up
+# calls), never for handing a value forward to a test.
+
+before file
+  # Side effect only — nothing bound here (nor its response) is visible to the test below.
+  api GET /health
+  expect status equals 200
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+after
+  # Shares the test's scope, so `productId` (captured inside the test body below, not `before`)
+  # is still visible here — real cleanup, the house style SPEC §4.2 recommends over relying on
+  # any runtime auto-teardown (there isn't one).
+  api DELETE /products/{productId}
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 204
+
+@examples @hooks
+test "before seeds this test's scope; after cleans up what the test itself created"
+  api POST /products body { name: unique("Hooks Widget"), price: 5, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId

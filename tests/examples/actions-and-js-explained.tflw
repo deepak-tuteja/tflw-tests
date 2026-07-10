@@ -1,0 +1,35 @@
+# actions-and-js-explained.tflw — SPEC §8 (actions/import) + §11 (JS escape hatch). An `action`
+# is a file-scoped, parameterized, reusable sequence of steps shared via `import` — no globals.
+# `use "<file>.ts"` calls a plain async JS/TS function like a native action; it's the outlet for
+# anything past the DSL's hard fence (§7.5) — custom logic, faker-grade data, exotic protocols.
+
+import "../shared/catalog.tflw"
+use "../helpers/receipt.ts"
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+@examples @actions
+test "an imported action runs like inline steps, returns a value via give" as admin
+  # `create product(...)` is defined once in shared/catalog.tflw and imported here — its steps
+  # (the POST, the expect, the capture) splice into this test's own report as if written inline.
+  let productId = create product(unique("Action Widget"), 12.5, 5, categoryId)
+
+  api GET /products/{productId}
+  expect status equals 200
+  expect body.price equals "12.50"
+
+@examples @js
+test "use pulls in a plain JS/TS helper, called like a native action" as admin
+  let productId = create product(unique("JS Widget"), 20, 5, categoryId)
+
+  # `make receipt(...)` -> helpers/receipt.ts's exported `makeReceipt`, camelCase name lookup.
+  # Runs real (non-DSL) logic — string formatting here, but this is the escape hatch for
+  # anything the hard fence (§7.5) rules out: conditionals, loops, faker-grade data.
+  let receipt = make receipt(productId, 20)
+
+  api DELETE /products/{productId}
+    header "X-Receipt" is "{receipt}"
+  expect status equals 204

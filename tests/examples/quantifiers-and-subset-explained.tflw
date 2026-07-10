@@ -1,0 +1,46 @@
+# quantifiers-and-subset-explained.tflw — SPEC §6.3-§6.3.1: `any`/`all` walk a body path until
+# they find an array, then apply the rest of the path per element; `matches subset {...}` checks
+# only the listed keys (extra keys on the actual object are ignored). Composed together, they
+# correlate multiple fields on the *same* array element in one statement — see order-items.tflw
+# for the "looks right, isn't" trap two independent `any`s fall into, and
+# tests/.gaps/nested-array-quantifier.tflw for where quantifying stops working (a *second*
+# nested array).
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+@examples @quantifiers
+test "any/all over an array-returning endpoint's items" as admin
+  api POST /products body { name: unique("Quant A"), price: 5, stock: 1, categoryId: {categoryId} }
+  expect status equals 201
+  capture body.id as productIdA
+
+  api POST /products body { name: unique("Quant B"), price: 5, stock: 1, categoryId: {categoryId} }
+  expect status equals 201
+  capture body.id as productIdB
+
+  api POST /orders body { items: [ { productId: {productIdA}, quantity: 2 }, { productId: {productIdB}, quantity: 5 } ] }
+  expect status equals 201
+  capture body.id as orderId
+
+  api GET /orders/{orderId}/items
+  expect status equals 200
+  # all: every element must satisfy the check.
+  expect all body.quantity is greater than 0
+  # any: at least one element must satisfy the check.
+  expect any body.quantity equals 5
+  # Correlated: matches subset checks BOTH fields against the SAME element — proves it's
+  # specifically productIdA that has quantity 2, not just that some element has each fact
+  # separately (which two different elements could each satisfy on their own).
+  expect any body matches subset { productId: "{productIdA}", quantity: 2 }
+
+@examples @subset
+test "matches subset ignores extra keys — a full equals would fail on the same body" as admin
+  let subsetName = unique("Subset Widget")
+  api POST /products body { name: {subsetName}, price: 5, stock: 1, categoryId: {categoryId} }
+  expect status equals 201
+  # `id`, `version`, `createdAt`, `updatedAt`, `description`, `imageFilename`, etc. all exist on
+  # the real response too — subset only checks the three keys named here.
+  expect body matches subset { name: "{subsetName}", stock: 1, categoryId: "{categoryId}" }

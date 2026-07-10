@@ -1,0 +1,32 @@
+# response-subjects-explained.tflw — SPEC §5.3: what `expect`/`check`/`capture` can see after an
+# `api` step — `status`, `header "<name>"`, `body.<path>` (JSON), `body text` (non-JSON), and
+# `duration` (a regression tripwire, not perf testing).
+
+@examples @subjects
+test "status — the HTTP status code"
+  api GET /health
+  expect status equals 200
+
+@examples @subjects
+test "body.<path> — dot/index addressing into a JSON response"
+  api GET /products
+  expect status equals 200
+  expect body[0].id matches "^[0-9a-f-]{36}$"
+
+@examples @subjects
+test "header \"<name>\" — a specific response header, by name"
+  api GET /products
+  expect header "content-type" matches "json"
+
+@examples @subjects
+test "duration — wall time of the request, a regression tripwire"
+  api GET /health
+  expect duration is less than 5000ms
+
+@examples @subjects
+test "body text — the raw response body as a string, for a non-JSON response"
+  api root GET /health
+  # /health (unversioned) 404s with an RFC7807 problem+json body — still JSON here, so this shows
+  # `body text` working against *any* response, not just genuinely non-JSON ones; http-maturity.tflw
+  # exercises the real non-JSON case this subject exists for.
+  expect body text contains "Not Found"

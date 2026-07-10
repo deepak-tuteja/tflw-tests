@@ -1,0 +1,38 @@
+# expressions-explained.tflw — SPEC §7.5: the closed expression grammar — arithmetic on numbers,
+# string interpolation, and date math + `format ... as "..."`. Hard fence: no conditionals, no
+# loops, no boolean operators — anything past this needs the JS escape hatch (§11). `expect`
+# only ever targets a real response subject (§5.3) — there's no bare "assert on this variable"
+# form — so every check below routes the computed value through a request body field and asserts
+# on what the server echoed back.
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+@examples @expressions
+test "arithmetic — + - * / on numbers" as admin
+  let unitPrice = 5
+  let qty = 3
+  let total = {unitPrice} * {qty}
+
+  # 5 * 3 = 15 — sent as `stock` so the response can prove the arithmetic actually ran.
+  api POST /products body { name: unique("Expr Widget"), price: {unitPrice}, stock: {total}, categoryId: {categoryId} }
+  expect status equals 201
+  expect body.stock equals 15
+
+@examples @expressions
+test "date math + format — today/now offset by a duration, rendered as a calendar string" as admin
+  let shipDate = format today + 3 days as "yyyy-MM-dd"
+  let stamp = format now as "yyyy-MM-dd HH:mm:ss"
+
+  # No date field on this resource — `description` is free text, so it doubles as a place to
+  # prove the formatted value round-trips exactly as computed.
+  api POST /products body { name: unique("Expr Date Widget"), description: {shipDate}, price: 5, stock: 1, categoryId: {categoryId} }
+  expect status equals 201
+  expect body.description matches "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+  capture body.id as productId
+
+  api PATCH /products/{productId} body { description: {stamp} }
+  expect status equals 200
+  expect body.description matches "^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$"

@@ -23,6 +23,13 @@ export class CategoriesController {
     return this.categories.findAll();
   }
 
+  // Recursive category tree (M13) — top-level categories with `children` nested arbitrarily
+  // deep. Must come before any future `:id`-shaped GET route to avoid "tree" being parsed as an id.
+  @Get('tree')
+  findTree() {
+    return this.categories.findTree();
+  }
+
   @Post()
   createNotSupported(): never {
     throw new MethodNotAllowedException('categories are read-only in this API');

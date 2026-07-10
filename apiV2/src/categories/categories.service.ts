@@ -3,6 +3,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Category } from '../entities/category.entity';
 
+export interface CategoryTreeNode {
+  id: string;
+  name: string;
+  children: CategoryTreeNode[];
+}
+
 @Injectable()
 export class CategoriesService {
   constructor(
@@ -11,6 +17,24 @@ export class CategoriesService {
 
   findAll(): Promise<Category[]> {
     return this.categories.find({ order: { name: 'ASC' } });
+  }
+
+  // M13 (plan_v2.md Part F): assembled in memory from one flat query — the catalog's category
+  // count is small (single/low-double digits), so this beats a recursive CTE for the actual
+  // shape of this data without adding real cost.
+  async findTree(): Promise<CategoryTreeNode[]> {
+    const all = await this.categories.find({ order: { name: 'ASC' } });
+    const nodes = new Map<string, CategoryTreeNode>();
+    for (const cat of all) nodes.set(cat.id, { id: cat.id, name: cat.name, children: [] });
+
+    const roots: CategoryTreeNode[] = [];
+    for (const cat of all) {
+      const node = nodes.get(cat.id)!;
+      const parent = cat.parentId ? nodes.get(cat.parentId) : undefined;
+      if (parent) parent.children.push(node);
+      else roots.push(node);
+    }
+    return roots;
   }
 
   async assertExists(id: string): Promise<Category> {

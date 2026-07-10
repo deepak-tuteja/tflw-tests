@@ -1,0 +1,41 @@
+# capture-explained.tflw — SPEC §5.4: `capture` binds a response value to a variable usable in
+# every later step — the mechanism that lets one request's real data become the next request's
+# input (see request-chain.tflw for this taken to a genuinely long, multi-hop extreme).
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+@examples @capture
+test "capture body.<path> as <name> — a JSON field feeding the next request"
+  api POST /products body { name: unique("Capture Widget"), price: 5, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api GET /products/{productId}
+  expect status equals 200
+  expect body.categoryId equals "{categoryId}"
+
+@examples @capture
+test "capture header \"<name>\" as <name> — a response header feeding the next request" as admin
+  api POST /products body { name: unique("Capture Job Widget"), price: 5, stock: 1, categoryId: {categoryId} }
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+  expect status equals 201
+  capture body.id as orderId
+
+  api POST /orders/{orderId}/fulfill
+  expect status equals 202
+  capture header "location" as jobUrl
+  # tflw's `capture` doesn't parse the URL — it's just a string; jobs.tflw already captures
+  # `body.jobId` directly instead for the actual GET /jobs/{jobId} poll. This just proves the
+  # header itself is genuinely captured.
+  expect header "location" matches "/v1/jobs/"

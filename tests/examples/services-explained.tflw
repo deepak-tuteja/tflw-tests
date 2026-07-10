@@ -1,0 +1,18 @@
+# services-explained.tflw — SPEC §3.2: a `tflw.config` `env` block can declare more than one
+# named API service, each with its own base URL. `api <METHOD> ...` (no name) targets the
+# default service; `api <name> <METHOD> ...` targets a named one. This repo's tflw.config
+# declares `root` alongside the default — same app, different base URL (no `/v1` prefix baked
+# in) — so a test can prove the prefix is a real routing boundary, not just a convention.
+
+@examples @services
+test "the default (unnamed) service targets the /v1-prefixed base URL"
+  api GET /health
+  expect status equals 200
+  expect body.status equals "ok"
+
+@examples @services
+test "the named `root` service targets the same app without the /v1 prefix"
+  api root GET /health
+  # /v1/health exists; /health (unversioned) doesn't — proves these are two genuinely different
+  # base URLs, not just a naming convenience.
+  expect status equals 404

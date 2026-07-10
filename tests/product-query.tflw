@@ -4,6 +4,11 @@
 # term embedded in each test's own product names instead — `q=<tag>` scopes every assertion to
 # exactly the rows this test created, so exact counts/page math stay parallel-safe under
 # `--workers` without a unique category or any test-only header.
+#
+# Uses an inline admin login (not `as admin`) for the writes, fixed during M13 — the same
+# cumulative-suite-timing issue as schema-and-shape.tflw/jobs.tflw (M12/M13): as the suite has
+# grown, this file now also sorts late enough for the cached `admin` session's 5s-TTL token to be
+# stale here. The `GET /products` reads themselves need no auth at all (public catalog browsing).
 
 use "./helpers/paginate.ts"
 
@@ -12,14 +17,21 @@ before
   expect status equals 200
   capture body[0].id as categoryId
 
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
 @query @crud
-test "filtering, sorting, and full-text search combine, scoped to this test's own facet" as admin
+test "filtering, sorting, and full-text search combine, scoped to this test's own facet"
   let tag = unique("catalog-tag")
   api POST /products body { name: "{tag} Cheap Item", price: 5, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   api POST /products body { name: "{tag} Mid Item", price: 15, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   api POST /products body { name: "{tag} Pricey Item", price: 30, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
 
   api GET /products?q={tag}&sort=price
@@ -42,17 +54,22 @@ test "sorting by an unrecognized field is a 400, not a silent no-op"
   expect status equals 400
 
 @query @pagination
-test "offset pagination reports exact totals for this test's own facet" as admin
+test "offset pagination reports exact totals for this test's own facet"
   let tag = unique("page-tag")
   api POST /products body { name: "{tag} 1", price: 10, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   api POST /products body { name: "{tag} 2", price: 10, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   api POST /products body { name: "{tag} 3", price: 10, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   api POST /products body { name: "{tag} 4", price: 10, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   api POST /products body { name: "{tag} 5", price: 10, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
 
   api GET /products?q={tag}&page=1&pageSize=2
@@ -68,13 +85,16 @@ test "offset pagination reports exact totals for this test's own facet" as admin
   expect body.data has count 1
 
 @query @pagination
-test "walking every page (via the JS escape hatch) sees every product exactly once" as admin
+test "walking every page (via the JS escape hatch) sees every product exactly once"
   let tag = unique("walk-tag")
   api POST /products body { name: "{tag} A", price: 10, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   api POST /products body { name: "{tag} B", price: 10, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   api POST /products body { name: "{tag} C", price: 10, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
 
   let seen = walk all pages(tag, 2)

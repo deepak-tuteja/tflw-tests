@@ -8,7 +8,11 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Product } from '../entities/product.entity';
+import { OrderItem } from '../entities/order-item.entity';
+import { Review } from '../entities/review.entity';
+import { NotificationType } from '../entities/notification.entity';
 import { CategoriesService } from '../categories/categories.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { FindProductsQueryDto } from './dto/find-products-query.dto';
@@ -56,7 +60,10 @@ function applySort(qb: SelectQueryBuilder<Product>, sort: string | undefined): v
 export class ProductsService {
   constructor(
     @InjectRepository(Product) private readonly products: Repository<Product>,
+    @InjectRepository(OrderItem) private readonly orderItems: Repository<OrderItem>,
+    @InjectRepository(Review) private readonly reviews: Repository<Review>,
     private readonly categories: CategoriesService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // Filter (categoryId), full-text search (q), sort, and offset pagination (page+pageSize) —
@@ -129,13 +136,49 @@ export class ProductsService {
 
     if (dto.categoryId) await this.categories.assertExists(dto.categoryId);
 
+    const previousPrice = product.price;
+
     if (dto.name !== undefined) product.name = dto.name;
     if (dto.description !== undefined) product.description = dto.description;
     if (dto.price !== undefined) product.price = String(dto.price);
     if (dto.stock !== undefined) product.stock = dto.stock;
     if (dto.categoryId !== undefined) product.categoryId = dto.categoryId;
 
-    return this.products.save(product);
+    const saved = await this.products.save(product);
+
+    if (dto.price !== undefined && Number(saved.price) < Number(previousPrice)) {
+      await this.notifyPriceDrop(saved, previousPrice, saved.price);
+    }
+
+    return saved;
+  }
+
+  // Real side-effect (M13, plan_v2.md Part F decision 3): every user who ordered or reviewed
+  // this product gets a `price_drop` notification — no direct create-notification endpoint.
+  private async notifyPriceDrop(product: Product, oldPrice: string, newPrice: string): Promise<void> {
+    const orderRows = await this.orderItems
+      .createQueryBuilder('item')
+      .innerJoin('item.order', 'itemOrder')
+      .select('DISTINCT itemOrder.user_id', 'userId')
+      .where('item.product_id = :productId', { productId: product.id })
+      .getRawMany<{ userId: string }>();
+    const reviewRows = await this.reviews.find({
+      where: { productId: product.id },
+      select: { userId: true },
+    });
+
+    const userIds = new Set<string>([
+      ...orderRows.map((row) => row.userId),
+      ...reviewRows.map((row) => row.userId),
+    ]);
+
+    for (const userId of userIds) {
+      await this.notifications.create(userId, NotificationType.PRICE_DROP, {
+        productId: product.id,
+        oldPrice,
+        newPrice,
+      });
+    }
   }
 
   // Batch create (M12, plan_v2.md Part E): each item is validated and persisted independently —

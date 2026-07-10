@@ -1,0 +1,22 @@
+# sessions-explained.tflw — SPEC §3.3: a `session` block is tflw's one auth concept. It's a
+# named sequence of steps (usually a login) that runs once per run per worker and is cached; a
+# test opts in with `as <session-name>` and starts with the session's declared headers/cookies
+# already applied. tflw.config (this repo's) defines two: `admin` (bearer) and `shopper` (cookie).
+
+@examples @sessions
+test "opting into `as admin` starts every api step with the admin session's bearer header already applied" as admin
+  # No explicit Authorization header anywhere below — `as admin` supplied it before this test's
+  # first step even ran (tflw.config's `session admin` block captured it once for the whole run).
+  api GET /orders/all
+  expect status equals 200
+
+@examples @sessions
+test "opting into `as shopper` starts with the cookie jar already carrying the session's cookie" as shopper
+  api GET /auth/profile
+  expect status equals 200
+  expect body.role equals "user"
+
+@examples @sessions
+test "a test with no `as <session>` clause is anonymous — no auth applied at all"
+  api GET /orders/all
+  expect status equals 401

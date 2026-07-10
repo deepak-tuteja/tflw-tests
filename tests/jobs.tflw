@@ -3,39 +3,54 @@
 # immediately; `GET /jobs/:id` is the pollable handle, exercised via `wait until api` (same
 # construct v1's order-workflow.tflw used, now against a genuine job resource instead of an
 # order that silently self-transitioned on its own timer).
+#
+# Uses an inline admin login (not `as admin`) throughout, fixed during M13 (same cumulative-
+# suite-timing issue as schema-and-shape.tflw, M12): as the suite has grown, this file now also
+# sorts late enough that the cached `admin` session's 5s-TTL bearer token can be stale by the
+# time these tests run. See schema-and-shape.tflw's file header for the full explanation.
 
 before
   api GET /categories
   expect status equals 200
   capture body[0].id as categoryId
 
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
 @workflow
-test "an order progresses through fulfillment via a real async job, polled to completion" as admin
+test "an order progresses through fulfillment via a real async job, polled to completion"
   api POST /products body { name: unique("Workflow Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body.id as productId
 
   api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   expect body.status equals "pending"
   capture body.id as orderId
 
   api POST /orders/{orderId}/fulfill
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 202
   expect header "location" matches "/v1/jobs/"
   expect body.status equals "processing"
   capture body.jobId as jobId
 
   wait until api GET /jobs/{jobId}
+    header "Authorization" is "Bearer {adminToken}"
     expect body.status equals "completed"
 
   api GET /orders/{orderId}
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 200
   expect body.status equals "fulfilled"
 
 @workflow @authz
-test "only an admin can trigger fulfillment" as admin
+test "only an admin can trigger fulfillment"
   api POST /products body { name: unique("Self-service Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body.id as productId
 
@@ -53,8 +68,9 @@ test "only an admin can trigger fulfillment" as admin
   expect status equals 403
 
 @workflow @authz
-test "a job is scoped to its order's owner, just like the order itself" as admin
+test "a job is scoped to its order's owner, just like the order itself"
   api POST /products body { name: unique("Scoped Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body.id as productId
 
@@ -68,6 +84,7 @@ test "a job is scoped to its order's owner, just like the order itself" as admin
   capture body.id as orderId
 
   api POST /orders/{orderId}/fulfill
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 202
   capture body.jobId as jobId
 
@@ -88,17 +105,21 @@ test "a job is scoped to its order's owner, just like the order itself" as admin
     expect body.status equals "completed"
 
 @workflow @statusVariety
-test "fulfilling an order that isn't pending is a conflict, not a duplicate job" as admin
+test "fulfilling an order that isn't pending is a conflict, not a duplicate job"
   api POST /products body { name: unique("Already-fulfilling Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body.id as productId
 
   api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body.id as orderId
 
   api POST /orders/{orderId}/fulfill
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 202
 
   api POST /orders/{orderId}/fulfill
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 409

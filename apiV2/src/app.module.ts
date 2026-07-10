@@ -14,9 +14,11 @@ import { OrderItem } from './entities/order-item.entity';
 import { Review } from './entities/review.entity';
 import { TokenRecord } from './entities/token-record.entity';
 import { Job } from './entities/job.entity';
+import { Notification } from './entities/notification.entity';
 import { JobsModule } from './jobs/jobs.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { FlakyWidgetModule } from './flaky-widget/flaky-widget.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -30,7 +32,7 @@ import { FlakyWidgetModule } from './flaky-widget/flaky-widget.module';
         username: config.get<string>('DB_USER', 'postgres'),
         password: config.get<string>('DB_PASSWORD', 'postgres'),
         database: config.get<string>('DB_NAME', 'testflow_tests'),
-        entities: [User, Category, Product, Order, OrderItem, Review, TokenRecord, Job],
+        entities: [User, Category, Product, Order, OrderItem, Review, TokenRecord, Job, Notification],
         // Migrations run as a separate step (cli.mjs's start sequence);
         // the app never mutates schema on its own.
         synchronize: false,
@@ -44,6 +46,7 @@ import { FlakyWidgetModule } from './flaky-widget/flaky-widget.module';
     JobsModule,
     ReviewsModule,
     FlakyWidgetModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}

@@ -1,0 +1,28 @@
+# wait-until-api-explained.tflw — SPEC §5.5: an ordinary `expect` evaluates once and fails fast.
+# `wait until api` is the explicit escape for eventual consistency — it re-issues the same
+# request until its `expect`s pass or the configured `timeout wait` budget elapses. It can also
+# carry its own `header` lines, resent on every poll (closed gap #4, 2026-07-08).
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+@examples @waituntilapi
+test "wait until api polls a real async transition to completion" as admin
+  api POST /products body { name: unique("Wait Widget"), price: 5, stock: 1, categoryId: {categoryId} }
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+  expect status equals 201
+  capture body.id as orderId
+
+  api POST /orders/{orderId}/fulfill
+  expect status equals 202
+  capture body.jobId as jobId
+
+  # A one-shot `expect body.status equals "completed"` right here would very likely fail — the
+  # job hasn't finished yet. `wait until api` re-polls until it has (or the wait budget runs out).
+  wait until api GET /jobs/{jobId}
+    expect body.status equals "completed"

@@ -1,0 +1,15 @@
+# tags-explained.tflw — SPEC §4.1: `@tag`s above a `test` (or a `with each` block) filter which
+# tests run via `tflw run --tag <name>`. A test can carry more than one tag; `--tag` matches any
+# test that has it, regardless of what else it's tagged with. Try: `npx tflw run --tag examples`
+# (every test in this whole examples/ directory, since each file tags its tests `@examples`),
+# or `npx tflw run --tag smoke` (just the one test below).
+
+@examples @smoke
+test "tagged @examples and @smoke — matched by either --tag examples or --tag smoke"
+  api GET /health
+  expect status equals 200
+
+@examples @slow
+test "tagged @examples and @slow — matched by --tag examples or --tag slow, not --tag smoke"
+  api GET /health
+  expect status equals 200

@@ -1,0 +1,86 @@
+# checkout-journey.tflw — M13 kitchen-sink (plan_v2.md Part F decision 5): a full realistic
+# checkout, combining generators, registration, catalog browsing (search + pagination),
+# idempotent order creation, real async fulfillment polling, and quantifiers over the finished
+# order — the features chain the way an actual test author would reach for them together, not as
+# an isolated feature showcase (see tests/examples/ for that).
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+@journey @checkout
+test "a new shopper registers, browses, checks out idempotently, and watches fulfillment complete"
+  # --- generators + registration ---
+  let shopperName = unique("Journey Shopper")
+  let shopperEmail = unique email
+  api POST /auth/register body { name: {shopperName}, email: {shopperEmail}, password: "journey-Pass-123" }
+  expect status equals 201
+  capture body.accessToken as shopperToken
+
+  # --- seed two findable products (admin) ---
+  let tag = unique("journey-tag")
+  api POST /products body { name: "{tag} Journey Widget A", price: 12, stock: 10, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productIdA
+
+  api POST /products body { name: "{tag} Journey Widget B", price: 8, stock: 10, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productIdB
+
+  # --- browse: search + paginate, as the shopper ---
+  api GET /products?q={tag}&page=1&pageSize=10
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 200
+  expect body.total equals 2
+  expect any body.data matches subset { id: "{productIdA}" }
+  expect any body.data matches subset { id: "{productIdB}" }
+
+  # --- checkout: an idempotent order, repeating the key returns the same order ---
+  let idempotencyKey = unique("journey-order-key")
+  api POST /orders body { items: [ { productId: {productIdA}, quantity: 2 }, { productId: {productIdB}, quantity: 1 } ] }
+    header "Authorization" is "Bearer {shopperToken}"
+    header "Idempotency-Key" is "{idempotencyKey}"
+  expect status equals 201
+  expect body.status equals "pending"
+  capture body.id as orderId
+
+  api POST /orders body { items: [ { productId: {productIdA}, quantity: 2 }, { productId: {productIdB}, quantity: 1 } ] }
+    header "Authorization" is "Bearer {shopperToken}"
+    header "Idempotency-Key" is "{idempotencyKey}"
+  expect status equals 200
+  expect body.id equals "{orderId}"
+
+  # --- fulfillment: a real async job, polled to completion ---
+  api POST /orders/{orderId}/fulfill
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 202
+  capture body.jobId as jobId
+
+  wait until api GET /jobs/{jobId}
+    header "Authorization" is "Bearer {adminToken}"
+    expect body.status equals "completed"
+
+  # --- review the finished order: quantifiers over its items ---
+  api GET /orders/{orderId}/items
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 200
+  expect body has count 2
+  expect all body.quantity is greater than 0
+  expect any body matches subset { productId: "{productIdA}", quantity: 2 }
+
+  api GET /orders/{orderId}
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 200
+  expect body.status equals "fulfilled"
+
+  # --- the shopper leaves a review, which the seed data can now surface ---
+  api POST /products/{productIdA}/reviews body { rating: 5, comment: "exactly as ordered" }
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 201

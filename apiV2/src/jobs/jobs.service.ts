@@ -10,6 +10,8 @@ import { Job, JobStatus, JobType } from '../entities/job.entity';
 import { Order, OrderStatus } from '../entities/order.entity';
 import { AuthedUser } from '../auth/guards/bearer-auth.guard';
 import { UserRole } from '../entities/user.entity';
+import { NotificationType } from '../entities/notification.entity';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const STAGE_DELAY_MS = 150;
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -22,6 +24,7 @@ export class JobsService {
   constructor(
     @InjectRepository(Job) private readonly jobs: Repository<Job>,
     @InjectRepository(Order) private readonly orders: Repository<Order>,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async startFulfillment(order: Order): Promise<Job> {
@@ -44,17 +47,30 @@ export class JobsService {
 
     // Everything past this point is the real fire-and-forget async work: the triggering request
     // already has its 202, this is what `GET /jobs/:id` polls for.
-    void this.continueFulfillment(saved.id, order.id);
+    void this.continueFulfillment(saved.id, order.id, order.userId);
 
     return saved;
   }
 
-  private async continueFulfillment(jobId: string, orderId: string): Promise<void> {
+  // Each real status transition also fires an `order_status_changed` notification for the
+  // order's owner (M13, plan_v2.md Part F decision 3) — a genuine side-effect of the async work
+  // actually completing, not a notification manufactured just to have one to test.
+  private async continueFulfillment(jobId: string, orderId: string, userId: string): Promise<void> {
     await delay(STAGE_DELAY_MS);
     await this.orders.update(orderId, { status: OrderStatus.READY });
+    await this.notifications.create(userId, NotificationType.ORDER_STATUS_CHANGED, {
+      orderId,
+      oldStatus: OrderStatus.PROCESSING,
+      newStatus: OrderStatus.READY,
+    });
 
     await delay(STAGE_DELAY_MS);
     await this.orders.update(orderId, { status: OrderStatus.FULFILLED });
+    await this.notifications.create(userId, NotificationType.ORDER_STATUS_CHANGED, {
+      orderId,
+      oldStatus: OrderStatus.READY,
+      newStatus: OrderStatus.FULFILLED,
+    });
     await this.jobs.update(jobId, { status: JobStatus.COMPLETED });
   }
 

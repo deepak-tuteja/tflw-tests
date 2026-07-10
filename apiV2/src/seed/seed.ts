@@ -71,6 +71,23 @@ async function seed() {
     categoryEntities[name] = cat;
   }
 
+  // Recursive category tree (M13, plan_v2.md Part F): 3 levels under an existing top-level
+  // category, real recursive JSON for GET /categories/tree to expose.
+  const subcategories: Array<{ name: string; parent: string }> = [
+    { name: 'Audio', parent: 'Electronics' },
+    { name: 'Headphones', parent: 'Audio' },
+  ];
+  for (const sub of subcategories) {
+    let cat = await categoryRepo.findOne({ where: { name: sub.name } });
+    if (!cat) {
+      cat = await categoryRepo.save(
+        categoryRepo.create({ name: sub.name, parentId: categoryEntities[sub.parent].id }),
+      );
+      console.log(`seeded subcategory: ${sub.name} (parent: ${sub.parent})`);
+    }
+    categoryEntities[sub.name] = cat;
+  }
+
   const products = [
     { name: 'Wireless Mouse', category: 'Electronics', price: '19.99', stock: 100 },
     { name: 'Mechanical Keyboard', category: 'Electronics', price: '79.99', stock: 40 },

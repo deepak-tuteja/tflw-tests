@@ -1,0 +1,32 @@
+# generators-explained.tflw — SPEC §7.2-§7.3: `unique(...)` (collision-safe, run-wide counter,
+# never seed-reproducible) for anything with a uniqueness constraint; `random ...` (per-test
+# seeded, replays identically under the same `--seed`, collisions allowed) for value-shaped data.
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+@examples @generators
+test "unique(\"prefix\") and unique email — collision-safe across the whole run" as admin
+  let name = unique("Gen Widget")
+  api POST /products body { name: {name}, price: 5, stock: 1, categoryId: {categoryId} }
+  expect status equals 201
+  expect body.name equals "{name}"
+
+  let email = unique email
+  api POST /auth/register body { name: "Gen User", email: {email}, password: "gen-Pass-123" }
+  expect status equals 201
+  expect body.accessToken matches "^ey"
+
+@examples @generators
+test "random number/decimal/string/of/like/date — value-shaped, collisions allowed" as admin
+  let qty = random number 1 to 10
+  let price = random decimal 5 to 99.9
+  let sku = random like "SKU-####-??"
+  let color = random of "red", "blue", "green"
+  let tag = random string 8
+
+  api POST /products body { name: unique("Random {tag}"), price: {price}, stock: {qty}, categoryId: {categoryId} }
+  expect status equals 201
+  expect body.stock equals {qty}

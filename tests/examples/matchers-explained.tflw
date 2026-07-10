@@ -1,0 +1,51 @@
+# matchers-explained.tflw — SPEC §6.1-§6.2, §6.4: the closed matcher set, `not`, and the
+# `expect` (hard, fails immediately) vs `check` (soft, records and continues — the whole test
+# still fails at the end if any check failed) distinction.
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+@examples @matchers
+test "equals — exact value, any type"
+  api GET /health
+  expect status equals 200
+
+@examples @matchers
+test "contains — substring/element membership"
+  api GET /health
+  expect body.status contains "ok"
+
+@examples @matchers
+test "matches \"<regex>\" — a string against a regular expression"
+  api GET /health
+  expect header "content-type" matches "json"
+
+@examples @matchers
+test "is greater than / is less than — numeric comparison"
+  # `.total` only exists on the paginated envelope shape — GET /products without page/pageSize
+  # returns a bare array instead (see body.<path>'s own example above for that shape).
+  api GET /products?page=1&pageSize=5
+  expect body.total is greater than 0
+  expect duration is less than 5000ms
+
+@examples @matchers
+test "has count N — an array's exact length"
+  api GET /products?page=1&pageSize=3
+  expect body.data has count 3
+
+@examples @matchers
+test "not — negates any matcher"
+  api GET /health
+  expect status not equals 500
+
+@examples @matchers
+test "check is a soft twin of expect — it records a failure and keeps running" as admin
+  api POST /products body { name: unique("Matcher Widget"), price: 5, stock: 1, categoryId: {categoryId} }
+  expect status equals 201
+  # Both of these run regardless of whether the first one passes — a hard `expect` here would
+  # abort the test the instant the first one failed, hiding whether the second field was also
+  # wrong. This test only fails at the end if at least one `check` failed (neither does here).
+  check body.price equals "5"
+  check body.stock equals 1

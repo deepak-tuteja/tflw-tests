@@ -1,0 +1,16 @@
+# retry-explained.tflw — SPEC §4.4: `retry N` re-runs the whole test up to N more times on
+# failure; a pass-after-retry is flagged **flaky**, never silently green. `random` values replay
+# identically on every attempt (so a retried attempt can reuse the same key/namespace); `unique`
+# values do not (their run-wide counter keeps advancing, so a retry never collides with data an
+# earlier attempt already created). See retry-and-flake.tflw for the same idea against a real
+# flaky endpoint with richer assertions.
+
+@examples @retry
+test "retry 2 re-runs a failing test up to twice more, reusing the same `random` key each time" retry 2
+  # A fresh `random string 8` per attempt would defeat the whole point — the flaky-widget's
+  # per-key attempt counter needs the SAME key across retries to actually recover.
+  let key = random string 8
+  api POST /flaky-widget body { key: {key} }
+  # Attempt 1 gets 503, attempt 2 (first retry) gets 429, attempt 3 (second retry) gets 201 —
+  # this test is reported `flaky` (passed, but only after retrying), which is the point.
+  expect status equals 201

@@ -9,27 +9,39 @@
 # tests/.gaps/nested-array-quantifier.tflw for what happens when a path instead tries to
 # quantify into a *second*, nested array (`GET /orders/all`'s embedded `items[]`), a real limit
 # this redesign surfaced and is now tracked as TFLW-GAPS.md gap #11.
+#
+# Uses an inline admin login (not `as admin`), fixed during M13 — the same cumulative-suite-
+# timing issue as schema-and-shape.tflw/jobs.tflw (M12/M13): as the suite has grown, this file
+# now also sorts late enough for the cached `admin` session's 5s-TTL token to be stale here.
 
 before
   api GET /categories
   expect status equals 200
   capture body[0].id as categoryId
 
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
 @crud @quantifiers
-test "quantifiers over one order's items" as admin
+test "quantifiers over one order's items"
   api POST /products body { name: unique("Quant Widget A"), price: 5, stock: 10, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body.id as productIdA
 
   api POST /products body { name: unique("Quant Widget B"), price: 5, stock: 10, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body.id as productIdB
 
   api POST /orders body { items: [ { productId: {productIdA}, quantity: 3 }, { productId: {productIdB}, quantity: 1 } ] }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body.id as orderId
 
   api GET /orders/{orderId}/items
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 200
   expect all body.quantity is greater than 0
   expect any body.quantity equals 3

@@ -1,0 +1,91 @@
+# notifications-and-tree.tflw — M13 kitchen-sink (plan_v2.md Part F decision 5): the two new
+# resources this milestone added, exercised together. `notifications` are real side-effects
+# (order fulfillment, a price drop, a review reply — no direct create endpoint), asserted on via
+# `any`/`matches subset` since the list is a genuine polymorphic union (each `type` has a
+# different payload shape). `categories/tree` is walked via nested index captures, the same
+# deterministic-alphabetical-order convention `capture body[0].id as categoryId` already relies
+# on everywhere else in this suite.
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+@notifications @tree
+test "the category tree nests real subcategories, walked via nested captures"
+  api GET /categories/tree
+  expect status equals 200
+  # Alphabetical: Books[0], Electronics[1], Home & Kitchen[2], Office Supplies[3],
+  # Sports & Outdoors[4], Toys & Games[5] — same deterministic-seed-order convention this suite
+  # already relies on for `capture body[0].id as categoryId`.
+  expect body[1].name equals "Electronics"
+  expect body[1].children[0].name equals "Audio"
+  expect body[1].children[0].children[0].name equals "Headphones"
+  # A leaf node's own children array is still present, just empty — not omitted.
+  expect body[1].children[0].children[0].children has count 0
+  capture body[1].children[0].children[0].id as headphonesId
+
+  # The tree's leaf is a real category record, findable through the ordinary flat endpoint too —
+  # the tree is a different *view* of the same rows, not a separate resource.
+  api GET /categories
+  expect status equals 200
+  expect any body matches subset { id: "{headphonesId}", name: "Headphones" }
+
+@notifications @polymorphic
+test "order fulfillment, a price drop, and a review reply each produce a distinct notification shape"
+  let shopperEmail = unique email
+  api POST /auth/register body { name: "Notif Shopper", email: {shopperEmail}, password: "notif-Pass-123" }
+  expect status equals 201
+  capture body.accessToken as shopperToken
+
+  let productName = unique("Notif Widget")
+  api POST /products body { name: {productName}, price: 40, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  # --- trigger 1: order -> fulfill -> real order_status_changed side-effects ---
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 201
+  capture body.id as orderId
+
+  api POST /orders/{orderId}/fulfill
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 202
+  capture body.jobId as jobId
+
+  wait until api GET /jobs/{jobId}
+    header "Authorization" is "Bearer {adminToken}"
+    expect body.status equals "completed"
+
+  # --- trigger 2: a review, then an admin reply -> real review_reply side-effect ---
+  api POST /products/{productId}/reviews body { rating: 4, comment: "solid" }
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 201
+  capture body.id as reviewId
+
+  api POST /reviews/{reviewId}/reply body { replyText: "Thanks for the feedback!" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+
+  # --- trigger 3: a genuine price drop -> real price_drop side-effect (shopper ordered+reviewed) ---
+  api PATCH /products/{productId} body { price: 25 }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+
+  # --- the payoff: one polymorphic list, three distinct shapes, correlated per type ---
+  api GET /notifications
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 200
+  # 4, not 3: fulfillment fires order_status_changed twice (processing->ready, ready->fulfilled)
+  # — see JobsService.continueFulfillment — plus one review_reply and one price_drop.
+  expect body has count 4
+  expect any body matches subset { type: "order_status_changed", orderId: "{orderId}", newStatus: "fulfilled" }
+  expect any body matches subset { type: "review_reply", reviewId: "{reviewId}", replyText: "Thanks for the feedback!" }
+  expect any body matches subset { type: "price_drop", productId: "{productId}", newPrice: "25" }
+  expect all body.id matches "^[0-9a-f-]{36}$"
