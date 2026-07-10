@@ -1,0 +1,52 @@
+# interleaved-sessions.tflw — two identities live in one test: an admin bearer identity and a
+# shopper cookie identity, alternating calls within a single test. Proves cookie-jar isolation
+# holds with two identities active at once.
+#
+# Modernized for v2 (plan_v2.md Part E, M12): predates gap #1's fix (cookie jar) and originally
+# captured `body.sessionId` from the response, replaying it as a raw `Cookie` header — that echo
+# no longer exists in v2 by design (plan_v2.md Part A) and the jar now tracks `Set-Cookie`
+# automatically (see cookie-jar.tflw). Also drops the retired `X-Test-NS` header and the old
+# separate `auth` named-service (both gone in the unified /v1 service). Deliberately does NOT use
+# `as admin` session sugar: `AnyAuthGuard` checks a bearer `Authorization` header before a session
+# cookie (apiV2/src/auth/guards/any-auth.guard.ts), so a session's auto-attached admin header
+# would silently win over the shopper's jar-tracked cookie on every step — same reason
+# reviews.tflw's multi-identity tests skip session sugar and pass an explicit bearer header per
+# admin-scoped step instead.
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+@sessions @interleave
+test "admin (bearer) and shopper (cookie) are both live in one test"
+  api POST /auth/session-login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  # cookie jar auto-tracks the session cookie from here on — no capture/header replay needed
+
+  api GET /auth/profile
+  expect status equals 200
+  expect body.role equals "user"
+
+  api POST /products body { name: unique("Interleave Widget"), price: 8, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api GET /auth/profile
+  expect status equals 200
+  expect body.email equals env(USER_A_EMAIL)
+
+  api POST /orders body { items: [ { productId: {productId}, quantity: 1 } ] }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as orderId
+
+  api GET /orders/{orderId}
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  expect body.status equals "pending"

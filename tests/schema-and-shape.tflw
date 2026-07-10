@@ -5,6 +5,18 @@
 # uses the real thing instead of the old one-statement-per-field escape hatch. Schema/contract
 # validation (P#3, gap #6) is still open — that test still needs the JS helper. See TFLW-GAPS.md
 # for the full ranked writeup.
+#
+# Uses an inline admin login (not `as admin`) deliberately, fixed during M12 (plan_v2.md Part E):
+# this file happens to sort after enough other files (including some slow ones, e.g.
+# reviews.tflw's real Retry-After wait) that by the time it runs, the whole suite's cumulative
+# wall-clock time can exceed the shared `admin` session's cached bearer token TTL
+# (JWT_ACCESS_TTL=5s, deliberately short so token-expiry.tflw/token-refresh-lifecycle.tflw can
+# observe a real expiry) — a session's token is captured once per run and never refreshes
+# (SPEC §3.3), so any `as admin` test running late enough gets a stale, expired token and a spurious
+# 401. Confirmed empirically: `npx tflw run tests/schema-and-shape.tflw` alone always passes;
+# `npx tflw run` (full suite) consistently 401s here at ~4.9s cumulative elapsed. Same fix already
+# used by reviews.tflw/order-items.tflw for admin-needing tests that can't rely on `as admin`'s
+# fixed-at-establishment-time token.
 
 use "./helpers/schema-check.ts"
 
@@ -13,9 +25,14 @@ before
   expect status equals 200
   capture body[0].id as categoryId
 
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
 @shape
-test "asserting a full RFC7807 error shape in one structural statement" as admin
+test "asserting a full RFC7807 error shape in one structural statement"
   api POST /products body { name: "", price: -5, stock: 1, categoryId: "not-a-uuid" }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 422
   # `matches subset {...}` (tflw 0.1.0, TFLW-GAPS.md gap #2): asserts these three key/value pairs
   # in one statement and ignores everything else on the body — including the legitimately
@@ -25,8 +42,9 @@ test "asserting a full RFC7807 error shape in one structural statement" as admin
   expect body matches subset { type: "about:blank", title: "Unprocessable Entity", status: 422 }
 
 @gaps @schema
-test "validating a response against its own documented OpenAPI schema needs a JS helper" as admin
+test "validating a response against its own documented OpenAPI schema needs a JS helper"
   api POST /products body { name: unique("Schema-checked Widget"), price: 12.5, stock: 3, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body as product
 

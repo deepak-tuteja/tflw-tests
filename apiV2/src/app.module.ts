@@ -16,6 +16,7 @@ import { TokenRecord } from './entities/token-record.entity';
 import { Job } from './entities/job.entity';
 import { JobsModule } from './jobs/jobs.module';
 import { ReviewsModule } from './reviews/reviews.module';
+import { FlakyWidgetModule } from './flaky-widget/flaky-widget.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { ReviewsModule } from './reviews/reviews.module';
     OrdersModule,
     JobsModule,
     ReviewsModule,
+    FlakyWidgetModule,
   ],
 })
 export class AppModule {}

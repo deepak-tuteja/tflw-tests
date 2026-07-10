@@ -1,0 +1,28 @@
+# retry-and-flake.tflw — transient-failure showcase: `retry N` against a per-key flaky endpoint.
+#
+# Ported to v2 (plan_v2.md Part E, M12): the flaky-widget endpoint itself is new — v1's version
+# was a flat "fails twice, succeeds"; broadened per decision 5 to vary the failure status per
+# attempt (503, then 429 + `Retry-After`, then 201), giving a second, independent evidence source
+# for open gap #5 (`Retry-After`-aware retry) alongside `reviews.tflw`'s `@ratelimit` tests. (The
+# async-job `wait until api` scenario this file's original comment referenced now lives in
+# jobs.tflw, not a separate order-workflow.tflw.)
+
+@flaky
+test "flaky-widget succeeds after retrying" as admin retry 2
+  let key = random string 8
+  api POST /flaky-widget body { key: {key}, name: "Flaky Thing" }
+  expect status equals 201
+
+@flaky @ratelimit
+test "flaky-widget's three attempts are individually observable: 503, then 429 with Retry-After, then 201"
+  let key = random string 8
+
+  api POST /flaky-widget body { key: {key} }
+  expect status equals 503
+
+  api POST /flaky-widget body { key: {key} }
+  expect status equals 429
+  expect header "Retry-After" matches "^[0-9]+$"
+
+  api POST /flaky-widget body { key: {key} }
+  expect status equals 201

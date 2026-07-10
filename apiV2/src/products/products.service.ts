@@ -12,6 +12,8 @@ import { CategoriesService } from '../categories/categories.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { FindProductsQueryDto } from './dto/find-products-query.dto';
+import { BatchProductItemDto } from './dto/batch-create-products.dto';
+import { BatchCreateProductsResult, BatchItemResult } from './dto/batch-create-products-result';
 import { isForeignKeyViolation } from '../common/db-errors';
 
 // ETag values are just the row's version number, quoted per RFC7232 — opaque to the client,
@@ -134,6 +136,48 @@ export class ProductsService {
     if (dto.categoryId !== undefined) product.categoryId = dto.categoryId;
 
     return this.products.save(product);
+  }
+
+  // Batch create (M12, plan_v2.md Part E): each item is validated and persisted independently —
+  // one bad row never blocks the good ones (207 Multi-Status), unlike the all-or-nothing
+  // behavior a plain array-body POST would give via the global ValidationPipe. Three
+  // independent per-item failure reasons: invalid price, unknown category, and a name reused
+  // earlier in the same batch payload (not a DB-level constraint — products may share names
+  // across separate, non-batched creates).
+  async createBatch(items: BatchProductItemDto[]): Promise<BatchCreateProductsResult> {
+    const results: BatchItemResult[] = [];
+    const seenNames = new Set<string>();
+
+    for (const item of items) {
+      if (item.price < 0) {
+        results.push({ ok: false, reason: 'invalid price' });
+        continue;
+      }
+      if (seenNames.has(item.name)) {
+        results.push({ ok: false, reason: 'duplicate name in batch' });
+        continue;
+      }
+      seenNames.add(item.name);
+
+      const category = await this.categories.tryFind(item.categoryId);
+      if (!category) {
+        results.push({ ok: false, reason: 'unknown category' });
+        continue;
+      }
+
+      const product = this.products.create({
+        name: item.name,
+        description: item.description ?? '',
+        price: String(item.price),
+        stock: item.stock,
+        categoryId: item.categoryId,
+      });
+      const saved = await this.products.save(product);
+      results.push({ ok: true, id: saved.id });
+    }
+
+    const succeeded = results.filter((r) => r.ok).length;
+    return { results, succeeded, failed: results.length - succeeded };
   }
 
   // Product-image upload (M6): metadata only, no real file persistence/serving (see

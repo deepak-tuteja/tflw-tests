@@ -24,6 +24,7 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { FindProductsQueryDto } from './dto/find-products-query.dto';
 import { ProductResponseDto } from './dto/product-response.dto';
+import { BatchCreateProductsDto } from './dto/batch-create-products.dto';
 import { AnyAuthGuard } from '../auth/guards/any-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -66,6 +67,16 @@ export class ProductsController {
     const product = await this.products.create(dto);
     res.setHeader('ETag', etagFor(product));
     return product;
+  }
+
+  // Batch create (M12): each item validates and persists independently — 207 Multi-Status with
+  // a per-item result, never an all-or-nothing 4xx for the whole payload.
+  @Post('batch')
+  @HttpCode(207)
+  @UseGuards(AnyAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  createBatch(@Body() dto: BatchCreateProductsDto) {
+    return this.products.createBatch(dto.items);
   }
 
   // Only partial updates are supported — a full-replace PUT is a deliberately unsupported verb

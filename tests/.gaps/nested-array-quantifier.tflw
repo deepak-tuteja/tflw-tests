@@ -1,0 +1,34 @@
+# nested-array-quantifier.tflw — proof that `any`/`all` (SPEC §6.3) cannot quantify into a
+# *second*, nested array. Discovered while redesigning quantifiers.tflw (M12, plan_v2.md Part E,
+# TFLW-GAPS.md gap #11): `GET /orders/all` returns `Order[]`, each with a nested `items[]`
+# (plan_v2.md Part D decision 2's relation-deepening). `evaluateQuantified`
+# (packages/runtime/src/interpreter.ts:879) navigates the path until it finds the FIRST array,
+# then applies the *remaining* path segments per element via plain property navigation — it never
+# re-quantifies into a second array found partway through those remaining segments. Since arrays
+# are `typeof 'object'` in JS, `navigate`'s prop-access branch (packages/runtime/src/eval.ts:174)
+# doesn't even throw on `someArray.quantity` — it silently returns `undefined`, so this fails as
+# an ordinary "no element matched" rather than a clear type error pointing at the real cause.
+#
+# Excluded from the default suite (dot-dir convention, same as .demo-fail/.checkonly) — this is a
+# deliberate, permanent can't-express-at-all proof, not a scenario expected to ever pass.
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+@gaps
+test "cannot quantify into a nested array — GET /orders/all's per-order items[]" as admin
+  api POST /products body { name: unique("Nested Quant Widget"), price: 5, stock: 10, categoryId: {categoryId} }
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /orders body { items: [ { productId: {productId}, quantity: 3 } ] }
+  expect status equals 201
+
+  api GET /orders/all
+  expect status equals 200
+  # This is the assertion a user would naturally reach for — "does any order in the list contain
+  # an item with quantity 3" — and it fails not because the data is wrong (the order above really
+  # does have such an item), but because the path can only quantify one array level deep.
+  expect any body.items.quantity equals 3
