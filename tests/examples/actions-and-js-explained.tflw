@@ -11,19 +11,23 @@ before
   expect status equals 200
   capture body[0].id as categoryId
 
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
 @examples @actions
-test "an imported action runs like inline steps, returns a value via give" as admin
+test "an imported action runs like inline steps, returns a value via give"
   # `create product(...)` is defined once in shared/catalog.tflw and imported here — its steps
   # (the POST, the expect, the capture) splice into this test's own report as if written inline.
-  let productId = create product(unique("Action Widget"), 12.5, 5, categoryId)
+  let productId = create product(unique("Action Widget"), 12.5, 5, categoryId, adminToken)
 
   api GET /products/{productId}
   expect status equals 200
   expect body.price equals "12.50"
 
 @examples @js
-test "use pulls in a plain JS/TS helper, called like a native action" as admin
-  let productId = create product(unique("JS Widget"), 20, 5, categoryId)
+test "use pulls in a plain JS/TS helper, called like a native action"
+  let productId = create product(unique("JS Widget"), 20, 5, categoryId, adminToken)
 
   # `make receipt(...)` -> helpers/receipt.ts's exported `makeReceipt`, camelCase name lookup.
   # Runs real (non-DSL) logic — string formatting here, but this is the escape hatch for
@@ -31,5 +35,6 @@ test "use pulls in a plain JS/TS helper, called like a native action" as admin
   let receipt = make receipt(productId, 20)
 
   api DELETE /products/{productId}
+    header "Authorization" is "Bearer {adminToken}"
     header "X-Receipt" is "{receipt}"
   expect status equals 204

@@ -49,7 +49,7 @@ test "the same catalog-moderation action is forbidden for a non-admin identity"
   expect status equals 403
 
 @moderation @batch
-test "a bulk catalog import batch reports mixed success without failing the whole request" as admin
+test "a bulk catalog import batch reports mixed success without failing the whole request"
   let goodName = unique("Bulk Import Good")
   api POST /products/batch body {
       items: [
@@ -58,6 +58,7 @@ test "a bulk catalog import batch reports mixed success without failing the whol
         { name: "Bulk Import Bad Category", price: 15, stock: 10, categoryId: "00000000-0000-0000-0000-000000000000" }
       ]
     }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 207
   expect body.succeeded equals 1
   expect body.failed equals 2

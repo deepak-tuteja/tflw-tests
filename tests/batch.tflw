@@ -15,31 +15,37 @@ before
   expect status equals 200
   capture body[0].id as categoryId
 
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
 @batch @crud
 with each
   | label        | price | shouldSucceed |
   | "Batch Good" | 12    | true          |
   | "Batch Bad"  | -5    | false         |
-test "batch-creates {label} alongside a fixed always-valid filler item" as admin
+test "batch-creates {label} alongside a fixed always-valid filler item"
   api POST /products/batch body {
       items: [
         { name: unique("{label}"), price: {price}, stock: 5, categoryId: {categoryId} },
         { name: unique("Filler Item"), price: 1, stock: 1, categoryId: {categoryId} }
       ]
     }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 207
   expect body.results[0].ok equals {shouldSucceed}
   expect body.results[1].ok equals true
   expect body.succeeded is greater than 0
 
 @batch @crud
-test "batch reports the invalid-price reason on the failing item" as admin
+test "batch reports the invalid-price reason on the failing item"
   api POST /products/batch body {
       items: [
         { name: unique("Bad Price Widget"), price: -5, stock: 5, categoryId: {categoryId} },
         { name: unique("Filler Item"), price: 1, stock: 1, categoryId: {categoryId} }
       ]
     }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 207
   expect body.results[0].ok equals false
   expect body.results[0].reason equals "invalid price"
@@ -47,13 +53,14 @@ test "batch reports the invalid-price reason on the failing item" as admin
   expect body.failed equals 1
 
 @batch @crud
-test "batch reports the unknown-category reason on the failing item" as admin
+test "batch reports the unknown-category reason on the failing item"
   api POST /products/batch body {
       items: [
         { name: unique("Bad Category Widget"), price: 10, stock: 5, categoryId: "00000000-0000-0000-0000-000000000000" },
         { name: unique("Filler Item"), price: 1, stock: 1, categoryId: {categoryId} }
       ]
     }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 207
   expect body.results[0].ok equals false
   expect body.results[0].reason equals "unknown category"
@@ -61,7 +68,7 @@ test "batch reports the unknown-category reason on the failing item" as admin
   expect body.failed equals 1
 
 @batch @crud
-test "batch reports the duplicate-name reason on the second occurrence" as admin
+test "batch reports the duplicate-name reason on the second occurrence"
   let dupName = unique("Repeated Widget")
   api POST /products/batch body {
       items: [
@@ -69,6 +76,7 @@ test "batch reports the duplicate-name reason on the second occurrence" as admin
         { name: {dupName}, price: 12, stock: 3, categoryId: {categoryId} }
       ]
     }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 207
   expect body.results[0].ok equals true
   expect body.results[1].ok equals false

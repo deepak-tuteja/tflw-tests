@@ -1,8 +1,8 @@
 # auth.tflw — the bearer transport: register/login/refresh/logout/profile, real short-TTL access
 # tokens (JWT_ACCESS_TTL=5s), refresh rotation + reuse-after-rotation rejection, and RBAC
-# (admin-only /orders/all). The `admin` session (config-level bearer login, cached for the whole
-# run) covers ordinary admin-authed calls elsewhere; this file exercises the auth endpoints
-# themselves, so most tests log in ad hoc instead of using the cached session.
+# (admin-only /orders/all). Every test logs in ad hoc (M14: per-test fresh admin tokens, not the
+# cached `admin` session — see PROGRESS.md M14 for why); this file exercises the auth endpoints
+# themselves anyway, so an inline login was always the more natural fit here.
 
 @auth
 test "registering a new user returns a working bearer pair"
@@ -36,8 +36,13 @@ test "a non-admin bearer cannot list all orders"
   expect status equals 403
 
 @auth @authz
-test "an admin bearer can list all orders" as admin
+test "an admin bearer can list all orders"
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
   api GET /orders/all
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 200
 
 @auth

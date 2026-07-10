@@ -23,16 +23,19 @@ test "capture body.<path> as <name> — a JSON field feeding the next request"
   expect body.categoryId equals "{categoryId}"
 
 @examples @capture
-test "capture header \"<name>\" as <name> — a response header feeding the next request" as admin
+test "capture header \"<name>\" as <name> — a response header feeding the next request"
   api POST /products body { name: unique("Capture Job Widget"), price: 5, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body.id as productId
 
   api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body.id as orderId
 
   api POST /orders/{orderId}/fulfill
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 202
   capture header "location" as jobUrl
   # tflw's `capture` doesn't parse the URL — it's just a string; jobs.tflw already captures

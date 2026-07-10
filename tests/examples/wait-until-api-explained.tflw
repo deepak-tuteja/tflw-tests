@@ -8,21 +8,29 @@ before
   expect status equals 200
   capture body[0].id as categoryId
 
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
 @examples @waituntilapi
-test "wait until api polls a real async transition to completion" as admin
+test "wait until api polls a real async transition to completion"
   api POST /products body { name: unique("Wait Widget"), price: 5, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body.id as productId
 
   api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body.id as orderId
 
   api POST /orders/{orderId}/fulfill
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 202
   capture body.jobId as jobId
 
   # A one-shot `expect body.status equals "completed"` right here would very likely fail — the
   # job hasn't finished yet. `wait until api` re-polls until it has (or the wait budget runs out).
   wait until api GET /jobs/{jobId}
+    header "Authorization" is "Bearer {adminToken}"
     expect body.status equals "completed"

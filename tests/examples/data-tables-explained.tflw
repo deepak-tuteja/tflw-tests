@@ -7,14 +7,19 @@ before
   expect status equals 200
   capture body[0].id as categoryId
 
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
 @examples @datatables
 with each
   | label     | price |
   | "Table A" | 5     |
   | "Table B" | 15    |
   | "Table C" | 45    |
-test "creates {label} at price {price}" as admin
+test "creates {label} at price {price}"
   api POST /products body { name: unique("{label}"), price: {price}, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   # The just-created response echoes back exactly the string form sent (no DB round-trip
   # normalizing it to two decimals yet — see response-subjects-explained.tflw for a GET against

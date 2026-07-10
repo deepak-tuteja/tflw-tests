@@ -1,16 +1,22 @@
 # http-maturity.tflw — plan_v2.md Cluster 3: ETag/If-Match optimistic concurrency, Idempotency-Key
 # on order creation, genuine 405s for verbs a resource doesn't support, a genuine 409 for a
-# reference conflict, and content negotiation (406/415). All `as admin` unless a specific identity
-# matters to the case (the cross-user Idempotency-Key conflict, which needs two distinct users).
+# reference conflict, and content negotiation (406/415). A per-test fresh admin login (M14)
+# unless a specific identity matters to the case (the cross-user Idempotency-Key conflict, which
+# needs two distinct users).
 
 before
   api GET /categories
   expect status equals 200
   capture body[0].id as categoryId
 
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
 @httpMaturity @etag
-test "product ETag: an unchanged read repeats it, and a matching If-None-Match yields 304" as admin
+test "product ETag: an unchanged read repeats it, and a matching If-None-Match yields 304"
   api POST /products body { name: unique("ETag Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body.id as id
   capture header "etag" as etag1
@@ -24,34 +30,40 @@ test "product ETag: an unchanged read repeats it, and a matching If-None-Match y
   expect status equals 304
 
 @httpMaturity @etag
-test "product If-Match: a stale ETag is rejected with 412, a fresh one succeeds" as admin
+test "product If-Match: a stale ETag is rejected with 412, a fresh one succeeds"
   api POST /products body { name: unique("Concurrency Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body.id as id
   capture header "etag" as etag
 
   api PATCH /products/{id} body { price: 99 }
+    header "Authorization" is "Bearer {adminToken}"
     header "If-Match" is "{etag}"
   expect status equals 200
   capture header "etag" as etag2
 
   api PATCH /products/{id} body { price: 5 }
+    header "Authorization" is "Bearer {adminToken}"
     header "If-Match" is "{etag}"
   expect status equals 412
   expect body matches subset { type: "about:blank", title: "Precondition Failed", status: 412 }
 
   api PATCH /products/{id} body { price: 7 }
+    header "Authorization" is "Bearer {adminToken}"
     header "If-Match" is "{etag2}"
   expect status equals 200
   expect body.price equals "7"
 
 @httpMaturity @statusVariety
-test "a full-replace PUT on a product is a genuine 405, not a 404" as admin
+test "a full-replace PUT on a product is a genuine 405, not a 404"
   api POST /products body { name: unique("Immutable-shape Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body.id as id
 
   api PUT /products/{id} body { name: "Replaced", price: 1, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 405
   expect body matches subset { type: "about:blank", title: "Method Not Allowed", status: 405 }
 
@@ -67,33 +79,39 @@ test "mutating a category returns 405 — categories are read-only in this API"
   expect status equals 405
 
 @httpMaturity @statusVariety
-test "deleting a product still referenced by an order returns 409, not a stack trace" as admin
+test "deleting a product still referenced by an order returns 409, not a stack trace"
   api POST /products body { name: unique("Referenced Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body.id as productId
 
   api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
 
   api DELETE /products/{productId}
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 409
   expect body matches subset { type: "about:blank", title: "Conflict", status: 409 }
   expect body.detail contains "referenced"
 
 @httpMaturity @idempotency
-test "Idempotency-Key: repeating the same key returns the original order, not a duplicate" as admin
+test "Idempotency-Key: repeating the same key returns the original order, not a duplicate"
   api POST /products body { name: unique("Idempotent Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body.id as productId
 
   let key = unique("order-key")
 
   api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+    header "Authorization" is "Bearer {adminToken}"
     header "Idempotency-Key" is "{key}"
   expect status equals 201
   capture body.id as orderId
 
   api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+    header "Authorization" is "Bearer {adminToken}"
     header "Idempotency-Key" is "{key}"
   expect status equals 200
   expect body.id equals "{orderId}"

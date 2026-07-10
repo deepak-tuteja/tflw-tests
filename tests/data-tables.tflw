@@ -8,19 +8,25 @@ before
   expect status equals 200
   capture body[0].id as categoryId
 
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
 @crud @tables
 with each
   | name        | price | stock |
   | "Table Pen" | 1.5   | 20    |
   | "Table Mug" | 6     | 15    |
-test "creates {name} via an inline data table" as admin
+test "creates {name} via an inline data table"
   api POST /products body { name: {name}, price: {price}, stock: {stock}, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   expect body.stock equals {stock}
 
 @crud @tables
 with each from "./data/products.json"
-test "creates {name} via a file-backed data table" as admin
+test "creates {name} via a file-backed data table"
   api POST /products body { name: {name}, price: {price}, stock: {stock}, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   expect body.name equals "{name}"

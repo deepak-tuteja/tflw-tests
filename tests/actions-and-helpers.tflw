@@ -9,13 +9,18 @@ before
   expect status equals 200
   capture body[0].id as categoryId
 
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
 @crud @actions
-test "action + JS escape hatch: create, receipt, delete" as admin
+test "action + JS escape hatch: create, receipt, delete"
   let productName = unique("Action Widget")
-  let productId = create product(productName, 22.5, 10, categoryId)
+  let productId = create product(productName, 22.5, 10, categoryId, adminToken)
 
   let receipt = make receipt(productId, 22.5)
 
   api DELETE /products/{productId}
+    header "Authorization" is "Bearer {adminToken}"
     header "X-Receipt" is "{receipt}"
   expect status equals 204

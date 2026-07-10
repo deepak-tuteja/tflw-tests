@@ -1,10 +1,11 @@
-# Shared action (P#17): creates a product under the calling test's own auth (its session headers
-# or manually-set headers both apply, since the action's steps splice into the same test), gives
-# back its id. Actions get their own scope, no closures over the caller (SPEC §8) — `categoryId`
-# is an explicit parameter, not implicit scope.
+# Shared action (P#17): creates a product using an explicitly-passed bearer token — no closures
+# over the caller (SPEC §8), so an admin token is a parameter, not implicit scope from a session
+# (M14: callers pass a per-test fresh admin token rather than relying on the `admin` session's
+# auto-applied header). Gives back the new product's id.
 
-action create product(name, price, stock, categoryId)
+action create product(name, price, stock, categoryId, token)
   api POST /products body { name: {name}, price: {price}, stock: {stock}, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {token}"
   expect status equals 201
   capture body.id as id
   give id

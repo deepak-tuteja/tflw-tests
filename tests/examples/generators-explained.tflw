@@ -7,10 +7,15 @@ before
   expect status equals 200
   capture body[0].id as categoryId
 
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
 @examples @generators
-test "unique(\"prefix\") and unique email — collision-safe across the whole run" as admin
+test "unique(\"prefix\") and unique email — collision-safe across the whole run"
   let name = unique("Gen Widget")
   api POST /products body { name: {name}, price: 5, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   expect body.name equals "{name}"
 
@@ -20,7 +25,7 @@ test "unique(\"prefix\") and unique email — collision-safe across the whole ru
   expect body.accessToken matches "^ey"
 
 @examples @generators
-test "random number/decimal/string/of/like/date — value-shaped, collisions allowed" as admin
+test "random number/decimal/string/of/like/date — value-shaped, collisions allowed"
   let qty = random number 1 to 10
   let price = random decimal 5 to 99.9
   let sku = random like "SKU-####-??"
@@ -28,5 +33,6 @@ test "random number/decimal/string/of/like/date — value-shaped, collisions all
   let tag = random string 8
 
   api POST /products body { name: unique("Random {tag}"), price: {price}, stock: {qty}, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   expect body.stock equals {qty}

@@ -7,6 +7,10 @@ before
   expect status equals 200
   capture body[0].id as categoryId
 
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
 @examples @matchers
 test "equals — exact value, any type"
   api GET /health
@@ -41,8 +45,9 @@ test "not — negates any matcher"
   expect status not equals 500
 
 @examples @matchers
-test "check is a soft twin of expect — it records a failure and keeps running" as admin
+test "check is a soft twin of expect — it records a failure and keeps running"
   api POST /products body { name: unique("Matcher Widget"), price: 5, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   # Both of these run regardless of whether the first one passes — a hard `expect` here would
   # abort the test the instant the first one failed, hiding whether the second field was also

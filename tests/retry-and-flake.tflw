@@ -8,7 +8,10 @@
 # jobs.tflw, not a separate order-workflow.tflw.)
 
 @flaky
-test "flaky-widget succeeds after retrying" as admin retry 2
+# `as admin` was never actually needed — flaky-widget requires no auth at all (see
+# flaky-widget.controller.ts, no guards) — dropped as part of M14's cleanup rather than
+# converted to an inline login nothing here uses.
+test "flaky-widget succeeds after retrying" retry 2
   let key = random string 8
   api POST /flaky-widget body { key: {key}, name: "Flaky Thing" }
   expect status equals 201
