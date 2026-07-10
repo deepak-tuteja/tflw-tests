@@ -2,6 +2,11 @@
 # named sequence of steps (usually a login) that runs once per run per worker and is cached; a
 # test opts in with `as <session-name>` and starts with the session's declared headers/cookies
 # already applied. tflw.config (this repo's) defines two: `admin` (bearer) and `shopper` (cookie).
+#
+# `as admin, shopper` (decision 96, closes TFLW-GAPS.md gap #7) opts into *both* at once — every
+# opted-in session's headers/cookies merge into the test's starting state, later-listed session
+# winning any header/cookie-name conflict against an earlier one. See interleaved-sessions.tflw
+# for the realistic version of this (a real cross-identity workflow); this file keeps it minimal.
 
 @examples @sessions
 test "opting into `as admin` starts every api step with the admin session's bearer header already applied" as admin
@@ -20,3 +25,18 @@ test "opting into `as shopper` starts with the cookie jar already carrying the s
 test "a test with no `as <session>` clause is anonymous — no auth applied at all"
   api GET /orders/all
   expect status equals 401
+
+@examples @sessions
+test "as admin, shopper opts into both at once — both sessions' contributions land on this test" as admin, shopper
+  # admin's bearer header applies with no override, exactly as `as admin` alone would.
+  api GET /orders/all
+  expect status equals 200
+
+  # apiV2's guard checks a bearer header before a cookie, so with both sessions merged onto every
+  # step by default, admin's bearer would otherwise always win — an explicit per-step `header
+  # "Authorization" is ""` clears it just for this one request, letting the guard fall through to
+  # shopper's cookie (per-step headers are the highest-precedence layer, SPEC §3.3).
+  api GET /auth/profile
+    header "Authorization" is ""
+  expect status equals 200
+  expect body.role equals "user"
