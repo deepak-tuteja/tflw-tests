@@ -35,7 +35,7 @@ before
   expect status equals 201
   capture body.id as productA
 
-@large @jsonpath
+@large @jsonpath @orderOps
 test "a 61-item order round-trips correctly at real volume, not toy volume"
   api POST /orders body from "./payloads/large-order.json"
     header "Authorization" is "Bearer {userAToken}"

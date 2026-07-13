@@ -4,7 +4,10 @@
 # cached `admin` session — see PROGRESS.md M14 for why); this file exercises the auth endpoints
 # themselves anyway, so an inline login was always the more natural fit here.
 
-@auth
+use "./helpers/concurrent-register.ts"
+use "./helpers/concurrent-refresh.ts"
+
+@auth @identityOps @smoke
 test "registering a new user returns a working bearer pair"
   api POST /auth/register body { name: unique("Auth User"), email: unique email, password: "reg-Pass-123" }
   expect status equals 201
@@ -15,17 +18,17 @@ test "registering a new user returns a working bearer pair"
   expect status equals 200
   expect body.role equals "user"
 
-@auth
+@auth @identityOps
 test "logging in with the wrong password is rejected"
   api POST /auth/login body { email: env(ADMIN_EMAIL), password: "definitely-wrong" }
   expect status equals 401
 
-@auth
+@auth @identityOps
 test "accessing profile without a token is rejected"
   api GET /auth/profile
   expect status equals 401
 
-@auth @authz
+@auth @authz @identityOps
 test "a non-admin bearer cannot list all orders"
   api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
   expect status equals 200
@@ -35,7 +38,7 @@ test "a non-admin bearer cannot list all orders"
     header "Authorization" is "Bearer {token}"
   expect status equals 403
 
-@auth @authz
+@auth @authz @identityOps
 test "an admin bearer can list all orders"
   api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
   expect status equals 200
@@ -45,7 +48,7 @@ test "an admin bearer can list all orders"
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 200
 
-@auth
+@auth @identityOps
 test "refresh mints a new access token and rotates the refresh token, retiring the old one"
   api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
   expect status equals 200
@@ -62,7 +65,7 @@ test "refresh mints a new access token and rotates the refresh token, retiring t
   api POST /auth/refresh body { refreshToken: "{oldRefresh}" }
   expect status equals 401
 
-@auth
+@auth @identityOps
 test "logout revokes the refresh token"
   api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
   expect status equals 200
@@ -73,3 +76,53 @@ test "logout revokes the refresh token"
 
   api POST /auth/refresh body { refreshToken: "{refreshToken}" }
   expect status equals 401
+
+@auth @crud @identityOps
+test "registering or logging in with a malformed body is a clean 422"
+  api POST /auth/register body { name: unique("Bad Reg"), email: unique email, password: 12345678 }
+  expect status equals 422
+  expect any body.errors.field equals "password"
+
+  api POST /auth/login body { email: 12345, password: "whatever" }
+  expect status equals 422
+  expect any body.errors.field equals "email"
+
+@auth @crud @identityOps
+test "registering or logging in with a missing required field is a clean 422"
+  api POST /auth/register body { email: unique email, password: "reg-Pass-123" }
+  expect status equals 422
+  expect any body.errors.field equals "name"
+
+  api POST /auth/login body { password: "whatever" }
+  expect status equals 422
+  expect any body.errors.field equals "email"
+
+@auth @identityOps
+test "refreshing with a malformed token string is a clean 401, not a stack trace"
+  api POST /auth/refresh body { refreshToken: "not-a-real-jwt" }
+  expect status equals 401
+
+  # No @IsNotEmpty/@MinLength on RefreshDto — an empty string passes DTO validation and reaches
+  # token verification, which correctly rejects it the same way as any other invalid token.
+  api POST /auth/refresh body { refreshToken: "" }
+  expect status equals 401
+
+@auth @regression @identityOps
+test "5 concurrent registrations for the same email produce exactly 1 success, never a 500"
+  let email = unique email
+
+  # The call itself is the assertion — throws unless exactly 1 of the 5 concurrent requests
+  # actually registered the email and the other 4 got a clean 409 (previously they hit an
+  # uncaught unique-violation and surfaced as a raw 500).
+  let proof = assert concurrent register(email, 5)
+
+@auth @regression @identityOps
+test "4 concurrent refreshes of the same token produce exactly 1 winner, never two valid sessions"
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.refreshToken as refreshToken
+
+  # The call itself is the assertion — throws unless exactly 1 of the 4 concurrent refresh
+  # requests actually rotated the token (previously a separate assertLive+revoke pair let more
+  # than one concurrent request pass the liveness check before either revoked it).
+  let proof = assert concurrent refresh(refreshToken, 4)

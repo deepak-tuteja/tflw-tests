@@ -1,4 +1,4 @@
-import { Controller, Get, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { JobsService } from './jobs.service';
 import { AnyAuthGuard } from '../auth/guards/any-auth.guard';
@@ -12,7 +12,7 @@ export class JobsController {
   constructor(private readonly jobs: JobsService) {}
 
   @Get(':id')
-  findOne(@Param('id') id: string, @CurrentUser() user: AuthedUser) {
+  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthedUser) {
     return this.jobs.findOneScoped(id, user);
   }
 }

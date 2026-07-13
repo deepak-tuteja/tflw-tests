@@ -15,13 +15,24 @@
 # precedence chain), so the guard falls through to the cookie. Confirmed empirically via curl
 # before trusting it here: the same request with a real bearer *and* a cookie authenticates as the
 # bearer's identity; with an *empty* bearer and the same cookie, it authenticates as the cookie's.
+#
+# The second test below (M18/plan_v2.md Part J) is the regression lock-in for M14's fix: M14's
+# actual mitigation was removing ordinary tests' *exposure* to the cached `admin` session's 5s
+# TTL (JWT_ACCESS_TTL) by moving them to per-test inline logins, not a code change to the TTL
+# itself — so nothing in the suite actually exercised the cliff M14 was protecting against. This
+# file is the last consumer of real `as admin`/`as admin, shopper` session sugar in alphabetical
+# run order (the only other one, `examples/sessions-explained.tflw`, sorts first), so it's the one
+# safe place to deliberately hold the session past its TTL without staling it out from under any
+# later test.
+
+use "./helpers/wait-seconds.ts"
 
 before
   api GET /categories
   expect status equals 200
   capture body[0].id as categoryId
 
-@sessions @interleave
+@sessions @interleave @regression @identityOps
 test "admin (bearer) and shopper (cookie) alternate within one test" as admin, shopper
   # Cleared bearer -> falls through to shopper's cookie.
   api GET /auth/profile
@@ -46,3 +57,17 @@ test "admin (bearer) and shopper (cookie) alternate within one test" as admin, s
   api GET /orders/{orderId}
   expect status equals 200
   expect body.status equals "pending"
+
+@sessions @regression @identityOps
+test "a cached admin session held past its 5s TTL genuinely 401s — the reason M14 moved ordinary tests off session sugar" as admin
+  # Fresh (or still-fresh-enough) right after the session's own login step.
+  api GET /orders/all
+  expect status equals 200
+
+  let waited = wait seconds(6)
+
+  # No per-step override — the merged bearer applies as normal, now stale. This is the exact
+  # trap M14's mitigation (per-test fresh inline logins everywhere but session-demo files) exists
+  # to avoid; this file is the one place in the suite expected to hit it, on purpose.
+  api GET /orders/all
+  expect status equals 401

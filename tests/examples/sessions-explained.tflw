@@ -26,7 +26,7 @@ test "a test with no `as <session>` clause is anonymous — no auth applied at a
   api GET /orders/all
   expect status equals 401
 
-@examples @sessions
+@examples @sessions @regression
 test "as admin, shopper opts into both at once — both sessions' contributions land on this test" as admin, shopper
   # admin's bearer header applies with no override, exactly as `as admin` alone would.
   api GET /orders/all

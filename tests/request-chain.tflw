@@ -25,7 +25,7 @@ before
   expect status equals 200
   capture body.accessToken as userAToken
 
-@chain @jsonpath
+@chain @jsonpath @orderOps
 test "an 8-hop chain threads real response data forward through all four body-interpolation forms"
   # Hop 1-2: category -> two distinct products, both fed forward into every later hop.
   api POST /products body { name: unique("Chain Product A"), price: 9.99, stock: 50, categoryId: {categoryId} }

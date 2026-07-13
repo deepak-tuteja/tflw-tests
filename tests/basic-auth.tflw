@@ -7,7 +7,7 @@
 
 use "./helpers/basic-auth.ts"
 
-@basicauth
+@basicauth @identityOps
 test "HTTP Basic authenticates the same credentials bearer/session login already accept"
   let basicHeader = basic auth header(env(ADMIN_EMAIL), env(ADMIN_PW))
 
@@ -15,7 +15,7 @@ test "HTTP Basic authenticates the same credentials bearer/session login already
     header "Authorization" is "{basicHeader}"
   expect status equals 200
 
-@basicauth
+@basicauth @identityOps
 test "HTTP Basic with a wrong password is rejected just like a wrong bearer credential"
   let basicHeader = basic auth header(env(ADMIN_EMAIL), "not-the-real-password")
 
@@ -23,7 +23,7 @@ test "HTTP Basic with a wrong password is rejected just like a wrong bearer cred
     header "Authorization" is "{basicHeader}"
   expect status equals 401
 
-@basicauth @authz
+@basicauth @authz @identityOps
 test "HTTP Basic still respects RBAC — a non-admin Basic credential is forbidden, not waved through"
   let basicHeader = basic auth header(env(USER_A_EMAIL), env(USER_A_PW))
 

@@ -21,7 +21,7 @@ before
   expect status equals 200
   capture body.accessToken as adminToken
 
-@query @crud
+@query @crud @catalogOps
 test "filtering, sorting, and full-text search combine, scoped to this test's own facet"
   let tag = unique("catalog-tag")
   api POST /products body { name: "{tag} Cheap Item", price: 5, stock: 1, categoryId: {categoryId} }
@@ -48,12 +48,35 @@ test "filtering, sorting, and full-text search combine, scoped to this test's ow
   expect status equals 200
   expect body has count 3
 
-@query @crud
+@query @crud @regression @catalogOps
+test "omitting sort defaults to name ascending, not database insertion order"
+  let tag = unique("catalog-defaultsort-tag")
+  api POST /products body { name: "{tag} Zeta Item", price: 5, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  api POST /products body { name: "{tag} Alpha Item", price: 15, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  api POST /products body { name: "{tag} Mid Item", price: 30, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+
+  # Inserted Zeta, Alpha, Mid (in that order) — a name-ascending default sort must still come
+  # back Alpha, Mid, Zeta, not the insertion order above (applySort in products.service.ts
+  # defaults to `product.name ASC` when `sort` is omitted entirely).
+  api GET /products?q={tag}
+  expect status equals 200
+  expect body has count 3
+  expect body[0].name equals "{tag} Alpha Item"
+  expect body[1].name equals "{tag} Mid Item"
+  expect body[2].name equals "{tag} Zeta Item"
+
+@query @crud @catalogOps
 test "sorting by an unrecognized field is a 400, not a silent no-op"
   api GET /products?sort=totallyNotAField
   expect status equals 400
 
-@query @pagination
+@query @pagination @catalogOps
 test "offset pagination reports exact totals for this test's own facet"
   let tag = unique("page-tag")
   api POST /products body { name: "{tag} 1", price: 10, stock: 1, categoryId: {categoryId} }
@@ -84,7 +107,7 @@ test "offset pagination reports exact totals for this test's own facet"
   expect status equals 200
   expect body.data has count 1
 
-@query @pagination
+@query @pagination @catalogOps
 test "walking every page (via the JS escape hatch) sees every product exactly once"
   let tag = unique("walk-tag")
   api POST /products body { name: "{tag} A", price: 10, stock: 1, categoryId: {categoryId} }

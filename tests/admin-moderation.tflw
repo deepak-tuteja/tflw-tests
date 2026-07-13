@@ -20,13 +20,13 @@ before
   expect status equals 200
   capture body.accessToken as userAToken
 
-@moderation @retry
+@moderation @retry @adminOps
 test "an admin retries a flaky upstream dependency check before starting moderation work" retry 2
   let key = random string 8
   api POST /flaky-widget body { key: {key} }
   expect status equals 201
 
-@moderation @datatables
+@moderation @datatables @adminOps
 with each
   | label            | price | stock |
   | "Mod Catalog A"   | 9     | 20    |
@@ -38,7 +38,7 @@ test "admin adds {label} to the catalog at price {price}, stock {stock}"
   expect status equals 201
   expect body.stock equals {stock}
 
-@moderation @authz
+@moderation @authz @adminOps
 test "the same catalog-moderation action is forbidden for a non-admin identity"
   api POST /products body { name: unique("Should Be Forbidden"), price: 9, stock: 1, categoryId: {categoryId} }
     header "Authorization" is "Bearer {userAToken}"
@@ -48,7 +48,7 @@ test "the same catalog-moderation action is forbidden for a non-admin identity"
     header "Authorization" is "Bearer {userAToken}"
   expect status equals 403
 
-@moderation @batch
+@moderation @batch @adminOps
 test "a bulk catalog import batch reports mixed success without failing the whole request"
   let goodName = unique("Bulk Import Good")
   api POST /products/batch body {

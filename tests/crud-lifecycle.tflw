@@ -11,7 +11,7 @@ before
   expect status equals 200
   capture body.accessToken as adminToken
 
-@crud
+@crud @catalogOps @smoke
 test "full product CRUD lifecycle"
   api POST /products body { name: unique("Lifecycle Widget"), price: 15, stock: 10, categoryId: {categoryId} }
     header "Authorization" is "Bearer {adminToken}"
@@ -36,12 +36,12 @@ test "full product CRUD lifecycle"
   expect status equals 404
   expect body matches subset { type: "about:blank", title: "Not Found", status: 404 }
 
-@crud
+@crud @catalogOps
 test "creating a product without a token is rejected"
   api POST /products body { name: "Sneaky Widget", price: 1, stock: 1, categoryId: {categoryId} }
   expect status equals 401
 
-@crud
+@crud @catalogOps
 test "a non-admin bearer cannot create a product"
   api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
   expect status equals 200
@@ -51,7 +51,7 @@ test "a non-admin bearer cannot create a product"
     header "Authorization" is "Bearer {token}"
   expect status equals 403
 
-@crud
+@crud @catalogOps
 test "creating a product with invalid fields returns RFC7807 field-level detail"
   api POST /products body { name: "", price: -5, stock: 1, categoryId: "not-a-uuid" }
     header "Authorization" is "Bearer {adminToken}"
@@ -61,14 +61,55 @@ test "creating a product with invalid fields returns RFC7807 field-level detail"
   expect any body.errors.field equals "price"
   expect any body.errors.field equals "categoryId"
 
-@crud
+@crud @catalogOps
 test "reading a nonexistent product returns a well-formed 404, not a stack trace"
   api GET /products/00000000-0000-0000-0000-000000000000
   expect status equals 404
   expect body.status equals 404
   expect body.detail contains "not found"
 
-@crud
+@crud @regression @catalogOps
+test "a price beyond the numeric(10,2) column is a clean 422, not a 500"
+  api POST /products body { name: unique("Overflow Widget"), price: 999999999999, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 422
+  expect any body.errors.field equals "price"
+
+@crud @regression @catalogOps
+test "a whitespace-only name is rejected, not silently accepted as blank"
+  api POST /products body { name: "   ", price: 5, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 422
+  expect any body.errors.field equals "name"
+
+@crud @regression @catalogOps
+test "a malformed (non-UUID) product id in the path is a clean 400, not a 500"
+  api GET /products/not-a-uuid
+  expect status equals 400
+
+  api PATCH /products/not-a-uuid body { price: 20 }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 400
+
+  api DELETE /products/not-a-uuid
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 400
+
+@crud @catalogOps
+test "creating a product against a nonexistent category is a clean 404"
+  api POST /products body { name: unique("Orphan Widget"), price: 5, stock: 1, categoryId: "00000000-0000-0000-0000-000000000000" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 404
+  expect body.detail contains "not found"
+
+@crud @catalogOps
+test "updating a nonexistent product is a clean 404, not a stack trace"
+  api PATCH /products/00000000-0000-0000-0000-000000000000 body { price: 20 }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 404
+  expect body.detail contains "not found"
+
+@crud @catalogOps
 test "creates a product with random generated fields"
   let productName = unique("Random Widget")
   let productPrice = random decimal 5 to 50

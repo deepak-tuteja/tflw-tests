@@ -7,6 +7,7 @@ import {
   HttpCode,
   MethodNotAllowedException,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Put,
@@ -46,7 +47,7 @@ export class ProductsController {
   @Get(':id')
   @ApiOkResponse({ type: ProductResponseDto })
   async findOne(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Headers('if-none-match') ifNoneMatch: string | undefined,
     @Res({ passthrough: true }) res: Response,
   ) {
@@ -94,7 +95,7 @@ export class ProductsController {
   @UseGuards(AnyAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   async update(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateProductDto,
     @Headers('if-match') ifMatch: string | undefined,
     @Res({ passthrough: true }) res: Response,
@@ -111,7 +112,7 @@ export class ProductsController {
   @UseGuards(AnyAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @UseInterceptors(FileInterceptor('image'))
-  attachImage(@Param('id') id: string, @UploadedFile() file: Express.Multer.File) {
+  attachImage(@Param('id', ParseUUIDPipe) id: string, @UploadedFile() file: Express.Multer.File) {
     return this.products.attachImage(id, file);
   }
 
@@ -119,7 +120,7 @@ export class ProductsController {
   @HttpCode(204)
   @UseGuards(AnyAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  async remove(@Param('id') id: string) {
+  async remove(@Param('id', ParseUUIDPipe) id: string) {
     await this.products.remove(id);
   }
 }

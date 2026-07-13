@@ -11,7 +11,7 @@
 
 use "./helpers/wait-seconds.ts"
 
-@gaps @tokenexpiry
+@gaps @tokenexpiry @identityOps
 test "an access token genuinely expires at its configured TTL, and refresh recovers"
   api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
   expect status equals 200

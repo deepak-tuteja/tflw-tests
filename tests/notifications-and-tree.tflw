@@ -15,7 +15,12 @@ before
   expect status equals 200
   capture body.accessToken as adminToken
 
-@notifications @tree
+@notifications @regression @adminOps
+test "GET /notifications without auth is rejected"
+  api GET /notifications
+  expect status equals 401
+
+@notifications @tree @regression @adminOps
 test "the category tree nests real subcategories, walked via nested captures"
   api GET /categories/tree
   expect status equals 200
@@ -35,7 +40,7 @@ test "the category tree nests real subcategories, walked via nested captures"
   expect status equals 200
   expect any body matches subset { id: "{headphonesId}", name: "Headphones" }
 
-@notifications @polymorphic
+@notifications @polymorphic @regression @adminOps
 test "order fulfillment, a price drop, and a review reply each produce a distinct notification shape"
   let shopperEmail = unique email
   api POST /auth/register body { name: "Notif Shopper", email: {shopperEmail}, password: "notif-Pass-123" }
@@ -89,3 +94,73 @@ test "order fulfillment, a price drop, and a review reply each produce a distinc
   expect any body matches subset { type: "review_reply", reviewId: "{reviewId}", replyText: "Thanks for the feedback!" }
   expect any body matches subset { type: "price_drop", productId: "{productId}", newPrice: "25" }
   expect all body.id matches "^[0-9a-f-]{36}$"
+
+@notifications @regression @adminOps
+test "GET /notifications returns newest-first"
+  let shopperEmail = unique email
+  api POST /auth/register body { name: "Notif Order Shopper", email: {shopperEmail}, password: "notif-Pass-123" }
+  expect status equals 201
+  capture body.accessToken as shopperToken
+
+  api POST /products body { name: unique("Notif Order Widget"), price: 15, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 201
+  capture body.id as orderId
+
+  api POST /orders/{orderId}/fulfill
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 202
+  capture body.jobId as jobId
+
+  wait until api GET /jobs/{jobId}
+    header "Authorization" is "Bearer {adminToken}"
+    expect body.status equals "completed"
+
+  # Fulfillment fires two order_status_changed notifications 150ms apart (processing->ready, then
+  # ready->fulfilled — JobsService.continueFulfillment's real STAGE_DELAY_MS) — a genuine, not
+  # manufactured, time gap to prove `GET /notifications` orders newest-first, not merely returns
+  # the right shapes (the polymorphic test above only checks membership via unordered `any`).
+  api GET /notifications
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 200
+  expect body has count 2
+  expect body[0] matches subset { type: "order_status_changed", newStatus: "fulfilled" }
+  expect body[1] matches subset { type: "order_status_changed", newStatus: "ready" }
+
+@notifications @regression @adminOps
+test "raising a product's price does not fire a spurious price_drop notification"
+  let shopperEmail = unique email
+  api POST /auth/register body { name: "Price Steady Shopper", email: {shopperEmail}, password: "notif-Pass-123" }
+  expect status equals 201
+  capture body.accessToken as shopperToken
+
+  api POST /products body { name: unique("Price Steady Widget"), price: 30, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /products/{productId}/reviews body { rating: 5, comment: "great" }
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 201
+
+  # Baseline: reviewing alone fires no notification of its own (only a reply would).
+  api GET /notifications
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 200
+  expect body has count 0
+
+  # Raise the price, don't drop it — notifyPriceDrop only fires on a strict decrease
+  # (products.service.ts: `Number(saved.price) < Number(previousPrice)`).
+  api PATCH /products/{productId} body { price: 45 }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+
+  api GET /notifications
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 200
+  expect body has count 0

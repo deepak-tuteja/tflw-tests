@@ -29,7 +29,7 @@ before
   expect status equals 200
   capture body.accessToken as userBToken
 
-@crud @orderitem
+@crud @orderitem @orderOps
 test "patching one item's quantity updates just that item, verified via matches subset"
   api POST /orders body { items: [{ productId: {productId}, quantity: 2 }] }
     header "Authorization" is "Bearer {userAToken}"
@@ -47,7 +47,7 @@ test "patching one item's quantity updates just that item, verified via matches 
   expect status equals 200
   expect any body.quantity equals 9
 
-@crud @orderitem @authz
+@crud @orderitem @authz @orderOps
 test "patching another user's order item is scoped exactly like the parent order"
   api POST /orders body { items: [{ productId: {productId}, quantity: 2 }] }
     header "Authorization" is "Bearer {userAToken}"
@@ -59,7 +59,7 @@ test "patching another user's order item is scoped exactly like the parent order
     header "Authorization" is "Bearer {userBToken}"
   expect status equals 403
 
-@crud @orderitem
+@crud @orderitem @orderOps
 test "patching a nonexistent item within a real order is a clean 404, not a stack trace"
   api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
     header "Authorization" is "Bearer {userAToken}"

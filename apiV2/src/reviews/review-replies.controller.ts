@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { ReviewsService } from './reviews.service';
 import { ReplyToReviewDto } from './dto/reply-to-review.dto';
@@ -21,7 +21,7 @@ export class ReviewRepliesController {
   @HttpCode(200)
   @UseGuards(AnyAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  reply(@Param('id') id: string, @Body() dto: ReplyToReviewDto) {
+  reply(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ReplyToReviewDto) {
     return this.reviews.reply(id, dto);
   }
 }

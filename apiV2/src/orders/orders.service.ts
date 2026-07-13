@@ -24,6 +24,16 @@ export interface CreateOrderResult {
   created: boolean;
 }
 
+// Order-insensitive multiset comparison by (productId, quantity) — used by replayOrConflict to
+// detect an Idempotency-Key reused with a genuinely different body (M19 finding).
+function sameItems(existing: OrderItem[], requested: OrderItemInputDto[]): boolean {
+  if (existing.length !== requested.length) return false;
+  const key = (productId: string, quantity: number) => `${productId}:${quantity}`;
+  const existingKeys = existing.map((item) => key(item.productId, item.quantity)).sort();
+  const requestedKeys = requested.map((item) => key(item.productId, item.quantity)).sort();
+  return existingKeys.every((k, i) => k === requestedKeys[i]);
+}
+
 @Injectable()
 export class OrdersService {
   constructor(
@@ -58,7 +68,10 @@ export class OrdersService {
     couponCode?: string,
   ): Promise<CreateOrderResult> {
     if (idempotencyKey) {
-      const replay = await this.findExistingByIdempotencyKey(idempotencyKey, userId);
+      // `items` passed here (unlike CartService.checkout's call below) so a genuine body-mismatch
+      // replay — the same key reused with different items — is caught rather than silently
+      // returning the original order for a request that never actually happened (M19 finding).
+      const replay = await this.findExistingByIdempotencyKey(idempotencyKey, userId, items);
       if (replay) return replay;
     }
 
@@ -71,7 +84,7 @@ export class OrdersService {
       if (idempotencyKey && isUniqueViolation(err)) {
         // Lost the race to a concurrent request using the same key — replay its result instead
         // of surfacing the constraint violation.
-        const replay = await this.findExistingByIdempotencyKey(idempotencyKey, userId);
+        const replay = await this.findExistingByIdempotencyKey(idempotencyKey, userId, items);
         if (replay) return replay;
       }
       throw err;
@@ -82,13 +95,17 @@ export class OrdersService {
   // an idempotent order — CartService.checkout, specifically — can check for a replay *before*
   // doing anything that would only be valid for a genuinely new order (like requiring a non-empty
   // cart: a checkout's cart is already cleared by the original request by the time a legitimate
-  // replay of the same key arrives).
+  // replay of the same key arrives). `expectedItems` is deliberately optional and omitted by
+  // CartService: a legitimate cart-checkout replay's *current* cart is expected to already be
+  // empty (cleared by the original request) or to have moved on entirely, so comparing it against
+  // the stored order would misfire on the normal case, not just the mismatched one.
   async findExistingByIdempotencyKey(
     idempotencyKey: string,
     userId: string,
+    expectedItems?: OrderItemInputDto[],
   ): Promise<CreateOrderResult | null> {
     const existing = await this.findByIdempotencyKey(idempotencyKey);
-    return existing ? this.replayOrConflict(existing, userId) : null;
+    return existing ? this.replayOrConflict(existing, userId, expectedItems) : null;
   }
 
   // Race-safe by construction, not by locking: the conditional `UPDATE ... WHERE stock >= :qty`
@@ -189,9 +206,21 @@ export class OrdersService {
     });
   }
 
-  private replayOrConflict(existing: Order, userId: string): CreateOrderResult {
+  private replayOrConflict(
+    existing: Order,
+    userId: string,
+    expectedItems?: OrderItemInputDto[],
+  ): CreateOrderResult {
     if (existing.userId !== userId) {
       throw new ConflictException('this Idempotency-Key was already used by another request');
+    }
+    // M19 finding: previously unchecked, so reusing a key with a genuinely different body
+    // silently replayed the *original* order with a 200 — indistinguishable from a legitimate
+    // replay, no error, no trace of the caller's actual (different) request ever having happened.
+    if (expectedItems && !sameItems(existing.items, expectedItems)) {
+      throw new ConflictException(
+        'this Idempotency-Key was already used with a different request body',
+      );
     }
     return { order: existing, created: false };
   }

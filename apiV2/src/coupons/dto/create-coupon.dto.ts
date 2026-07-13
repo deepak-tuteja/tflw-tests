@@ -12,6 +12,10 @@ export class CreateCouponDto {
   @IsEnum(CouponType)
   type: CouponType;
 
+  // The `type === percent` upper bound (100) is a cross-field rule — class-validator's
+  // `@ValidateIf` gates an entire property's validators, not individual ones, so it can't
+  // conditionally add @Max(100) on top of an unconditional @Min(0) here. Enforced in
+  // CouponsService.create instead (M19 finding).
   @ApiProperty()
   @IsNumber()
   @Min(0)

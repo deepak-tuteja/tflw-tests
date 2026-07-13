@@ -18,7 +18,7 @@ before
   expect status equals 200
   capture body.accessToken as adminToken
 
-@workflow
+@workflow @adminOps
 test "an order progresses through fulfillment via a real async job, polled to completion"
   api POST /products body { name: unique("Workflow Widget"), price: 10, stock: 5, categoryId: {categoryId} }
     header "Authorization" is "Bearer {adminToken}"
@@ -47,7 +47,7 @@ test "an order progresses through fulfillment via a real async job, polled to co
   expect status equals 200
   expect body.status equals "fulfilled"
 
-@workflow @authz
+@workflow @authz @adminOps
 test "only an admin can trigger fulfillment"
   api POST /products body { name: unique("Self-service Widget"), price: 10, stock: 5, categoryId: {categoryId} }
     header "Authorization" is "Bearer {adminToken}"
@@ -67,7 +67,7 @@ test "only an admin can trigger fulfillment"
     header "Authorization" is "Bearer {userAToken}"
   expect status equals 403
 
-@workflow @authz
+@workflow @authz @adminOps
 test "a job is scoped to its order's owner, just like the order itself"
   api POST /products body { name: unique("Scoped Widget"), price: 10, stock: 5, categoryId: {categoryId} }
     header "Authorization" is "Bearer {adminToken}"
@@ -104,7 +104,7 @@ test "a job is scoped to its order's owner, just like the order itself"
     header "Authorization" is "Bearer {userAToken}"
     expect body.status equals "completed"
 
-@workflow @statusVariety
+@workflow @statusVariety @adminOps
 test "fulfilling an order that isn't pending is a conflict, not a duplicate job"
   api POST /products body { name: unique("Already-fulfilling Widget"), price: 10, stock: 5, categoryId: {categoryId} }
     header "Authorization" is "Bearer {adminToken}"

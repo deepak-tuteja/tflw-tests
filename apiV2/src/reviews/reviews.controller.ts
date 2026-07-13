@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ApiTags } from '@nestjs/swagger';
 import { ReviewsService } from './reviews.service';
@@ -26,7 +26,7 @@ export class ReviewsController {
 
   @Get()
   async list(
-    @Param('productId') productId: string,
+    @Param('productId', ParseUUIDPipe) productId: string,
     @Query('cursor') cursor: string | undefined,
     @Query('limit') limitRaw: string | undefined,
     @Req() req: Request,
@@ -46,7 +46,7 @@ export class ReviewsController {
   @Post()
   @UseGuards(AnyAuthGuard, RateLimitGuard)
   create(
-    @Param('productId') productId: string,
+    @Param('productId', ParseUUIDPipe) productId: string,
     @CurrentUser() user: AuthedUser,
     @Body() dto: CreateReviewDto,
   ) {

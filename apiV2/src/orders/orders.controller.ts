@@ -4,6 +4,7 @@ import {
   Get,
   Headers,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Res,
@@ -55,14 +56,14 @@ export class OrdersController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @CurrentUser() user: AuthedUser) {
+  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthedUser) {
     return this.orders.findOneScoped(id, user);
   }
 
   // Nested sub-resource (plan_v2.md Part A) — same ownership scoping as the parent, just
   // projected down to the line items.
   @Get(':id/items')
-  async findItems(@Param('id') id: string, @CurrentUser() user: AuthedUser) {
+  async findItems(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthedUser) {
     const order = await this.orders.findOneScoped(id, user);
     return order.items;
   }
@@ -72,8 +73,8 @@ export class OrdersController {
   // (admin covered by findOneScoped's role check too).
   @Patch(':id/items/:itemId')
   updateItem(
-    @Param('id') id: string,
-    @Param('itemId') itemId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
     @Body() dto: UpdateOrderItemDto,
     @CurrentUser() user: AuthedUser,
   ) {
@@ -85,7 +86,7 @@ export class OrdersController {
   @Post(':id/fulfill')
   @Roles(UserRole.ADMIN)
   async fulfill(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthedUser,
     @Res({ passthrough: true }) res: Response,
   ) {

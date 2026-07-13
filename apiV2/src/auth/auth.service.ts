@@ -14,6 +14,7 @@ import { TokenRecordsService } from './token-records.service';
 import { parseDurationMs } from './ms';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { isUniqueViolation } from '../common/db-errors';
 
 export interface BearerTokenPair {
   accessToken: string;
@@ -38,14 +39,28 @@ export class AuthService {
       throw new ConflictException('email already registered');
     }
     const passwordHash = await bcrypt.hash(dto.password, 10);
-    const user = await this.users.save(
-      this.users.create({
-        name: dto.name,
-        email: dto.email,
-        passwordHash,
-        role: UserRole.USER,
-      }),
-    );
+    // The pre-check above is TOCTOU-racy: two concurrent registrations for the same email can
+    // both pass it before either INSERT commits. The DB's own unique(email) constraint is the
+    // real guard; without catching its violation here, the loser's raw QueryFailedError would
+    // fall through ProblemDetailsFilter as an opaque 500 instead of the same 409 the pre-check
+    // gives the (far more common) sequential case (M19 finding, found via a real 5-concurrent-
+    // registration curl repro).
+    let user: User;
+    try {
+      user = await this.users.save(
+        this.users.create({
+          name: dto.name,
+          email: dto.email,
+          passwordHash,
+          role: UserRole.USER,
+        }),
+      );
+    } catch (err) {
+      if (isUniqueViolation(err)) {
+        throw new ConflictException('email already registered');
+      }
+      throw err;
+    }
     return this.issueBearerPair(user);
   }
 
@@ -75,8 +90,7 @@ export class AuthService {
 
   async refresh(refreshToken: string): Promise<BearerTokenPair> {
     const decoded = await this.tokens.verify(refreshToken, 'refresh');
-    await this.tokenRecords.assertLive(decoded.jti!);
-    await this.tokenRecords.revoke(decoded.jti!);
+    await this.tokenRecords.claimForRotation(decoded.jti!);
 
     const user = await this.users.findOneOrFail({ where: { id: decoded.sub } });
     return this.issueBearerPair(user);

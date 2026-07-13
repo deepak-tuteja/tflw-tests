@@ -23,7 +23,7 @@ before
   expect status equals 200
   capture body.accessToken as adminToken
 
-@crud @quantifiers
+@crud @quantifiers @catalogOps
 test "quantifiers over one order's items"
   api POST /products body { name: unique("Quant Widget A"), price: 5, stock: 10, categoryId: {categoryId} }
     header "Authorization" is "Bearer {adminToken}"

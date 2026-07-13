@@ -29,7 +29,7 @@ before
   expect status equals 200
   capture body.accessToken as adminToken
 
-@shape
+@shape @adminOps
 test "asserting a full RFC7807 error shape in one structural statement"
   api POST /products body { name: "", price: -5, stock: 1, categoryId: "not-a-uuid" }
     header "Authorization" is "Bearer {adminToken}"
@@ -41,7 +41,7 @@ test "asserting a full RFC7807 error shape in one structural statement"
   # longer the only way.
   expect body matches subset { type: "about:blank", title: "Unprocessable Entity", status: 422 }
 
-@gaps @schema
+@gaps @schema @adminOps
 test "validating a response against its own documented OpenAPI schema needs a JS helper"
   api POST /products body { name: unique("Schema-checked Widget"), price: 12.5, stock: 3, categoryId: {categoryId} }
     header "Authorization" is "Bearer {adminToken}"

@@ -7,7 +7,7 @@
 
 use "./helpers/find-category.ts"
 
-@catalog @query @large
+@catalog @query @large @catalogOps
 test "full-text search over the bulk catalog returns an exact count at real volume"
   api GET /products?q=gadgetronic
   expect status equals 200
@@ -29,7 +29,7 @@ test "full-text search over the bulk catalog returns an exact count at real volu
   expect body[0].price equals "5.99"
   expect body[11].price equals "45.99"
 
-@catalog @query @large
+@catalog @query @large @catalogOps
 test "filtering by a bulk-only category returns an exact count at real volume"
   api GET /categories
   expect status equals 200

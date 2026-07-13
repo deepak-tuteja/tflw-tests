@@ -40,10 +40,24 @@ export class CartService {
     const cart = await this.getOrCreateCart(userId);
     const existing = await this.cartItems.findOne({ where: { cartId: cart.id, productId } });
     if (existing) {
-      existing.quantity += quantity;
-      return this.cartItems.save(existing);
+      // Atomic increment, not read-modify-write (M19 finding: 5 concurrent +1 requests against
+      // an existing line each read the same stale quantity and clobbered each other's write,
+      // losing 4 of 5 increments — the same lost-update class M15 already fixed for stock, cart
+      // quantity just never got the same treatment).
+      await this.cartItems.increment({ id: existing.id }, 'quantity', quantity);
+      return this.cartItems.findOneOrFail({ where: { id: existing.id } });
     }
-    return this.cartItems.save(this.cartItems.create({ cartId: cart.id, productId, quantity }));
+    try {
+      return await this.cartItems.save(this.cartItems.create({ cartId: cart.id, productId, quantity }));
+    } catch (err) {
+      if (isUniqueViolation(err)) {
+        // Lost a race to insert this cart's first row for this product — the winner's row is
+        // now `existing` from the concurrent request's perspective; fold this one into it too.
+        await this.cartItems.increment({ cartId: cart.id, productId }, 'quantity', quantity);
+        return this.cartItems.findOneOrFail({ where: { cartId: cart.id, productId } });
+      }
+      throw err;
+    }
   }
 
   async updateItem(userId: string, itemId: string, quantity: number): Promise<CartItem> {

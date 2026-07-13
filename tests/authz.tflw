@@ -33,7 +33,7 @@ before
   expect status equals 201
   capture body.id as productId
 
-@authz
+@authz @identityOps
 test "user B cannot read user A's order"
   api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
     header "Authorization" is "Bearer {userAToken}"
@@ -44,7 +44,7 @@ test "user B cannot read user A's order"
     header "Authorization" is "Bearer {userBToken}"
   expect status equals 403
 
-@authz
+@authz @identityOps
 test "user A can read her own order"
   api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
     header "Authorization" is "Bearer {userAToken}"
@@ -56,7 +56,7 @@ test "user A can read her own order"
   expect status equals 200
   expect body.status equals "pending"
 
-@authz
+@authz @identityOps
 test "an admin can read any user's order"
   api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
     header "Authorization" is "Bearer {userBToken}"
@@ -67,7 +67,7 @@ test "an admin can read any user's order"
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 200
 
-@authz
+@authz @identityOps
 test "user A only sees her own orders in her order list, never user B's"
   api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
     header "Authorization" is "Bearer {userBToken}"

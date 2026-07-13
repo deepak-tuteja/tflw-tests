@@ -86,13 +86,21 @@ export class ReviewsService {
     const review = await this.reviews.findOne({ where: { id } });
     if (!review) throw new NotFoundException('review not found');
 
+    // Replying again (e.g. to correct a typo) is allowed to silently overwrite `replyText` — but
+    // only the *first* reply notifies the author. Without this check, every edit re-fired a
+    // duplicate review_reply notification (M19 finding) with no way for the author to tell a real
+    // new reply from the admin just fixing a typo.
+    const isFirstReply = review.replyText === null;
+
     review.replyText = dto.replyText;
     const saved = await this.reviews.save(review);
 
-    await this.notifications.create(review.userId, NotificationType.REVIEW_REPLY, {
-      reviewId: review.id,
-      replyText: dto.replyText,
-    });
+    if (isFirstReply) {
+      await this.notifications.create(review.userId, NotificationType.REVIEW_REPLY, {
+        reviewId: review.id,
+        replyText: dto.replyText,
+      });
+    }
 
     return saved;
   }

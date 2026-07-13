@@ -13,7 +13,7 @@ before
   expect status equals 200
   capture body.accessToken as adminToken
 
-@journey @checkout
+@journey @checkout @orderOps @smoke
 test "a new shopper registers, browses, checks out idempotently, and watches fulfillment complete"
   # --- generators + registration ---
   let shopperName = unique("Journey Shopper")

@@ -10,7 +10,7 @@
 # automatic cookie jar (SPEC §3.3, P#33) tracks both cookies by name and sends them back as one
 # proper `Cookie` header on its own.
 
-@auth @cookiejar
+@auth @cookiejar @identityOps
 test "a dual Set-Cookie login no longer crashes replaying its cookies — both carry forward automatically"
   api POST /auth/session-login-full body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
   expect status equals 200
@@ -19,7 +19,7 @@ test "a dual Set-Cookie login no longer crashes replaying its cookies — both c
   expect status equals 200
   expect body.email equals env(USER_A_EMAIL)
 
-@auth @cookiejar
+@auth @cookiejar @identityOps
 test "session-refresh also works from the auto-tracked jar with no manual cookie replay"
   api POST /auth/session-login-full body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
   expect status equals 200

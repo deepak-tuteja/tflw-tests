@@ -6,6 +6,7 @@
 # can never collide across parallel files/workers.
 
 use "./helpers/sleep-and-retry.ts"
+use "./helpers/walk-review-cursor.ts"
 
 before
   api GET /categories
@@ -20,7 +21,7 @@ before
   expect status equals 200
   capture body.accessToken as userAToken
 
-@reviews @crud
+@reviews @crud @adminOps
 test "creating a review, then reading it back via the nested list"
   api POST /products body { name: unique("Reviewable Widget"), price: 10, stock: 5, categoryId: {categoryId} }
     header "Authorization" is "Bearer {adminToken}"
@@ -38,7 +39,7 @@ test "creating a review, then reading it back via the nested list"
   expect body.data[0].rating equals 5
   expect body.nextCursor equals null
 
-@reviews
+@reviews @adminOps
 test "reviewing the same product twice is a conflict, not a duplicate row"
   api POST /products body { name: unique("Double-reviewed Widget"), price: 10, stock: 5, categoryId: {categoryId} }
     header "Authorization" is "Bearer {adminToken}"
@@ -54,7 +55,7 @@ test "reviewing the same product twice is a conflict, not a duplicate row"
   expect status equals 409
   expect body.detail contains "already reviewed"
 
-@reviews
+@reviews @adminOps
 test "reviewing a product without auth is rejected"
   api POST /products body { name: unique("Guarded Widget"), price: 10, stock: 5, categoryId: {categoryId} }
     header "Authorization" is "Bearer {adminToken}"
@@ -64,7 +65,7 @@ test "reviewing a product without auth is rejected"
   api POST /products/{productId}/reviews body { rating: 3 }
   expect status equals 401
 
-@reviews @pagination
+@reviews @pagination @adminOps
 test "the nested reviews list is cursor-paginated with a Link header on the next page"
   api POST /products body { name: unique("Popular Widget"), price: 10, stock: 5, categoryId: {categoryId} }
     header "Authorization" is "Bearer {adminToken}"
@@ -98,7 +99,56 @@ test "the nested reviews list is cursor-paginated with a Link header on the next
   expect body.data has count 1
   expect body.nextCursor equals null
 
-@reviews @ratelimit
+@reviews @pagination @regression @adminOps
+test "the cursor walk never duplicates or drops a review at a page boundary"
+  api POST /products body { name: unique("Cursor Tie-break Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /auth/login body { email: env(USER_B_EMAIL), password: env(USER_B_PW) }
+  expect status equals 200
+  capture body.accessToken as userBToken
+
+  let shopperOneEmail = unique email
+  api POST /auth/register body { name: "Cursor Shopper One", email: {shopperOneEmail}, password: "cursor-Pass-123" }
+  expect status equals 201
+  capture body.accessToken as shopperOneToken
+
+  let shopperTwoEmail = unique email
+  api POST /auth/register body { name: "Cursor Shopper Two", email: {shopperTwoEmail}, password: "cursor-Pass-123" }
+  expect status equals 201
+  capture body.accessToken as shopperTwoToken
+
+  # 5 reviews, posted back-to-back with no artificial delay between them — the tight loop this
+  # scenario needs to have any chance of landing two rows in the same Postgres microsecond, which
+  # is exactly the condition reviews.service.ts's millisecond-truncated cursor comparison exists
+  # to handle correctly (a plain `created_at > :cursor` would risk leaking or dropping a boundary
+  # row here).
+  api POST /products/{productId}/reviews body { rating: 5 }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+
+  api POST /products/{productId}/reviews body { rating: 4 }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+
+  api POST /products/{productId}/reviews body { rating: 3 }
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 201
+
+  api POST /products/{productId}/reviews body { rating: 2 }
+    header "Authorization" is "Bearer {shopperOneToken}"
+  expect status equals 201
+
+  api POST /products/{productId}/reviews body { rating: 1 }
+    header "Authorization" is "Bearer {shopperTwoToken}"
+  expect status equals 201
+
+  # The call itself is the assertion: throws unless every page's union is exactly 5 unique ids.
+  let proof = assert review cursor walk(productId, 2, 5)
+
+@reviews @ratelimit @adminOps
 test "exceeding the review rate limit returns 429 with a Retry-After header"
   # Deliberately invalid bodies (rating 0 fails Min(1)): the rate-limit guard runs before
   # validation, so each attempt still burns a window slot without ever creating a real review —
@@ -129,7 +179,7 @@ test "exceeding the review rate limit returns 429 with a Retry-After header"
   expect status equals 429
   expect header "Retry-After" matches "^[0-9]+$"
 
-@reviews @ratelimit
+@reviews @ratelimit @adminOps
 test "a JS helper can honor Retry-After, and the follow-up request then succeeds"
   api POST /products body { name: unique("Retry-honoring Widget"), price: 10, stock: 5, categoryId: {categoryId} }
     header "Authorization" is "Bearer {adminToken}"
@@ -162,3 +212,88 @@ test "a JS helper can honor Retry-After, and the follow-up request then succeeds
   api POST /products/{productId}/reviews body { rating: 5, comment: "worth the wait" }
     header "Authorization" is "Bearer {userBToken}"
   expect status equals 201
+
+@reviews @crud @adminOps
+test "malformed or out-of-range review fields are rejected cleanly"
+  api POST /products body { name: unique("Review Validation Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /auth/login body { email: env(USER_B_EMAIL), password: env(USER_B_PW) }
+  expect status equals 200
+  capture body.accessToken as userBToken
+
+  api POST /products/{productId}/reviews body { rating: "five" }
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 422
+  expect any body.errors.field equals "rating"
+
+  api POST /products/{productId}/reviews body { rating: 6 }
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 422
+  expect any body.errors.field equals "rating"
+
+  api POST /products/{productId}/reviews body { rating: 3.5 }
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 422
+  expect any body.errors.field equals "rating"
+
+@reviews @crud @adminOps
+test "a review with no rating at all is rejected cleanly"
+  # Own fresh product (not shared with the test above): the rate-limit guard allows only 3
+  # requests per (user, product) per second, and the test above already spends all 3 of its own.
+  api POST /products body { name: unique("Review Validation Widget 2"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /auth/login body { email: env(USER_B_EMAIL), password: env(USER_B_PW) }
+  expect status equals 200
+  capture body.accessToken as userBToken
+
+  api POST /products/{productId}/reviews body { comment: "no rating at all" }
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 422
+  expect any body.errors.field equals "rating"
+
+@reviews @adminOps
+test "replying to a nonexistent review is a clean 404, not a stack trace"
+  api POST /reviews/00000000-0000-0000-0000-000000000000/reply body { replyText: "hello?" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 404
+  expect body.detail contains "not found"
+
+@reviews @regression @adminOps
+test "replying twice only notifies the review's author once, on the first reply"
+  api POST /products body { name: unique("Reply Notify Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  let shopperEmail = unique email
+  api POST /auth/register body { name: "Reply Notify Shopper", email: {shopperEmail}, password: "replynotify-Pass-123" }
+  expect status equals 201
+  capture body.accessToken as shopperToken
+
+  api POST /products/{productId}/reviews body { rating: 5 }
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 201
+  capture body.id as reviewId
+
+  api POST /reviews/{reviewId}/reply body { replyText: "Thanks!" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+
+  # A second reply overwrites the text (allowed — e.g. correcting a typo) but must not re-fire
+  # the notification (M19 finding: previously fired a duplicate every time).
+  api POST /reviews/{reviewId}/reply body { replyText: "Thanks (typo fix)!" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  expect body.replyText equals "Thanks (typo fix)!"
+
+  api GET /notifications
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 200
+  expect body has count 1
+  expect body[0] matches subset { type: "review_reply", reviewId: "{reviewId}" }

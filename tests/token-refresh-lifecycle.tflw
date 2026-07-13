@@ -8,7 +8,7 @@
 
 use "./helpers/wait-seconds.ts"
 
-@gaps @tokenexpiry @lifecycle
+@gaps @tokenexpiry @lifecycle @identityOps
 test "a session survives three expire-then-refresh cycles across many sequential requests"
   api POST /auth/login body { email: env(USER_B_EMAIL), password: env(USER_B_PW) }
   expect status equals 200

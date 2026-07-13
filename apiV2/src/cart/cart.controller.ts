@@ -6,6 +6,7 @@ import {
   Headers,
   HttpCode,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Res,
@@ -42,7 +43,7 @@ export class CartController {
   @Patch('items/:id')
   updateItem(
     @CurrentUser() user: AuthedUser,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateCartItemDto,
   ) {
     return this.cart.updateItem(user.id, id, dto.quantity);
@@ -50,7 +51,7 @@ export class CartController {
 
   @Delete('items/:id')
   @HttpCode(204)
-  async removeItem(@CurrentUser() user: AuthedUser, @Param('id') id: string) {
+  async removeItem(@CurrentUser() user: AuthedUser, @Param('id', ParseUUIDPipe) id: string) {
     await this.cart.removeItem(user.id, id);
   }
 

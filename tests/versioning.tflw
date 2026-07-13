@@ -4,13 +4,13 @@
 # (an unversioned request to a versioned-only route 404s) rather than just a URL convention nobody
 # checks — and reach the Swagger/OpenAPI mount, which NestJS deliberately serves outside it.
 
-@versioning
+@versioning @adminOps @smoke
 test "the OpenAPI spec is served outside the versioned prefix"
   api root GET /openapi.json
   expect status equals 200
   expect body.openapi contains "3."
 
-@versioning
+@versioning @adminOps
 test "a versioned-only route 404s when hit through the unversioned root"
   api root GET /health
   expect status equals 404

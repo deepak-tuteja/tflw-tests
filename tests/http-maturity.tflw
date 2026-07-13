@@ -13,7 +13,7 @@ before
   expect status equals 200
   capture body.accessToken as adminToken
 
-@httpMaturity @etag
+@httpMaturity @etag @adminOps
 test "product ETag: an unchanged read repeats it, and a matching If-None-Match yields 304"
   api POST /products body { name: unique("ETag Widget"), price: 10, stock: 5, categoryId: {categoryId} }
     header "Authorization" is "Bearer {adminToken}"
@@ -29,7 +29,7 @@ test "product ETag: an unchanged read repeats it, and a matching If-None-Match y
     header "If-None-Match" is "{etag1}"
   expect status equals 304
 
-@httpMaturity @etag
+@httpMaturity @etag @adminOps
 test "product If-Match: a stale ETag is rejected with 412, a fresh one succeeds"
   api POST /products body { name: unique("Concurrency Widget"), price: 10, stock: 5, categoryId: {categoryId} }
     header "Authorization" is "Bearer {adminToken}"
@@ -55,7 +55,7 @@ test "product If-Match: a stale ETag is rejected with 412, a fresh one succeeds"
   expect status equals 200
   expect body.price equals "7"
 
-@httpMaturity @statusVariety
+@httpMaturity @statusVariety @adminOps
 test "a full-replace PUT on a product is a genuine 405, not a 404"
   api POST /products body { name: unique("Immutable-shape Widget"), price: 10, stock: 5, categoryId: {categoryId} }
     header "Authorization" is "Bearer {adminToken}"
@@ -67,7 +67,7 @@ test "a full-replace PUT on a product is a genuine 405, not a 404"
   expect status equals 405
   expect body matches subset { type: "about:blank", title: "Method Not Allowed", status: 405 }
 
-@httpMaturity @statusVariety
+@httpMaturity @statusVariety @adminOps
 test "mutating a category returns 405 — categories are read-only in this API"
   api POST /categories body { name: "New Category" }
   expect status equals 405
@@ -78,7 +78,7 @@ test "mutating a category returns 405 — categories are read-only in this API"
   api DELETE /categories/00000000-0000-0000-0000-000000000000
   expect status equals 405
 
-@httpMaturity @statusVariety
+@httpMaturity @statusVariety @adminOps
 test "deleting a product still referenced by an order returns 409, not a stack trace"
   api POST /products body { name: unique("Referenced Widget"), price: 10, stock: 5, categoryId: {categoryId} }
     header "Authorization" is "Bearer {adminToken}"
@@ -95,7 +95,7 @@ test "deleting a product still referenced by an order returns 409, not a stack t
   expect body matches subset { type: "about:blank", title: "Conflict", status: 409 }
   expect body.detail contains "referenced"
 
-@httpMaturity @idempotency
+@httpMaturity @idempotency @adminOps
 test "Idempotency-Key: repeating the same key returns the original order, not a duplicate"
   api POST /products body { name: unique("Idempotent Widget"), price: 10, stock: 5, categoryId: {categoryId} }
     header "Authorization" is "Bearer {adminToken}"
@@ -116,7 +116,7 @@ test "Idempotency-Key: repeating the same key returns the original order, not a 
   expect status equals 200
   expect body.id equals "{orderId}"
 
-@httpMaturity @idempotency @authz
+@httpMaturity @idempotency @authz @adminOps
 test "reusing another user's Idempotency-Key is a conflict, not a valid replay"
   api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
   expect status equals 200
@@ -145,14 +145,14 @@ test "reusing another user's Idempotency-Key is a conflict, not a valid replay"
     header "Idempotency-Key" is "{key}"
   expect status equals 409
 
-@httpMaturity @contentNegotiation
+@httpMaturity @contentNegotiation @adminOps
 test "requesting an unsupported representation returns 406"
   api GET /products
     header "Accept" is "application/xml"
   expect status equals 406
   expect body matches subset { type: "about:blank", title: "Not Acceptable", status: 406 }
 
-@httpMaturity @contentNegotiation
+@httpMaturity @contentNegotiation @adminOps
 test "posting a non-JSON content type to a JSON endpoint returns 415"
   api POST /products body text "not-json-data"
     header "Content-Type" is "text/plain"
