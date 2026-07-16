@@ -88,7 +88,8 @@ test "asserting one specific item's quantity in a multi-item order is a single c
 @crud @regression @orderOps
 test "GET /orders returns the requester's own orders newest-first"
   let shopperEmail = unique email
-  api POST /auth/register body { name: "Order List Shopper", email: {shopperEmail}, password: "orderlist-Pass-123" }
+  let shopperPw = random password
+  api POST /auth/register body { name: "Order List Shopper", email: {shopperEmail}, password: {shopperPw} }
   expect status equals 201
   capture body.accessToken as shopperToken
 

@@ -43,7 +43,8 @@ test "the category tree nests real subcategories, walked via nested captures"
 @notifications @polymorphic @regression @adminOps
 test "order fulfillment, a price drop, and a review reply each produce a distinct notification shape"
   let shopperEmail = unique email
-  api POST /auth/register body { name: "Notif Shopper", email: {shopperEmail}, password: "notif-Pass-123" }
+  let shopperPw = random password
+  api POST /auth/register body { name: "Notif Shopper", email: {shopperEmail}, password: {shopperPw} }
   expect status equals 201
   capture body.accessToken as shopperToken
 
@@ -98,7 +99,8 @@ test "order fulfillment, a price drop, and a review reply each produce a distinc
 @notifications @regression @adminOps
 test "GET /notifications returns newest-first"
   let shopperEmail = unique email
-  api POST /auth/register body { name: "Notif Order Shopper", email: {shopperEmail}, password: "notif-Pass-123" }
+  let shopperPw = random password
+  api POST /auth/register body { name: "Notif Order Shopper", email: {shopperEmail}, password: {shopperPw} }
   expect status equals 201
   capture body.accessToken as shopperToken
 
@@ -135,7 +137,8 @@ test "GET /notifications returns newest-first"
 @notifications @regression @adminOps
 test "raising a product's price does not fire a spurious price_drop notification"
   let shopperEmail = unique email
-  api POST /auth/register body { name: "Price Steady Shopper", email: {shopperEmail}, password: "notif-Pass-123" }
+  let shopperPw = random password
+  api POST /auth/register body { name: "Price Steady Shopper", email: {shopperEmail}, password: {shopperPw} }
   expect status equals 201
   capture body.accessToken as shopperToken
 

@@ -244,7 +244,8 @@ test "another user cannot patch or delete this user's cart item"
 @cart @orderOps
 test "checking out an empty cart is a clean 422"
   let shopperEmail = unique email
-  api POST /auth/register body { name: "Empty Cart Shopper", email: {shopperEmail}, password: "empty-Pass-123" }
+  let shopperPw = random password
+  api POST /auth/register body { name: "Empty Cart Shopper", email: {shopperEmail}, password: {shopperPw} }
   expect status equals 201
   capture body.accessToken as shopperToken
 
@@ -276,7 +277,8 @@ test "deleting an already-removed cart item a second time is a clean 404"
 @cart @regression @orderOps
 test "N concurrent add-item requests for the same product never lose an update"
   let shopperEmail = unique email
-  api POST /auth/register body { name: "Cart Race Shopper", email: {shopperEmail}, password: "cartrace-Pass-123" }
+  let shopperPw = random password
+  api POST /auth/register body { name: "Cart Race Shopper", email: {shopperEmail}, password: {shopperPw} }
   expect status equals 201
   capture body.accessToken as shopperToken
 

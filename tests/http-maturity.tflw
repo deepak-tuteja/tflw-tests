@@ -69,13 +69,14 @@ test "a full-replace PUT on a product is a genuine 405, not a 404"
 
 @httpMaturity @statusVariety @adminOps
 test "mutating a category returns 405 — categories are read-only in this API"
+  let someId = random uuid
   api POST /categories body { name: "New Category" }
   expect status equals 405
 
-  api PATCH /categories/00000000-0000-0000-0000-000000000000 body { name: "x" }
+  api PATCH /categories/{someId} body { name: "x" }
   expect status equals 405
 
-  api DELETE /categories/00000000-0000-0000-0000-000000000000
+  api DELETE /categories/{someId}
   expect status equals 405
 
 @httpMaturity @statusVariety @adminOps

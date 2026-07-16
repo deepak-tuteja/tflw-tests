@@ -51,11 +51,12 @@ test "the same catalog-moderation action is forbidden for a non-admin identity"
 @moderation @batch @adminOps
 test "a bulk catalog import batch reports mixed success without failing the whole request"
   let goodName = unique("Bulk Import Good")
+  let badCategoryId = random uuid
   api POST /products/batch body {
       items: [
         { name: {goodName}, price: 15, stock: 10, categoryId: {categoryId} },
         { name: "Bulk Import Bad Price", price: -1, stock: 10, categoryId: {categoryId} },
-        { name: "Bulk Import Bad Category", price: 15, stock: 10, categoryId: "00000000-0000-0000-0000-000000000000" }
+        { name: "Bulk Import Bad Category", price: 15, stock: 10, categoryId: {badCategoryId} }
       ]
     }
     header "Authorization" is "Bearer {adminToken}"

@@ -111,12 +111,14 @@ test "the cursor walk never duplicates or drops a review at a page boundary"
   capture body.accessToken as userBToken
 
   let shopperOneEmail = unique email
-  api POST /auth/register body { name: "Cursor Shopper One", email: {shopperOneEmail}, password: "cursor-Pass-123" }
+  let shopperOnePw = random password
+  api POST /auth/register body { name: "Cursor Shopper One", email: {shopperOneEmail}, password: {shopperOnePw} }
   expect status equals 201
   capture body.accessToken as shopperOneToken
 
   let shopperTwoEmail = unique email
-  api POST /auth/register body { name: "Cursor Shopper Two", email: {shopperTwoEmail}, password: "cursor-Pass-123" }
+  let shopperTwoPw = random password
+  api POST /auth/register body { name: "Cursor Shopper Two", email: {shopperTwoEmail}, password: {shopperTwoPw} }
   expect status equals 201
   capture body.accessToken as shopperTwoToken
 
@@ -259,7 +261,8 @@ test "a review with no rating at all is rejected cleanly"
 
 @reviews @adminOps
 test "replying to a nonexistent review is a clean 404, not a stack trace"
-  api POST /reviews/00000000-0000-0000-0000-000000000000/reply body { replyText: "hello?" }
+  let reviewId = random uuid
+  api POST /reviews/{reviewId}/reply body { replyText: "hello?" }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 404
   expect body.detail contains "not found"
@@ -272,7 +275,8 @@ test "replying twice only notifies the review's author once, on the first reply"
   capture body.id as productId
 
   let shopperEmail = unique email
-  api POST /auth/register body { name: "Reply Notify Shopper", email: {shopperEmail}, password: "replynotify-Pass-123" }
+  let shopperPw = random password
+  api POST /auth/register body { name: "Reply Notify Shopper", email: {shopperEmail}, password: {shopperPw} }
   expect status equals 201
   capture body.accessToken as shopperToken
 

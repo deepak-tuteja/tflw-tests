@@ -36,7 +36,13 @@ const pkg = JSON.parse(fs.readFileSync(PKG_PATH, 'utf8'));
 pkg.dependencies.tflw = `file:vendor/${tarballName}`;
 fs.writeFileSync(PKG_PATH, JSON.stringify(pkg, null, 2) + '\n');
 
+// A bare `npm install` isn't enough when the tarball's filename+version haven't changed (the
+// common case here, since tflw stays pre-1.0 `0.1.0` across refreshes): package-lock.json already
+// has an `integrity` hash pinned for that exact path from the *previous* pack, so npm trusts the
+// lockfile and silently skips re-extracting the new tarball content (found the hard way, decision
+// 98's consumption — M21). Installing the tarball path explicitly forces npm to recompute the
+// hash from what's actually on disk right now.
 console.log('Reinstalling...');
-execSync('npm install', { cwd: ROOT, stdio: 'inherit' });
+execSync(`npm install "./vendor/${tarballName}"`, { cwd: ROOT, stdio: 'inherit' });
 
 console.log(`Done. tflw installed from ${tarballName}.`);

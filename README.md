@@ -41,6 +41,15 @@ node cli.mjs stop      # docker compose down -v — drops the DB too (ephemeral 
 
 Or use the `testflow-tests-app` skill to start/stop the stack.
 
+### Full regression sweep (M21)
+
+`npm run regression` — the thorough check to run after any change to apiV2 or `tests/*.tflw`: the
+full suite, then each feature-area tag alone (`identityOps`/`catalogOps`/`orderOps`/`adminOps`),
+then `@smoke` alone, then each `smoke,<area>` cross-axis combo — 10 phases, each on its own fresh
+Docker restart (`scripts/regression.mjs`; restarting every phase isn't optional — `unique(...)`'s
+counter resets per `tflw run` invocation but Postgres data doesn't, so chained phases on the same
+DB reproduce false collisions). Exits non-zero if any phase fails.
+
 ## Reporting
 
 A plain `npx tflw run` already exercises a lot of what to look for in `report/report.html` and

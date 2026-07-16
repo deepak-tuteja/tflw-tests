@@ -33,7 +33,8 @@ test "an expired coupon is rejected"
   capture body.id as productId
 
   let shopperEmail = unique email
-  api POST /auth/register body { name: "Coupon Shopper", email: {shopperEmail}, password: "coupon-Pass-123" }
+  let shopperPw = random password
+  api POST /auth/register body { name: "Coupon Shopper", email: {shopperEmail}, password: {shopperPw} }
   expect status equals 201
   capture body.accessToken as shopperToken
 
@@ -59,7 +60,8 @@ test "a coupon below its minimum order amount is rejected"
   capture body.id as productId
 
   let shopperEmail = unique email
-  api POST /auth/register body { name: "Coupon Shopper", email: {shopperEmail}, password: "coupon-Pass-123" }
+  let shopperPw = random password
+  api POST /auth/register body { name: "Coupon Shopper", email: {shopperEmail}, password: {shopperPw} }
   expect status equals 201
   capture body.accessToken as shopperToken
 
@@ -85,7 +87,8 @@ test "a coupon that has reached its usage limit is rejected"
   capture body.id as productId
 
   let shopperEmail = unique email
-  api POST /auth/register body { name: "Coupon Shopper", email: {shopperEmail}, password: "coupon-Pass-123" }
+  let shopperPw = random password
+  api POST /auth/register body { name: "Coupon Shopper", email: {shopperEmail}, password: {shopperPw} }
   expect status equals 201
   capture body.accessToken as shopperToken
 
@@ -121,7 +124,8 @@ test "an unknown coupon code is rejected"
   capture body.id as productId
 
   let shopperEmail = unique email
-  api POST /auth/register body { name: "Coupon Shopper", email: {shopperEmail}, password: "coupon-Pass-123" }
+  let shopperPw = random password
+  api POST /auth/register body { name: "Coupon Shopper", email: {shopperEmail}, password: {shopperPw} }
   expect status equals 201
   capture body.accessToken as shopperToken
 
@@ -142,7 +146,8 @@ test "a valid coupon discounts a successful checkout"
   capture body.id as productId
 
   let shopperEmail = unique email
-  api POST /auth/register body { name: "Coupon Shopper", email: {shopperEmail}, password: "coupon-Pass-123" }
+  let shopperPw = random password
+  api POST /auth/register body { name: "Coupon Shopper", email: {shopperEmail}, password: {shopperPw} }
   expect status equals 201
   capture body.accessToken as shopperToken
 
@@ -251,7 +256,8 @@ test "3 concurrent checkouts against a usageLimit:1 coupon produce exactly 1 suc
   capture body.id as raceProductId
 
   let shopperAEmail = unique email
-  api POST /auth/register body { name: "Coupon Race A", email: {shopperAEmail}, password: "couponrace-Pass-123" }
+  let shopperAPw = random password
+  api POST /auth/register body { name: "Coupon Race A", email: {shopperAEmail}, password: {shopperAPw} }
   expect status equals 201
   capture body.accessToken as shopperAToken
   api POST /cart/items body { productId: {raceProductId}, quantity: 1 }
@@ -259,7 +265,8 @@ test "3 concurrent checkouts against a usageLimit:1 coupon produce exactly 1 suc
   expect status equals 201
 
   let shopperBEmail = unique email
-  api POST /auth/register body { name: "Coupon Race B", email: {shopperBEmail}, password: "couponrace-Pass-123" }
+  let shopperBPw = random password
+  api POST /auth/register body { name: "Coupon Race B", email: {shopperBEmail}, password: {shopperBPw} }
   expect status equals 201
   capture body.accessToken as shopperBToken
   api POST /cart/items body { productId: {raceProductId}, quantity: 1 }
@@ -267,7 +274,8 @@ test "3 concurrent checkouts against a usageLimit:1 coupon produce exactly 1 suc
   expect status equals 201
 
   let shopperCEmail = unique email
-  api POST /auth/register body { name: "Coupon Race C", email: {shopperCEmail}, password: "couponrace-Pass-123" }
+  let shopperCPw = random password
+  api POST /auth/register body { name: "Coupon Race C", email: {shopperCEmail}, password: {shopperCPw} }
   expect status equals 201
   capture body.accessToken as shopperCToken
   api POST /cart/items body { productId: {raceProductId}, quantity: 1 }

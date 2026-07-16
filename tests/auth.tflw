@@ -9,7 +9,8 @@ use "./helpers/concurrent-refresh.ts"
 
 @auth @identityOps @smoke
 test "registering a new user returns a working bearer pair"
-  api POST /auth/register body { name: unique("Auth User"), email: unique email, password: "reg-Pass-123" }
+  let pw = random password
+  api POST /auth/register body { name: unique("Auth User"), email: unique email, password: {pw} }
   expect status equals 201
   capture body.accessToken as accessToken
 
@@ -89,7 +90,8 @@ test "registering or logging in with a malformed body is a clean 422"
 
 @auth @crud @identityOps
 test "registering or logging in with a missing required field is a clean 422"
-  api POST /auth/register body { email: unique email, password: "reg-Pass-123" }
+  let pw = random password
+  api POST /auth/register body { email: unique email, password: {pw} }
   expect status equals 422
   expect any body.errors.field equals "name"
 

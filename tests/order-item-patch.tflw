@@ -65,7 +65,8 @@ test "patching a nonexistent item within a real order is a clean 404, not a stac
     header "Authorization" is "Bearer {userAToken}"
   expect status equals 201
   capture body.id as orderId
+  let itemId = random uuid
 
-  api PATCH /orders/{orderId}/items/00000000-0000-0000-0000-000000000000 body { quantity: 5 }
+  api PATCH /orders/{orderId}/items/{itemId} body { quantity: 5 }
     header "Authorization" is "Bearer {userAToken}"
   expect status equals 404

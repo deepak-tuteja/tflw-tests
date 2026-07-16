@@ -63,7 +63,8 @@ test "creating a product with invalid fields returns RFC7807 field-level detail"
 
 @crud @catalogOps
 test "reading a nonexistent product returns a well-formed 404, not a stack trace"
-  api GET /products/00000000-0000-0000-0000-000000000000
+  let productId = random uuid
+  api GET /products/{productId}
   expect status equals 404
   expect body.status equals 404
   expect body.detail contains "not found"
@@ -97,14 +98,16 @@ test "a malformed (non-UUID) product id in the path is a clean 400, not a 500"
 
 @crud @catalogOps
 test "creating a product against a nonexistent category is a clean 404"
-  api POST /products body { name: unique("Orphan Widget"), price: 5, stock: 1, categoryId: "00000000-0000-0000-0000-000000000000" }
+  let orphanCategoryId = random uuid
+  api POST /products body { name: unique("Orphan Widget"), price: 5, stock: 1, categoryId: {orphanCategoryId} }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 404
   expect body.detail contains "not found"
 
 @crud @catalogOps
 test "updating a nonexistent product is a clean 404, not a stack trace"
-  api PATCH /products/00000000-0000-0000-0000-000000000000 body { price: 20 }
+  let productId = random uuid
+  api PATCH /products/{productId} body { price: 20 }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 404
   expect body.detail contains "not found"

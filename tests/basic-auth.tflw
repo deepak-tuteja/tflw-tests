@@ -1,32 +1,35 @@
 # basic-auth.tflw — M6 (plan_v2.md Part D decision 9): HTTP Basic as a second auth scheme
 # alongside bearer/session, applied uniformly through the existing multi-scheme combinator
-# (`AnyAuthGuard`) rather than a separate parallel surface. tflw has no `base64(...)` generator
-# function (SPEC §5's generator list), so encoding the credential pair forces a JS helper
-# (helpers/basic-auth.ts) either way — this test is written to surface that as real evidence for
-# TFLW-GAPS.md, not to presuppose whether it's a genuine gap or a working-as-intended punt.
-
-use "./helpers/basic-auth.ts"
+# (`AnyAuthGuard`) rather than a separate parallel surface. Originally written with a JS helper
+# (helpers/basic-auth.ts) to encode the credential pair, since tflw had no `base64(...)` generator
+# — that surfaced as real evidence for TFLW-GAPS.md (closed by tflw decision 98, M21: native
+# `base64 encode(...)`). Migrated off the JS escape hatch now that the gap is closed.
 
 @basicauth @identityOps
 test "HTTP Basic authenticates the same credentials bearer/session login already accept"
-  let basicHeader = basic auth header(env(ADMIN_EMAIL), env(ADMIN_PW))
+  let email = env(ADMIN_EMAIL)
+  let pw = env(ADMIN_PW)
+  let creds = base64 encode("{email}:{pw}")
 
   api GET /orders/all
-    header "Authorization" is "{basicHeader}"
+    header "Authorization" is "Basic {creds}"
   expect status equals 200
 
 @basicauth @identityOps
 test "HTTP Basic with a wrong password is rejected just like a wrong bearer credential"
-  let basicHeader = basic auth header(env(ADMIN_EMAIL), "not-the-real-password")
+  let email = env(ADMIN_EMAIL)
+  let creds = base64 encode("{email}:not-the-real-password")
 
   api GET /orders/all
-    header "Authorization" is "{basicHeader}"
+    header "Authorization" is "Basic {creds}"
   expect status equals 401
 
 @basicauth @authz @identityOps
 test "HTTP Basic still respects RBAC — a non-admin Basic credential is forbidden, not waved through"
-  let basicHeader = basic auth header(env(USER_A_EMAIL), env(USER_A_PW))
+  let email = env(USER_A_EMAIL)
+  let pw = env(USER_A_PW)
+  let creds = base64 encode("{email}:{pw}")
 
   api GET /orders/all
-    header "Authorization" is "{basicHeader}"
+    header "Authorization" is "Basic {creds}"
   expect status equals 403

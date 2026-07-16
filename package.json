@@ -15,7 +15,8 @@
   },
   "scripts": {
     "refresh-tflw": "node scripts/refresh-tflw.mjs",
-    "test": "tflw run"
+    "test": "tflw run",
+    "regression": "node scripts/regression.mjs"
   },
   "dependencies": {
     "tflw": "file:vendor/tflw-0.1.0.tgz"

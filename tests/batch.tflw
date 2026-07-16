@@ -54,9 +54,10 @@ test "batch reports the invalid-price reason on the failing item"
 
 @batch @crud @catalogOps
 test "batch reports the unknown-category reason on the failing item"
+  let badCategoryId = random uuid
   api POST /products/batch body {
       items: [
-        { name: unique("Bad Category Widget"), price: 10, stock: 5, categoryId: "00000000-0000-0000-0000-000000000000" },
+        { name: unique("Bad Category Widget"), price: 10, stock: 5, categoryId: {badCategoryId} },
         { name: unique("Filler Item"), price: 1, stock: 1, categoryId: {categoryId} }
       ]
     }
