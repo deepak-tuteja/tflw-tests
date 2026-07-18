@@ -5,6 +5,10 @@ report/
 vendor/*.tgz
 .testflow-tests.pids
 
+# TLS sidecar's CA/server/client certs — regenerated fresh at every container start
+# (M22, enterprise arc cluster 1), nothing here is ever meant to be a stable fixture.
+nginx/certs/
+
 # Internal dev-tracking docs (decision log + build tracker + gap-discovery findings) — same
 # approach as ../testFlow's own .gitignore: not part of the public project, local planning
 # artifacts only.

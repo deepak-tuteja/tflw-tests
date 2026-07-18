@@ -15,6 +15,10 @@ function run(cmd) {
 function start() {
   run('docker compose up -d --build --wait');
   console.log('\napi v2: http://localhost:4001 (health /v1/health, docs /docs, spec /openapi.json)');
+  console.log(
+    'tls sidecar: https://localhost:8443 (self-signed) · https://localhost:8444 (mTLS — client ' +
+      'cert required, see nginx/certs/ after start)',
+  );
 }
 
 function stop() {

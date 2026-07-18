@@ -1,0 +1,68 @@
+# oauth-token-endpoint.tflw — M22 follow-up (testFlow PLAN.md decision 99c, PLAN_ENTERPRISE.md
+# decision 11): direct, low-level coverage of apiV2's POST /oauth/token endpoint itself — the raw
+# RFC 6749 §4.4 client-credentials grant, asserted on directly (status + response shape) via plain
+# `api POST`, not through tflw's `oauth2` session sugar. session-refresh-and-oauth2.tflw already
+# dogfoods that sugar against this same endpoint, but only ever exercises the happy path (the sugar
+# has no reason to hit a bad grant) — this file is the actual regression lock on the endpoint's own
+# contract: a valid grant's token shape, and every way a bad grant should fail.
+#
+# apiV2/src/oauth/oauth.service.ts + dto/oauth-token.dto.ts are the source of truth for the
+# expected status codes: 401 (`UnauthorizedException`) for a bad client_id/secret, 422 for anything
+# the DTO's class-validator rejects — this app's global `ValidationPipe` always throws a 422
+# `ValidationProblemException`, never a plain 400 (apiV2/src/common/validation-problem.exception.ts
+# + problem-details.filter.ts), same convention as every other endpoint's negative-case tests (see
+# auth.tflw's own 422 tests for the `expect any body.errors.field equals "…"` pattern reused here).
+
+@auth @oauth2 @identityOps
+test "a valid client_credentials grant returns a well-formed bearer token, usable immediately"
+  api POST /oauth/token body { grant_type: "client_credentials", client_id: env(OAUTH_CLIENT_ID), client_secret: env(OAUTH_CLIENT_SECRET), scope: "orders.read orders.write" }
+  expect status equals 200
+  expect body.token_type equals "Bearer"
+  expect body.scope equals "orders.read orders.write"
+  expect body.expires_in is greater than 0
+  capture body.access_token as token
+
+  api GET /auth/profile
+    header "Authorization" is "Bearer {token}"
+  expect status equals 200
+  expect body.role equals "admin"
+
+@auth @oauth2 @identityOps
+test "scope is optional — a grant without one still succeeds"
+  api POST /oauth/token body { grant_type: "client_credentials", client_id: env(OAUTH_CLIENT_ID), client_secret: env(OAUTH_CLIENT_SECRET) }
+  expect status equals 200
+  expect body.token_type equals "Bearer"
+  capture body.access_token as token
+
+  api GET /auth/profile
+    header "Authorization" is "Bearer {token}"
+  expect status equals 200
+
+@auth @oauth2 @identityOps
+test "an unknown client_id is a clean 401, not a 500"
+  api POST /oauth/token body { grant_type: "client_credentials", client_id: "not-a-real-client", client_secret: "whatever" }
+  expect status equals 401
+  expect body.status equals 401
+
+@auth @oauth2 @identityOps
+test "a real client_id with the wrong client_secret is a clean 401"
+  api POST /oauth/token body { grant_type: "client_credentials", client_id: env(OAUTH_CLIENT_ID), client_secret: "definitely-wrong" }
+  expect status equals 401
+  expect body.status equals 401
+
+@auth @oauth2 @identityOps
+test "an unsupported grant_type is a clean 422, not a 500"
+  api POST /oauth/token body { grant_type: "password", client_id: env(OAUTH_CLIENT_ID), client_secret: env(OAUTH_CLIENT_SECRET) }
+  expect status equals 422
+  expect any body.errors.field equals "grant_type"
+
+@auth @oauth2 @identityOps
+test "a missing client_secret is a clean 422"
+  api POST /oauth/token body { grant_type: "client_credentials", client_id: env(OAUTH_CLIENT_ID) }
+  expect status equals 422
+  expect any body.errors.field equals "client_secret"
+
+@auth @oauth2 @identityOps
+test "an unexpected extra field is rejected by the whitelist, not silently ignored"
+  api POST /oauth/token body { grant_type: "client_credentials", client_id: env(OAUTH_CLIENT_ID), client_secret: env(OAUTH_CLIENT_SECRET), unexpected_field: "x" }
+  expect status equals 422

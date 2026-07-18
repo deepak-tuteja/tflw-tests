@@ -43,18 +43,26 @@ export class TokensService {
     }
   }
 
-  sign(payload: Omit<DecodedToken, 'csrf'> & { csrf?: string }): string {
+  sign(payload: Omit<DecodedToken, 'csrf'> & { csrf?: string }, ttlOverride?: string): string {
     return this.jwt.sign(payload, {
       secret: this.secretFor(payload.typ),
       // Env-driven TTL strings ("5s"/"1h"/…) aren't literal types, so they can't satisfy
       // @nestjs/jwt's `StringValue` template-literal type at compile time even though `ms`
       // (which it wraps) parses them fine at runtime.
-      expiresIn: this.ttlFor(payload.typ) as unknown as number,
+      expiresIn: (ttlOverride ?? this.ttlFor(payload.typ)) as unknown as number,
     });
   }
 
   signAccessToken(user: User): string {
     return this.sign({ sub: user.id, role: user.role, typ: 'access' });
+  }
+
+  // Client-credentials grant (oauth.service.ts) issues a real user-mapped access token like
+  // `signAccessToken`, but on a per-client TTL rather than the shared `JWT_ACCESS_TTL` — two
+  // configured clients (a normal-TTL one and a ~5s one) need genuinely different expiries from
+  // the same signing path, not two more copies of `sign({...typ:'access'})`.
+  signAccessTokenWithTtl(user: User, ttl: string): string {
+    return this.sign({ sub: user.id, role: user.role, typ: 'access' }, ttl);
   }
 
   signRefreshToken(user: User, jti: string): string {

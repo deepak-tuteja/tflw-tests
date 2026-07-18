@@ -16,14 +16,30 @@
 # before trusting it here: the same request with a real bearer *and* a cookie authenticates as the
 # bearer's identity; with an *empty* bearer and the same cookie, it authenticates as the cookie's.
 #
-# The second test below (M18/plan_v2.md Part J) is the regression lock-in for M14's fix: M14's
-# actual mitigation was removing ordinary tests' *exposure* to the cached `admin` session's 5s
-# TTL (JWT_ACCESS_TTL) by moving them to per-test inline logins, not a code change to the TTL
-# itself — so nothing in the suite actually exercised the cliff M14 was protecting against. This
-# file is the last consumer of real `as admin`/`as admin, shopper` session sugar in alphabetical
-# run order (the only other one, `examples/sessions-explained.tflw`, sorts first), so it's the one
-# safe place to deliberately hold the session past its TTL without staling it out from under any
-# later test.
+# The second test below (M18/plan_v2.md Part J, updated M22) is the regression lock-in for M14's
+# original workaround, and now for the real fix that superseded it. M14's actual mitigation was
+# removing ordinary tests' *exposure* to the cached `admin` session's 5s TTL (JWT_ACCESS_TTL) by
+# moving them to per-test inline logins, not a code change to the TTL itself — so this was the one
+# file in the suite that deliberately held a session past its TTL, to prove the cliff (a bare 401,
+# no recovery) was real. M9 (testFlow PLAN.md decision 99a, enterprise arc cluster 1) closed that
+# cliff at the root: a session now refreshes automatically on a 401, so the same scenario that used
+# to 401 now transparently recovers and succeeds — see this test's own body below, and
+# tests/session-refresh-and-oauth2.tflw for the dedicated M22 coverage. This file is kept as the
+# regression lock (a session genuinely does go stale here, and the *recovery* is what's now
+# asserted) — it's the last consumer of real `as admin`/`as admin, shopper` session sugar in
+# alphabetical run order (the only other one, `examples/sessions-explained.tflw`, sorts first), so
+# it's still the one safe place to deliberately hold the session past its TTL without staling it
+# out from under any later test. The rest of the suite's per-test inline logins are no longer a
+# forced workaround post-M9, just an existing style choice left as-is (out of scope for this pass).
+#
+# The third test below restores what the second test's *pre-M9 version* actually proved (a stale
+# credential genuinely 401s, no recovery) — coverage that M9's fix legitimately retired from
+# `session`-driven tests, since a `session` now always recovers. Refresh-on-401 only ever fires for
+# a test's own opted-in `as <session>` list (tflw PLAN.md decision 99a — `EvalCtx.sessionNames`), so
+# a bare captured token, held in a plain variable and sent via a per-step header override with no
+# `session`/`as` involved at all, has nothing watching it and nothing to refresh it. Same TTL, same
+# 6s wait, same expired-credential shape as the second test — the only thing that changed is which
+# code path is under test.
 
 use "./helpers/wait-seconds.ts"
 
@@ -59,15 +75,36 @@ test "admin (bearer) and shopper (cookie) alternate within one test" as admin, s
   expect body.status equals "pending"
 
 @sessions @regression @identityOps
-test "a cached admin session held past its 5s TTL genuinely 401s — the reason M14 moved ordinary tests off session sugar" as admin
+test "a cached admin session held past its 5s TTL now transparently refreshes and succeeds (M9 closed M14's cliff)" as admin
   # Fresh (or still-fresh-enough) right after the session's own login step.
   api GET /orders/all
   expect status equals 200
 
   let waited = wait seconds(6)
 
-  # No per-step override — the merged bearer applies as normal, now stale. This is the exact
-  # trap M14's mitigation (per-test fresh inline logins everywhere but session-demo files) exists
-  # to avoid; this file is the one place in the suite expected to hit it, on purpose.
+  # No per-step override — the merged bearer would be stale here. Pre-M9 this was the exact trap
+  # M14's mitigation (per-test fresh inline logins everywhere but session-demo files) existed to
+  # avoid — a bare 401, no recovery. tflw now detects the 401, re-establishes the `admin` session,
+  # and retries this exact request once, transparently — see testFlow PLAN.md decision 99a.
   api GET /orders/all
+  expect status equals 200
+
+@auth @regression @identityOps
+test "a manually-held bearer token (no session, no oauth2) past its 5s TTL genuinely 401s"
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as staleToken
+
+  api GET /auth/profile
+    header "Authorization" is "Bearer {staleToken}"
+  expect status equals 200
+
+  let waited = wait seconds(6)
+
+  # Nothing here is a `session` and this test carries no `as <name>` — refresh-on-401 has no
+  # session name to re-establish, so this token just... stays stale. This is the real, still-true
+  # version of the pre-M9 claim the test above used to make: a credential nothing is watching does
+  # not heal itself.
+  api GET /auth/profile
+    header "Authorization" is "Bearer {staleToken}"
   expect status equals 401

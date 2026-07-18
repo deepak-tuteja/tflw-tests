@@ -38,11 +38,38 @@ services:
       USER_A_PW: ${USER_A_PW:-alice-pw-123}
       USER_B_EMAIL: ${USER_B_EMAIL:-bob@example.com}
       USER_B_PW: ${USER_B_PW:-bob-pw-123}
+      OAUTH_CLIENT_ID: ${OAUTH_CLIENT_ID:-tflw-oauth-client}
+      OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET:-tflw-oauth-secret}
+      OAUTH_ACCESS_TTL: ${OAUTH_ACCESS_TTL:-1h}
+      OAUTH_SHORT_CLIENT_ID: ${OAUTH_SHORT_CLIENT_ID:-tflw-oauth-short-client}
+      OAUTH_SHORT_CLIENT_SECRET: ${OAUTH_SHORT_CLIENT_SECRET:-tflw-oauth-short-secret}
+      OAUTH_SHORT_ACCESS_TTL: ${OAUTH_SHORT_ACCESS_TTL:-5s}
       PORT: 4001
     ports:
       - "4001:4001"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:4001/v1/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  # TLS sidecar (M22, enterprise arc cluster 1 — PLAN_ENTERPRISE.md decision 10): a self-signed
+  # HTTPS listener (8443) and a client-cert-requiring listener (8444), both proxying to `api`
+  # unchanged. Certs generated fresh at container start (nginx/docker-entrypoint.sh), written to
+  # a host bind mount so a host-side `tflw run` can reference the CA/client cert directly.
+  nginx:
+    build:
+      context: ./nginx
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "8443:8443"
+      - "8444:8444"
+    volumes:
+      - ./nginx/certs:/certs
+    healthcheck:
+      test: ["CMD", "wget", "--no-check-certificate", "-qO-", "https://127.0.0.1:8443/v1/health"]
       interval: 2s
       timeout: 3s
       retries: 20

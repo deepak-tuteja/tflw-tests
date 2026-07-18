@@ -17,7 +17,9 @@ plan and `PROGRESS.md` for build status.
 apiV2/               NestJS + TypeORM + Postgres e-commerce API — users/categories/products/
                      orders/order_items/reviews; migrations + deterministic idempotent seed
                      run on container start; /v1 prefix; OpenAPI at /openapi.json + /docs
-docker-compose.yml   postgres (ephemeral per-run volume) + api, healthchecked
+docker-compose.yml   postgres (ephemeral per-run volume) + api + nginx (TLS sidecar), healthchecked
+nginx/               TLS sidecar (M22) — self-signed :8443 + mTLS-requiring :8444, proxying
+                     unchanged to api:4001; certs generated fresh at every container start
 tests/               .tflw test files, one per feature/scenario (being ported to v2, M1-M5)
 tests/helpers/       JS escape-hatch helpers (page-walk, Retry-After sleep-and-retry, etc.)
 tests/shared/        actions shared across files (e.g. `create product`)
@@ -32,10 +34,11 @@ TFLW-FEATURE-GAPS.md genuine tflw DSL gaps found while building the v1 (plain-No
 ## Setup
 
 ```sh
-cp .env.example .env   # Postgres creds, JWT secrets, seeded admin/userA/userB credentials
-node cli.mjs start     # docker compose up -d --build --wait (postgres + api on :4001)
+cp .env.example .env   # Postgres creds, JWT secrets, seeded admin/userA/userB/OAuth-client credentials
+node cli.mjs start     # docker compose up -d --build --wait (postgres + api :4001 + nginx TLS sidecar)
 npm run refresh-tflw   # packs ../testFlow/packages/cli and installs the tarball
 npx tflw run           # runs tests/*.tflw against the running api
+npm run test:mtls      # runs tests/mtls.tflw against the sidecar's mTLS-requiring listener (own env, M22)
 node cli.mjs stop      # docker compose down -v — drops the DB too (ephemeral per-run isolation)
 ```
 
@@ -73,7 +76,7 @@ A plain `npx tflw run` already exercises a lot of what to look for in `report/re
 
 | Tag | Files |
 |---|---|
-| `@auth` | auth.tflw, sessions.tflw, generators.tflw |
+| `@auth` | auth.tflw, sessions.tflw, generators.tflw, session-refresh-and-oauth2.tflw, mtls.tflw, oauth-token-endpoint.tflw |
 | `@crud` | auth.tflw, crud-lifecycle.tflw, quantifiers.tflw, data-tables.tflw, generators.tflw, actions-and-helpers.tflw, pagination.tflw, batch.tflw |
 | `@sessions` | sessions.tflw, interleaved-sessions.tflw |
 | `@flaky` | retry-and-flake.tflw |

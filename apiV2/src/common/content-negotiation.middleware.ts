@@ -2,12 +2,15 @@ import type { NextFunction, Request, Response } from 'express';
 
 const METHODS_WITH_BODY = new Set(['POST', 'PATCH', 'PUT']);
 
-// M6 (plan_v2.md Part D decision 8): two routes deliberately accept a non-JSON Content-Type,
+// M6 (plan_v2.md Part D decision 8): a few routes deliberately accept a non-JSON Content-Type,
 // same "branch on the specific route" approach the rest of this gate already uses — everything
-// else on the API stays JSON-only.
+// else on the API stays JSON-only. `/oauth/token` (M22, enterprise arc cluster 1) joins this list
+// because RFC 6749 §4.4.2's client-credentials grant is form-urlencoded by spec, same reasoning
+// as `/auth/login` already accepting it.
 const EXTRA_ALLOWED_CONTENT_TYPES: Record<string, string[]> = {
   'POST /v1/auth/login': ['application/x-www-form-urlencoded'],
   'POST /v1/products/:id/image': ['multipart/form-data'],
+  'POST /v1/oauth/token': ['application/x-www-form-urlencoded'],
 };
 
 function extraAllowedContentTypes(method: string, path: string): string[] {
@@ -16,6 +19,9 @@ function extraAllowedContentTypes(method: string, path: string): string[] {
   }
   if (method === 'POST' && /^\/v1\/products\/[^/]+\/image$/.test(path)) {
     return EXTRA_ALLOWED_CONTENT_TYPES['POST /v1/products/:id/image'];
+  }
+  if (method === 'POST' && path === '/v1/oauth/token') {
+    return EXTRA_ALLOWED_CONTENT_TYPES['POST /v1/oauth/token'];
   }
   return [];
 }

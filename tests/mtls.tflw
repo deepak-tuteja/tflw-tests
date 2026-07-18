@@ -1,0 +1,32 @@
+# mtls.tflw — M22 (enterprise arc cluster 1, testFlow PLAN.md decision 99b): dogfoods tflw's
+# `cert`/`key` mTLS config against the nginx TLS sidecar's client-cert-requiring listener
+# (nginx/nginx.conf, port 8444 — proxies unchanged to the same api:4001 backend every other test
+# in this suite talks to directly).
+#
+# Deliberately its own file, run against its own dedicated `env` (tflw.config's `mtlsSidecar`),
+# and scoped to just this file (not the whole `tests/` dir):
+#
+#   npx tflw run --env mtlsSidecar tests/mtls.tflw
+#   (or: npm run test:mtls)
+#
+# not folded into the default `npm test` run — see tflw.config's comment on `env mtlsSidecar` for
+# why. A whole-directory run under `--env mtlsSidecar` would also fail the checker's `api <service>`
+# validation on unrelated files that use the `local` env's `root` named service (TF026, "unknown
+# api service") — `mtlsSidecar` deliberately declares no named services of its own, so this file is
+# always run standalone by path, never combined with the rest of the suite. Both tests below only
+# pass if the client certificate nginx/certs/client.pem actually reaches the server and is
+# accepted; tflw's own unit tests (packages/runtime/test/mtls.test.ts) already cover the negative
+# case (no cert/wrong cert gets rejected) against a throwaway fixture server — this file's job is
+# proving the real feature end-to-end against a real reverse proxy instead.
+
+@auth @mtls @identityOps
+test "a plain unauthenticated request reaches the real api through the mTLS-requiring listener"
+  api GET /health
+  expect status equals 200
+  expect body.status equals "ok"
+
+@auth @mtls @identityOps
+test "the `admin` session logs in and authenticates a real request through the mTLS-requiring listener" as admin
+  api GET /auth/profile
+  expect status equals 200
+  expect body.role equals "admin"

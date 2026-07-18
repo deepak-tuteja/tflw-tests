@@ -1,0 +1,54 @@
+# session-refresh-and-oauth2.tflw — M22 (enterprise arc cluster 1, testFlow PLAN.md decision 99a/
+# 99c): dogfoods tflw's new session refresh-on-401 + TTL expiry, and the `oauth2` session sugar
+# built on top of it, against real short-TTL credentials (not a fixture server).
+#
+# This app's own JWT_ACCESS_TTL already defaults to 5s (M1, real short-TTL-by-default for testing
+# purposes — see tests/token-expiry.tflw) — which means the `admin` session (tflw.config) has
+# always been carrying a token that expires mid-run. Before tflw 0.1.0's M9, a `session` block
+# cached its headers forever once established (SPEC §3.3, decision 42) — this is the exact "M14's
+# real pain" PLAN_ENTERPRISE.md decision 3 names: any `as admin` test running more than ~5s after
+# the session first established would 401, with no recovery. The first test below is the direct
+# proof this no longer happens.
+
+use "./helpers/wait-seconds.ts"
+
+@auth @sessions @oauth2 @identityOps
+test "an `as admin` session transparently refreshes once its 5s access token has actually expired" as admin
+  api GET /auth/profile
+  expect status equals 200
+  expect body.role equals "admin"
+
+  # Past JWT_ACCESS_TTL (5s) — the session's cached bearer header is now genuinely stale.
+  let waited = wait seconds(6)
+
+  # Pre-M9 this would have failed with a bare 401 (the cached header was never re-checked).
+  # tflw now retries this exact request once, having refreshed the `admin` session first.
+  api GET /auth/profile
+  expect status equals 200
+  expect body.role equals "admin"
+
+@auth @sessions @oauth2 @identityOps
+test "the `oauthLong` client-credentials session authenticates a real request" as oauthLong
+  api GET /auth/profile
+  expect status equals 200
+  expect body.role equals "admin"
+
+@auth @sessions @oauth2 @identityOps
+test "the same oauth2 session is reused across two requests, not re-fetched" as oauthLong
+  api GET /categories
+  expect status equals 200
+
+  api GET /auth/profile
+  expect status equals 200
+
+@auth @sessions @oauth2 @identityOps
+test "the `oauthShort` (~5s TTL) client-credentials session proactively re-fetches its token ahead of expiry" as oauthShort
+  api GET /auth/profile
+  expect status equals 200
+
+  # Past the client's configured ~5s `expires_in` — tflw's oauth2 sugar treats this as expired on
+  # its own (SPEC §3.3's proactive path), without ever needing to observe a real 401 first.
+  let waited = wait seconds(6)
+
+  api GET /auth/profile
+  expect status equals 200
