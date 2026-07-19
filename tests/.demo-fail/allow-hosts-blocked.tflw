@@ -1,0 +1,12 @@
+# allow-hosts-blocked.tflw — DEMO-FAIL FIXTURE (M23, testFlow PLAN.md decision 101a): the
+# negative case for `allow hosts` — a request to a real, reachable host that just isn't on the
+# allowlist must be refused before any network I/O, not silently let through. Run under
+# `--env allowHostsBlocked` (tflw.config), whose allowlist deliberately excludes localhost.
+#
+# Run explicitly (dot-directory, invisible to a bare `tflw run`/`tflw check`):
+#   npx tflw run tests/.demo-fail/allow-hosts-blocked.tflw --env allowHostsBlocked --tag demofail
+
+@demofail @safety
+test "a request to a host outside `allow hosts` is refused before it ever reaches the real, healthy server"
+  api GET /health
+  expect status equals 200

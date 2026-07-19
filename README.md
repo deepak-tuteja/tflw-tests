@@ -39,6 +39,7 @@ node cli.mjs start     # docker compose up -d --build --wait (postgres + api :40
 npm run refresh-tflw   # packs ../testFlow/packages/cli and installs the tarball
 npx tflw run           # runs tests/*.tflw against the running api
 npm run test:mtls      # runs tests/mtls.tflw against the sidecar's mTLS-requiring listener (own env, M22)
+npm run test:safety    # runs tests/safety-redaction.tflw with `redact` active (own env, M23)
 node cli.mjs stop      # docker compose down -v — drops the DB too (ephemeral per-run isolation)
 ```
 
@@ -89,7 +90,8 @@ A plain `npx tflw run` already exercises a lot of what to look for in `report/re
 | `@ratelimit` | rate-limit.tflw |
 | `@batch` | batch.tflw |
 | `@interleave` | interleaved-sessions.tflw |
-| `@demofail` (+ per-scenario `@retryexhausted`/`@waittimeout`/`@badassertion`/`@softmixed`) | `tests/.demo-fail/*.tflw` |
+| `@safety` | safety-redaction.tflw, `tests/.demo-fail/allow-hosts-blocked.tflw` |
+| `@demofail` (+ per-scenario `@retryexhausted`/`@waittimeout`/`@badassertion`/`@softmixed`/`@safety`) | `tests/.demo-fail/*.tflw` |
 
 ### Demo-fail / check-only fixtures
 

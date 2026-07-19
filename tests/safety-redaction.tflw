@@ -1,0 +1,40 @@
+# safety-redaction.tflw — M23 (testFlow PLAN.md decision 101, enterprise arc cluster 2
+# consumption): proves tflw's Safety/redaction knobs against the real running apiV2, not just
+# tflw's own unit tests (packages/runtime/test/{allow-hosts,evidence-level,field-redaction}.test.ts).
+#
+# Run under `--env safetyRedaction` (or `npm run test:safety`) — its own dedicated env, same
+# blast-radius reasoning as `mtlsSidecar` (tflw.config): `redact` has no CLI override, so
+# declaring it under `local` would mask matching fields in every other file's report too.
+#
+# `allow hosts`'s positive case (a real host allowed) is proven here implicitly — every request
+# below runs fine under `env local`'s own `allow hosts "localhost"` in the default suite; this
+# file's own env doesn't repeat that declaration since `redact` is the feature under test here.
+# The *negative* case (a host genuinely blocked) lives in
+# tests/.demo-fail/allow-hosts-blocked.tflw, its own dedicated env for the same reason.
+#
+# `evidence`'s levels have no per-test grammar surface to assert on directly (they trim what the
+# *report* shows, never what `expect`/`capture` see) — proven by running this same file under
+# `--evidence headers-only`/`--evidence none` and inspecting the emitted report.html, per the
+# manual verification step in plan_v2.md Part P / PROGRESS.md's M23 entry.
+
+@auth @safety @identityOps
+test "`/profile/export` returns real PII — the assertion sees the true value even though the report will mask it" as admin
+  api GET /profile/export
+  expect status equals 200
+  expect body.email equals env(ADMIN_EMAIL)
+  expect body.address.street matches "^[0-9]+ Maple Ave$"
+  expect body.address.city matches "^(Springfield|Riverside|Fairview|Georgetown|Madison)$"
+  expect body.address.postalCode matches "^[0-9]{5}$"
+  expect body.phone matches "^\\+1-[0-9]{3}-[0-9]{3}-[0-9]{4}$"
+
+@auth @safety @identityOps
+test "the same profile export is stable across two calls (deterministic PII, not random)" as admin
+  api GET /profile/export
+  expect status equals 200
+  capture body.phone as firstPhone
+  capture body.address.postalCode as firstPostal
+
+  api GET /profile/export
+  expect status equals 200
+  expect body.phone equals "{firstPhone}"
+  expect body.address.postalCode equals "{firstPostal}"

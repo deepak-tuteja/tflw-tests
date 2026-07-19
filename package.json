@@ -17,6 +17,7 @@
     "refresh-tflw": "node scripts/refresh-tflw.mjs",
     "test": "tflw run",
     "test:mtls": "tflw run --env mtlsSidecar tests/mtls.tflw",
+    "test:safety": "tflw run --env safetyRedaction tests/safety-redaction.tflw",
     "regression": "node scripts/regression.mjs"
   },
   "dependencies": {

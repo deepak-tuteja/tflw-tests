@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { OauthModule } from './oauth/oauth.module';
+import { ProfileExportModule } from './profile-export/profile-export.module';
 import { ProductsModule } from './products/products.module';
 import { OrdersModule } from './orders/orders.module';
 import { CategoriesModule } from './categories/categories.module';
@@ -60,6 +61,7 @@ import { CartModule } from './cart/cart.module';
     HealthModule,
     AuthModule,
     OauthModule,
+    ProfileExportModule,
     CategoriesModule,
     ProductsModule,
     OrdersModule,
