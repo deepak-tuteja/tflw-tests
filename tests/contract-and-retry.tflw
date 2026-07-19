@@ -1,0 +1,43 @@
+# contract-and-retry.tflw — M24 (enterprise arc cluster 3 consumption, testFlow PLAN.md decision
+# 102): `expect body matches schema "Name" from "source"` (contract validation via real ajv,
+# closes TFLW-GAPS.md gap #6) and `retry honoring "Retry-After" up to N` (per-step retry, closes
+# gap #5). `/openapi.json` is served unversioned (`env local`'s `api root` service, see
+# tflw.config's comment) — hence the absolute `http://localhost:4001/openapi.json` source below,
+# tflw's own documented multi-service limitation for a relative schema source.
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+@contract @catalogOps
+test "a real product response matches its documented OpenAPI schema" as admin
+  api POST /products body { name: unique("Contract Widget"), price: 12.5, stock: 4, categoryId: {categoryId} }
+  expect status equals 201
+  capture body.id as productId
+
+  api GET /products/{productId}
+  expect status equals 200
+  expect body matches schema "ProductResponseDto" from "http://localhost:4001/openapi.json"
+
+@contract @catalogOps
+test "an obviously wrong schema name correctly does not match" as admin
+  api POST /products body { name: unique("Contract Widget Mismatch"), price: 12.5, stock: 4, categoryId: {categoryId} }
+  expect status equals 201
+  capture body.id as productId
+
+  api GET /products/{productId}
+  expect status equals 200
+  expect body not matches schema "DriftedWidgetResponseDto" from "http://localhost:4001/openapi.json"
+
+@retryafter
+test "a rate-limited request honors a seconds-format Retry-After and succeeds"
+  api POST /retry-demo body { key: random string 8, format: "seconds" }
+    retry honoring "Retry-After" up to 2
+  expect status equals 200
+
+@retryafter
+test "a rate-limited request honors an HTTP-date-format Retry-After and succeeds"
+  api POST /retry-demo body { key: random string 8, format: "date" }
+    retry honoring "Retry-After" up to 2
+  expect status equals 200

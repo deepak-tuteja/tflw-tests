@@ -1,0 +1,14 @@
+# contract-drift.tflw — DEMO-FAIL FIXTURE (M24, testFlow PLAN.md decision 102a): apiV2's
+# `/contract-demo/drifted` endpoint documents a `price` field via `@ApiOkResponse` that its real
+# handler never returns — a realistic "schema says a field exists but the API stopped returning
+# it" drift. Shows the contract matcher actually catching real drift (TFLW-GAPS.md gap #6),
+# not just passing on well-behaved endpoints.
+#
+# Run explicitly (dot-directory, invisible to a bare `tflw run`/`tflw check`):
+#   npx tflw run tests/.demo-fail/contract-drift.tflw --tag demofail
+
+@demofail @contract
+test "a drifted endpoint fails contract validation on its missing documented field"
+  api GET /contract-demo/drifted
+  expect status equals 200
+  expect body matches schema "DriftedWidgetResponseDto" from "http://localhost:4001/openapi.json"

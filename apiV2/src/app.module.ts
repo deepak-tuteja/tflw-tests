@@ -23,6 +23,8 @@ import { CartItem } from './entities/cart-item.entity';
 import { JobsModule } from './jobs/jobs.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { FlakyWidgetModule } from './flaky-widget/flaky-widget.module';
+import { RetryDemoModule } from './retry-demo/retry-demo.module';
+import { ContractDemoModule } from './contract-demo/contract-demo.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { CouponsModule } from './coupons/coupons.module';
 import { CartModule } from './cart/cart.module';
@@ -68,6 +70,8 @@ import { CartModule } from './cart/cart.module';
     JobsModule,
     ReviewsModule,
     FlakyWidgetModule,
+    RetryDemoModule,
+    ContractDemoModule,
     NotificationsModule,
     CouponsModule,
     CartModule,

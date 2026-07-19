@@ -91,7 +91,9 @@ A plain `npx tflw run` already exercises a lot of what to look for in `report/re
 | `@batch` | batch.tflw |
 | `@interleave` | interleaved-sessions.tflw |
 | `@safety` | safety-redaction.tflw, `tests/.demo-fail/allow-hosts-blocked.tflw` |
-| `@demofail` (+ per-scenario `@retryexhausted`/`@waittimeout`/`@badassertion`/`@softmixed`/`@safety`) | `tests/.demo-fail/*.tflw` |
+| `@contract` | contract-and-retry.tflw, `tests/.demo-fail/contract-drift.tflw` |
+| `@retryafter` | contract-and-retry.tflw, `tests/.demo-fail/retry-after-not-honored.tflw` |
+| `@demofail` (+ per-scenario `@retryexhausted`/`@waittimeout`/`@badassertion`/`@softmixed`/`@safety`/`@contract`/`@retryafter`) | `tests/.demo-fail/*.tflw` |
 
 ### Demo-fail / check-only fixtures
 
@@ -100,8 +102,8 @@ tflw's file discovery walks every `.tflw` file except dot-prefixed entries (ther
 config key), so a dot-directory is the only way to keep them out:
 
 ```sh
-# 4 intentionally-failing tests, showing what a real failure/timeout/retry-exhaustion looks like
-# in report.html — never part of the green default suite
+# intentionally-failing tests, showing what a real failure/timeout/retry-exhaustion/contract-
+# drift/un-honored-rate-limit looks like in report.html — never part of the green default suite
 npx tflw run tests/.demo-fail/*.tflw --tag demofail
 
 # 3 deliberately invalid-syntax files, showing tflw check's teaching diagnostics
@@ -111,9 +113,8 @@ npx tflw check tests/.checkonly/unknown-matcher.tflw
 npx tflw check tests/.checkonly/bad-session.tflw
 ```
 
-See `TFLW-FEATURE-GAPS.md` for genuine tflw DSL gaps found while building this suite (no
-page-walk primitive, no `Retry-After`-aware retry, `wait until api` can't carry per-step headers,
-only one `session` per test).
+See `TFLW-GAPS.md` for genuine tflw DSL gaps found while building this suite (no page-walk
+primitive, no arbitrary retry-backoff logic — most other findings there are fixed).
 
 ## Why a separate project, not another folder in testFlow/
 

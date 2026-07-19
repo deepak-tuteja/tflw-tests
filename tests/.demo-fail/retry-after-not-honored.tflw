@@ -1,0 +1,12 @@
+# retry-after-not-honored.tflw — DEMO-FAIL FIXTURE (M24, testFlow PLAN.md decision 102b): a
+# fresh `retry-demo` key with no `retry honoring "Retry-After" up to N` clause — the request is
+# sent exactly once, sees the 429, and the test fails. Shows the gap `retry honoring` closes
+# (TFLW-GAPS.md gap #5): without it, a genuinely rate-limited request just fails.
+#
+# Run explicitly (dot-directory, invisible to a bare `tflw run`/`tflw check`):
+#   npx tflw run tests/.demo-fail/retry-after-not-honored.tflw --tag demofail
+
+@demofail @retryafter
+test "without the retry clause, a rate-limited request just fails"
+  api POST /retry-demo body { key: random string 8 }
+  expect status equals 200
