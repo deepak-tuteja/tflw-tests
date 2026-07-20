@@ -1,0 +1,27 @@
+# mtls-rejection.tflw — PLAN_CI.md decision 6: the negative case `mtls.tflw` deliberately can't
+# cover — a request with no client certificate against the real mTLS-requiring nginx listener
+# (nginx/nginx.conf, `ssl_verify_client on`, port 8444).
+#
+# Confirmed empirically (not assumed): nginx does *not* reject the TLS handshake itself for a
+# missing client cert (it would for one signed by the wrong CA) — it completes the handshake and
+# returns a plain HTTP 400 with an nginx-generated body. So this is a normal status/body
+# assertion, not `expect request fails` (that assertion, testFlow decision 18/M14, is for a
+# genuinely refused *connection* — see `packages/runtime/test/mtls.test.ts` upstream for that
+# case against a fixture server that does hard-reject at the TLS layer).
+#
+# Own file (can't share one with mtls.tflw — one `--env` per run) against its own dedicated env
+# (tflw.config's `mtlsSidecarNoCert`). Lives under `tests/.env-specific/` (new dot-dir, same
+# discovery-exclusion mechanism as `.demo-fail`/`.checkonly`) rather than directly under `tests/`
+# like `mtls.tflw`: unlike that file's assertions (deliberately true under *any* backend, so
+# leaving it in default discovery is harmless), this test's `expect status equals 400` is only
+# true through the no-cert-rejecting sidecar — under the default `env local` it would hit the api
+# directly and get a plain 200, breaking the default `npm test` run.
+#
+#   npx tflw run --env mtlsSidecarNoCert tests/.env-specific/mtls-rejection.tflw
+#   (or: npm run test:mtls-rejection)
+
+@auth @mtls @identityOps
+test "a request without a client cert is rejected by the mTLS-requiring listener"
+  api GET /health
+  expect status equals 400
+  expect body text contains "No required SSL certificate was sent"

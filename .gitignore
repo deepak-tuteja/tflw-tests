@@ -1,5 +1,6 @@
 node_modules/
 report/
+report-by-phase/
 *.log
 .env
 vendor/*.tgz
@@ -14,6 +15,7 @@ nginx/certs/
 # artifacts only.
 PLAN.md
 plan_v2.md
+PLAN_CI.md
 PROGRESS.md
 TFLW-GAPS.md
 TFLW-FEATURE-GAPS.md

@@ -25,6 +25,8 @@ tests/helpers/       JS escape-hatch helpers (page-walk, Retry-After sleep-and-r
 tests/shared/        actions shared across files (e.g. `create product`)
 tests/.demo-fail/    intentionally-failing fixtures, tag-gated + dot-dir-excluded from `tflw run`
 tests/.checkonly/    invalid-syntax fixtures, demonstrated via `tflw check <file>` only
+tests/.env-specific/ passing tests whose assertions only hold under a non-default env (M25),
+                     dot-dir-excluded from `tflw run`/`tflw check` for the same reason
 tflw.config          services, sessions, env, `defaults: timeout wait 5s`
 vendor/              npm-packed tflw tarball (regenerated, not committed)
 scripts/             refresh-tflw.mjs
@@ -39,6 +41,7 @@ node cli.mjs start     # docker compose up -d --build --wait (postgres + api :40
 npm run refresh-tflw   # packs ../testFlow/packages/cli and installs the tarball
 npx tflw run           # runs tests/*.tflw against the running api
 npm run test:mtls      # runs tests/mtls.tflw against the sidecar's mTLS-requiring listener (own env, M22)
+npm run test:mtls-rejection  # runs .env-specific/mtls-rejection.tflw — no client cert, real rejection (M25)
 npm run test:safety    # runs tests/safety-redaction.tflw with `redact` active (own env, M23)
 node cli.mjs stop      # docker compose down -v — drops the DB too (ephemeral per-run isolation)
 ```
@@ -77,7 +80,7 @@ A plain `npx tflw run` already exercises a lot of what to look for in `report/re
 
 | Tag | Files |
 |---|---|
-| `@auth` | auth.tflw, sessions.tflw, generators.tflw, session-refresh-and-oauth2.tflw, mtls.tflw, oauth-token-endpoint.tflw |
+| `@auth` | auth.tflw, sessions.tflw, generators.tflw, session-refresh-and-oauth2.tflw, mtls.tflw, `tests/.env-specific/mtls-rejection.tflw`, oauth-token-endpoint.tflw |
 | `@crud` | auth.tflw, crud-lifecycle.tflw, quantifiers.tflw, data-tables.tflw, generators.tflw, actions-and-helpers.tflw, pagination.tflw, batch.tflw |
 | `@sessions` | sessions.tflw, interleaved-sessions.tflw |
 | `@flaky` | retry-and-flake.tflw |
@@ -95,9 +98,9 @@ A plain `npx tflw run` already exercises a lot of what to look for in `report/re
 | `@retryafter` | contract-and-retry.tflw, `tests/.demo-fail/retry-after-not-honored.tflw` |
 | `@demofail` (+ per-scenario `@retryexhausted`/`@waittimeout`/`@badassertion`/`@softmixed`/`@safety`/`@contract`/`@retryafter`) | `tests/.demo-fail/*.tflw` |
 
-### Demo-fail / check-only fixtures
+### Demo-fail / check-only / env-specific fixtures
 
-Two small sets of fixtures are deliberately excluded from the default `tflw run`/`tflw check` —
+Three small sets of fixtures are deliberately excluded from the default `tflw run`/`tflw check` —
 tflw's file discovery walks every `.tflw` file except dot-prefixed entries (there's no ignore-glob
 config key), so a dot-directory is the only way to keep them out:
 
@@ -111,6 +114,12 @@ npx tflw run tests/.demo-fail/*.tflw --tag demofail
 npx tflw check tests/.checkonly/bad-keyword.tflw
 npx tflw check tests/.checkonly/unknown-matcher.tflw
 npx tflw check tests/.checkonly/bad-session.tflw
+
+# genuinely passing tests (M25) whose assertions are only true under a non-default env — unlike
+# mtls.tflw (whose assertions hold under any backend, so it stays in default discovery),
+# mtls-rejection.tflw's `expect status equals 400` is only true through the no-cert-rejecting
+# mTLS sidecar, so it would break the default green suite if left undotted
+npm run test:mtls-rejection
 ```
 
 See `TFLW-GAPS.md` for genuine tflw DSL gaps found while building this suite (no page-walk

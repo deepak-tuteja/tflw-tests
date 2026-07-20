@@ -1,0 +1,87 @@
+name: CI
+
+# PLAN_CI.md decision 1: post-merge signal only, no PR gate, no branch-protection changes.
+on:
+  push:
+    branches: [main]
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout testFlow-tests
+        uses: actions/checkout@v4
+        with:
+          path: testFlow-tests
+
+      # decision 2: no committed vendor tarball — every run dogfoods tflw's actual current `main`,
+      # checked out fresh as a sibling repo, same as the local dev flow (scripts/refresh-tflw.mjs).
+      - name: Checkout tflw (testFlow)
+        uses: actions/checkout@v4
+        with:
+          repository: deepak-tuteja/tflw
+          path: testFlow
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Needed before refresh-tflw.mjs packs packages/cli below — `npm pack`'s own `prepack`
+      # lifecycle script rebuilds every workspace package cli depends on, which needs devDeps
+      # installed across the whole tflw monorepo, not just packages/cli.
+      - name: Install tflw workspace deps
+        run: npm ci
+        working-directory: testFlow
+
+      # decision 3: apiV2's own lint + test first, before any Docker work — fails fast and
+      # cheaply on a real code/lint bug, ahead of the much slower Docker+regression steps below.
+      - name: apiV2 lint + test
+        run: |
+          npm ci
+          npm run lint
+          npm test
+        working-directory: testFlow-tests/apiV2
+
+      # decision 10: no GitHub Secrets needed — docker-compose.yml already bakes a dev-safe
+      # default into every credential it reads (`${ADMIN_EMAIL:-admin@example.com}` etc.). tflw
+      # itself needs those same values in *its own* process env to authenticate against the
+      # running stack — .env.example carries the identical defaults, so this is just the same
+      # `cp .env.example .env` step README.md's own local Setup section documents.
+      - name: Configure env (dev-safe defaults, matches docker-compose.yml's own fallbacks)
+        run: cp .env.example .env
+        working-directory: testFlow-tests
+
+      # Packs testFlow/packages/cli into a tarball and `npm install`s it here — this is also
+      # testFlow-tests' own dependency install (nothing else in package.json to install).
+      - name: Refresh tflw from the checked-out build
+        run: npm run refresh-tflw
+        working-directory: testFlow-tests
+
+      # decisions 5-8: full suite + every feature-area tag + @smoke + every smoke,<area> combo +
+      # the M25 mtls-rejection/safety-redaction-check phases — each its own fresh Docker restart
+      # (scripts/regression.mjs), archived per-phase into report-by-phase/ as it goes. `--verbose`
+      # (and the resulting GitHub Actions ::group::/::endgroup:: log grouping, tflw decision
+      # 111.8) is auto-detected from GITHUB_ACTIONS — no extra flag needed here.
+      - name: Full regression sweep (12 phases, each its own fresh Docker restart)
+        run: npm run regression
+        working-directory: testFlow-tests
+
+      # decision 9: surfaces pass/fail inline in the Actions run summary / PR checks, not just a
+      # bare red X on the job.
+      - name: Publish JUnit results inline
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: tflw regression
+          path: 'testFlow-tests/report-by-phase/*/junit.xml'
+          reporter: java-junit
+
+      # decision 9: every phase's report.html/junit.xml/results.json (+ events.ndjson under
+      # --format ndjson, unused here) uploaded — pass or fail, not failure-only — so a green run's
+      # evidence stays inspectable too, not just a failing one's.
+      - name: Upload full report artifacts (every phase)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-reports
+          path: testFlow-tests/report-by-phase/
