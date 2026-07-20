@@ -38,6 +38,8 @@ async function bootstrap() {
 
   const port = process.env.PORT ?? 4001;
   await app.listen(port);
-  console.log(`api v2 listening on :${port} (prefix /v1, docs /docs, spec /openapi.json)`);
+  console.log(
+    `api v2 listening on :${port} (prefix /v1, docs /docs, spec /openapi.json)`,
+  );
 }
-bootstrap();
+void bootstrap();

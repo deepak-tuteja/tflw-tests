@@ -55,7 +55,10 @@ export class AuthController {
 
   @Post('session-login')
   @HttpCode(200)
-  sessionLogin(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
+  sessionLogin(
+    @Body() dto: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     return this.auth.sessionLogin(dto, res, { withRefreshCookie: false });
   }
 
@@ -66,20 +69,34 @@ export class AuthController {
   // cookie, and it asserts the raw header directly rather than chaining it forward.
   @Post('session-login-full')
   @HttpCode(200)
-  sessionLoginFull(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
+  sessionLoginFull(
+    @Body() dto: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     return this.auth.sessionLogin(dto, res, { withRefreshCookie: true });
   }
 
   @Post('session-refresh')
   @HttpCode(200)
-  sessionRefresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    return this.auth.sessionRefresh(req.cookies?.session_refresh, res);
+  sessionRefresh(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const sessionRefreshCookie = req.cookies?.session_refresh as
+      string | undefined;
+    return this.auth.sessionRefresh(sessionRefreshCookie, res);
   }
 
   @Post('session-logout')
   @HttpCode(200)
-  async sessionLogout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    await this.auth.sessionLogout(req.cookies?.session, req.cookies?.session_refresh, res);
+  async sessionLogout(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const sessionCookie = req.cookies?.session as string | undefined;
+    const sessionRefreshCookie = req.cookies?.session_refresh as
+      string | undefined;
+    await this.auth.sessionLogout(sessionCookie, sessionRefreshCookie, res);
     return { status: 'ok' };
   }
 }

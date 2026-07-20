@@ -10,19 +10,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout testFlow-tests
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: testFlow-tests
 
       # decision 2: no committed vendor tarball — every run dogfoods tflw's actual current `main`,
       # checked out fresh as a sibling repo, same as the local dev flow (scripts/refresh-tflw.mjs).
       - name: Checkout tflw (testFlow)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: deepak-tuteja/tflw
           path: testFlow
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
 
@@ -74,7 +74,7 @@ jobs:
       # on the first real run of this workflow.
       - name: Publish JUnit results inline
         if: always()
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         with:
           name: tflw regression
           working-directory: testFlow-tests
@@ -86,7 +86,7 @@ jobs:
       # evidence stays inspectable too, not just a failing one's.
       - name: Upload full report artifacts (every phase)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: regression-reports
           path: testFlow-tests/report-by-phase/
