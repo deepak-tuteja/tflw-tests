@@ -10,6 +10,7 @@ import { TokensService } from '../tokens.service';
 import { TokenRecordsService } from '../token-records.service';
 import { AuthService } from '../auth.service';
 import { AuthedUser } from './bearer-auth.guard';
+import { UserRole } from '../../entities/user.entity';
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -30,17 +31,32 @@ export class AnyAuthGuard implements CanActivate {
     const cookie = req.cookies?.session as string | undefined;
 
     if (header?.startsWith('Bearer ')) {
-      const decoded = await this.tokens.verify(header.slice('Bearer '.length), 'access');
-      (req as Request & { user: AuthedUser }).user = { id: decoded.sub, role: decoded.role! };
+      const decoded = await this.tokens.verify(
+        header.slice('Bearer '.length),
+        'access',
+      );
+      (req as Request & { user: AuthedUser }).user = {
+        id: decoded.sub,
+        role: decoded.role! as UserRole,
+      };
       return true;
     }
 
     if (header?.startsWith('Basic ')) {
-      const [email, password] = Buffer.from(header.slice('Basic '.length), 'base64')
+      const [email, password] = Buffer.from(
+        header.slice('Basic '.length),
+        'base64',
+      )
         .toString('utf8')
         .split(':');
-      const user = await this.auth.validateCredentials(email ?? '', password ?? '');
-      (req as Request & { user: AuthedUser }).user = { id: user.id, role: user.role };
+      const user = await this.auth.validateCredentials(
+        email ?? '',
+        password ?? '',
+      );
+      (req as Request & { user: AuthedUser }).user = {
+        id: user.id,
+        role: user.role,
+      };
       return true;
     }
 
@@ -53,10 +69,15 @@ export class AnyAuthGuard implements CanActivate {
           throw new ForbiddenException('missing or invalid CSRF token');
         }
       }
-      (req as Request & { user: AuthedUser }).user = { id: decoded.sub, role: decoded.role! };
+      (req as Request & { user: AuthedUser }).user = {
+        id: decoded.sub,
+        role: decoded.role! as UserRole,
+      };
       return true;
     }
 
-    throw new UnauthorizedException('missing bearer token, session cookie, or Basic credentials');
+    throw new UnauthorizedException(
+      'missing bearer token, session cookie, or Basic credentials',
+    );
   }
 }

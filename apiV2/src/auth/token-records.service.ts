@@ -6,7 +6,8 @@ import { TokenRecord } from '../entities/token-record.entity';
 @Injectable()
 export class TokenRecordsService {
   constructor(
-    @InjectRepository(TokenRecord) private readonly records: Repository<TokenRecord>,
+    @InjectRepository(TokenRecord)
+    private readonly records: Repository<TokenRecord>,
   ) {}
 
   async issue(userId: string, ttlMs: number): Promise<TokenRecord> {
@@ -46,7 +47,8 @@ export class TokenRecordsService {
       .where('id = :jti AND revoked_at IS NULL AND expires_at > now()', { jti })
       .returning('*')
       .execute();
-    const row = result.raw[0] as TokenRecord | undefined;
+    const raw = result.raw as TokenRecord[];
+    const row: TokenRecord | undefined = raw[0];
     if (!row) {
       throw new UnauthorizedException('token is revoked or expired');
     }

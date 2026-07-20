@@ -9,6 +9,7 @@ import { Request } from 'express';
 import { TokensService } from '../tokens.service';
 import { TokenRecordsService } from '../token-records.service';
 import { AuthedUser } from './bearer-auth.guard';
+import { UserRole } from '../../entities/user.entity';
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -37,7 +38,7 @@ export class SessionAuthGuard implements CanActivate {
 
     (req as Request & { user: AuthedUser }).user = {
       id: decoded.sub,
-      role: decoded.role!,
+      role: decoded.role! as UserRole,
     };
     return true;
   }

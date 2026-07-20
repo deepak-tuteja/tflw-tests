@@ -67,13 +67,18 @@ jobs:
         working-directory: testFlow-tests
 
       # decision 9: surfaces pass/fail inline in the Actions run summary / PR checks, not just a
-      # bare red X on the job.
+      # bare red X on the job. `working-directory` is required, not cosmetic — this action shells
+      # out to `git ls-files` internally, and the job's own root (GITHUB_WORKSPACE) isn't a git
+      # repo itself (both testFlow-tests and testFlow are checked out into subdirectories above);
+      # without it the step fails outright with "fatal: not a git repository", found empirically
+      # on the first real run of this workflow.
       - name: Publish JUnit results inline
         if: always()
         uses: dorny/test-reporter@v1
         with:
           name: tflw regression
-          path: 'testFlow-tests/report-by-phase/*/junit.xml'
+          working-directory: testFlow-tests
+          path: 'report-by-phase/*/junit.xml'
           reporter: java-junit
 
       # decision 9: every phase's report.html/junit.xml/results.json (+ events.ndjson under

@@ -20,14 +20,21 @@ export class RateLimitGuard implements CanActivate {
   private readonly hits = new Map<string, number[]>();
 
   canActivate(context: ExecutionContext): boolean {
-    const req = context.switchToHttp().getRequest<Request & { user?: AuthedUser }>();
+    const req = context
+      .switchToHttp()
+      .getRequest<Request & { user?: AuthedUser }>();
     const res = context.switchToHttp().getResponse<Response>();
-    const key = `${req.user?.id ?? 'anon'}:${req.params.productId}`;
+    const key = `${req.user?.id ?? 'anon'}:${String(req.params.productId)}`;
     const now = Date.now();
-    const recent = (this.hits.get(key) ?? []).filter((t) => now - t < WINDOW_MS);
+    const recent = (this.hits.get(key) ?? []).filter(
+      (t) => now - t < WINDOW_MS,
+    );
 
     if (recent.length >= MAX_REQUESTS) {
-      const retryAfterSeconds = Math.max(1, Math.ceil((recent[0] + WINDOW_MS - now) / 1000));
+      const retryAfterSeconds = Math.max(
+        1,
+        Math.ceil((recent[0] + WINDOW_MS - now) / 1000),
+      );
       res.setHeader('Retry-After', String(retryAfterSeconds));
       throw new HttpException(
         'rate limit exceeded — try again shortly',
