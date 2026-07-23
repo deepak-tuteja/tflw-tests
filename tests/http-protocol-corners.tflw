@@ -1,0 +1,57 @@
+# http-protocol-corners.tflw — plan_v2.md Part R, M30 (Cluster A: HTTP protocol corners): a
+# deprecated resource alias exercising `without redirects` for real (`GET /catalog/:id` 302s to
+# `/v1/products/:id`, decision 10), and transparent gzip decompression (decision 11 — apiV2's
+# `compression` middleware forces every response through gzip regardless of size, so even a tiny
+# body like `/health`'s proves the runtime's `undici`-based fetch client actually decompresses).
+#
+# HEAD/OPTIONS (decision 10's other half — tflw's grammar has no HTTP verb beyond GET/POST/PUT/
+# DELETE/PATCH at all, confirmed via `packages/lang/src/ast.ts`'s `HttpMethod` union) is a
+# parse-time rejection, not a runtime scenario — proven instead as a `.checkonly` fixture,
+# `tests/.checkonly/http-method-head.tflw`. Repeated query params (decision 9) land as a 2-line
+# addendum to `product-query.tflw`'s existing filter test, not a dedicated scenario here — tflw's
+# `api GET <path>` is literal/interpolated text, so typing a repeated key needs nothing new.
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+@httpProtocolCorners @redirects @catalogOps
+test "GET /catalog/:id — the default-follow request lands on the real product, 200"
+  api POST /products body { name: unique("Redirect Widget"), price: 5, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  # No `without redirects` clause — the runtime's default `redirect: 'follow'` chases the 302
+  # straight through to the real resource, same as a browser typing the old bookmarked URL.
+  api GET /catalog/{productId}
+  expect status equals 200
+  expect body.id equals "{productId}"
+
+@httpProtocolCorners @redirects @catalogOps
+test "GET /catalog/:id without redirects — the 3xx itself becomes observable, not chased through"
+  api POST /products body { name: unique("Redirect Widget"), price: 5, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api GET /catalog/{productId} without redirects
+  expect status equals 302
+  expect header "location" equals "/v1/products/{productId}"
+
+@httpProtocolCorners @compression
+test "GET /health — a real gzipped response, transparently decompressed by tflw's fetch client"
+  # apiV2's `compression({ threshold: 0 })` forces even this tiny body through gzip.
+  # `content-encoding: gzip` on the trace proves a real compressed response went over the wire;
+  # the JSON body still resolving cleanly proves the runtime actually decompressed it rather than
+  # passing it through unreadable — a broken decompression would surface here as `body` failing
+  # to resolve at all, not merely a wrong value.
+  api GET /health
+  expect status equals 200
+  expect header "content-encoding" equals "gzip"
+  expect body.status equals "ok"

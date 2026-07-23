@@ -48,6 +48,12 @@ test "filtering, sorting, and full-text search combine, scoped to this test's ow
   expect status equals 200
   expect body has count 3
 
+  # M30 (repeated query params, decision 9): `api GET <path>` is literal/interpolated text, so
+  # typing a repeated key is trivial — Express folds it into an array, which `FindProductsQueryDto`
+  # (a plain `q?: string`) correctly rejects as 422 rather than silently picking one or crashing.
+  api GET /products?q={tag}&q={tag}
+  expect status equals 422
+
 @query @crud @regression @catalogOps
 test "omitting sort defaults to name ascending, not database insertion order"
   let tag = unique("catalog-defaultsort-tag")

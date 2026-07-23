@@ -4,6 +4,7 @@ import { Product } from '../entities/product.entity';
 import { OrderItem } from '../entities/order-item.entity';
 import { Review } from '../entities/review.entity';
 import { ProductsController } from './products.controller';
+import { CatalogRedirectController } from './catalog-redirect.controller';
 import { ProductsService } from './products.service';
 import { CategoriesModule } from '../categories/categories.module';
 import { AuthModule } from '../auth/auth.module';
@@ -16,7 +17,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     AuthModule,
     NotificationsModule,
   ],
-  controllers: [ProductsController],
+  controllers: [ProductsController, CatalogRedirectController],
   providers: [ProductsService],
   exports: [ProductsService],
 })

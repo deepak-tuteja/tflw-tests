@@ -99,6 +99,7 @@ A plain `npx tflw run` already exercises a lot of what to look for in `report/re
 | `@retryafter` | contract-and-retry.tflw, `tests/.demo-fail/retry-after-not-honored.tflw` |
 | `@demofail` (+ per-scenario `@retryexhausted`/`@waittimeout`/`@badassertion`/`@softmixed`/`@safety`/`@contract`/`@retryafter`) | `tests/.demo-fail/*.tflw` |
 | `@requestlifecycle` | `tests/.env-specific/unreachable-host.tflw` (M29) |
+| `@httpProtocolCorners` | `http-protocol-corners.tflw` (M30 — `without redirects`, gzip decompression) |
 
 ### Demo-fail / check-only / env-specific fixtures
 
@@ -111,11 +112,13 @@ config key), so a dot-directory is the only way to keep them out:
 # drift/un-honored-rate-limit looks like in report.html — never part of the green default suite
 npx tflw run tests/.demo-fail/*.tflw --tag demofail
 
-# 3 deliberately invalid-syntax files, showing tflw check's teaching diagnostics
-# (TF011 unrecognised keyword, TF014 unrecognised matcher, TF028 undeclared session)
+# 4 deliberately invalid-syntax files, showing tflw check's teaching diagnostics
+# (TF011 unrecognised keyword, TF014 unrecognised matcher, TF028 undeclared session,
+# TF012 unknown HTTP method — M30, tflw's grammar has no HEAD/OPTIONS at all)
 npx tflw check tests/.checkonly/bad-keyword.tflw
 npx tflw check tests/.checkonly/unknown-matcher.tflw
 npx tflw check tests/.checkonly/bad-session.tflw
+npx tflw check tests/.checkonly/http-method-head.tflw
 
 # genuinely passing tests (M25) whose assertions are only true under a non-default env — unlike
 # mtls.tflw (whose assertions hold under any backend, so it stays in default discovery),

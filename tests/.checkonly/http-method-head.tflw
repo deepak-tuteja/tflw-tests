@@ -1,0 +1,14 @@
+# http-method-head.tflw — CHECK-ONLY FIXTURE (M30, plan_v2.md Part R decision 10): tflw's grammar
+# has no HTTP verb beyond GET/POST/PUT/DELETE/PATCH at all — confirmed via
+# `packages/lang/src/ast.ts`'s `HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'` union —
+# so `api HEAD ...`/`api OPTIONS ...` never parse. Demonstrates `tflw check`'s teaching diagnostic
+# (TF012: unknown HTTP method after `api`). `OPTIONS` hits the exact same diagnostic for the exact
+# same reason (both confirmed empirically); only one is kept here to avoid a near-duplicate fixture
+# — see TFLW-GAPS.md gap #16 for the full writeup, including the confirmed `OPTIONS` behavior.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/http-method-head.tflw
+
+test "a HEAD request — a verb tflw's grammar doesn't have at all"
+  api HEAD /health
+  expect status equals 200
