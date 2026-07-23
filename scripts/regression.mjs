@@ -59,6 +59,12 @@ const PHASES = [
     cmd: ['npx', 'tflw', 'run', '--no-color', ...CI_VERBOSE, '--env', 'mtlsSidecarNoCert', 'tests/.env-specific/mtls-rejection.tflw'].join(' '),
   },
   { name: 'safety-redaction-check', cmd: 'node scripts/verify-redaction.mjs' },
+  // M29 (plan_v2.md Part R, coverage audit): the tests/.demo-fail/ set and 6 previously-unproven
+  // CLI flags had no repeatable, regression-catching proof before this — only ad-hoc manual runs
+  // during past milestones. Same "script it, don't trust a one-time manual check forever" reasoning
+  // as safety-redaction-check above.
+  { name: 'demo-fail-check', cmd: 'node scripts/verify-demofail.mjs' },
+  { name: 'cli-flags-check', cmd: 'node scripts/verify-cli-flags.mjs' },
 ];
 
 function run(cmd, opts = {}) {

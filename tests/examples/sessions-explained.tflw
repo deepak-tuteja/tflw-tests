@@ -40,3 +40,17 @@ test "as admin, shopper opts into both at once — both sessions' contributions 
     header "Authorization" is ""
   expect status equals 200
   expect body.role equals "user"
+
+# M29: `session <name> oauth2 ...` (decision 99c) is sugar over an ordinary session block — instead
+# of a login-request recipe, it declares a token URL + client credentials and tflw runs the
+# client-credentials grant itself, proactively re-fetching ahead of the token's own `expires_in`
+# rather than waiting to observe a real 401 first (tflw.config's `oauthShort`, ~5s TTL). Session
+# refresh-on-401 for an *ordinary* (non-oauth2) session is the other half of the same decision —
+# demonstrating it needs genuinely waiting out a real TTL, which tests/session-refresh-and-
+# oauth2.tflw already does at full length (its first test); not repeated here to keep this file
+# minimal and fast.
+@examples @sessions
+test "as oauthLong — the oauth2 session sugar authenticates via a real client-credentials grant" as oauthLong
+  api GET /auth/profile
+  expect status equals 200
+  expect body.role equals "admin"

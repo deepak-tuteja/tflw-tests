@@ -39,7 +39,10 @@ test "an expired coupon is rejected"
   capture body.accessToken as shopperToken
 
   let code = unique("EXPIRED")
-  api POST /coupons body { code: {code}, type: "fixed", value: 5, expiresAt: "2020-01-01T00:00:00Z", minOrderAmount: 0, usageLimit: 10 }
+  # M29: `random date in past` (up to 365 days back) is always < now, so this stays a genuine
+  # "already expired" coupon without a hardcoded literal.
+  let expiredDate = random date in past
+  api POST /coupons body { code: {code}, type: "fixed", value: 5, expiresAt: "{expiredDate}", minOrderAmount: 0, usageLimit: 10 }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
 
@@ -66,7 +69,8 @@ test "a coupon below its minimum order amount is rejected"
   capture body.accessToken as shopperToken
 
   let code = unique("MINAMOUNT")
-  api POST /coupons body { code: {code}, type: "fixed", value: 5, expiresAt: "2099-01-01T00:00:00Z", minOrderAmount: 100, usageLimit: 10 }
+  let futureDate = random date in future
+  api POST /coupons body { code: {code}, type: "fixed", value: 5, expiresAt: "{futureDate}", minOrderAmount: 100, usageLimit: 10 }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
 
@@ -93,7 +97,8 @@ test "a coupon that has reached its usage limit is rejected"
   capture body.accessToken as shopperToken
 
   let code = unique("LIMIT1")
-  api POST /coupons body { code: {code}, type: "fixed", value: 2, expiresAt: "2099-01-01T00:00:00Z", minOrderAmount: 0, usageLimit: 1 }
+  let futureDate = random date in future
+  api POST /coupons body { code: {code}, type: "fixed", value: 2, expiresAt: "{futureDate}", minOrderAmount: 0, usageLimit: 1 }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
 
@@ -152,7 +157,8 @@ test "a valid coupon discounts a successful checkout"
   capture body.accessToken as shopperToken
 
   let code = unique("SAVE10PCT")
-  api POST /coupons body { code: {code}, type: "percent", value: 10, expiresAt: "2099-01-01T00:00:00Z", minOrderAmount: 10, usageLimit: 5 }
+  let futureDate = random date in future
+  api POST /coupons body { code: {code}, type: "percent", value: 10, expiresAt: "{futureDate}", minOrderAmount: 10, usageLimit: 5 }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
 
@@ -182,42 +188,45 @@ test "5 concurrent order requests against stock 3 produce exactly 3 successes an
 
 @coupons @crud @orderOps
 test "creating a coupon with malformed or missing fields is a clean 422"
-  api POST /coupons body { code: unique("BADTYPE"), type: "bogus", value: 10, expiresAt: "2099-01-01T00:00:00Z", minOrderAmount: 0, usageLimit: 1 }
+  let futureDate = random date in future
+  api POST /coupons body { code: unique("BADTYPE"), type: "bogus", value: 10, expiresAt: "{futureDate}", minOrderAmount: 0, usageLimit: 1 }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 422
   expect any body.errors.field equals "type"
 
-  api POST /coupons body { code: unique("NOVALUE"), type: "fixed", expiresAt: "2099-01-01T00:00:00Z", minOrderAmount: 0, usageLimit: 1 }
+  api POST /coupons body { code: unique("NOVALUE"), type: "fixed", expiresAt: "{futureDate}", minOrderAmount: 0, usageLimit: 1 }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 422
   expect any body.errors.field equals "value"
 
-  api POST /coupons body { type: "fixed", value: 5, expiresAt: "2099-01-01T00:00:00Z", minOrderAmount: 0, usageLimit: 1 }
+  api POST /coupons body { type: "fixed", value: 5, expiresAt: "{futureDate}", minOrderAmount: 0, usageLimit: 1 }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 422
   expect any body.errors.field equals "code"
 
 @coupons @crud @orderOps
 test "creating a coupon with out-of-range values is a clean 422"
-  api POST /coupons body { code: unique("NEGVALUE"), type: "fixed", value: -5, expiresAt: "2099-01-01T00:00:00Z", minOrderAmount: 0, usageLimit: 1 }
+  let futureDate = random date in future
+  api POST /coupons body { code: unique("NEGVALUE"), type: "fixed", value: -5, expiresAt: "{futureDate}", minOrderAmount: 0, usageLimit: 1 }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 422
   expect any body.errors.field equals "value"
 
-  api POST /coupons body { code: unique("ZEROLIMIT"), type: "fixed", value: 5, expiresAt: "2099-01-01T00:00:00Z", minOrderAmount: 0, usageLimit: 0 }
+  api POST /coupons body { code: unique("ZEROLIMIT"), type: "fixed", value: 5, expiresAt: "{futureDate}", minOrderAmount: 0, usageLimit: 0 }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 422
   expect any body.errors.field equals "usageLimit"
 
 @coupons @crud @regression @orderOps
 test "a percent coupon above 100 is rejected — the discount can never exceed the subtotal"
-  api POST /coupons body { code: unique("OVER100PCT"), type: "percent", value: 150, expiresAt: "2099-01-01T00:00:00Z", minOrderAmount: 0, usageLimit: 1 }
+  let futureDate = random date in future
+  api POST /coupons body { code: unique("OVER100PCT"), type: "percent", value: 150, expiresAt: "{futureDate}", minOrderAmount: 0, usageLimit: 1 }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 422
   expect body.detail contains "100"
 
   # A fixed coupon has no such ceiling — a large flat discount is legitimate.
-  api POST /coupons body { code: unique("BIGFIXED"), type: "fixed", value: 500, expiresAt: "2099-01-01T00:00:00Z", minOrderAmount: 0, usageLimit: 1 }
+  api POST /coupons body { code: unique("BIGFIXED"), type: "fixed", value: 500, expiresAt: "{futureDate}", minOrderAmount: 0, usageLimit: 1 }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
 
@@ -227,18 +236,20 @@ test "a non-admin bearer cannot create a coupon"
   expect status equals 200
   capture body.accessToken as userAToken
 
-  api POST /coupons body { code: unique("SNEAKY"), type: "fixed", value: 5, expiresAt: "2099-01-01T00:00:00Z", minOrderAmount: 0, usageLimit: 1 }
+  let futureDate = random date in future
+  api POST /coupons body { code: unique("SNEAKY"), type: "fixed", value: 5, expiresAt: "{futureDate}", minOrderAmount: 0, usageLimit: 1 }
     header "Authorization" is "Bearer {userAToken}"
   expect status equals 403
 
 @coupons @crud @orderOps
 test "creating a coupon with an already-used code is a clean 409, not a silent overwrite"
   let code = unique("DUPECODE")
-  api POST /coupons body { code: {code}, type: "fixed", value: 5, expiresAt: "2099-01-01T00:00:00Z", minOrderAmount: 0, usageLimit: 1 }
+  let futureDate = random date in future
+  api POST /coupons body { code: {code}, type: "fixed", value: 5, expiresAt: "{futureDate}", minOrderAmount: 0, usageLimit: 1 }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
 
-  api POST /coupons body { code: {code}, type: "fixed", value: 50, expiresAt: "2099-01-01T00:00:00Z", minOrderAmount: 0, usageLimit: 1 }
+  api POST /coupons body { code: {code}, type: "fixed", value: 50, expiresAt: "{futureDate}", minOrderAmount: 0, usageLimit: 1 }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 409
   expect body.detail contains "already exists"
@@ -246,7 +257,8 @@ test "creating a coupon with an already-used code is a clean 409, not a silent o
 @coupons @concurrency @regression @orderOps
 test "3 concurrent checkouts against a usageLimit:1 coupon produce exactly 1 success and 2 conflicts"
   let code = unique("RACELIMIT")
-  api POST /coupons body { code: {code}, type: "fixed", value: 1, expiresAt: "2099-01-01T00:00:00Z", minOrderAmount: 0, usageLimit: 1 }
+  let futureDate = random date in future
+  api POST /coupons body { code: {code}, type: "fixed", value: 1, expiresAt: "{futureDate}", minOrderAmount: 0, usageLimit: 1 }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
 

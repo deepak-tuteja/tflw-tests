@@ -1,12 +1,14 @@
 # actions-and-helpers.tflw — a same-run `action`+`import` (shared/catalog.tflw) and the JS
 # escape hatch (`use`, helpers/receipt.ts), chained in one flow.
 #
-# The second test below is illustrative, not a real business scenario (M21): unlike uuid/password/
-# base64 (which all had a genuine apiV2 need — UUID primary keys, register's password field, the
-# existing Basic-auth guard), nothing in this app returns or consumes a hex-encoded value, and url
-# encoding of request paths/queries already happens automatically on every interpolated `{var}`
-# (tflw decision 62) — so there's no organic gap for `hex`/`url` encode/decode to close here. Kept
-# only for dogfood coverage of the two forms decision 9/uuid/password/base64 didn't exercise.
+# The second test below is illustrative, not a real business scenario (M21, extended M29): unlike
+# `base64 encode` (a genuine apiV2 need — the existing Basic-auth guard, tests/basic-auth.tflw),
+# nothing in this app returns or consumes a hex-encoded value or a base64-encoded value that needs
+# *decoding*, and url encoding of request paths/queries already happens automatically on every
+# interpolated `{var}` (tflw decision 62) — so there's no organic gap for `hex`/`url`
+# encode/decode or `base64 decode` to close here (M29's coverage audit confirmed `base64 decode`
+# specifically had zero usage anywhere, same non-finding shape as hex/url). Kept only for dogfood
+# coverage of the forms decision 9/uuid/password/`base64 encode` didn't exercise.
 
 import "./shared/catalog.tflw"
 use "./helpers/receipt.ts"
@@ -33,13 +35,15 @@ test "action + JS escape hatch: create, receipt, delete"
   expect status equals 204
 
 @crud @actions
-test "illustrative: hex/url transforms round-trip through a real request/response (M21)"
+test "illustrative: hex/url/base64 transforms round-trip through a real request/response (M21, M29)"
   let tag = unique("hex-url")
   let hexed = hex encode("{tag}")
   let unhexed = hex decode(hexed)
   let urled = url encode("{tag} widget")
   let unurled = url decode(urled)
-  let productName = "{unhexed} {unurled}"
+  let b64ed = base64 encode("{tag}")
+  let unb64ed = base64 decode(b64ed)
+  let productName = "{unhexed} {unurled} {unb64ed}"
 
   api POST /products body { name: {productName}, price: 5, stock: 1, categoryId: {categoryId} }
     header "Authorization" is "Bearer {adminToken}"

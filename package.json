@@ -19,6 +19,7 @@
     "test:mtls": "tflw run --env mtlsSidecar tests/mtls.tflw",
     "test:mtls-rejection": "tflw run --env mtlsSidecarNoCert tests/.env-specific/mtls-rejection.tflw",
     "test:safety": "tflw run --env safetyRedaction tests/safety-redaction.tflw",
+    "test:unreachable-host": "tflw run --env unreachableHost tests/.env-specific/unreachable-host.tflw",
     "regression": "node scripts/regression.mjs"
   },
   "dependencies": {

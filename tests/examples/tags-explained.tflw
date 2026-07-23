@@ -2,7 +2,14 @@
 # tests run via `tflw run --tag <name>`. A test can carry more than one tag; `--tag` matches any
 # test that has it, regardless of what else it's tagged with. Try: `npx tflw run --tag examples`
 # (every test in this whole examples/ directory, since each file tags its tests `@examples`),
-# or `npx tflw run --tag smoke` (just the one test below).
+# or `npx tflw run --tag smoke` (just the first test below).
+#
+# M29: `--tag a,b,c` (M17, comma-separated, whitespace-tolerant, OR semantics — "everything tagged
+# a OR b OR c") composes with `--only` as AND, same as a single `--tag` value always has. The two
+# tests below already demonstrate this without any extra DSL content needed (the composition is a
+# CLI-argument-parsing feature, not something a test file's own content changes): `npx tflw run
+# tests/examples/tags-explained.tflw --tag smoke,slow` matches *both* tests (the union), while
+# `--tag smoke` alone matches only the first and `--tag slow` alone matches only the second.
 
 @examples @smoke
 test "tagged @examples and @smoke — matched by either --tag examples or --tag smoke"

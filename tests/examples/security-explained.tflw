@@ -1,0 +1,35 @@
+# security-explained.tflw — M29 (plan_v2.md Part R): the enterprise-arc cluster 2/3 security/config
+# surface (`allow hosts`, `evidence`, `redact`, mTLS `cert`/`key`) — added to `tests/examples/`
+# because M13's systematic reference set (one file per SPEC.md feature area) predates all four.
+#
+# Unlike most `tests/examples/` files, this one can't be a single self-contained teaching file
+# under the default `env local` for every feature: `allow hosts`'s *positive* case (a normal
+# request through an allowlist that includes the host) is genuinely testable under `env local` —
+# it already declares `allow hosts "localhost"` for exactly this reason — but the other three only
+# mean anything under their own dedicated env (a `.tflw` file can't switch `--env` mid-file; env
+# selection is a run-wide CLI flag). Rather than duplicate those dedicated fixtures' real
+# assertions here just to have them "in" this file, this is a real positive-case test plus a
+# systematic index pointing at each dedicated proof:
+#
+# - `allow hosts` (negative case — a host genuinely blocked): tests/.demo-fail/allow-hosts-blocked.tflw
+#   (`npx tflw run tests/.demo-fail/allow-hosts-blocked.tflw --env allowHostsBlocked --tag demofail`)
+# - `evidence` levels (`full`/`headers-only`/`none`): tests/safety-redaction.tflw exercises
+#   `--evidence` directly at run time — no dedicated env needed for that flag.
+# - `redact` (field-level PII masking): tests/safety-redaction.tflw (`env safetyRedaction`),
+#   durably proven for real (not just its own assertions) by `scripts/verify-redaction.mjs`.
+# - mTLS `cert`/`key` (positive case — a real client cert accepted): tests/mtls.tflw
+#   (`npx tflw run --env mtlsSidecar tests/mtls.tflw`).
+# - mTLS (negative case — no client cert): tests/.env-specific/mtls-rejection.tflw
+#   (`npx tflw run --env mtlsSidecarNoCert tests/.env-specific/mtls-rejection.tflw`).
+# - `expect request connects`/`fails` (the matcher this whole investigation was chasing when it
+#   found that a wrong-CA mTLS cert *doesn't* produce a hard connection failure — nginx's
+#   `ssl_verify_client on` completes the handshake and returns a plain HTTP 400 either way):
+#   tests/.env-specific/unreachable-host.tflw, and matchers-explained.tflw's positive-case pair.
+
+@examples @security
+test "allow hosts — an allowlisted host's traffic passes through completely unaffected"
+  # tflw.config's `env local` declares `allow hosts "localhost"` — every one of this suite's ~35
+  # other files already depends on this never false-positive-blocking normal traffic; this test is
+  # the explicit, named proof of that fact, not an incidental side effect of it.
+  api GET /health
+  expect status equals 200

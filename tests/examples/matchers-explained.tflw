@@ -44,6 +44,34 @@ test "not — negates any matcher"
   api GET /health
   expect status not equals 500
 
+# M29: `matches schema "Name" from "src"` (SPEC §6.2.1, decision 102a) validates a response body
+# against a schema straight out of the API's own generated OpenAPI document — real ajv JSON-Schema
+# validation, `$ref`-resolved, not a hand-rolled check. `/openapi.json` is served unversioned (see
+# tflw.config's `env local` — `api root`), so the source is an absolute URL here, not a relative
+# path. See tests/contract-and-retry.tflw for the full proof (a well-formed match + a `not`
+# polarity check) and tests/.demo-fail/contract-drift.tflw for a genuinely drifted schema failing.
+@examples @matchers
+test "matches schema \"Name\" from \"src\" — validate a response against the real OpenAPI document"
+  api POST /products body { name: unique("Schema Widget"), price: 5, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api GET /products/{productId}
+  expect status equals 200
+  expect body matches schema "ProductResponseDto" from "http://localhost:4001/openapi.json"
+
+# M29: `expect request connects`/`fails` (SPEC §6.2.2, decision 18) assert on the connection
+# itself, not the response — and can't be combined with a response-based assertion on the same
+# request (TF031). The positive case (an ordinary reachable request) belongs here; a genuine
+# connection-layer *failure* needs a request that never gets a response at all, which this
+# suite's default env never produces — see tests/.env-specific/unreachable-host.tflw for that
+# executable proof (its own dedicated env, `unreachableHost`, for exactly that reason).
+@examples @matchers
+test "request connects — the request reaches a real server at all"
+  api GET /health
+  expect request connects
+
 @examples @matchers
 test "check is a soft twin of expect — it records a failure and keeps running"
   api POST /products body { name: unique("Matcher Widget"), price: 5, stock: 1, categoryId: {categoryId} }

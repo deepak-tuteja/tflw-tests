@@ -103,7 +103,10 @@ test "Idempotency-Key: repeating the same key returns the original order, not a 
   expect status equals 201
   capture body.id as productId
 
-  let key = unique("order-key")
+  # M29: an Idempotency-Key is exactly what `unique uuid` is for (collision-*guaranteed*, not just
+  # collision-allowed like `random uuid`) — matches real-world convention (Stripe et al. mint
+  # idempotency keys as UUIDs) better than the free-form `unique("order-key")` this used before.
+  let key = unique uuid
 
   api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
     header "Authorization" is "Bearer {adminToken}"
@@ -134,7 +137,7 @@ test "reusing another user's Idempotency-Key is a conflict, not a valid replay"
   expect status equals 201
   capture body.id as productId
 
-  let key = unique("cross-user-key")
+  let key = unique uuid
 
   api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
     header "Authorization" is "Bearer {userAToken}"

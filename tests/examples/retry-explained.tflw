@@ -14,3 +14,15 @@ test "retry 2 re-runs a failing test up to twice more, reusing the same `random`
   # Attempt 1 gets 503, attempt 2 (first retry) gets 429, attempt 3 (second retry) gets 201 —
   # this test is reported `flaky` (passed, but only after retrying), which is the point.
   expect status equals 201
+
+# M29: `retry honoring "Retry-After" up to N` (SPEC §5.1, decision 102b) is a per-`api`-step
+# clause, not `test ... retry N` above — it re-sends *that one request* after sleeping the
+# duration a real 429 response's `Retry-After` header names, instead of re-running the whole test
+# from scratch. See tests/contract-and-retry.tflw for the fuller two-format (seconds/HTTP-date)
+# proof against the same /retry-demo fixture; tests/.demo-fail/retry-after-not-honored.tflw shows
+# the same endpoint failing without this clause — the gap it closes, made concrete.
+@examples @retry
+test "retry honoring \"Retry-After\" resends one request, not the whole test"
+  api POST /retry-demo body { key: random string 8, format: "seconds" }
+    retry honoring "Retry-After" up to 2
+  expect status equals 200

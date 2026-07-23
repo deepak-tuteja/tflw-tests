@@ -1,0 +1,23 @@
+# unreachable-host.tflw — M29 (plan_v2.md Part R, coverage audit): the first-ever real proof of
+# `expect request connects`/`fails` (SPEC §6.2.2) in this suite. A wrong-CA-signed mTLS client
+# cert was tried first and rejected empirically: confirmed via curl that nginx's `ssl_verify_client
+# on` (http module) completes the TLS handshake regardless of whether the client cert is missing
+# or signed by an untrusted CA, returning a plain HTTP 400 either way — the exact same
+# non-connection-failure shape `.env-specific/mtls-rejection.tflw` already proves, so it can't
+# exercise this matcher. A closed local port gives a genuine, deterministic connection-layer
+# failure instead (tflw.config's `env unreachableHost`, port 9 — the universally-unassigned
+# "discard" port, guaranteed nothing listens there on any dev machine).
+#
+# Own file, own dedicated env (same reason mtls.tflw/mtls-rejection.tflw are each their own file):
+#   npx tflw run --env unreachableHost tests/.env-specific/unreachable-host.tflw
+#   (or: npm run test:unreachable-host)
+#
+# The exact failure message ("request failed: GET http://localhost:9/health — fetch failed") was
+# confirmed empirically with --verbose before writing the `matching` clause below, not assumed.
+# See tests/examples/matchers-explained.tflw's `connects`/`fails` pair for the positive-case
+# teaching example (which runs under the ordinary `env local`, needing no dedicated env of its own).
+
+@requestlifecycle
+test "a request to an unreachable host never connects at all"
+  api GET /health
+  expect request fails matching "fetch failed"

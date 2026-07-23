@@ -52,10 +52,11 @@ Or use the `testflow-tests-app` skill to start/stop the stack.
 
 `npm run regression` — the thorough check to run after any change to apiV2 or `tests/*.tflw`: the
 full suite, then each feature-area tag alone (`identityOps`/`catalogOps`/`orderOps`/`adminOps`),
-then `@smoke` alone, then each `smoke,<area>` cross-axis combo — 10 phases, each on its own fresh
-Docker restart (`scripts/regression.mjs`; restarting every phase isn't optional — `unique(...)`'s
-counter resets per `tflw run` invocation but Postgres data doesn't, so chained phases on the same
-DB reproduce false collisions). Exits non-zero if any phase fails.
+then `@smoke` alone, then each `smoke,<area>` cross-axis combo, then `mtls-rejection`/
+`safety-redaction-check`, then (M29) `demo-fail-check`/`cli-flags-check` — 14 phases, each on its
+own fresh Docker restart (`scripts/regression.mjs`; restarting every phase isn't optional —
+`unique(...)`'s counter resets per `tflw run` invocation but Postgres data doesn't, so chained
+phases on the same DB reproduce false collisions). Exits non-zero if any phase fails.
 
 ## Reporting
 
@@ -97,6 +98,7 @@ A plain `npx tflw run` already exercises a lot of what to look for in `report/re
 | `@contract` | contract-and-retry.tflw, `tests/.demo-fail/contract-drift.tflw` |
 | `@retryafter` | contract-and-retry.tflw, `tests/.demo-fail/retry-after-not-honored.tflw` |
 | `@demofail` (+ per-scenario `@retryexhausted`/`@waittimeout`/`@badassertion`/`@softmixed`/`@safety`/`@contract`/`@retryafter`) | `tests/.demo-fail/*.tflw` |
+| `@requestlifecycle` | `tests/.env-specific/unreachable-host.tflw` (M29) |
 
 ### Demo-fail / check-only / env-specific fixtures
 
@@ -120,6 +122,12 @@ npx tflw check tests/.checkonly/bad-session.tflw
 # mtls-rejection.tflw's `expect status equals 400` is only true through the no-cert-rejecting
 # mTLS sidecar, so it would break the default green suite if left undotted
 npm run test:mtls-rejection
+
+# M29: `expect request connects`/`fails` (SPEC §6.2.2) proven for real against a closed local
+# port (env unreachableHost) — a genuine connection-layer failure, unlike mtls-rejection.tflw's
+# own HTTP-level 400 (a wrong-CA client cert was tried first and empirically confirmed to degrade
+# to that same soft-400 shape, not a hard connection failure — see the file's own header comment)
+npm run test:unreachable-host
 ```
 
 See `TFLW-GAPS.md` for genuine tflw DSL gaps found while building this suite (no page-walk
