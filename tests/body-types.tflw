@@ -7,12 +7,14 @@
 # file persistence, matching this repo's async-jobs pattern of simulating the realistic surface
 # without unnecessary infra).
 #
-# Discovered running this against the real endpoint: `upload "..." as "field"` has no way to
-# specify (or infer from the file extension) the uploaded file's Content-Type — its multipart
-# builder wraps the file in a type-less `Blob` (packages/runtime/src/interpreter.ts:772,
-# `new Blob([new Uint8Array(buf)])`, no `type` option), so multer always sees
-# `application/octet-stream` regardless of the file's real extension. Asserted below as real
-# observed behavior (see TFLW-GAPS.md for the ranked writeup of this finding).
+# TFLW-GAPS.md gap #10 — fixed in tflw M19 (decision 22): `upload "..." as "field"` now infers a
+# Content-Type from the file extension by default (small curated table; an unrecognized extension
+# falls back to the old always-`application/octet-stream` behavior, never a hard error) and accepts
+# an optional `type "..."` clause to override the inference. Verified below against the real
+# endpoint: a `.png` upload with no `type` clause now genuinely arrives as `image/png` (previously
+# always `application/octet-stream` regardless of extension — that gap is what this file originally
+# documented), an explicit `type "..."` wins over inference, and an unrecognized extension still
+# falls back to `application/octet-stream` exactly as before.
 
 before
   api GET /categories
@@ -52,10 +54,34 @@ test "uploading a product image via multipart/form-data stores just its metadata
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   expect body.imageFilename equals "sample.png"
-  # Not "image/png" — see the file-level comment above: `upload` can't specify or infer a
-  # Content-Type, so this is what the server genuinely receives.
-  expect body.imageMimeType equals "application/octet-stream"
+  # tflw M19 (gap #10): inferred from the ".png" extension — no `type` clause needed.
+  expect body.imageMimeType equals "image/png"
   expect body.imageSizeBytes equals 25
+
+@bodytypes
+test "an explicit `upload … type \"…\"` overrides extension-based inference"
+  api POST /products body { name: unique("Overridden Widget"), price: 9.99, stock: 3, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /products/{productId}/image upload "./payloads/sample.png" as "image" type "application/x-custom"
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  expect body.imageMimeType equals "application/x-custom"
+
+@bodytypes
+test "an unrecognized file extension still falls back to application/octet-stream"
+  api POST /products body { name: unique("Unrecognized Ext Widget"), price: 9.99, stock: 3, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /products/{productId}/image upload "./payloads/sample.dat" as "image"
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  expect body.imageMimeType equals "application/octet-stream"
+  expect body.imageSizeBytes equals 36
 
 @bodytypes @authz
 test "uploading a product image without admin is rejected"
