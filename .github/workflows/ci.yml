@@ -72,13 +72,23 @@ jobs:
       # repo itself (both testFlow-tests and testFlow are checked out into subdirectories above);
       # without it the step fails outright with "fatal: not a git repository", found empirically
       # on the first real run of this workflow.
+      #
+      # `demo-fail-check`'s own junit.xml is excluded (fast-glob negation, confirmed supported by
+      # dorny/test-reporter's `path` input): scripts/verify-demofail.mjs's real pass/fail verdict
+      # is its own count-based `check()` logic (already gating this job via the step above's exit
+      # code), not the raw junit.xml regression.mjs's archivePhaseReport() happens to archive —
+      # that's just whichever `npx tflw run` call the script made *last* (currently
+      # allow-hosts-blocked.tflw under `--env allowHostsBlocked`, one intentionally-failing test
+      # by design). Without this exclusion dorny reports that single by-design failure as a real
+      # one and reds out an otherwise-green job — confirmed on run 30128607599 (push of 21b582e),
+      # the first CI execution ever to exercise this phase.
       - name: Publish JUnit results inline
         if: always()
         uses: dorny/test-reporter@v3
         with:
           name: tflw regression
           working-directory: testFlow-tests
-          path: 'report-by-phase/*/junit.xml'
+          path: 'report-by-phase/*/junit.xml,!report-by-phase/demo-fail-check/junit.xml'
           reporter: java-junit
 
       # decision 9: every phase's report.html/junit.xml/results.json (+ events.ndjson under
