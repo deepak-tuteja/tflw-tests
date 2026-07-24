@@ -1,0 +1,133 @@
+# review-threads.tflw — M31 (plan_v2.md Part R Cluster D): arbitrary-depth, self-referencing
+# Q&A threads under a review (`POST/GET /reviews/:id/replies`), deliberately distinct from
+# reviews.tflw's `/reviews/:id/reply` (singular, M13's one official admin/seller response). Any
+# authenticated user can post into or nest under a thread; reads are public, same as the review
+# list itself. See TFLW-GAPS.md gap #11 for this milestone's quantifier-into-nested-children
+# finding (reconfirmed, not a new gap).
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as userAToken
+
+@reviewThreads @reviews @adminOps
+test "a reply, a reply-to-that-reply, and a reply-to-that — three real levels deep, walked via nested captures"
+  api POST /products body { name: unique("Threaded Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /products/{productId}/reviews body { rating: 5, comment: "Solid" }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as reviewId
+
+  api POST /reviews/{reviewId}/replies body { text: "does this work with the wall mount?" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as l1Id
+
+  api POST /reviews/{reviewId}/replies body { text: "yes, sold separately though", parentReplyId: {l1Id} }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as l2Id
+
+  api POST /reviews/{reviewId}/replies body { text: "good to know, thanks!", parentReplyId: {l2Id} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+
+  api GET /reviews/{reviewId}/replies
+  expect status equals 200
+  expect body has count 1
+  expect body[0].text equals "does this work with the wall mount?"
+  expect body[0].children[0].text equals "yes, sold separately though"
+  expect body[0].children[0].children[0].text equals "good to know, thanks!"
+  # A leaf's own children array is still present, just empty — same convention as
+  # notifications-and-tree.tflw's category-tree leaf check.
+  expect body[0].children[0].children[0].children has count 0
+
+@reviewThreads @reviews @adminOps
+test "a reply's parentReplyId must belong to the same review, not just exist somewhere"
+  api POST /products body { name: unique("Threaded Widget A"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productIdA
+
+  api POST /products body { name: unique("Threaded Widget B"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productIdB
+
+  api POST /products/{productIdA}/reviews body { rating: 4 }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as reviewIdA
+
+  api POST /products/{productIdB}/reviews body { rating: 3 }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as reviewIdB
+
+  api POST /reviews/{reviewIdA}/replies body { text: "reply under review A" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as replyUnderA
+
+  # replyUnderA is a real, existing reply — just not one that belongs to review B.
+  api POST /reviews/{reviewIdB}/replies body { text: "sneaky cross-review nest", parentReplyId: {replyUnderA} }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 400
+  expect body.detail contains "does not belong to this review"
+
+@reviewThreads @reviews @adminOps
+test "an unknown parentReplyId is rejected the same way as a cross-review one"
+  api POST /products body { name: unique("Threaded Widget C"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /products/{productId}/reviews body { rating: 5 }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as reviewId
+
+  let phantomReplyId = random uuid
+  api POST /reviews/{reviewId}/replies body { text: "nesting under nothing", parentReplyId: {phantomReplyId} }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 400
+  expect body.detail contains "does not belong to this review"
+
+@reviewThreads @reviews @adminOps
+test "replying to a nonexistent review via the thread endpoint is a clean 404"
+  let reviewId = random uuid
+  api POST /reviews/{reviewId}/replies body { text: "hello?" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 404
+  expect body.detail contains "not found"
+
+@reviewThreads @reviews @adminOps
+test "posting into a thread without auth is rejected, but reading it needs none"
+  api POST /products body { name: unique("Threaded Widget D"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /products/{productId}/reviews body { rating: 5 }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as reviewId
+
+  api POST /reviews/{reviewId}/replies body { text: "no token attached" }
+  expect status equals 401
+
+  api GET /reviews/{reviewId}/replies
+  expect status equals 200
+  expect body has count 0

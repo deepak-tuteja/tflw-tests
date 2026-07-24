@@ -14,6 +14,7 @@ import { Product } from './entities/product.entity';
 import { Order } from './entities/order.entity';
 import { OrderItem } from './entities/order-item.entity';
 import { Review } from './entities/review.entity';
+import { ReviewReply } from './entities/review-reply.entity';
 import { TokenRecord } from './entities/token-record.entity';
 import { Job } from './entities/job.entity';
 import { Notification } from './entities/notification.entity';
@@ -48,6 +49,7 @@ import { CartModule } from './cart/cart.module';
           Order,
           OrderItem,
           Review,
+          ReviewReply,
           TokenRecord,
           Job,
           Notification,
