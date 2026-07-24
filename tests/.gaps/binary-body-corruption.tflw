@@ -1,0 +1,46 @@
+# binary-body-corruption.tflw — proof of TFLW-GAPS.md gap #17: tflw has no binary-safe body
+# assertion. `sendRequest` (packages/runtime/src/http.ts:127) calls `await res.text()`
+# unconditionally on every response, regardless of Content-Type — there is no branch that treats
+# a non-text body differently. For `GET /orders/{id}/receipt` (M32, a real FlateDecode-compressed
+# PDF, genuinely binary, not ASCII text wearing a .pdf extension), that UTF-8 decode is lossy and
+# irreversible: invalid byte sequences in the compressed stream become U+FFFD replacement
+# characters, and the resulting JS string, if re-encoded, is a *different byte length* than the
+# original response (empirically: a 750-byte PDF became a 741-character string that re-encodes to
+# 873 UTF-8 bytes). `body text` is the only body subject the interpreter exposes
+# (interpreter.ts:1273) — there's no raw-bytes/length/checksum subject to fall back on, so no
+# tflw assertion can verify a binary response's exact content today; only headers
+# (content-type/content-length/content-disposition) remain reliably assertable, which
+# order-receipts.tflw does instead.
+#
+# Excluded from the default suite (dot-dir convention, same as .checkonly/.demo-fail) — this is a
+# deliberate, permanent can't-express-at-all proof, not a scenario expected to exercise real
+# coverage. The assertion below is expected to PASS: that's the proof the corruption occurred.
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+@gaps
+test "a binary PDF response body decodes into mojibake, not a way to assert its real content"
+  api POST /products body { name: unique("Gap Proof Widget"), price: 9.99, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as orderId
+
+  api GET /orders/{orderId}/receipt
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  # The literal character below is a real U+FFFD REPLACEMENT CHARACTER, not an escape — proof that
+  # `res.text()`'s UTF-8 decode produced mojibake from the compressed binary stream, which is all
+  # `body text` gives a test to work with for a binary response.
+  expect body text contains "�"

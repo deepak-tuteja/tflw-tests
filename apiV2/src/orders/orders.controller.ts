@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Res,
+  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
@@ -15,6 +16,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderItemDto } from './dto/update-order-item.dto';
+import { buildOrderReceiptPdf } from './order-receipt.util';
 import { AnyAuthGuard } from '../auth/guards/any-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -38,7 +40,11 @@ export class OrdersController {
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { order, created } = await this.orders.create(user.id, dto.items, idempotencyKey);
+    const { order, created } = await this.orders.create(
+      user.id,
+      dto.items,
+      idempotencyKey,
+    );
     res.status(created ? 201 : 200);
     return order;
   }
@@ -56,16 +62,41 @@ export class OrdersController {
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthedUser) {
+  findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthedUser,
+  ) {
     return this.orders.findOneScoped(id, user);
   }
 
   // Nested sub-resource (plan_v2.md Part A) — same ownership scoping as the parent, just
   // projected down to the line items.
   @Get(':id/items')
-  async findItems(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthedUser) {
+  async findItems(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthedUser,
+  ) {
     const order = await this.orders.findOneScoped(id, user);
     return order.items;
+  }
+
+  // Binary/file-serving response (M32, plan_v2.md Part R Cluster B) — a real PDF body, same
+  // ownership scoping as the parent order. `StreamableFile` (not a plain `Buffer` return) is
+  // deliberate: NestJS's default response path treats a returned object as JSON, which would
+  // mangle raw bytes; `StreamableFile` is Nest's own escape hatch for exactly this.
+  @Get(':id/receipt')
+  async receipt(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthedUser,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const order = await this.orders.findOneScoped(id, user);
+    const pdf = buildOrderReceiptPdf(order);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="receipt-${order.id}.pdf"`,
+    });
+    return new StreamableFile(pdf);
   }
 
   // Nested-item PATCH (M6, plan_v2.md Part D decision 3a) — same ownership scoping as the parent

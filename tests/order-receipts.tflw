@@ -1,0 +1,73 @@
+# order-receipts.tflw — M32 (plan_v2.md Part R Cluster B): the first genuinely binary response
+# body in this API. `GET /orders/{id}/receipt` serves a real, hand-assembled PDF (FlateDecode-
+# compressed content stream, same as virtually every real-world PDF), same ownership scoping as
+# the rest of the order sub-resources (`order-items.tflw`'s pattern). tflw can only assert on this
+# endpoint's headers/status today — the body itself can't be checked for exact content; see
+# TFLW-GAPS.md gap #17 and tests/.gaps/binary-body-corruption.tflw for why.
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as userAToken
+
+  api POST /auth/login body { email: env(USER_B_EMAIL), password: env(USER_B_PW) }
+  expect status equals 200
+  capture body.accessToken as userBToken
+
+  api POST /products body { name: unique("Receipt Widget"), price: 9.99, stock: 10, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+@orderReceipts @orders @orderOps
+test "a placed order's receipt is a real PDF with the right headers"
+  api POST /orders body { items: [{ productId: {productId}, quantity: 2 }] }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as orderId
+
+  api GET /orders/{orderId}/receipt
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  expect header "content-type" equals "application/pdf"
+  expect header "content-disposition" contains "receipt-{orderId}.pdf"
+
+@orderReceipts @authz @orderOps
+test "a receipt is scoped exactly like the parent order"
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as orderId
+
+  api GET /orders/{orderId}/receipt
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 403
+
+  api GET /orders/{orderId}/receipt
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+
+@orderReceipts @orders @orderOps
+test "a receipt for a nonexistent order is a clean 404"
+  let orderId = random uuid
+  api GET /orders/{orderId}/receipt
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 404
+
+@orderReceipts @auth @orderOps
+test "fetching a receipt without auth is rejected"
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as orderId
+
+  api GET /orders/{orderId}/receipt
+  expect status equals 401

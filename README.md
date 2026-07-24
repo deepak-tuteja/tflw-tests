@@ -101,6 +101,7 @@ A plain `npx tflw run` already exercises a lot of what to look for in `report/re
 | `@requestlifecycle` | `tests/.env-specific/unreachable-host.tflw` (M29) |
 | `@httpProtocolCorners` | `http-protocol-corners.tflw` (M30 — `without redirects`, gzip decompression) |
 | `@reviewThreads` | `review-threads.tflw` (M31 — arbitrary-depth, self-referencing reply threads under a review) |
+| `@orderReceipts` | `order-receipts.tflw` (M32 — a real, `/FlateDecode`-compressed PDF order receipt; first genuinely binary response body) |
 
 ### Demo-fail / check-only / env-specific fixtures
 
