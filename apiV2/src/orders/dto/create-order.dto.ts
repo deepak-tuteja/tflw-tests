@@ -29,6 +29,10 @@ export class CreateOrderDto {
   // this app's only real caller of this field is testFlow-tests' own JS-escape-hatch throwaway
   // HTTP receiver, not a public internet endpoint.
   @IsOptional()
-  @IsUrl({ require_tld: false, require_protocol: true, protocols: ['http', 'https'] })
+  @IsUrl({
+    require_tld: false,
+    require_protocol: true,
+    protocols: ['http', 'https'],
+  })
   webhookUrl?: string;
 }
