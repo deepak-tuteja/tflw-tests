@@ -4,12 +4,17 @@
 # `compression` middleware forces every response through gzip regardless of size, so even a tiny
 # body like `/health`'s proves the runtime's `undici`-based fetch client actually decompresses).
 #
-# HEAD/OPTIONS (decision 10's other half — tflw's grammar has no HTTP verb beyond GET/POST/PUT/
-# DELETE/PATCH at all, confirmed via `packages/lang/src/ast.ts`'s `HttpMethod` union) is a
-# parse-time rejection, not a runtime scenario — proven instead as a `.checkonly` fixture,
-# `tests/.checkonly/http-method-head.tflw`. Repeated query params (decision 9) land as a 2-line
-# addendum to `product-query.tflw`'s existing filter test, not a dedicated scenario here — tflw's
-# `api GET <path>` is literal/interpolated text, so typing a repeated key needs nothing new.
+# HEAD/OPTIONS (decision 10's other half) was a parse-time rejection at M30 — tflw's grammar had
+# no HTTP verb beyond GET/POST/PUT/DELETE/PATCH (`packages/lang/src/ast.ts`'s `HttpMethod` union),
+# proven then as a `.checkonly` fixture. Fixed upstream in tflw (TFLW-GAPS.md gap #16) — HEAD and
+# OPTIONS now parse like any other verb, so the two cases below are real, passing scenarios:
+# Express auto-implements HEAD for any GET route (strips the body, keeps headers, confirmed via
+# `curl -sD -` against the live stack before this was written), and apiV2 has no CORS/OPTIONS
+# handler configured (`main.ts` has no `enableCors`), so OPTIONS falls through to the app's own
+# RFC7807 catch-all — a real 404, not a silently-special-cased verb. Repeated query params
+# (decision 9) land as a 2-line addendum to `product-query.tflw`'s existing filter test, not a
+# dedicated scenario here — tflw's `api GET <path>` is literal/interpolated text, so typing a
+# repeated key needs nothing new.
 
 before
   api GET /categories
@@ -55,3 +60,21 @@ test "GET /health — a real gzipped response, transparently decompressed by tfl
   expect status equals 200
   expect header "content-encoding" equals "gzip"
   expect body.status equals "ok"
+
+@httpProtocolCorners
+test "HEAD /products — Express auto-implements HEAD for a GET route: real content-length, empty body"
+  # Not compared against GET's own content-length: tflw's client advertises `Accept-Encoding:
+  # gzip`, so a GET here comes back `content-encoding: gzip` + `transfer-encoding: chunked` (no
+  # content-length at all, confirmed empirically) — the same compression this file's own
+  # `GET /health` test above proves. HEAD carries no body for compression to apply to, so Express
+  # skips it and reports a real, uncompressed content-length instead; the two verbs take genuinely
+  # different header paths here, not identical ones.
+  api HEAD /products
+  expect status equals 200
+  expect header "content-length" matches "^[0-9]+$"
+  expect body text equals ""
+
+@httpProtocolCorners
+test "OPTIONS /products — no CORS/OPTIONS handler configured, falls through to the RFC7807 catch-all"
+  api OPTIONS /products
+  expect status equals 404

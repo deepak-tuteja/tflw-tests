@@ -115,13 +115,11 @@ config key), so a dot-directory is the only way to keep them out:
 # drift/un-honored-rate-limit looks like in report.html — never part of the green default suite
 npx tflw run tests/.demo-fail/*.tflw --tag demofail
 
-# 4 deliberately invalid-syntax files, showing tflw check's teaching diagnostics
-# (TF011 unrecognised keyword, TF014 unrecognised matcher, TF028 undeclared session,
-# TF012 unknown HTTP method — M30, tflw's grammar has no HEAD/OPTIONS at all)
+# 3 deliberately invalid-syntax files, showing tflw check's teaching diagnostics
+# (TF011 unrecognised keyword, TF014 unrecognised matcher, TF028 undeclared session)
 npx tflw check tests/.checkonly/bad-keyword.tflw
 npx tflw check tests/.checkonly/unknown-matcher.tflw
 npx tflw check tests/.checkonly/bad-session.tflw
-npx tflw check tests/.checkonly/http-method-head.tflw
 
 # genuinely passing tests (M25) whose assertions are only true under a non-default env — unlike
 # mtls.tflw (whose assertions hold under any backend, so it stays in default discovery),
