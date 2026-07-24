@@ -2,6 +2,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -21,6 +22,8 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 // `Order.status` directly — the job is just the pollable handle for "did the work finish."
 @Injectable()
 export class JobsService {
+  private readonly logger = new Logger(JobsService.name);
+
   constructor(
     @InjectRepository(Job) private readonly jobs: Repository<Job>,
     @InjectRepository(Order) private readonly orders: Repository<Order>,
@@ -34,7 +37,10 @@ export class JobsService {
       );
     }
 
-    const job = this.jobs.create({ type: JobType.ORDER_FULFILLMENT, orderId: order.id });
+    const job = this.jobs.create({
+      type: JobType.ORDER_FULFILLMENT,
+      orderId: order.id,
+    });
     const saved = await this.jobs.save(job);
 
     // The pending -> processing transition happens synchronously, before this call returns —
@@ -47,7 +53,12 @@ export class JobsService {
 
     // Everything past this point is the real fire-and-forget async work: the triggering request
     // already has its 202, this is what `GET /jobs/:id` polls for.
-    void this.continueFulfillment(saved.id, order.id, order.userId);
+    void this.continueFulfillment(
+      saved.id,
+      order.id,
+      order.userId,
+      order.webhookUrl,
+    );
 
     return saved;
   }
@@ -55,23 +66,71 @@ export class JobsService {
   // Each real status transition also fires an `order_status_changed` notification for the
   // order's owner (M13, plan_v2.md Part F decision 3) — a genuine side-effect of the async work
   // actually completing, not a notification manufactured just to have one to test.
-  private async continueFulfillment(jobId: string, orderId: string, userId: string): Promise<void> {
+  private async continueFulfillment(
+    jobId: string,
+    orderId: string,
+    userId: string,
+    webhookUrl: string | null,
+  ): Promise<void> {
     await delay(STAGE_DELAY_MS);
     await this.orders.update(orderId, { status: OrderStatus.READY });
-    await this.notifications.create(userId, NotificationType.ORDER_STATUS_CHANGED, {
-      orderId,
-      oldStatus: OrderStatus.PROCESSING,
-      newStatus: OrderStatus.READY,
-    });
+    await this.notifications.create(
+      userId,
+      NotificationType.ORDER_STATUS_CHANGED,
+      {
+        orderId,
+        oldStatus: OrderStatus.PROCESSING,
+        newStatus: OrderStatus.READY,
+      },
+    );
 
     await delay(STAGE_DELAY_MS);
     await this.orders.update(orderId, { status: OrderStatus.FULFILLED });
-    await this.notifications.create(userId, NotificationType.ORDER_STATUS_CHANGED, {
-      orderId,
-      oldStatus: OrderStatus.READY,
-      newStatus: OrderStatus.FULFILLED,
-    });
+    await this.notifications.create(
+      userId,
+      NotificationType.ORDER_STATUS_CHANGED,
+      {
+        orderId,
+        oldStatus: OrderStatus.READY,
+        newStatus: OrderStatus.FULFILLED,
+      },
+    );
     await this.jobs.update(jobId, { status: JobStatus.COMPLETED });
+
+    // Outbound-webhook cluster (M33, plan_v2.md Part R Cluster C): a real order-completion
+    // webhook, fired only once fulfillment has genuinely reached its terminal state. Best-effort
+    // and non-blocking by design — same as any real webhook integration (Stripe, Shopify), a
+    // delivery failure (receiver down/unreachable) never rolls back or retries the order itself,
+    // it's just logged.
+    if (webhookUrl) void this.deliverWebhook(webhookUrl, orderId);
+  }
+
+  private async deliverWebhook(
+    webhookUrl: string,
+    orderId: string,
+  ): Promise<void> {
+    try {
+      const res = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event: 'order.fulfilled',
+          orderId,
+          status: OrderStatus.FULFILLED,
+          occurredAt: new Date().toISOString(),
+        }),
+        signal: AbortSignal.timeout(2000),
+      });
+      if (!res.ok) {
+        this.logger.warn(
+          `webhook delivery to ${webhookUrl} for order ${orderId} returned ${res.status}`,
+        );
+      }
+    } catch (err) {
+      this.logger.warn(
+        `webhook delivery to ${webhookUrl} for order ${orderId} failed: ${(err as Error).message}`,
+      );
+    }
   }
 
   async findOneScoped(id: string, requester: AuthedUser): Promise<Job> {

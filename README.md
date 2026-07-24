@@ -102,6 +102,7 @@ A plain `npx tflw run` already exercises a lot of what to look for in `report/re
 | `@httpProtocolCorners` | `http-protocol-corners.tflw` (M30 — `without redirects`, gzip decompression) |
 | `@reviewThreads` | `review-threads.tflw` (M31 — arbitrary-depth, self-referencing reply threads under a review) |
 | `@orderReceipts` | `order-receipts.tflw` (M32 — a real, `/FlateDecode`-compressed PDF order receipt; first genuinely binary response body) |
+| `@orderWebhooks` | `order-webhooks.tflw` (M33 — a real order-completion webhook, delivered to a JS-escape-hatch throwaway HTTP receiver) |
 
 ### Demo-fail / check-only / env-specific fixtures
 

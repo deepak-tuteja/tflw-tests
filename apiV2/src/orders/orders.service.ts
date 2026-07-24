@@ -26,11 +26,19 @@ export interface CreateOrderResult {
 
 // Order-insensitive multiset comparison by (productId, quantity) — used by replayOrConflict to
 // detect an Idempotency-Key reused with a genuinely different body (M19 finding).
-function sameItems(existing: OrderItem[], requested: OrderItemInputDto[]): boolean {
+function sameItems(
+  existing: OrderItem[],
+  requested: OrderItemInputDto[],
+): boolean {
   if (existing.length !== requested.length) return false;
-  const key = (productId: string, quantity: number) => `${productId}:${quantity}`;
-  const existingKeys = existing.map((item) => key(item.productId, item.quantity)).sort();
-  const requestedKeys = requested.map((item) => key(item.productId, item.quantity)).sort();
+  const key = (productId: string, quantity: number) =>
+    `${productId}:${quantity}`;
+  const existingKeys = existing
+    .map((item) => key(item.productId, item.quantity))
+    .sort();
+  const requestedKeys = requested
+    .map((item) => key(item.productId, item.quantity))
+    .sort();
   return existingKeys.every((k, i) => k === requestedKeys[i]);
 }
 
@@ -38,7 +46,8 @@ function sameItems(existing: OrderItem[], requested: OrderItemInputDto[]): boole
 export class OrdersService {
   constructor(
     @InjectRepository(Order) private readonly orders: Repository<Order>,
-    @InjectRepository(OrderItem) private readonly orderItems: Repository<OrderItem>,
+    @InjectRepository(OrderItem)
+    private readonly orderItems: Repository<OrderItem>,
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly jobsService: JobsService,
   ) {}
@@ -66,25 +75,41 @@ export class OrdersService {
     items: OrderItemInputDto[],
     idempotencyKey?: string,
     couponCode?: string,
+    webhookUrl?: string,
   ): Promise<CreateOrderResult> {
     if (idempotencyKey) {
       // `items` passed here (unlike CartService.checkout's call below) so a genuine body-mismatch
       // replay — the same key reused with different items — is caught rather than silently
       // returning the original order for a request that never actually happened (M19 finding).
-      const replay = await this.findExistingByIdempotencyKey(idempotencyKey, userId, items);
+      const replay = await this.findExistingByIdempotencyKey(
+        idempotencyKey,
+        userId,
+        items,
+      );
       if (replay) return replay;
     }
 
     try {
       const order = await this.dataSource.transaction((manager) =>
-        this.persistOrderAtomically(manager, userId, items, idempotencyKey, couponCode),
+        this.persistOrderAtomically(
+          manager,
+          userId,
+          items,
+          idempotencyKey,
+          couponCode,
+          webhookUrl,
+        ),
       );
       return { order, created: true };
     } catch (err) {
       if (idempotencyKey && isUniqueViolation(err)) {
         // Lost the race to a concurrent request using the same key — replay its result instead
         // of surfacing the constraint violation.
-        const replay = await this.findExistingByIdempotencyKey(idempotencyKey, userId, items);
+        const replay = await this.findExistingByIdempotencyKey(
+          idempotencyKey,
+          userId,
+          items,
+        );
         if (replay) return replay;
       }
       throw err;
@@ -105,7 +130,9 @@ export class OrdersService {
     expectedItems?: OrderItemInputDto[],
   ): Promise<CreateOrderResult | null> {
     const existing = await this.findByIdempotencyKey(idempotencyKey);
-    return existing ? this.replayOrConflict(existing, userId, expectedItems) : null;
+    return existing
+      ? this.replayOrConflict(existing, userId, expectedItems)
+      : null;
   }
 
   // Race-safe by construction, not by locking: the conditional `UPDATE ... WHERE stock >= :qty`
@@ -120,13 +147,17 @@ export class OrdersService {
     items: OrderItemInputDto[],
     idempotencyKey: string | undefined,
     couponCode: string | undefined,
+    webhookUrl: string | undefined,
   ): Promise<Order> {
     const orderItems: OrderItem[] = [];
     let subtotal = 0;
 
     for (const item of items) {
-      const product = await manager.findOne(Product, { where: { id: item.productId } });
-      if (!product) throw new NotFoundException(`product ${item.productId} not found`);
+      const product = await manager.findOne(Product, {
+        where: { id: item.productId },
+      });
+      if (!product)
+        throw new NotFoundException(`product ${item.productId} not found`);
 
       const result = await manager
         .createQueryBuilder()
@@ -137,7 +168,9 @@ export class OrdersService {
         .setParameter('qty', item.quantity)
         .execute();
       if (result.affected === 0) {
-        throw new ConflictException(`insufficient stock for product "${product.name}"`);
+        throw new ConflictException(
+          `insufficient stock for product "${product.name}"`,
+        );
       }
 
       subtotal += Number(product.price) * item.quantity;
@@ -150,7 +183,9 @@ export class OrdersService {
       );
     }
 
-    const discountAmount = couponCode ? await this.applyCoupon(manager, couponCode, subtotal) : null;
+    const discountAmount = couponCode
+      ? await this.applyCoupon(manager, couponCode, subtotal)
+      : null;
 
     const order = manager.create(Order, {
       userId,
@@ -158,6 +193,7 @@ export class OrdersService {
       idempotencyKey: idempotencyKey ?? null,
       couponCode: couponCode ?? null,
       discountAmount,
+      webhookUrl: webhookUrl ?? null,
     });
     return manager.save(Order, order);
   }
@@ -212,7 +248,9 @@ export class OrdersService {
     expectedItems?: OrderItemInputDto[],
   ): CreateOrderResult {
     if (existing.userId !== userId) {
-      throw new ConflictException('this Idempotency-Key was already used by another request');
+      throw new ConflictException(
+        'this Idempotency-Key was already used by another request',
+      );
     }
     // M19 finding: previously unchecked, so reusing a key with a genuinely different body
     // silently replayed the *original* order with a 200 — indistinguishable from a legitimate

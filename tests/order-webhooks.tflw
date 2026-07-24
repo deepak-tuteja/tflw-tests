@@ -1,0 +1,120 @@
+# order-webhooks.tflw — M33 (plan_v2.md Part R Cluster C): a real order-completion webhook.
+# `POST /orders` accepts an optional `webhookUrl`; once fulfillment reaches its terminal
+# FULFILLED transition (JobsService.continueFulfillment, same async-job mechanism jobs.tflw
+# already exercises), a genuine outbound `POST {event, orderId, status, occurredAt}` fires at
+# that URL — best-effort, fire-and-forget, never blocking or rolling back the order itself.
+#
+# The receiver is a throwaway HTTP server started via the JS escape hatch (helpers/
+# webhook-receiver.ts) — there's no declarative way to stand up an inbound listener or observe
+# "did a request arrive" from inside the closed `.tflw` grammar (SPEC §7.5's hard fence), so
+# `assert webhook received(...)` is confirmed-by-design escape-hatch territory, same shape as
+# schema-check.ts's `assert matches schema(...)`: the JS call itself throws (and so *is*) the
+# assertion. See TFLW-GAPS.md gap #18 for the write-up of this finding.
+
+use "./helpers/webhook-receiver.ts"
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+@orderWebhooks @orders @orderOps
+test "fulfilling an order with a webhookUrl delivers a real order.fulfilled POST to it"
+  let receiverUrl = start webhook receiver()
+
+  api POST /products body { name: unique("Webhook Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }], webhookUrl: {receiverUrl} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as orderId
+
+  api POST /orders/{orderId}/fulfill
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 202
+  capture body.jobId as jobId
+
+  wait until api GET /jobs/{jobId}
+    header "Authorization" is "Bearer {adminToken}"
+    expect body.status equals "completed"
+
+  # The job is already "completed" by the time this runs, but webhook delivery is a separate,
+  # unawaited fire-and-forget continuation (JobsService.deliverWebhook) — so this still polls
+  # rather than checking once.
+  let proof = assert webhook received(receiverUrl, "order.fulfilled", orderId, 2000)
+
+  let stopped = stop webhook receiver(receiverUrl)
+
+@orderWebhooks @orders @orderOps
+test "an order created without a webhookUrl never triggers a delivery attempt"
+  let receiverUrl = start webhook receiver()
+
+  api POST /products body { name: unique("No-webhook Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as orderId
+
+  api POST /orders/{orderId}/fulfill
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 202
+  capture body.jobId as jobId
+
+  wait until api GET /jobs/{jobId}
+    header "Authorization" is "Bearer {adminToken}"
+    expect body.status equals "completed"
+
+  let proof = assert webhook not received(receiverUrl, 200)
+
+  let stopped = stop webhook receiver(receiverUrl)
+
+@orderWebhooks @orders @orderOps
+test "a webhook delivery failure never blocks or rolls back fulfillment itself"
+  # Port 9 ("discard") is universally unassigned, same deterministic-unreachable precedent as
+  # tflw.config's own `env unreachableHost` (M29, TFLW-GAPS.md's `unreachable-host.tflw`) — no
+  # receiver is listening here, on purpose.
+  api POST /products body { name: unique("Unreachable-webhook Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }], webhookUrl: "http://127.0.0.1:9/webhook" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as orderId
+
+  api POST /orders/{orderId}/fulfill
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 202
+  capture body.jobId as jobId
+
+  wait until api GET /jobs/{jobId}
+    header "Authorization" is "Bearer {adminToken}"
+    expect body.status equals "completed"
+
+  api GET /orders/{orderId}
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  expect body.status equals "fulfilled"
+
+@orderWebhooks @orders
+test "a malformed webhookUrl is rejected at order creation, not deferred to a silent delivery failure"
+  api POST /products body { name: unique("Bad-webhook Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }], webhookUrl: "not-a-url" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 422

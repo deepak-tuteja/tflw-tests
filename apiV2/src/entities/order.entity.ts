@@ -55,8 +55,23 @@ export class Order {
   @Column({ name: 'coupon_code', type: 'varchar', nullable: true })
   couponCode: string | null;
 
-  @Column({ name: 'discount_amount', type: 'numeric', precision: 10, scale: 2, nullable: true })
+  @Column({
+    name: 'discount_amount',
+    type: 'numeric',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+  })
   discountAmount: string | null;
+
+  // Outbound-webhook cluster (M33, plan_v2.md Part R Cluster C) — an optional delivery URL set at
+  // order creation; fired once, best-effort, when fulfillment reaches its terminal FULFILLED
+  // transition (JobsService.continueFulfillment). A real e-commerce integration point (order-
+  // completion webhooks, same shape as Stripe/Shopify), not a fixture manufactured for its own
+  // sake — and it reuses the fulfillment flow's already-real async-job mechanism rather than
+  // inventing a second one.
+  @Column({ name: 'webhook_url', type: 'varchar', nullable: true })
+  webhookUrl: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

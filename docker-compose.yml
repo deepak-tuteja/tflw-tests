@@ -20,6 +20,13 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # M33 (plan_v2.md Part R Cluster C) — the container needs to dial back out to a throwaway
+    # HTTP receiver bound on the host (started by tflw's JS escape hatch, `tests/helpers/
+    # webhook-receiver.ts`), so `host.docker.internal` has to resolve from inside this container.
+    # Docker Desktop provides this for free; the special `host-gateway` value is what makes it
+    # resolve under plain Docker Engine on Linux too (20.10+).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
