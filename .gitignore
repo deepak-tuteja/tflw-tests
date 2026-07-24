@@ -6,6 +6,10 @@ report-by-phase/
 vendor/*.tgz
 .testflow-tests.pids
 
+# gap #17 (M36) scratch space — tests/helpers/save-temp-file.ts writes a `body bytes` round-trip
+# proof file here every run; never a committed fixture.
+tests/.scratch/
+
 # TLS sidecar's CA/server/client certs — regenerated fresh at every container start
 # (M22, enterprise arc cluster 1), nothing here is ever meant to be a stable fixture.
 nginx/certs/

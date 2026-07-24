@@ -1,9 +1,11 @@
 # order-receipts.tflw — M32 (plan_v2.md Part R Cluster B): the first genuinely binary response
 # body in this API. `GET /orders/{id}/receipt` serves a real, hand-assembled PDF (FlateDecode-
 # compressed content stream, same as virtually every real-world PDF), same ownership scoping as
-# the rest of the order sub-resources (`order-items.tflw`'s pattern). tflw can only assert on this
-# endpoint's headers/status today — the body itself can't be checked for exact content; see
-# TFLW-GAPS.md gap #17 and tests/.gaps/binary-body-corruption.tflw for why.
+# the rest of the order sub-resources (`order-items.tflw`'s pattern). M36 (tflw M24, gap #17)
+# closed the original gap here — tflw can now assert the exact bytes via `body bytes`/`matches
+# file`, not just headers/status; see the round-trip test below and TFLW-GAPS.md gap #17 (Fixed).
+
+use "./helpers/save-temp-file.ts"
 
 before
   api GET /categories
@@ -39,6 +41,32 @@ test "a placed order's receipt is a real PDF with the right headers"
   expect status equals 200
   expect header "content-type" equals "application/pdf"
   expect header "content-disposition" contains "receipt-{orderId}.pdf"
+
+@orderReceipts @orders @orderOps
+test "a receipt's exact bytes round-trip byte-for-byte across two fetches (gap #17)"
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as orderId
+
+  # order-receipt.util.ts's only variable input is the order's own persisted createdAt — no
+  # new Date()/randomness at render time — so the same order's receipt is byte-identical across
+  # repeated fetches. Fetch once, save the exact bytes received to a scratch file, fetch again,
+  # and compare the second fetch against that file — proves real round-trip byte stability
+  # without depending on a committed fixture ever staying in sync with seed data. (`has count`
+  # can't take this proof further: it needs a literal NUMBER token, not a `{var}` — there's no way
+  # to compare `body bytes`' length against a header captured moments earlier in this grammar
+  # today. Not a gap in practice here — `matches file`'s own byte-equality check is strictly
+  # stronger than a length check anyway, since Buffer.equals() requires equal length too.)
+  api GET /orders/{orderId}/receipt
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  capture body bytes as receiptBytes
+  let scratchPath = save temp file(receiptBytes)
+
+  api GET /orders/{orderId}/receipt
+    header "Authorization" is "Bearer {userAToken}"
+  expect body bytes matches file ".scratch/receipt-roundtrip.bin"
 
 @orderReceipts @authz @orderOps
 test "a receipt is scoped exactly like the parent order"
