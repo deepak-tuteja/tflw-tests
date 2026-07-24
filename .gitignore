@@ -12,10 +12,13 @@ nginx/certs/
 
 # Internal dev-tracking docs (decision log + build tracker + gap-discovery findings) — same
 # approach as ../testFlow's own .gitignore: not part of the public project, local planning
-# artifacts only.
+# artifacts only. Wildcarded (was: individually-named PLAN_*.md entries) after PLAN_LIFECYCLE.md
+# turned up as an untracked straggler with no matching rule — every PLAN_*.md is local-only now,
+# no case-by-case exceptions (PLAN_GAPS_16_17.md was one; untracked via `git rm --cached` in the
+# same change that added this line).
 PLAN.md
 plan_v2.md
-PLAN_CI.md
+PLAN_*.md
 PROGRESS.md
 TFLW-GAPS.md
 TFLW-FEATURE-GAPS.md
