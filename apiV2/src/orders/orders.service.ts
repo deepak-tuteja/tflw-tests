@@ -24,6 +24,12 @@ export interface CreateOrderResult {
   created: boolean;
 }
 
+// RFC 4180 minimal quoting — none of this export's columns (uuid/enum/decimal/ISO-date/email)
+// are expected to contain a comma/quote/newline, but quoting defensively costs nothing.
+function csvField(value: string): string {
+  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
 // Order-insensitive multiset comparison by (productId, quantity) — used by replayOrConflict to
 // detect an Idempotency-Key reused with a genuinely different body (M19 finding).
 function sameItems(
@@ -278,6 +284,35 @@ export class OrdersService {
       relations: { items: { product: { category: true } } },
       order: { createdAt: 'DESC' },
     });
+  }
+
+  // PLAN_FILEFORMATS.md D5 — id,status,total,createdAt,ownerEmail; total is the same
+  // items-minus-discount computation order-receipt.util.ts's PDF already does, just summed rather
+  // than itemized.
+  async exportCsv(): Promise<string> {
+    const orders = await this.orders.find({
+      relations: { items: true, user: true },
+      order: { createdAt: 'DESC' },
+    });
+
+    const rows = orders.map((order) => {
+      const itemsTotal = order.items.reduce(
+        (sum, item) => sum + Number(item.unitPrice) * item.quantity,
+        0,
+      );
+      const total = itemsTotal - Number(order.discountAmount ?? 0);
+      return [
+        order.id,
+        order.status,
+        total.toFixed(2),
+        order.createdAt.toISOString(),
+        order.user.email,
+      ]
+        .map(csvField)
+        .join(',');
+    });
+
+    return ['id,status,total,createdAt,ownerEmail', ...rows].join('\n') + '\n';
   }
 
   async findOneScoped(id: string, requester: AuthedUser): Promise<Order> {

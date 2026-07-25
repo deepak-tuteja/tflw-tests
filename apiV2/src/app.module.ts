@@ -26,6 +26,7 @@ import { ReturnRequest } from './entities/return-request.entity';
 import { Ticket } from './entities/ticket.entity';
 import { TicketComment } from './entities/ticket-comment.entity';
 import { TicketEvent } from './entities/ticket-event.entity';
+import { Upload } from './entities/upload.entity';
 import { JobsModule } from './jobs/jobs.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { FlakyWidgetModule } from './flaky-widget/flaky-widget.module';
@@ -36,6 +37,7 @@ import { CouponsModule } from './coupons/coupons.module';
 import { CartModule } from './cart/cart.module';
 import { ReturnRequestsModule } from './return-requests/return-requests.module';
 import { TicketsModule } from './tickets/tickets.module';
+import { UploadsModule } from './uploads/uploads.module';
 
 @Module({
   imports: [
@@ -67,6 +69,7 @@ import { TicketsModule } from './tickets/tickets.module';
           Ticket,
           TicketComment,
           TicketEvent,
+          Upload,
         ],
         // Migrations run as a separate step (cli.mjs's start sequence);
         // the app never mutates schema on its own.
@@ -91,6 +94,7 @@ import { TicketsModule } from './tickets/tickets.module';
     CartModule,
     ReturnRequestsModule,
     TicketsModule,
+    UploadsModule,
   ],
 })
 export class AppModule {}

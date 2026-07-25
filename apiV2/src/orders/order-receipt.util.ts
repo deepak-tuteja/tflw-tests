@@ -18,6 +18,19 @@ function buildContentStream(lines: string[]): string {
   return ops.join('\n');
 }
 
+// PLAN_FILEFORMATS.md D4 — a fixed line budget per page (comfortably below what fits on a
+// 792pt-tall MediaBox at this content stream's 14pt line spacing); each page gets its own content
+// stream starting fresh at the same `72 740 Td` origin.
+const PAGE_LINE_BUDGET = 40;
+
+function paginate(lines: string[]): string[][] {
+  const pages: string[][] = [];
+  for (let i = 0; i < lines.length; i += PAGE_LINE_BUDGET) {
+    pages.push(lines.slice(i, i + PAGE_LINE_BUDGET));
+  }
+  return pages;
+}
+
 // GET /orders/:id/receipt (M32, plan_v2.md Part R Cluster B) — a real PDF, hand-assembled rather
 // than pulling in a PDF library for one fixture endpoint. The content stream is genuinely
 // /FlateDecode-compressed (node:zlib, same as virtually every real-world PDF), so the served body
@@ -47,30 +60,51 @@ export function buildOrderReceiptPdf(order: Order): Buffer {
   }
   lines.push('', `Total: $${total.toFixed(2)}`);
 
-  const compressed = deflateSync(
-    Buffer.from(buildContentStream(lines), 'ascii'),
-  );
+  // PLAN_FILEFORMATS.md D4 — multi-page: /Pages/Kids grows to one entry per page, each with its
+  // own /Contents stream object, all sharing the one /Font object. Object numbering: 1 catalog,
+  // 2 pages, [3..2+N] page objects, next one font, then N content-stream objects.
+  const pages = paginate(lines);
+  const pageCount = pages.length;
+  const firstPageObjNum = 3;
+  const fontObjNum = firstPageObjNum + pageCount;
+  const firstContentObjNum = fontObjNum + 1;
 
   const objects: Buffer[] = [
     Buffer.from('<< /Type /Catalog /Pages 2 0 R >>\n', 'ascii'),
-    Buffer.from('<< /Type /Pages /Kids [3 0 R] /Count 1 >>\n', 'ascii'),
     Buffer.from(
-      '<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /MediaBox [0 0 612 792] /Contents 5 0 R >>\n',
+      `<< /Type /Pages /Kids [${pages.map((_, i) => `${firstPageObjNum + i} 0 R`).join(' ')}] /Count ${pageCount} >>\n`,
       'ascii',
     ),
+  ];
+  for (let i = 0; i < pageCount; i++) {
+    objects.push(
+      Buffer.from(
+        `<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 ${fontObjNum} 0 R >> >> /MediaBox [0 0 612 792] /Contents ${firstContentObjNum + i} 0 R >>\n`,
+        'ascii',
+      ),
+    );
+  }
+  objects.push(
     Buffer.from(
       '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\n',
       'ascii',
     ),
-    Buffer.concat([
-      Buffer.from(
-        `<< /Length ${compressed.length} /Filter /FlateDecode >>\nstream\n`,
-        'ascii',
-      ),
-      compressed,
-      Buffer.from('\nendstream\n', 'ascii'),
-    ]),
-  ];
+  );
+  for (const pageLines of pages) {
+    const compressed = deflateSync(
+      Buffer.from(buildContentStream(pageLines), 'ascii'),
+    );
+    objects.push(
+      Buffer.concat([
+        Buffer.from(
+          `<< /Length ${compressed.length} /Filter /FlateDecode >>\nstream\n`,
+          'ascii',
+        ),
+        compressed,
+        Buffer.from('\nendstream\n', 'ascii'),
+      ]),
+    );
+  }
 
   // %PDF-1.4 header followed by the conventional 4-high-bit-byte comment line that marks a PDF as
   // binary to naive text-mode transfer tools — real PDF writers emit this too.

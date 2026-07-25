@@ -63,6 +63,20 @@ export class OrdersController {
     return this.orders.findAllAdmin();
   }
 
+  // PLAN_FILEFORMATS.md D5 — a naturally-computed CSV, not an upload echo. Declared before `:id`
+  // so "export" is never swallowed by the id route (same reason `all` precedes it above).
+  // Computed fresh per request — small synchronous read, no caching/background job needed.
+  @Get('export')
+  @Roles(UserRole.ADMIN)
+  async exportCsv(@Res({ passthrough: true }) res: Response): Promise<string> {
+    const csv = await this.orders.exportCsv();
+    res.set({
+      'Content-Type': 'text/csv',
+      'Content-Disposition': 'attachment; filename="orders-export.csv"',
+    });
+    return csv;
+  }
+
   @Get(':id')
   findOne(
     @Param('id', ParseUUIDPipe) id: string,
