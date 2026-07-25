@@ -34,6 +34,20 @@ async function seed() {
       password: process.env.USER_B_PW ?? 'bob-pw-123',
       role: UserRole.USER,
     },
+    // PLAN_TICKETING.md T1 — two distinct agents, needed for the "AGENT can't reassign or see
+    // another agent's ticket" cross-agent authz cases (T3).
+    {
+      name: 'Carol',
+      email: process.env.AGENT_A_EMAIL ?? 'carol@example.com',
+      password: process.env.AGENT_A_PW ?? 'carol-pw-123',
+      role: UserRole.AGENT,
+    },
+    {
+      name: 'Dave',
+      email: process.env.AGENT_B_EMAIL ?? 'dave@example.com',
+      password: process.env.AGENT_B_PW ?? 'dave-pw-123',
+      role: UserRole.AGENT,
+    },
   ];
 
   for (const u of users) {

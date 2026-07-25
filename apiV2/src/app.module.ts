@@ -23,6 +23,9 @@ import { Coupon } from './entities/coupon.entity';
 import { Cart } from './entities/cart.entity';
 import { CartItem } from './entities/cart-item.entity';
 import { ReturnRequest } from './entities/return-request.entity';
+import { Ticket } from './entities/ticket.entity';
+import { TicketComment } from './entities/ticket-comment.entity';
+import { TicketEvent } from './entities/ticket-event.entity';
 import { JobsModule } from './jobs/jobs.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { FlakyWidgetModule } from './flaky-widget/flaky-widget.module';
@@ -32,6 +35,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { CouponsModule } from './coupons/coupons.module';
 import { CartModule } from './cart/cart.module';
 import { ReturnRequestsModule } from './return-requests/return-requests.module';
+import { TicketsModule } from './tickets/tickets.module';
 
 @Module({
   imports: [
@@ -60,6 +64,9 @@ import { ReturnRequestsModule } from './return-requests/return-requests.module';
           Cart,
           CartItem,
           ReturnRequest,
+          Ticket,
+          TicketComment,
+          TicketEvent,
         ],
         // Migrations run as a separate step (cli.mjs's start sequence);
         // the app never mutates schema on its own.
@@ -83,6 +90,7 @@ import { ReturnRequestsModule } from './return-requests/return-requests.module';
     CouponsModule,
     CartModule,
     ReturnRequestsModule,
+    TicketsModule,
   ],
 })
 export class AppModule {}

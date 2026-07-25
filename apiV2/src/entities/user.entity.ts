@@ -13,6 +13,9 @@ import { Review } from './review.entity';
 export enum UserRole {
   ADMIN = 'admin',
   USER = 'user',
+  // PLAN_TICKETING.md decision 2 — scoped to the tickets domain only; no other endpoint in the
+  // app recognizes this role.
+  AGENT = 'agent',
 }
 
 @Entity('users')

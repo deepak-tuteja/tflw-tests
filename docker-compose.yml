@@ -45,6 +45,10 @@ services:
       USER_A_PW: ${USER_A_PW:-alice-pw-123}
       USER_B_EMAIL: ${USER_B_EMAIL:-bob@example.com}
       USER_B_PW: ${USER_B_PW:-bob-pw-123}
+      AGENT_A_EMAIL: ${AGENT_A_EMAIL:-carol@example.com}
+      AGENT_A_PW: ${AGENT_A_PW:-carol-pw-123}
+      AGENT_B_EMAIL: ${AGENT_B_EMAIL:-dave@example.com}
+      AGENT_B_PW: ${AGENT_B_PW:-dave-pw-123}
       OAUTH_CLIENT_ID: ${OAUTH_CLIENT_ID:-tflw-oauth-client}
       OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET:-tflw-oauth-secret}
       OAUTH_ACCESS_TTL: ${OAUTH_ACCESS_TTL:-1h}
