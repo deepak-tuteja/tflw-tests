@@ -16,6 +16,7 @@ import { AssignTicketDto } from './dto/assign-ticket.dto';
 import { CreateTicketCommentDto } from './dto/create-ticket-comment.dto';
 import { FindTicketsQueryDto } from './dto/find-tickets-query.dto';
 import { AuthedUser } from '../auth/guards/bearer-auth.guard';
+import { SLA_WINDOW_MS } from './sla.constants';
 
 // PLAN_TICKETING.md T1 — sync ticket-domain mechanics: creation, role-scoped read/list, the
 // assign/claim pair (decision 6), the full open->claim->start->resolve->close chain, the owner's
@@ -70,6 +71,9 @@ export class TicketsService {
       subject: dto.subject,
       description: dto.description,
       submittedBy: userId,
+      // T2's sweep target — stamped here (not left null until T2) since T1 and T2 share the same
+      // Ticket row; decision 4's SLA_WINDOW_MS.
+      slaDeadline: new Date(Date.now() + SLA_WINDOW_MS),
     });
     const saved = await this.tickets.save(ticket);
     await this.logEvent(saved.id, TicketEventType.CREATED, userId);

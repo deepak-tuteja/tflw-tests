@@ -6,6 +6,7 @@ import { TicketEvent } from '../entities/ticket-event.entity';
 import { User } from '../entities/user.entity';
 import { TicketsController } from './tickets.controller';
 import { TicketsService } from './tickets.service';
+import { TicketSlaSweepService } from './ticket-sla-sweep.service';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
@@ -14,7 +15,7 @@ import { AuthModule } from '../auth/auth.module';
     AuthModule,
   ],
   controllers: [TicketsController],
-  providers: [TicketsService],
+  providers: [TicketsService, TicketSlaSweepService],
   exports: [TicketsService],
 })
 export class TicketsModule {}
