@@ -105,6 +105,7 @@ A plain `npx tflw run` already exercises a lot of what to look for in `report/re
 | `@orderWebhooks` | `order-webhooks.tflw` (M33 — a real order-completion webhook, delivered to a JS-escape-hatch throwaway HTTP receiver) |
 | `@lifecycle` | token-refresh-lifecycle.tflw, user-lifecycle.tflw (`PLAN_LIFECYCLE.md` L3 — attribute enrich→conflict→retry→redact, then soft async self-deletion, as one realistic chain) |
 | `@orderReturns` | return-requests.tflw (`PLAN_RETURNS.md` R3 — order return/refund requests: owner submits, admin approves/rejects, an approved decision fires a real async refund job) |
+| `@ticketing` | tickets.tflw (`PLAN_TICKETING.md` T3 — a third role (`AGENT`) scoped to specific resource instances, role-filtered comment visibility, a cross-endpoint cancel/resolve race, and the suite's first collection-level `wait until` combined with `has count`) |
 
 ### Demo-fail / check-only / env-specific fixtures
 
