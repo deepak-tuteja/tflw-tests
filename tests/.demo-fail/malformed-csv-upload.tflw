@@ -1,0 +1,25 @@
+# malformed-csv-upload.tflw — DEMO-FAIL FIXTURE (F2, PLAN_FILEFORMATS.md; TFLW-GAPS.md gap #19,
+# PLAN_GAPS_19.md D19.4): `body csv` on genuinely malformed CSV content (a data row with the wrong
+# field count for the header) must fail loud and specific, not silently return an empty/partial
+# array. `./payloads/malformed.csv` uploads fine (valid bytes, valid `text/csv` content-type by
+# extension) — the malformedness is only in the CSV structure itself, caught when `body csv` is
+# actually resolved against it.
+#
+# Run explicitly (dot-directory, invisible to a bare `tflw run`/`tflw check`):
+#   npx tflw run tests/.demo-fail/*.tflw --tag demofail
+
+@demofail @fileformats
+test "body csv on a malformed CSV upload fails with a specific, loud error"
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as userAToken
+
+  api POST /uploads upload "../payloads/malformed.csv" as "file"
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as uploadId
+
+  api GET /uploads/{uploadId}
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  expect body csv has count 1

@@ -1,0 +1,25 @@
+# malformed-pdf-upload.tflw — DEMO-FAIL FIXTURE (F2, PLAN_FILEFORMATS.md; TFLW-GAPS.md gap #19,
+# PLAN_GAPS_19.md D19.7): `body pdf text` against a response that isn't actually a parseable PDF
+# must fail loud and specific, not silently return an empty string. `./payloads/malformed.pdf` is
+# plain text wearing a `.pdf` extension — it uploads fine (valid bytes, valid `application/pdf`
+# content-type by extension) — the malformedness is only in the PDF structure itself, caught when
+# `body pdf text` actually tries to walk the (nonexistent) object table.
+#
+# Run explicitly (dot-directory, invisible to a bare `tflw run`/`tflw check`):
+#   npx tflw run tests/.demo-fail/*.tflw --tag demofail
+
+@demofail @fileformats
+test "body pdf text on a malformed PDF upload fails with a specific, loud error"
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as userAToken
+
+  api POST /uploads upload "../payloads/malformed.pdf" as "file"
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as uploadId
+
+  api GET /uploads/{uploadId}
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  expect body pdf text contains "anything"
