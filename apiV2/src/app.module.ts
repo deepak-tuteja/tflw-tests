@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { OauthModule } from './oauth/oauth.module';
 import { ProfileExportModule } from './profile-export/profile-export.module';
 import { ProductsModule } from './products/products.module';
+import { UsersModule } from './users/users.module';
 import { OrdersModule } from './orders/orders.module';
 import { CategoriesModule } from './categories/categories.module';
 import { User } from './entities/user.entity';
@@ -68,6 +69,7 @@ import { CartModule } from './cart/cart.module';
     ProfileExportModule,
     CategoriesModule,
     ProductsModule,
+    UsersModule,
     OrdersModule,
     JobsModule,
     ReviewsModule,

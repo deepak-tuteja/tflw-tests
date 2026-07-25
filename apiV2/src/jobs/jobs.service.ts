@@ -10,9 +10,10 @@ import { Repository } from 'typeorm';
 import { Job, JobStatus, JobType } from '../entities/job.entity';
 import { Order, OrderStatus } from '../entities/order.entity';
 import { AuthedUser } from '../auth/guards/bearer-auth.guard';
-import { UserRole } from '../entities/user.entity';
+import { User, UserRole } from '../entities/user.entity';
 import { NotificationType } from '../entities/notification.entity';
 import { NotificationsService } from '../notifications/notifications.service';
+import { TokenRecordsService } from '../auth/token-records.service';
 
 const STAGE_DELAY_MS = 150;
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -27,7 +28,9 @@ export class JobsService {
   constructor(
     @InjectRepository(Job) private readonly jobs: Repository<Job>,
     @InjectRepository(Order) private readonly orders: Repository<Order>,
+    @InjectRepository(User) private readonly users: Repository<User>,
     private readonly notifications: NotificationsService,
+    private readonly tokenRecords: TokenRecordsService,
   ) {}
 
   async startFulfillment(order: Order): Promise<Job> {
@@ -133,14 +136,59 @@ export class JobsService {
     }
   }
 
+  // Self-service account deletion (PLAN_LIFECYCLE.md L2) — same sync-transition-then-async-
+  // continuation shape as startFulfillment: the deactivation + revocation that blocks re-auth
+  // happens before this call returns, everything else (attribute wipe, a defensive second
+  // revocation sweep) is the fire-and-forget continuation `GET /jobs/:id` polls for.
+  async startAccountDeletion(user: User): Promise<Job> {
+    if (user.deactivatedAt) {
+      throw new ConflictException('account is already deactivated');
+    }
+
+    await this.users.update(user.id, { deactivatedAt: new Date() });
+    await this.tokenRecords.revokeAllForUser(user.id);
+
+    const job = this.jobs.create({
+      type: JobType.ACCOUNT_DELETION,
+      userId: user.id,
+    });
+    const saved = await this.jobs.save(job);
+
+    await this.jobs.update(saved.id, { status: JobStatus.PROCESSING });
+    saved.status = JobStatus.PROCESSING;
+
+    void this.continueAccountDeletion(saved.id, user.id);
+
+    return saved;
+  }
+
+  private async continueAccountDeletion(jobId: string, userId: string): Promise<void> {
+    await delay(STAGE_DELAY_MS);
+    await this.users.update(userId, { attributes: {} });
+
+    // A defensive second sweep: catches any token record minted in the race window between the
+    // synchronous revocation above and now (e.g. a refresh rotation that was already in flight
+    // when the deletion request landed).
+    await delay(STAGE_DELAY_MS);
+    await this.tokenRecords.revokeAllForUser(userId);
+
+    await this.jobs.update(jobId, { status: JobStatus.COMPLETED });
+  }
+
   async findOneScoped(id: string, requester: AuthedUser): Promise<Job> {
     const job = await this.jobs.findOne({ where: { id } });
     if (!job) throw new NotFoundException('job not found');
 
     if (requester.role !== UserRole.ADMIN) {
-      const order = await this.orders.findOne({ where: { id: job.orderId } });
-      if (!order || order.userId !== requester.id) {
-        throw new ForbiddenException('not your job');
+      if (job.userId) {
+        if (job.userId !== requester.id) {
+          throw new ForbiddenException('not your job');
+        }
+      } else if (job.orderId) {
+        const order = await this.orders.findOne({ where: { id: job.orderId } });
+        if (!order || order.userId !== requester.id) {
+          throw new ForbiddenException('not your job');
+        }
       }
     }
 

@@ -35,6 +35,9 @@ export class AnyAuthGuard implements CanActivate {
         header.slice('Bearer '.length),
         'access',
       );
+      // Access tokens are stateless — this is the only thing that can reject one before its own
+      // TTL expiry once the user's account has been deactivated (PLAN_LIFECYCLE.md L2).
+      await this.auth.assertActive(decoded.sub);
       (req as Request & { user: AuthedUser }).user = {
         id: decoded.sub,
         role: decoded.role! as UserRole,
@@ -63,6 +66,7 @@ export class AnyAuthGuard implements CanActivate {
     if (cookie) {
       const decoded = await this.tokens.verify(cookie, 'session');
       await this.tokenRecords.assertLive(decoded.jti!);
+      await this.auth.assertActive(decoded.sub);
       if (MUTATING_METHODS.has(req.method)) {
         const csrfHeader = req.headers['x-csrf-token'];
         if (!csrfHeader || csrfHeader !== decoded.csrf) {

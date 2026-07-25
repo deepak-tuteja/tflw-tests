@@ -8,6 +8,7 @@ import {
 import { Request } from 'express';
 import { TokensService } from '../tokens.service';
 import { TokenRecordsService } from '../token-records.service';
+import { AuthService } from '../auth.service';
 import { AuthedUser } from './bearer-auth.guard';
 import { UserRole } from '../../entities/user.entity';
 
@@ -18,6 +19,7 @@ export class SessionAuthGuard implements CanActivate {
   constructor(
     private readonly tokens: TokensService,
     private readonly tokenRecords: TokenRecordsService,
+    private readonly auth: AuthService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -28,6 +30,7 @@ export class SessionAuthGuard implements CanActivate {
     }
     const decoded = await this.tokens.verify(cookie, 'session');
     await this.tokenRecords.assertLive(decoded.jti!);
+    await this.auth.assertActive(decoded.sub);
 
     if (MUTATING_METHODS.has(req.method)) {
       const csrfHeader = req.headers['x-csrf-token'];

@@ -8,9 +8,11 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { Order } from './order.entity';
+import { User } from './user.entity';
 
 export enum JobType {
   ORDER_FULFILLMENT = 'order-fulfillment',
+  ACCOUNT_DELETION = 'account-deletion',
 }
 
 export enum JobStatus {
@@ -33,12 +35,22 @@ export class Job {
   @Column({ type: 'enum', enum: JobStatus, default: JobStatus.PENDING })
   status: JobStatus;
 
-  @ManyToOne(() => Order, { onDelete: 'CASCADE', nullable: false })
+  // Exactly one of order/user is populated, depending on `type` — ORDER_FULFILLMENT jobs are
+  // order-scoped, ACCOUNT_DELETION jobs (PLAN_LIFECYCLE.md L2) are user-scoped; there's no order
+  // to hang them off.
+  @ManyToOne(() => Order, { onDelete: 'CASCADE', nullable: true })
   @JoinColumn({ name: 'order_id' })
-  order: Order;
+  order: Order | null;
 
-  @Column({ name: 'order_id' })
-  orderId: string;
+  @Column({ name: 'order_id', nullable: true })
+  orderId: string | null;
+
+  @ManyToOne(() => User, { onDelete: 'CASCADE', nullable: true })
+  @JoinColumn({ name: 'user_id' })
+  user: User | null;
+
+  @Column({ name: 'user_id', nullable: true })
+  userId: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

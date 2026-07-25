@@ -71,7 +71,24 @@ export class AuthService {
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       throw new UnauthorizedException('invalid email or password');
     }
+    if (user.deactivatedAt) {
+      throw new UnauthorizedException('account has been deactivated');
+    }
     return user;
+  }
+
+  // Backs BearerAuthGuard/AnyAuthGuard/SessionAuthGuard's deactivation check (PLAN_LIFECYCLE.md L2
+  // decision 7). Bearer access tokens are stateless (no token_records row), so revoking a user's
+  // token records at deletion time doesn't stop an already-issued access token from verifying —
+  // this per-request lookup is what actually blocks it before its own TTL expiry.
+  async assertActive(userId: string): Promise<void> {
+    const user = await this.users.findOne({
+      where: { id: userId },
+      select: { id: true, deactivatedAt: true },
+    });
+    if (!user || user.deactivatedAt) {
+      throw new UnauthorizedException('account has been deactivated');
+    }
   }
 
   async login(dto: LoginDto): Promise<BearerTokenPair> {
@@ -93,6 +110,9 @@ export class AuthService {
     await this.tokenRecords.claimForRotation(decoded.jti!);
 
     const user = await this.users.findOneOrFail({ where: { id: decoded.sub } });
+    if (user.deactivatedAt) {
+      throw new UnauthorizedException('account has been deactivated');
+    }
     return this.issueBearerPair(user);
   }
 
@@ -173,6 +193,9 @@ export class AuthService {
     await this.tokenRecords.assertLive(decoded.jti!);
 
     const user = await this.users.findOneOrFail({ where: { id: decoded.sub } });
+    if (user.deactivatedAt) {
+      throw new UnauthorizedException('account has been deactivated');
+    }
     const csrfToken = await this.issueSessionCookie(user, res);
     return { csrfToken };
   }

@@ -33,6 +33,20 @@ export class TokenRecordsService {
     await this.records.update({ id: jti }, { revokedAt: new Date() });
   }
 
+  // Bulk revoke for account deletion (PLAN_LIFECYCLE.md L2): cuts every one of the user's
+  // outstanding refresh/session/session_refresh records at once, rather than one jti at a time.
+  // Called both synchronously (blocks re-auth right away) and again from the async continuation
+  // (catches anything issued in the race window between the sync call and now, e.g. a refresh
+  // rotation that was already in flight).
+  async revokeAllForUser(userId: string): Promise<void> {
+    await this.records
+      .createQueryBuilder()
+      .update(TokenRecord)
+      .set({ revokedAt: () => 'now()' })
+      .where('user_id = :userId AND revoked_at IS NULL', { userId })
+      .execute();
+  }
+
   // Atomic check-and-revoke for rotation (refresh/session-refresh): a separate `assertLive` +
   // `revoke` pair is racy — two concurrent requests bearing the same not-yet-revoked token can
   // both pass `assertLive` before either `revoke` commits, each minting its own successor pair
