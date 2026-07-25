@@ -17,6 +17,10 @@ export enum OrderStatus {
   READY = 'ready',
   FULFILLED = 'fulfilled',
   CANCELLED = 'cancelled',
+  // PLAN_RETURNS.md R2 — terminal state reached once an approved return request's refund job
+  // (JobsService.startRefund) completes. Never set synchronously; only the job continuation
+  // writes it.
+  REFUNDED = 'refunded',
 }
 
 @Entity('orders')

@@ -104,6 +104,7 @@ A plain `npx tflw run` already exercises a lot of what to look for in `report/re
 | `@orderReceipts` | `order-receipts.tflw` (M32 — a real, `/FlateDecode`-compressed PDF order receipt; first genuinely binary response body) |
 | `@orderWebhooks` | `order-webhooks.tflw` (M33 — a real order-completion webhook, delivered to a JS-escape-hatch throwaway HTTP receiver) |
 | `@lifecycle` | token-refresh-lifecycle.tflw, user-lifecycle.tflw (`PLAN_LIFECYCLE.md` L3 — attribute enrich→conflict→retry→redact, then soft async self-deletion, as one realistic chain) |
+| `@orderReturns` | return-requests.tflw (`PLAN_RETURNS.md` R3 — order return/refund requests: owner submits, admin approves/rejects, an approved decision fires a real async refund job) |
 
 ### Demo-fail / check-only / env-specific fixtures
 

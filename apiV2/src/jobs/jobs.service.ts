@@ -175,6 +175,46 @@ export class JobsService {
     await this.jobs.update(jobId, { status: JobStatus.COMPLETED });
   }
 
+  // Refund job (PLAN_RETURNS.md R2) — kicked off by ReturnRequestsService.decide's APPROVED
+  // branch, same sync-transition-then-async-continuation shape as startFulfillment: the order is
+  // already known FULFILLED (the caller only reaches here via an approved return request, which
+  // itself requires a FULFILLED order per decision 6), so there's no precondition check here —
+  // that's the return request's job, not this one's.
+  async startRefund(order: Order): Promise<Job> {
+    const job = this.jobs.create({
+      type: JobType.REFUND,
+      orderId: order.id,
+    });
+    const saved = await this.jobs.save(job);
+
+    await this.jobs.update(saved.id, { status: JobStatus.PROCESSING });
+    saved.status = JobStatus.PROCESSING;
+
+    void this.continueRefund(saved.id, order.id, order.userId);
+
+    return saved;
+  }
+
+  private async continueRefund(
+    jobId: string,
+    orderId: string,
+    userId: string,
+  ): Promise<void> {
+    await delay(STAGE_DELAY_MS);
+    await this.orders.update(orderId, { status: OrderStatus.REFUNDED });
+    await this.notifications.create(
+      userId,
+      NotificationType.ORDER_STATUS_CHANGED,
+      {
+        orderId,
+        oldStatus: OrderStatus.FULFILLED,
+        newStatus: OrderStatus.REFUNDED,
+      },
+    );
+
+    await this.jobs.update(jobId, { status: JobStatus.COMPLETED });
+  }
+
   async findOneScoped(id: string, requester: AuthedUser): Promise<Job> {
     const job = await this.jobs.findOne({ where: { id } });
     if (!job) throw new NotFoundException('job not found');

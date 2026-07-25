@@ -13,6 +13,7 @@ import { User } from './user.entity';
 export enum JobType {
   ORDER_FULFILLMENT = 'order-fulfillment',
   ACCOUNT_DELETION = 'account-deletion',
+  REFUND = 'refund',
 }
 
 export enum JobStatus {
