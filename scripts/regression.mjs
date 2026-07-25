@@ -27,12 +27,32 @@ function slug(name) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
+// M35 fixed this by excluding demo-fail-check's junit.xml from the `dorny/test-reporter` glob via
+// a comma-separated `!`-negation in the workflow's `path` input — confirmed wrong on the very next
+// real CI run (30132116208): dorny's `LocalFileProvider` splits `path` on `,` and calls fast-glob
+// *separately per segment* (see its src/input-providers/local-file-provider.ts), so the negation
+// segment just globs on its own (matching nothing, since a lone negative pattern has no positive
+// pattern to subtract from) and never touches the other segment's results — the exclusion was a
+// complete no-op. Fixed for real here instead: rename demo-fail-check's own junit.xml so it can
+// no longer match `report-by-phase/*/junit.xml` at all, structurally, rather than depending on
+// glob-exclusion semantics the action doesn't actually implement. The file is still archived and
+// still uploaded whole via the report-by-phase/ artifact step — just under a name a human (or the
+// verify-demofail.mjs script whose own count-based check() logic is this phase's real verdict) can
+// still open, but the JUnit-consuming action can't accidentally pick up.
+const JUNIT_EXCLUDED_PHASES = new Set(['demo-fail-check']);
+
 function archivePhaseReport(phaseName) {
   if (!existsSync(REPORT_DIR)) return;
   const dest = path.join(ARCHIVE_DIR, slug(phaseName));
   rmSync(dest, { recursive: true, force: true });
   mkdirSync(ARCHIVE_DIR, { recursive: true });
   renameSync(REPORT_DIR, dest);
+  if (JUNIT_EXCLUDED_PHASES.has(slug(phaseName))) {
+    const junitPath = path.join(dest, 'junit.xml');
+    if (existsSync(junitPath)) {
+      renameSync(junitPath, path.join(dest, 'junit-by-design.xml'));
+    }
+  }
 }
 
 const AREA_TAGS = ['identityOps', 'catalogOps', 'orderOps', 'adminOps'];
