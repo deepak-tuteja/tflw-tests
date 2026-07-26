@@ -8,14 +8,13 @@
 // Ground truth comes from a direct fetch against the real api (bypassing tflw entirely), so this
 // script never trusts tflw's own redaction to tell it what the real values were.
 //
-// Scope, deliberately: `redact` (SPEC §3.5) is documented as applying only to the request/response
-// trace (`redactRequest`/`redactResponse`), not to a step's own printed `detail` text. Two step
-// kinds (`capture`, and `expect ... equals "{var}"`) compose the real resolved value straight into
-// their own detail line, bypassing that boundary entirely — a real gap, filed as TFLW-GAPS.md #15,
-// not fixable from this repo. Gating this script on the full raw text of report.html/results.json
-// would just make it permanently red on a known, upstream, out-of-scope issue, so the strict
-// leak-check below walks results.json's structured `request.body`/`response.bodyText` fields only
-// — exactly what `redact` actually promises to cover.
+// Scope: `redact` (SPEC §3.5) applies to the request/response trace (`redactRequest`/
+// `redactResponse`) *and*, since gap #15 was fixed upstream (tflw 0.1.0, 2026-07-26), to a plain
+// `capture`/`expect`/`check` step's own printed `detail` text when its subject is redact-covered.
+// The leak-check below walks every step's `request.body`/`response.bodyText`/`detail` fields — the
+// full set `redact` now promises to cover. Quantified (`any`/`all`) assertions are a documented,
+// deliberate exception (upstream SPEC §3.5) — this suite doesn't quantify over a redacted path, so
+// there's nothing to carve out here.
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -73,10 +72,10 @@ let violations = 0;
 
 for (const test of report.tests) {
   for (const step of test.steps) {
-    if (step.kind !== 'api') continue;
     const fields = [
       ['request.body', step.request?.body],
       ['response.bodyText', step.response?.bodyText],
+      ['detail', step.detail],
     ];
     for (const [fieldName, text] of fields) {
       if (typeof text !== 'string') continue;

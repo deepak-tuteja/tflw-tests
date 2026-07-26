@@ -16,6 +16,15 @@
 # *report* shows, never what `expect`/`capture` see) — proven by running this same file under
 # `--evidence headers-only`/`--evidence none` and inspecting the emitted report.html, per the
 # manual verification step in plan_v2.md Part P / PROGRESS.md's M23 entry.
+#
+# Gap #15 (TFLW-GAPS.md, fixed upstream in tflw 0.1.0, 2026-07-26): the second test below
+# (`capture body.phone as firstPhone` / `expect body.phone equals "{firstPhone}"`) is exactly the
+# shape that used to leak the real phone number into `report.html`/`results.json` via the
+# `capture`/`expect` step's own detail text, even though the request/response trace was correctly
+# masked — same grammar as before, no new `.tflw` syntax needed to prove the fix. The DSL itself has
+# no way to read back its own emitted report file, so the actual leak-check lives in
+# `scripts/verify-redaction.mjs` (updated to also walk every step's `detail` field, not just
+# `request.body`/`response.bodyText`), run via `npm run test:safety`.
 
 @auth @safety @identityOps
 test "`/profile/export` returns real PII — the assertion sees the true value even though the report will mask it" as admin
@@ -23,7 +32,14 @@ test "`/profile/export` returns real PII — the assertion sees the true value e
   expect status equals 200
   expect body.email equals env(ADMIN_EMAIL)
   expect body.address.street matches "^[0-9]+ Maple Ave$"
-  expect body.address.city matches "^(Springfield|Riverside|Fairview|Georgetown|Madison)$"
+  # Deliberately a generic format check, not an enum of the fixture's real candidate city names
+  # (`apiV2/src/profile-export/profile-export.service.ts`'s `CITIES`) — found while widening
+  # `verify-redaction.mjs` to also scan step `detail` text (gap #15 fix): a `matches` assertion's
+  # message includes the regex *pattern* text verbatim even on a pass, so an enum-of-real-values
+  # regex will always coincidentally contain whichever value the API actually returned this run —
+  # not a real leak (the pattern is fixed source text, visible via `source` regardless of which
+  # value matched), but indistinguishable from one to a naive ground-truth substring scan.
+  expect body.address.city matches "^[A-Za-z ]+$"
   expect body.address.postalCode matches "^[0-9]{5}$"
   expect body.phone matches "^\\+1-[0-9]{3}-[0-9]{3}-[0-9]{4}$"
 
