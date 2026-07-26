@@ -84,3 +84,22 @@ services:
       interval: 2s
       timeout: 3s
       retries: 20
+
+  # Browser-arc dogfood target (webV2-0, PLAN_WEBV2_TARGETS.md): Vite+React+TS SPA storefront,
+  # built and served by its own nginx (webV2/Dockerfile), which also reverse-proxies /v1/* to
+  # `api` so the storefront and API share an origin (apiV2 sets no CORS headers and its session
+  # cookie/CSRF pairing assumes same-origin). Deliberately its own nginx service, not the mTLS
+  # sidecar above — that one is scoped to TLS/mTLS testing (M22) and serves nothing static.
+  webv2:
+    build:
+      context: ./webV2
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "8090:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 2s
+      timeout: 3s
+      retries: 20

@@ -17,9 +17,13 @@ plan and `PROGRESS.md` for build status.
 apiV2/               NestJS + TypeORM + Postgres e-commerce API — users/categories/products/
                      orders/order_items/reviews; migrations + deterministic idempotent seed
                      run on container start; /v1 prefix; OpenAPI at /openapi.json + /docs
-docker-compose.yml   postgres (ephemeral per-run volume) + api + nginx (TLS sidecar), healthchecked
+docker-compose.yml   postgres (ephemeral per-run volume) + api + nginx (TLS sidecar) + webv2,
+                     healthchecked
 nginx/               TLS sidecar (M22) — self-signed :8443 + mTLS-requiring :8444, proxying
                      unchanged to api:4001; certs generated fresh at every container start
+webV2/               React+Vite+TS SPA storefront (webV2-0) — tflw's browser-arc dogfood target
+                     (PLAN_WEBV2_TARGETS.md); own nginx image serves the build + proxies /v1/*
+                     to api:4001 so the storefront and API share an origin; :8090
 tests/               .tflw test files, one per feature/scenario (being ported to v2, M1-M5)
 tests/helpers/       JS escape-hatch helpers (page-walk, Retry-After sleep-and-retry, etc.)
 tests/shared/        actions shared across files (e.g. `create product`)
@@ -37,7 +41,7 @@ TFLW-FEATURE-GAPS.md genuine tflw DSL gaps found while building the v1 (plain-No
 
 ```sh
 cp .env.example .env   # Postgres creds, JWT secrets, seeded admin/userA/userB/OAuth-client credentials
-node cli.mjs start     # docker compose up -d --build --wait (postgres + api :4001 + nginx TLS sidecar)
+node cli.mjs start     # docker compose up -d --build --wait (postgres + api :4001 + nginx TLS sidecar + webV2 :8090)
 npm run refresh-tflw   # packs ../testFlow/packages/cli and installs the tarball
 npx tflw run           # runs tests/*.tflw against the running api
 npm run test:mtls      # runs tests/mtls.tflw against the sidecar's mTLS-requiring listener (own env, M22)
@@ -57,6 +61,20 @@ then `@smoke` alone, then each `smoke,<area>` cross-axis combo, then `mtls-rejec
 own fresh Docker restart (`scripts/regression.mjs`; restarting every phase isn't optional —
 `unique(...)`'s counter resets per `tflw run` invocation but Postgres data doesn't, so chained
 phases on the same DB reproduce false collisions). Exits non-zero if any phase fails.
+
+### webV2 — browser-arc dogfood target (webV2-0)
+
+`http://localhost:8090` after `node cli.mjs start` — a React+Vite+TS SPA storefront (catalog →
+product → cart → checkout) over apiV2's REST + session-cookie auth, the Tier-A ("clean": proper
+ARIA roles, `<label>`-associated inputs, one unambiguous "Add to cart" button per product) target
+tflw's upcoming browser steps (`PLAN_BROWSER_PERF_SECURITY.md` M3a) will run against once they
+ship — no `.tflw` coverage yet, since tflw itself has no browser support until M3a lands. Log in as
+any seeded user (e.g. `alice@example.com` / `alice-pw-123`); its own nginx image (`webV2/Dockerfile`
++ `webV2/nginx.conf`) builds the SPA and reverse-proxies `/v1/*` to `api:4001` so the storefront and
+API share an origin — required because apiV2 sets no CORS headers and its session-cookie/CSRF
+pairing (`apiV2/src/auth/auth.service.ts`) assumes same-origin. Deliberately its own nginx service,
+not the mTLS sidecar above (that one is scoped to TLS/mTLS testing, M22, and serves nothing static).
+`npm run dev` (port 5190) proxies the same way for local iteration against a host-run apiV2.
 
 ## Reporting
 

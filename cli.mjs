@@ -19,6 +19,7 @@ function start() {
     'tls sidecar: https://localhost:8443 (self-signed) · https://localhost:8444 (mTLS — client ' +
       'cert required, see nginx/certs/ after start)',
   );
+  console.log('webV2 storefront: http://localhost:8090 (browser-arc dogfood target)');
 }
 
 function stop() {
