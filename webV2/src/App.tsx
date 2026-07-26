@@ -8,8 +8,11 @@ import { LoginPage } from './pages/LoginPage';
 import { CatalogPage } from './pages/CatalogPage';
 import { CatalogAllPage } from './pages/CatalogAllPage';
 import { ProductPage } from './pages/ProductPage';
+import { ProductReviewsPage } from './pages/ProductReviewsPage';
 import { CartPage } from './pages/CartPage';
 import { OrderConfirmationPage } from './pages/OrderConfirmationPage';
+import { SupportPage } from './pages/SupportPage';
+import { AccessibilityDemoPage } from './pages/AccessibilityDemoPage';
 
 export function App() {
   return (
@@ -21,10 +24,13 @@ export function App() {
               <Route index element={<CatalogPage />} />
               <Route path="catalog/all" element={<CatalogAllPage />} />
               <Route path="products/:id" element={<ProductPage />} />
+              <Route path="products/:id/reviews" element={<ProductReviewsPage />} />
               <Route path="login" element={<LoginPage />} />
+              <Route path="a11y-demo" element={<AccessibilityDemoPage />} />
               <Route element={<ProtectedRoute />}>
                 <Route path="cart" element={<CartPage />} />
                 <Route path="orders/:id" element={<OrderConfirmationPage />} />
+                <Route path="support" element={<SupportPage />} />
               </Route>
             </Route>
           </Routes>

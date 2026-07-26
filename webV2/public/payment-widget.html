@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Payment</title>
+    <style>
+      body {
+        margin: 0.75rem;
+        font-family: system-ui, sans-serif;
+        font-size: 0.85rem;
+      }
+      label {
+        display: block;
+        margin-top: 0.5rem;
+      }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0.3rem;
+      }
+      button {
+        margin-top: 0.75rem;
+      }
+      #payment-error {
+        color: #c0392b;
+      }
+      #payment-status {
+        color: #1e7e34;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      Tier C corner (webV2-3, PLAN_WEBV2_TARGETS.md): an iframe-embedded payment widget. This is a
+      plain static page (served same-origin by nginx alongside the SPA build, see webV2/Dockerfile)
+      with its own vanilla-JS form — no framework, no real payment gateway. It exists purely to
+      require frame traversal (filling fields lives inside this document, not the parent) and a
+      postMessage handoff: on a valid-looking submit it tells the parent window it's "authorized"
+      rather than actually charging anything.
+    -->
+    <form id="payment-form">
+      <label for="card-number">Card number</label>
+      <input id="card-number" name="card-number" type="text" inputmode="numeric" autocomplete="cc-number" required />
+      <label for="card-expiry">Expiry (MM/YY)</label>
+      <input id="card-expiry" name="card-expiry" type="text" autocomplete="cc-exp" required />
+      <label for="card-cvc">CVC</label>
+      <input id="card-cvc" name="card-cvc" type="text" autocomplete="cc-csc" required />
+      <button type="submit">Authorize payment</button>
+      <p id="payment-error" role="alert" hidden></p>
+      <p id="payment-status" role="status" hidden></p>
+    </form>
+    <script>
+      var form = document.getElementById('payment-form');
+      var errorEl = document.getElementById('payment-error');
+      var statusEl = document.getElementById('payment-status');
+
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var number = document.getElementById('card-number').value.replace(/\s+/g, '');
+        var expiry = document.getElementById('card-expiry').value.trim();
+        var cvc = document.getElementById('card-cvc').value.trim();
+
+        if (number.length < 12 || !/^\d{2}\/\d{2}$/.test(expiry) || cvc.length < 3) {
+          statusEl.hidden = true;
+          errorEl.hidden = false;
+          errorEl.textContent = 'Enter a valid card number, expiry (MM/YY) and CVC.';
+          return;
+        }
+
+        errorEl.hidden = true;
+        statusEl.hidden = false;
+        statusEl.textContent = 'Payment authorized.';
+        window.parent.postMessage(
+          { type: 'payment-authorized', token: 'tok_demo_' + Date.now() },
+          window.location.origin,
+        );
+      });
+    </script>
+  </body>
+</html>

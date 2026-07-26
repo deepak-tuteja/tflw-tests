@@ -93,6 +93,11 @@ services:
   webv2:
     build:
       context: ./webV2
+      # a11y flag corner (webV2-3): kept true so the dogfood stack always has the inaccessible
+      # AccessibilityDemoPage half present for a future axe-core scan; flip to "false" here to
+      # produce a build with that half genuinely absent (not just hidden) for the clean-only case.
+      args:
+        VITE_ENABLE_A11Y_VIOLATIONS: "true"
     depends_on:
       api:
         condition: service_healthy

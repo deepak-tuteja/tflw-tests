@@ -116,6 +116,33 @@ add-to-cart form. `/catalog/all` ("Browse all products") hand-rolls a windowed l
 carries the full scroll height) — plus a placeholder-only filter input with no `<label>` anywhere
 on the page, forcing name resolution down to the placeholder text alone.
 
+### webV2 Tier C corners + a11y flag (webV2-3)
+
+Still `http://localhost:8090` — the final tier, per `PLAN_WEBV2_TARGETS.md`'s "hostile" tier plus
+its a11y-flag corner. Again purely additive; Tier A and Tier B stay untouched. The cart's checkout
+form embeds a same-origin static page (`/payment-widget.html`) via `<iframe title="Payment">` — a
+plain card form that `postMessage`s `{ type: 'payment-authorized' }` to the parent on a
+valid-looking submit, which is the only thing that enables the Checkout button; filling it out
+requires real frame traversal. Cart rows are reorderable via native HTML5 drag-and-drop (a
+`draggable` handle cell) — purely a client-side display order, since cart items have no backend
+position column. Every product row now links to `/products/:id/reviews`, a page built around a
+real shadow-DOM Web Component (`<star-rating>`, `customElements.define`) for submitting a 1–5 star
+rating — its buttons live inside an `open` shadow root, invisible to a plain
+`document.querySelector` from outside — next to a `<canvas>` bar chart of the rating distribution
+with nothing semantic underneath it; clicking a bar hit-tests pixel coordinates to filter the
+review list by that star rating. A new `/support` page (nav-linked, requires login) has a real
+drag-and-drop drop zone (distinct from a plain file input) hitting apiV2's existing `/uploads`
+endpoint (csv/txt/pdf), plus a "Subject" field whose `id` is recomputed with `Math.random()` on
+every render (not just mount) — the `<label>`'s `htmlFor` stays in sync each time, so accessible-
+name resolution never breaks even though the id itself never stops changing. A new `/a11y-demo`
+page (nav-linked) pairs an accessible section (labelled checkbox, real button, `alt`-bearing image)
+with a deliberately inaccessible twin (unlabelled checkbox with no accessible name at all, a
+clickable `<div>` standing in for a button with no role/tabindex, low-contrast text, an `alt`-less
+image) — the inaccessible half is gated behind a genuine **build-time** flag
+(`VITE_ENABLE_A11Y_VIOLATIONS`, a Docker build arg threaded into `ENV` before `npm run build`,
+defaulted to `true` in `docker-compose.yml`), so disabling it tree-shakes the violations out of the
+shipped JS bundle entirely rather than just hiding them at runtime.
+
 ## Reporting
 
 A plain `npx tflw run` already exercises a lot of what to look for in `report/report.html` and

@@ -20,6 +20,8 @@ export function Layout() {
             testFlow-tests storefront
           </Link>
           <Link to="/cart">Cart ({itemCount})</Link>
+          <Link to="/support">Support</Link>
+          <Link to="/a11y-demo">Accessibility demo</Link>
           {user ? (
             <>
               <span className="current-user">{user.email}</span>

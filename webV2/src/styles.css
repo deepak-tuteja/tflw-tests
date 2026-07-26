@@ -161,3 +161,76 @@ td {
   padding: 0 1rem;
   border-bottom: 1px solid #8883;
 }
+
+/* Tier C corner (webV2-3): drag handle for cart-row reorder. */
+.drag-handle {
+  cursor: grab;
+  font-size: 1.1rem;
+}
+
+/* Tier C corner (webV2-3): iframe-embedded payment widget. */
+.payment-frame {
+  width: 100%;
+  max-width: 24rem;
+  height: 220px;
+  border: 1px solid #8883;
+  border-radius: 0.5rem;
+}
+
+/* Tier C corner (webV2-3): canvas rating-distribution chart, nothing semantic underneath. */
+.rating-chart {
+  border: 1px solid #8883;
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.review-list {
+  list-style: none;
+  padding: 0;
+}
+
+.review-list li {
+  border-bottom: 1px solid #8883;
+  padding: 0.75rem 0;
+}
+
+.review-reply {
+  color: #666;
+  font-style: italic;
+}
+
+/* Tier C corner (webV2-3): drop-zone file upload, distinct from a plain file input. */
+.drop-zone {
+  border: 2px dashed #8886;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  text-align: center;
+  margin: 1rem 0;
+}
+
+.drop-zone-active {
+  border-color: #5b8def;
+  background: #5b8def1a;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* a11y flag corner (webV2-3): deliberately inaccessible twin section. */
+.a11y-fake-button {
+  display: inline-block;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid #8883;
+  cursor: pointer;
+}
+
+.a11y-low-contrast {
+  color: #ddd;
+  background: #fff;
+}

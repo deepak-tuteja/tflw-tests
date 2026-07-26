@@ -126,6 +126,7 @@ export function CatalogPage() {
                   <button type="button" onClick={() => setQuickViewProduct(product)}>
                     Quick view
                   </button>
+                  <Link to={`/products/${product.id}/reviews`}>Reviews</Link>
                 </div>
               </li>
             ))}

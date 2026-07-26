@@ -58,3 +58,30 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
   return payload as T;
 }
+
+// Multipart sibling of apiFetch, used by the SupportPage drop-zone corner (webV2-3) — file bodies
+// can't go through apiFetch's JSON-only Content-Type handling, but auth is the same session
+// cookie + CSRF token pairing.
+export async function uploadFile<T>(path: string, file: File): Promise<T> {
+  const form = new FormData();
+  form.append('file', file);
+  const headers: Record<string, string> = {};
+  if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
+
+  const res = await fetch(`/v1${path}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers,
+    body: form,
+  });
+
+  const isJson = res.headers.get('content-type')?.includes('json');
+  const payload = isJson ? await res.json() : undefined;
+
+  if (!res.ok) {
+    const detail = (payload as { detail?: string } | undefined)?.detail ?? res.statusText;
+    throw new ApiError(res.status, detail);
+  }
+
+  return payload as T;
+}

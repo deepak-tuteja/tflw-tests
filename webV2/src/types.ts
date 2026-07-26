@@ -60,6 +60,29 @@ export interface Order {
   items: OrderItem[];
 }
 
+export interface Review {
+  id: string;
+  userId: string;
+  productId: string;
+  rating: number;
+  comment: string;
+  replyText: string | null;
+  createdAt: string;
+}
+
+export interface ReviewPage {
+  data: Review[];
+  nextCursor: string | null;
+}
+
+export interface UploadMetadata {
+  id: string;
+  ownerId: string;
+  filename: string;
+  contentType: string;
+  createdAt: string;
+}
+
 export interface Profile {
   id: string;
   name: string;
