@@ -77,3 +77,87 @@ td {
 [role='status'] {
   color: #27ae60;
 }
+
+.product-row-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+/* Tier B corner (webV2-2): async success/error toasts, fixed top-right, auto-dismissing. */
+.toast-viewport {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  z-index: 100;
+}
+
+.toast {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-radius: 0.4rem;
+  background: #222;
+  color: #fff;
+  box-shadow: 0 2px 8px #0004;
+}
+
+.toast-success {
+  background: #1e7e34;
+}
+
+.toast-error {
+  background: #c0392b;
+}
+
+/* Tier B corner (webV2-2): focus-trap quick-view modal. */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: #0008;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 90;
+}
+
+.modal-dialog {
+  background: canvas;
+  color: canvastext;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  max-width: 28rem;
+  width: 90%;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+/* Tier B corner (webV2-2): hand-rolled windowed/virtualized list. */
+.virtual-list-viewport {
+  overflow-y: auto;
+  border: 1px solid #8883;
+  border-radius: 0.5rem;
+  position: relative;
+}
+
+.virtual-list-spacer {
+  position: relative;
+  width: 100%;
+}
+
+.virtual-list-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0 1rem;
+  border-bottom: 1px solid #8883;
+}

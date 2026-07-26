@@ -99,6 +99,23 @@ the design, both documented in code comments: `coupons` has no listing endpoint 
 one-time confirmation page, nothing to browse afterward), and there's no cross-product reviews
 listing (moderation is reached by browsing to a product's detail page, not a flat review inbox).
 
+### webV2 Tier B corners (webV2-2)
+
+Still `http://localhost:8090` — the storefront's Tier-A happy path (`ProductPage`'s single, cleanly
+-labelled "Add to cart") is untouched; these are added corners living alongside it, per
+`PLAN_WEBV2_TARGETS.md`'s "realistic mess" tier. The catalog grid now has an "Add to cart" *and* a
+"Quick view" button in every row (12 identical pairs per page, each `<li>` carrying
+`aria-label={product.name}` so `within row "…"` scoping resolves it) — "Add to cart"'s label is
+also split across two `<span>`s. Clicking it optimistically bumps the header cart count before the
+request resolves, then settles to the server's true count once it does (a real bump-then-correct,
+not scripted). A top-right async toast (`role="status"`/`"alert"`, auto-dismissing after 2.5s)
+confirms the add. "Quick view" opens a hand-rolled focus-trap modal (`role="dialog"`, Tab/Shift+Tab
+wrap at its own boundary, Escape closes, focus restores to the button that opened it) with its own
+add-to-cart form. `/catalog/all` ("Browse all products") hand-rolls a windowed list over the full
+~100-product catalog — a fixed-height scroll viewport mounts only the visible rows (spacer div
+carries the full scroll height) — plus a placeholder-only filter input with no `<label>` anywhere
+on the page, forcing name resolution down to the placeholder text alone.
+
 ## Reporting
 
 A plain `npx tflw run` already exercises a lot of what to look for in `report/report.html` and
