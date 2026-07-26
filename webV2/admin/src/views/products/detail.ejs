@@ -1,0 +1,29 @@
+<%- include('../partials/head', { title: product.name }) %>
+<%- include('../partials/nav') %>
+<p><a href="/products">&larr; back to products</a></p>
+<h1><%= product.name %></h1>
+<p><%= product.description %></p>
+<p>Price: <%= product.price %> · Stock: <%= product.stock %></p>
+
+<h2>Reviews (moderation)</h2>
+<% if (!reviews.length) { %>
+  <p>No reviews yet.</p>
+<% } %>
+<% reviews.forEach(function(r) { %>
+  <fieldset>
+    <legend>Rating <%= r.rating %>/5 — user <%= r.userId %></legend>
+    <p><%= r.comment %></p>
+    <% if (r.replyText) { %>
+      <p><span class="badge">replied</span> <%= r.replyText %></p>
+    <% } %>
+    <% if (currentUser.role === 'admin') { %>
+      <form method="post" action="/products/<%= product.id %>/reviews/<%= r.id %>/reply">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <label for="reply-<%= r.id %>"><%= r.replyText ? 'Edit reply' : 'Reply' %></label>
+        <textarea id="reply-<%= r.id %>" name="replyText" required><%= r.replyText ?? '' %></textarea>
+        <button type="submit"><%= r.replyText ? 'Update reply' : 'Post reply' %></button>
+      </form>
+    <% } %>
+  </fieldset>
+<% }) %>
+<%- include('../partials/foot') %>

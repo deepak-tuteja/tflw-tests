@@ -1,0 +1,25 @@
+<%- include('../partials/head', { title: 'Create coupon' }) %>
+<%- include('../partials/nav') %>
+<h1>Create coupon</h1>
+<p>apiV2 has no coupon-listing endpoint — this confirmation page is the only place you'll see a coupon's id after creating it.</p>
+<% if (error) { %><p class="error"><%= error %></p><% } %>
+<form method="post" action="/coupons">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+  <label for="code">Code</label>
+  <input id="code" name="code" required />
+  <label for="type">Type</label>
+  <select id="type" name="type">
+    <option value="percent">percent</option>
+    <option value="fixed">fixed</option>
+  </select>
+  <label for="value">Value (percent: 0-100, fixed: currency amount)</label>
+  <input id="value" name="value" type="number" step="0.01" min="0" required />
+  <label for="expiresAt">Expires at</label>
+  <input id="expiresAt" name="expiresAt" type="datetime-local" required />
+  <label for="minOrderAmount">Minimum order amount</label>
+  <input id="minOrderAmount" name="minOrderAmount" type="number" step="0.01" min="0" required />
+  <label for="usageLimit">Usage limit</label>
+  <input id="usageLimit" name="usageLimit" type="number" min="1" required />
+  <p><button type="submit">Create coupon</button></p>
+</form>
+<%- include('../partials/foot') %>

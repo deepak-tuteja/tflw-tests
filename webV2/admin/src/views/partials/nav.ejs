@@ -1,0 +1,15 @@
+<% if (currentUser) { %>
+<nav>
+  <a href="/">Dashboard</a>
+  <a href="/categories">Categories</a>
+  <a href="/products">Products / Moderation</a>
+  <a href="/tickets">Tickets</a>
+  <% if (currentUser.role === 'admin') { %><a href="/coupons">Coupons</a><% } %>
+  <span> — <%= currentUser.name %> (<%= currentUser.role %>)</span>
+  <form class="inline" method="post" action="/logout">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <button type="submit">Log out</button>
+  </form>
+</nav>
+<hr />
+<% } %>

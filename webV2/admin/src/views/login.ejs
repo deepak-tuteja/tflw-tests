@@ -1,0 +1,12 @@
+<%- include('partials/head', { title: 'Log in' }) %>
+<h1>testFlow-tests admin console</h1>
+<p>Log in with a seeded admin or agent account (e.g. <code>admin@example.com</code> / <code>admin-pw-123</code>, or <code>carol@example.com</code> / <code>carol-pw-123</code>).</p>
+<% if (error) { %><p class="error"><%= error %></p><% } %>
+<form method="post" action="/login">
+  <label for="email">Email</label>
+  <input id="email" name="email" type="email" required autofocus />
+  <label for="password">Password</label>
+  <input id="password" name="password" type="password" required />
+  <p><button type="submit">Log in</button></p>
+</form>
+<%- include('partials/foot') %>

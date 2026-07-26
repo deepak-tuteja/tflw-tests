@@ -1,0 +1,40 @@
+<%- include('../partials/head', { title: 'Tickets' }) %>
+<%- include('../partials/nav') %>
+<h1>Tickets</h1>
+<p>Admins see every ticket; agents see tickets assigned to them plus unclaimed ones.</p>
+<form method="get" action="/tickets">
+  <label for="status">Status</label>
+  <select id="status" name="status">
+    <option value="" <%= status === '' ? 'selected' : '' %>>Any</option>
+    <% ['open', 'in_progress', 'resolved', 'closed', 'cancelled'].forEach(function(s) { %>
+      <option value="<%= s %>" <%= status === s ? 'selected' : '' %>><%= s %></option>
+    <% }) %>
+  </select>
+  <label for="slaBreached">SLA breached</label>
+  <select id="slaBreached" name="slaBreached">
+    <option value="" <%= slaBreached === '' ? 'selected' : '' %>>Any</option>
+    <option value="true" <%= slaBreached === 'true' ? 'selected' : '' %>>true</option>
+    <option value="false" <%= slaBreached === 'false' ? 'selected' : '' %>>false</option>
+  </select>
+  <label for="assignedTo">Assigned to (user id)</label>
+  <input id="assignedTo" name="assignedTo" value="<%= assignedTo %>" />
+  <button type="submit">Filter</button>
+</form>
+
+<table>
+  <thead>
+    <tr><th>Subject</th><th>Status</th><th>Assigned to</th><th>SLA breached</th><th>Created</th></tr>
+  </thead>
+  <tbody>
+    <% tickets.forEach(function(t) { %>
+      <tr>
+        <td><a href="/tickets/<%= t.id %>"><%= t.subject %></a></td>
+        <td><%= t.status %></td>
+        <td><%= t.assignedTo ?? '—' %></td>
+        <td><%= t.slaBreached %></td>
+        <td><%= new Date(t.createdAt).toISOString() %></td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+<%- include('../partials/foot') %>

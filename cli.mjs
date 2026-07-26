@@ -20,6 +20,7 @@ function start() {
       'cert required, see nginx/certs/ after start)',
   );
   console.log('webV2 storefront: http://localhost:8090 (browser-arc dogfood target)');
+  console.log('webV2 admin console: http://localhost:8091 (SSR, full-page-nav dogfood target)');
 }
 
 function stop() {

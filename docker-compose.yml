@@ -103,3 +103,23 @@ services:
       interval: 2s
       timeout: 3s
       retries: 20
+
+  # SSR admin console (webV2-1, PLAN_WEBV2_TARGETS.md) — moderation/coupons/categories/tickets
+  # over apiV2, deliberately full-page-navigation (plain Express+EJS, forms POST and redirect,
+  # no client JS) rather than the storefront's async-re-render flake class above. Unlike webV2,
+  # this one has no nginx in front and no /v1/* proxy: every apiV2 call happens server-to-server
+  # (this container to `api`), so the browser only ever talks to this container and same-origin/
+  # CORS never comes up.
+  webv2-admin:
+    build:
+      context: ./webV2/admin
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "8091:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/login"]
+      interval: 2s
+      timeout: 3s
+      retries: 20

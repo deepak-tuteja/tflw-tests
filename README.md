@@ -17,13 +17,16 @@ plan and `PROGRESS.md` for build status.
 apiV2/               NestJS + TypeORM + Postgres e-commerce API — users/categories/products/
                      orders/order_items/reviews; migrations + deterministic idempotent seed
                      run on container start; /v1 prefix; OpenAPI at /openapi.json + /docs
-docker-compose.yml   postgres (ephemeral per-run volume) + api + nginx (TLS sidecar) + webv2,
-                     healthchecked
+docker-compose.yml   postgres (ephemeral per-run volume) + api + nginx (TLS sidecar) + webv2 +
+                     webv2-admin, healthchecked
 nginx/               TLS sidecar (M22) — self-signed :8443 + mTLS-requiring :8444, proxying
                      unchanged to api:4001; certs generated fresh at every container start
 webV2/               React+Vite+TS SPA storefront (webV2-0) — tflw's browser-arc dogfood target
                      (PLAN_WEBV2_TARGETS.md); own nginx image serves the build + proxies /v1/*
                      to api:4001 so the storefront and API share an origin; :8090
+webV2/admin/         SSR admin console (webV2-1) — moderation/coupons/categories/tickets over
+                     apiV2, plain Express+EJS full-page navigations (a different flake class
+                     than the SPA above); talks to api:4001 server-to-server, no proxy needed; :8091
 tests/               .tflw test files, one per feature/scenario (being ported to v2, M1-M5)
 tests/helpers/       JS escape-hatch helpers (page-walk, Retry-After sleep-and-retry, etc.)
 tests/shared/        actions shared across files (e.g. `create product`)
@@ -75,6 +78,26 @@ API share an origin — required because apiV2 sets no CORS headers and its sess
 pairing (`apiV2/src/auth/auth.service.ts`) assumes same-origin. Deliberately its own nginx service,
 not the mTLS sidecar above (that one is scoped to TLS/mTLS testing, M22, and serves nothing static).
 `npm run dev` (port 5190) proxies the same way for local iteration against a host-run apiV2.
+
+### webV2 admin — SSR full-page-nav dogfood target (webV2-1)
+
+`http://localhost:8091` after `node cli.mjs start` — a plain Express+EJS console (no client JS,
+no bundler) over apiV2's moderation (product reviews' reply endpoint), coupons, categories, and
+tickets domains, the "full-page navigations" flake class `PLAN_WEBV2_TARGETS.md` calls out as
+distinct from the storefront's async client-side re-renders: every page is a real server-rendered
+HTML response, every mutation is a `<form method="post">` that redirects on success (assign/claim/
+start/resolve a ticket, reply to a review, create a coupon). Log in as `admin@example.com` /
+`admin-pw-123` (full access) or `carol@example.com` / `carol-pw-123` (agent — tickets only, no
+coupons); a plain `user`-role login is rejected at the login form, since none of these four
+domains are user-facing. Architecture: this app never talks to apiV2 through nginx or the browser
+at all — it holds the apiV2 session cookie + CSRF token server-side (in its own `express-session`,
+a small BFF) and calls `api:4001` directly container-to-container, so there's no same-origin
+question to solve the way webV2's SPA has one. It carries its own CSRF token (separate from
+apiV2's) on every form, since a plain session-cookie-authenticated app with no such token would
+otherwise be genuinely vulnerable to CSRF from the browser's side. Two apiV2 surface gaps shaped
+the design, both documented in code comments: `coupons` has no listing endpoint (creation shows a
+one-time confirmation page, nothing to browse afterward), and there's no cross-product reviews
+listing (moderation is reached by browsing to a product's detail page, not a flat review inbox).
 
 ## Reporting
 

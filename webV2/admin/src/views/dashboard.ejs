@@ -1,0 +1,13 @@
+<%- include('partials/head', { title: 'Dashboard' }) %>
+<%- include('partials/nav') %>
+<h1>Dashboard</h1>
+<p>Logged in as <strong><%= currentUser.email %></strong> (<%= currentUser.role %>).</p>
+<ul>
+  <li><a href="/categories">Categories</a> — read-only tree (apiV2's categories are read-only by design).</li>
+  <li><a href="/products">Products / Moderation</a> — browse the catalog and reply to unreplied reviews.</li>
+  <li><a href="/tickets">Tickets</a> — assign, claim, start, resolve; comments and history.</li>
+  <% if (currentUser.role === 'admin') { %>
+    <li><a href="/coupons">Coupons</a> — create a coupon (apiV2 has no listing endpoint for these).</li>
+  <% } %>
+</ul>
+<%- include('partials/foot') %>

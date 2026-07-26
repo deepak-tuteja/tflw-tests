@@ -1,0 +1,71 @@
+<%
+  const isAssignedActor = currentUser.role === 'admin' || (currentUser.role === 'agent' && ticket.assignedTo === currentUser.id);
+  const canClaim = currentUser.role === 'agent' && ticket.assignedTo === null;
+  const canStart = isAssignedActor && ticket.status === 'open';
+  const canResolve = isAssignedActor && ticket.status === 'in_progress';
+%>
+<%- include('../partials/head', { title: ticket.subject }) %>
+<%- include('../partials/nav') %>
+<p><a href="/tickets">&larr; back to tickets</a></p>
+<h1><%= ticket.subject %></h1>
+<p><%= ticket.description %></p>
+<p>
+  Status: <span class="badge"><%= ticket.status %></span> ·
+  Assigned to: <%= ticket.assignedTo ?? '—' %> ·
+  SLA deadline: <%= ticket.slaDeadline %> ·
+  SLA breached: <%= ticket.slaBreached %>
+</p>
+
+<h2>Actions</h2>
+<% if (currentUser.role === 'admin') { %>
+  <form method="post" action="/tickets/<%= ticket.id %>/assign">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <label for="assigneeId">Assign to (agent user id)</label>
+    <input id="assigneeId" name="assigneeId" required />
+    <button type="submit">Assign</button>
+  </form>
+<% } %>
+<% if (canClaim) { %>
+  <form class="inline" method="post" action="/tickets/<%= ticket.id %>/claim">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <button type="submit">Claim</button>
+  </form>
+<% } %>
+<% if (canStart) { %>
+  <form class="inline" method="post" action="/tickets/<%= ticket.id %>/start">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <button type="submit">Start</button>
+  </form>
+<% } %>
+<% if (canResolve) { %>
+  <form class="inline" method="post" action="/tickets/<%= ticket.id %>/resolve">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <button type="submit">Resolve</button>
+  </form>
+<% } %>
+<% if (!canClaim && !canStart && !canResolve && currentUser.role !== 'admin') { %>
+  <p>No actions available for you on this ticket right now.</p>
+<% } %>
+
+<h2>Comments</h2>
+<% comments.forEach(function(c) { %>
+  <p>
+    <% if (c.isInternal) { %><span class="badge">internal</span><% } %>
+    <%= c.text %> — <em><%= c.authorUserId %>, <%= new Date(c.createdAt).toISOString() %></em>
+  </p>
+<% }) %>
+<form method="post" action="/tickets/<%= ticket.id %>/comments">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+  <label for="text">Add comment</label>
+  <textarea id="text" name="text" required></textarea>
+  <label><input type="checkbox" name="isInternal" /> internal note (hidden from the ticket owner)</label>
+  <p><button type="submit">Post comment</button></p>
+</form>
+
+<h2>History</h2>
+<ul>
+  <% history.forEach(function(e) { %>
+    <li><%= e.eventType %> — <%= e.actorUserId ?? 'system' %> — <%= new Date(e.createdAt).toISOString() %></li>
+  <% }) %>
+</ul>
+<%- include('../partials/foot') %>

@@ -1,0 +1,10 @@
+<%- include('partials/head', { title: 'Categories' }) %>
+<%- include('partials/nav') %>
+<h1>Categories</h1>
+<p>Read-only — apiV2's categories controller returns 405 for every mutating verb by design.</p>
+<ul>
+  <% tree.forEach(function(node) { %>
+    <%- include('partials/categoryNode', { node }) %>
+  <% }) %>
+</ul>
+<%- include('partials/foot') %>

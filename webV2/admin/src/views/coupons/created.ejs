@@ -1,0 +1,14 @@
+<%- include('../partials/head', { title: 'Coupon created' }) %>
+<%- include('../partials/nav') %>
+<h1>Coupon created</h1>
+<table>
+  <tr><th>id</th><td><%= coupon.id %></td></tr>
+  <tr><th>code</th><td><%= coupon.code %></td></tr>
+  <tr><th>type</th><td><%= coupon.type %></td></tr>
+  <tr><th>value</th><td><%= coupon.value %></td></tr>
+  <tr><th>expiresAt</th><td><%= coupon.expiresAt %></td></tr>
+  <tr><th>minOrderAmount</th><td><%= coupon.minOrderAmount %></td></tr>
+  <tr><th>usageLimit</th><td><%= coupon.usageLimit %></td></tr>
+</table>
+<p><a href="/coupons">Create another</a></p>
+<%- include('../partials/foot') %>
