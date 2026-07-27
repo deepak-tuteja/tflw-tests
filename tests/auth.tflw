@@ -1,3 +1,4 @@
+import "../shared/get-profile.tflw"
 # auth.tflw — the bearer transport: register/login/refresh/logout/profile, real short-TTL access
 # tokens (JWT_ACCESS_TTL=5s), refresh rotation + reuse-after-rotation rejection, and RBAC
 # (admin-only /orders/all). Every test logs in ad hoc (M14: per-test fresh admin tokens, not the
@@ -14,10 +15,7 @@ test "registering a new user returns a working bearer pair"
   expect status equals 201
   capture body.accessToken as accessToken
 
-  api GET /auth/profile
-    header "Authorization" is "Bearer {accessToken}"
-  expect status equals 200
-  expect body.role equals "user"
+  get profile("Bearer {accessToken}", "user")
 
 @auth @identityOps
 test "logging in with the wrong password is rejected"

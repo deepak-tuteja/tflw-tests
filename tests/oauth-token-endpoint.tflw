@@ -1,3 +1,4 @@
+import "../shared/get-profile.tflw"
 # oauth-token-endpoint.tflw — M22 follow-up (testFlow PLAN.md decision 99c, PLAN_ENTERPRISE.md
 # decision 11): direct, low-level coverage of apiV2's POST /oauth/token endpoint itself — the raw
 # RFC 6749 §4.4 client-credentials grant, asserted on directly (status + response shape) via plain
@@ -22,10 +23,7 @@ test "a valid client_credentials grant returns a well-formed bearer token, usabl
   expect body.expires_in is greater than 0
   capture body.access_token as token
 
-  api GET /auth/profile
-    header "Authorization" is "Bearer {token}"
-  expect status equals 200
-  expect body.role equals "admin"
+  get profile("Bearer {token}", "admin")
 
 @auth @oauth2 @identityOps
 test "scope is optional — a grant without one still succeeds"

@@ -1,0 +1,5 @@
+action get profile(authorization, value)
+  api GET /auth/profile
+    header "Authorization" is {authorization}
+  expect status equals 200
+  expect body.role equals {value}

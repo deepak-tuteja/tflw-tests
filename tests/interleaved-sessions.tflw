@@ -1,3 +1,4 @@
+import "../shared/get-profile.tflw"
 # interleaved-sessions.tflw — two identities live in one test: an admin bearer identity and a
 # shopper cookie identity, alternating calls within a single test. Proves cookie-jar isolation
 # holds with two identities active at once.
@@ -51,10 +52,7 @@ before
 @sessions @interleave @regression @identityOps
 test "admin (bearer) and shopper (cookie) alternate within one test" as admin, shopper
   # Cleared bearer -> falls through to shopper's cookie.
-  api GET /auth/profile
-    header "Authorization" is ""
-  expect status equals 200
-  expect body.role equals "user"
+  get profile("", "user")
 
   # No override here -> admin's merged bearer applies, as normal.
   api POST /products body { name: unique("Interleave Widget"), price: 8, stock: 5, categoryId: {categoryId} }

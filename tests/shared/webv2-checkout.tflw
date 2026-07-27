@@ -1,0 +1,16 @@
+# Shared action (P#17, M6 CallStmt): fills webV2's iframe-embedded payment widget
+# (`webV2/public/payment-widget.html`, PLAN_WEBV2_TARGETS.md's Tier C iframe corner) and completes
+# checkout — the same three steps `tests/webv2-storefront.tflw`'s cart-lifecycle tests each need
+# once they're ready to check out. `within frame` genuinely traverses the iframe's own document
+# (SPEC §9.5); the parent `button "Checkout"` only becomes enabled once the frame's own
+# `postMessage` handoff lands, so `wait until` (not a plain `expect`) covers that async gap.
+
+action checkout()
+  within frame css "iframe[title='Payment']"
+    fill field "Card number" with "4111111111111111"
+    fill field "Expiry (MM/YY)" with "12/30"
+    fill field "CVC" with "123"
+    click button "Authorize payment"
+  wait until button "Checkout" is enabled
+  click button "Checkout"
+  expect text "Order confirmed" is visible

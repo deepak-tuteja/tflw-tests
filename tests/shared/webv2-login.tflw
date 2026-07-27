@@ -1,0 +1,23 @@
+# Shared action (P#17, M6 CallStmt): the storefront's UI login form. Deliberately separate from
+# `session shopper` (tflw.config) — SPEC §10 doesn't yet bridge a session's cookie jar into a
+# browser context's storage state, so a mixed UI/API test establishes identity twice on purpose;
+# this is the UI half every `tests/webv2-storefront.tflw` scenario needs at least once.
+#
+# Ends on a real settle signal (`Log out` only renders once `AuthContext`'s `user` is set —
+# `webV2/src/components/Layout.tsx`), not just "the click landed". `AuthContext` rehydrates
+# `user` from the `session` cookie via an async `GET /auth/profile` on every mount
+# (`webV2/src/auth/AuthContext.tsx`), including after any *hard* navigation a caller does next
+# (`open` is a real `page.goto`, unlike this form's own client-side `navigate()` on submit) — an
+# unprotected page's buttons render immediately, before that fetch resolves, so a click against an
+# auth-gated action (add to cart, submit a review) can race `user` still being null and silently
+# redirect to `/login` instead (M7 acceptance: this is what T1/T2/T3/T5's original failures were —
+# not wrong locators, a real race between this rehydration and an unguarded click after a fresh
+# `open`). Callers that `open` a *different* page after calling this must re-assert
+# `expect button "Log out" is visible` post-navigation for the same reason.
+
+action login(email, password)
+  open "/login"
+  fill field "Email" with {email}
+  fill field "Password" with {password}
+  click button "Log in"
+  expect button "Log out" is visible

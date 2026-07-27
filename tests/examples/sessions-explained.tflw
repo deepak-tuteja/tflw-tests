@@ -1,3 +1,4 @@
+import "../../shared/get-profile.tflw"
 # sessions-explained.tflw — SPEC §3.3: a `session` block is tflw's one auth concept. It's a
 # named sequence of steps (usually a login) that runs once per run per worker and is cached; a
 # test opts in with `as <session-name>` and starts with the session's declared headers/cookies
@@ -36,10 +37,7 @@ test "as admin, shopper opts into both at once — both sessions' contributions 
   # step by default, admin's bearer would otherwise always win — an explicit per-step `header
   # "Authorization" is ""` clears it just for this one request, letting the guard fall through to
   # shopper's cookie (per-step headers are the highest-precedence layer, SPEC §3.3).
-  api GET /auth/profile
-    header "Authorization" is ""
-  expect status equals 200
-  expect body.role equals "user"
+  get profile("", "user")
 
 # M29: `session <name> oauth2 ...` (decision 99c) is sugar over an ordinary session block — instead
 # of a login-request recipe, it declares a token URL + client credentials and tflw runs the
