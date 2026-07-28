@@ -195,19 +195,22 @@ test "the a11y-demo's accessible checkbox check/uncheck is real, after scroll to
   uncheck field "Subscribe to updates"
   expect field "Subscribe to updates" not is checked
 
-test "the a11y-demo's accessible section: a masked snapshot absorbs a real checkbox change, unmasked catches it"
-  # M41 (PLAN_WEBV2_M40.md decision 4): first `matches snapshot` baseline. AccessibilityDemoPage's
-  # accessible half chosen for lowest flake risk — static markup, no seeded product data, no
-  # per-render dynamic ids (unlike the Tier C support-page upload corner); `/a11y-demo` is a public
-  # route (`webV2/src/App.tsx`), so no login/auth-rehydration race either.
+test "the render fixture: a masked snapshot absorbs a real checkbox change, unmasked catches it"
+  # M41 (PLAN_WEBV2_M40.md decision 4) first put this baseline on AccessibilityDemoPage's accessible
+  # half; M45 (PLAN_WEBV2_M45.md) moved it here after that page's inherited global `system-ui` font
+  # (styles.css) turned out to render differently across machines — the exact CI-vs-dev mismatch
+  # this test caught for real (960x141 baseline vs. CI's 960x133). `/render-fixture` exists purely
+  # to remove that variable: a self-hosted `.render-fixture` font (styles.css) instead of the host
+  # OS's system font, plus the same lowest-flake-risk shape M41 already chose — static markup, no
+  # seeded product data, no per-render dynamic ids, a public route (`webV2/src/App.tsx`) so no
+  # login/auth-rehydration race either.
   #
   # Proves `mask` genuinely changes the compare outcome rather than just being asserted in
   # isolation — mirrors tflw's own M4b runtime test (`runtime/test/browser-steps.test.ts:1000`,
   # "unmasked fails on the recolored region, masked passes despite it"). This page's only real
-  # source of visual state change is the accessible checkbox (M40): checking it unmasked genuinely
-  # differs from the unchecked baseline (caught below via `not matches snapshot`); masking that
-  # same region — plus the status-circle <img>, per decision 4 — absorbs the change and still
-  # matches.
+  # source of visual state change is its checkbox: checking it unmasked genuinely differs from the
+  # unchecked baseline (caught below via `not matches snapshot`); masking that same region — plus
+  # the status-circle <img> — absorbs the change and still matches.
   #
   # Baselines were seeded once via `tflw run --update-snapshots --only "<this test's name>"` against
   # a temporarily-neutralized copy of this test (checkbox left unchecked throughout, so both names'
@@ -217,14 +220,14 @@ test "the a11y-demo's accessible section: a masked snapshot absorbs a real check
   # the first capture of each name just wrote. Committed baselines under
   # `tests/snapshots/webv2-storefront/…` are the product of that one-time seed; every ordinary
   # `tflw run` after that only ever reads and compares.
-  open "/a11y-demo"
-  expect css "section[aria-labelledby='a11y-accessible-heading']" matches snapshot "a11y-accessible-unmasked"
+  open "/render-fixture"
+  expect css "section[aria-labelledby='render-fixture-heading']" matches snapshot "render-fixture-unmasked"
   check field "Subscribe to updates"
-  expect css "section[aria-labelledby='a11y-accessible-heading']" not matches snapshot "a11y-accessible-unmasked"
+  expect css "section[aria-labelledby='render-fixture-heading']" not matches snapshot "render-fixture-unmasked"
   uncheck field "Subscribe to updates"
-  expect css "section[aria-labelledby='a11y-accessible-heading']" matches snapshot "a11y-accessible-masked" mask field "Subscribe to updates" mask css "section[aria-labelledby='a11y-accessible-heading'] img"
+  expect css "section[aria-labelledby='render-fixture-heading']" matches snapshot "render-fixture-masked" mask field "Subscribe to updates" mask css "section[aria-labelledby='render-fixture-heading'] img"
   check field "Subscribe to updates"
-  expect css "section[aria-labelledby='a11y-accessible-heading']" matches snapshot "a11y-accessible-masked" mask field "Subscribe to updates" mask css "section[aria-labelledby='a11y-accessible-heading'] img"
+  expect css "section[aria-labelledby='render-fixture-heading']" matches snapshot "render-fixture-masked" mask field "Subscribe to updates" mask css "section[aria-labelledby='render-fixture-heading'] img"
 
 test "the order confirmation page's receipt link genuinely opens a second browser tab"
   # M43 (PLAN_WEBV2_M40.md decision 5): closes the `switch to new tab`/`switch to tab N`/`close tab`

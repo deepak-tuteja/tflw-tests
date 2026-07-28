@@ -234,3 +234,28 @@ td {
   color: #ddd;
   background: #fff;
 }
+
+/* M45 (PLAN_WEBV2_M45.md): self-hosted webfont, scoped to .render-fixture only (not :root) — a
+   `matches snapshot` test must never depend on which font the host OS resolves `system-ui` to
+   (confirmed root cause of a real CI-vs-dev snapshot mismatch: computePlatformKey pins OS/engine/
+   browser version but not fonts). font-display: block withholds text paint until this same-origin,
+   near-instant font is ready, so there's no fallback-font flash to race either. Liberation Sans,
+   SIL Open Font License — see assets/fonts/LICENSE.txt. */
+@font-face {
+  font-family: 'Render Fixture Sans';
+  src: url('./assets/fonts/LiberationSans-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Render Fixture Sans';
+  src: url('./assets/fonts/LiberationSans-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-display: block;
+}
+
+.render-fixture {
+  font-family: 'Render Fixture Sans', sans-serif;
+  max-width: 30rem;
+}

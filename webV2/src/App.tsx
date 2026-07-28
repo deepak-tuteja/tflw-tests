@@ -13,6 +13,7 @@ import { CartPage } from './pages/CartPage';
 import { OrderConfirmationPage } from './pages/OrderConfirmationPage';
 import { SupportPage } from './pages/SupportPage';
 import { AccessibilityDemoPage } from './pages/AccessibilityDemoPage';
+import { RenderFixturePage } from './pages/RenderFixturePage';
 
 export function App() {
   return (
@@ -27,6 +28,7 @@ export function App() {
               <Route path="products/:id/reviews" element={<ProductReviewsPage />} />
               <Route path="login" element={<LoginPage />} />
               <Route path="a11y-demo" element={<AccessibilityDemoPage />} />
+              <Route path="render-fixture" element={<RenderFixturePage />} />
               <Route element={<ProtectedRoute />}>
                 <Route path="cart" element={<CartPage />} />
                 <Route path="orders/:id" element={<OrderConfirmationPage />} />
