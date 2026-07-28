@@ -334,3 +334,27 @@ test "the happy-path product and catalog pages have no accessibility violations"
   expect page has no a11y violations
   open "/"
   expect page has no a11y violations
+
+test "the a11y-demo's inaccessible section: the scanner catches real violations, and severity is a floor not an exact match"
+  # M48 (PLAN_WEBV2_M45.md): no test in this suite had ever proven the a11y scanner actually
+  # catches a real violation — the test above only ever scans clean happy-path pages — despite
+  # AccessibilityDemoPage.tsx being purpose-built with 4 deliberate violations for exactly this.
+  # Real axe-core severities probed empirically first, not guessed: color-contrast → serious,
+  # image-alt → critical, label → critical. (The 4th deliberate violation — a role-less clickable
+  # <div> standing in for a button — isn't flagged by axe-core's default ruleset at all; not every
+  # bad practice is a rule violation.)
+  #
+  # `not has no moderate a11y violations` is the real floor-vs-exact-match discriminator: zero
+  # violations here are literally tagged "moderate" — only serious/critical exist — so this only
+  # passes under genuine floor semantics (serious/critical count as "moderate or worse"); an
+  # exact-match bug would incorrectly report this floor clean. Same reasoning for `minor`. A
+  # genuinely-passing floor (a level above every real violation) isn't reachable on this page
+  # without new target-app content — critical is axe's own ceiling, and this page has critical
+  # violations — deliberately out of scope for this milestone (PLAN_WEBV2_M45.md: no target-app
+  # work for M48).
+  open "/a11y-demo"
+  expect page not has no a11y violations
+  expect page not has no minor a11y violations
+  expect page not has no moderate a11y violations
+  expect page not has no serious a11y violations
+  expect page not has no critical a11y violations
