@@ -48,3 +48,25 @@ export async function apiRequest(auth, method, path, body) {
   }
   return { data, setCookie };
 }
+
+// Raw sibling of apiRequest for a non-JSON response body (M43, PLAN_WEBV2_M40.md decision 5 —
+// the orders CSV export): same auth-header handling, but skips the JSON.parse and passes the
+// real Content-Type/Content-Disposition straight through instead of assuming a JSON body. GET-only
+// in practice, so no CSRF header logic needed.
+export async function apiRequestRaw(auth, method, path) {
+  const headers = {};
+  if (auth?.sessionCookie) headers.Cookie = `session=${auth.sessionCookie}`;
+
+  const res = await fetch(`${API_BASE_URL}${path}`, { method, headers });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new ApiError(res.status, text ? JSON.parse(text) : undefined);
+  }
+
+  return {
+    body: await res.text(),
+    contentType: res.headers.get('content-type') ?? 'application/octet-stream',
+    contentDisposition: res.headers.get('content-disposition'),
+  };
+}

@@ -65,7 +65,11 @@ export function CartPage() {
     await refresh();
   }
 
-  async function removeItem(itemId: string) {
+  // M43 (PLAN_WEBV2_M40.md decision 5): confirm()-guarded, mirroring the admin product-delete
+  // corner — DELETE /cart/items/:id was already real and owner-scoped, just never previously
+  // guarded by a native dialog.
+  async function removeItem(itemId: string, name: string) {
+    if (!window.confirm(`Remove ${name} from your cart?`)) return;
     await apiFetch(`/cart/items/${itemId}`, { method: 'DELETE' });
     await refresh();
   }
@@ -149,7 +153,7 @@ export function CartPage() {
               </td>
               <td>${(Number(item.product.price) * item.quantity).toFixed(2)}</td>
               <td>
-                <button type="button" onClick={() => removeItem(item.id)}>
+                <button type="button" onClick={() => removeItem(item.id, item.product.name)}>
                   Remove {item.product.name}
                 </button>
               </td>

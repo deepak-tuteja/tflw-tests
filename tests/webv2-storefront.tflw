@@ -234,6 +234,76 @@ test "the a11y-demo's accessible section: a masked snapshot absorbs a real check
   check field "Subscribe to updates"
   expect css "section[aria-labelledby='a11y-accessible-heading']" matches snapshot "a11y-accessible-masked" mask field "Subscribe to updates" mask css "section[aria-labelledby='a11y-accessible-heading'] img"
 
+test "the order confirmation page's receipt link genuinely opens a second browser tab"
+  # M43 (PLAN_WEBV2_M40.md decision 5): closes the `switch to new tab`/`switch to tab N`/`close tab`
+  # gap — GET /orders/:id/receipt (M32) was already real and owner-scoped, just unconsumed by any
+  # UI; wired up as a `target="_blank"` link on OrderConfirmationPage.tsx (nginx proxies `/v1/*`
+  # same-origin, so the session cookie rides along with no bearer token needed). The receipt's own
+  # PDF content/headers are already thoroughly proven at the API level (tests/order-receipts.tflw,
+  # tests/file-formats.tflw's `body pdf text`) — re-asserting that here would be redundant, so this
+  # test's job is the browser-tab mechanics only.
+  #
+  # Confirmed empirically before writing this for real (not assumed): a `target="_blank"` link to a
+  # `Content-Disposition: attachment` response still fires Playwright's popup event — the new Page
+  # opens before the browser's own download handling takes over — so `switch to new tab` genuinely
+  # arms and catches it here, same as tflw's own runtime fixture (`browser-steps.test.ts:495`).
+  api GET /products?q=Bulk%20Item%2050&pageSize=1
+  expect status equals 200
+  capture body[0].id as bulk50Id
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as token
+  api POST /orders body { items: [{ productId: {bulk50Id}, quantity: 1 }] }
+    header "Authorization" is "Bearer {token}"
+  expect status equals 201
+  capture body.id as orderId
+
+  login(env(USER_A_EMAIL), env(USER_A_PW))
+  open "/orders/{orderId}"
+  expect text "Order confirmed" is visible
+  switch to new tab
+    click text "View receipt (PDF)"
+  switch to tab 1
+  expect text "Order confirmed" is visible
+  switch to tab 2
+  close tab
+  expect text "Order confirmed" is visible
+
+test "the cart's Remove confirm() dialog: dismiss keeps the item, accept removes it via a real DELETE"
+  # M43 (PLAN_WEBV2_M40.md decision 5): closes the `accept dialog`/`dismiss dialog` gap on the
+  # storefront side — DELETE /cart/items/:id was already real and owner-scoped, just never
+  # previously guarded by a native dialog. Dismissing first and confirming the row survives is what
+  # proves this is a genuine confirm()-guarded trap (Playwright otherwise auto-dismisses silently,
+  # SPEC §9.1), not just a click that happens to do nothing.
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as flushToken
+  api POST /cart/checkout
+    header "Authorization" is "Bearer {flushToken}"
+  # T4's own flush precondition (cart rows are drag-drop reorderable test, above): a 422 "cart is
+  # empty" here is expected and fine when nothing carried over from an earlier test.
+
+  login(env(USER_A_EMAIL), env(USER_A_PW))
+  open "/"
+  expect button "Log out" is visible
+  fill field "Search" with "Bulk Item 51"
+  within css "[aria-label='Bulk Item 51']"
+    click button "Add to cart"
+  expect text "Added 1 × Bulk Item 51 to your cart." is visible
+
+  open "/cart"
+  dismiss dialog
+  click button "Remove Bulk Item 51"
+  expect css "th[scope='row']:text-is('Bulk Item 51')" is visible
+
+  accept dialog
+  click button "Remove Bulk Item 51"
+  expect text "Your cart is empty." is visible
+  api GET /cart
+    header "Authorization" is "Bearer {flushToken}"
+  expect status equals 200
+  expect body.items has count 0
+
 test "the happy-path product and catalog pages have no accessibility violations"
   api GET /products?q=Bulk%20Item%20100&pageSize=1
   expect status equals 200

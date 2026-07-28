@@ -8,6 +8,7 @@
   <li><a href="/tickets">Tickets</a> — assign, claim, start, resolve; comments and history.</li>
   <% if (currentUser.role === 'admin') { %>
     <li><a href="/coupons">Coupons</a> — create a coupon (apiV2 has no listing endpoint for these).</li>
+    <li><a href="/orders/export">Download orders CSV</a></li>
   <% } %>
 </ul>
 <%- include('partials/foot') %>

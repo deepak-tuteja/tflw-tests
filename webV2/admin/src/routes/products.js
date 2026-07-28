@@ -57,4 +57,17 @@ router.post(
   }),
 );
 
+// M43 (PLAN_WEBV2_M40.md decision 5): DELETE /products/:id is admin-only and already real —
+// wired up behind a confirm()-guarded form (detail.ejs) since EJS forms have no native DELETE
+// verb. Redirects to the list on success so the product's real absence is the assertion, not a
+// rendered message.
+router.post(
+  '/:id/delete',
+  verifyCsrf,
+  asyncRoute(async (req, res) => {
+    await apiRequest(req.session.auth, 'DELETE', `/products/${req.params.id}`);
+    res.redirect('/products');
+  }),
+);
+
 export default router;

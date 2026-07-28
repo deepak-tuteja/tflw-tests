@@ -189,3 +189,64 @@ test "the tickets list's Status <select> really filters, and check field-gated i
     header "Authorization" is "Bearer {userBToken}"
   expect status equals 200
   expect all body.text not equals "Internal note: escalate to L2."
+
+test "the admin product detail's Delete confirm() dialog: dismiss keeps it, accept really deletes it (204)"
+  # M43 (PLAN_WEBV2_M40.md decision 5): closes the `accept dialog`/`dismiss dialog` gap on this
+  # app's admin side. DELETE /categories/:id turned out to be a deliberate 405 stub
+  # (categories.controller.ts's `deleteNotSupported` — caught by reading the controller body before
+  # building against it) — DELETE /products/:id (admin-only, real 204) is the real destructive
+  # endpoint wired up instead, behind a confirm()-guarded form (EJS forms have no native DELETE
+  # verb, so this posts to a dedicated `/products/:id/delete` route that issues the real DELETE
+  # server-side and redirects).
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+  api GET /categories
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  capture body[0].id as categoryId
+  api POST /products body { name: unique("M43 Delete Widget"), price: 9.99, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+  capture body.name as productName
+
+  open "/login"
+  fill form
+    | "Email"    | env(ADMIN_EMAIL) |
+    | "Password" | env(ADMIN_PW)    |
+  click button "Log in"
+  expect button "Log out" is visible
+
+  open "/products/{productId}"
+  dismiss dialog
+  click button "Delete product"
+  # dismissing cancels the form's own onsubmit — no navigation happens, so the detail page (and its
+  # heading) is still exactly what proves the product survived, not just that nothing errored.
+  expect css "h1:text-is('{productName}')" is visible
+
+  accept dialog
+  click button "Delete product"
+  expect css "h1:text-is('Products')" is visible
+  api GET /products/{productId}
+  expect status equals 404
+
+test "the dashboard's Download orders CSV link exercises a real browser download"
+  # M43 (PLAN_WEBV2_M40.md decision 5): closes the `download as <name>` gap — GET /orders/export
+  # (F1) was already real and admin-only, just unconsumed by any UI; this console had no route for
+  # it (every other admin route proxies apiV2 the same BFF way — `routes/orders.js`'s new
+  # `apiRequestRaw`, since the CSV body isn't JSON and can't go through `apiRequest`'s JSON.parse).
+  # The CSV's own content/columns are already thoroughly proven at the API level
+  # (tests/file-formats.tflw's `body csv` test) — re-asserting that here would be redundant, so this
+  # test's job is the browser download mechanics only: a real `download` event fires off a plain
+  # link click, binding the exact filename apiV2's own `Content-Disposition` sets.
+  open "/login"
+  fill form
+    | "Email"    | env(ADMIN_EMAIL) |
+    | "Password" | env(ADMIN_PW)    |
+  click button "Log in"
+  expect button "Log out" is visible
+
+  open "/"
+  download as file
+    click text "Download orders CSV"

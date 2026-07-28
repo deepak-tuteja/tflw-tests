@@ -26,4 +26,11 @@
     <% } %>
   </fieldset>
 <% }) %>
+
+<% if (currentUser.role === 'admin') { %>
+  <form method="post" action="/products/<%= product.id %>/delete" onsubmit="return confirm('Delete this product? This cannot be undone.')">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <button type="submit">Delete product</button>
+  </form>
+<% } %>
 <%- include('../partials/foot') %>
