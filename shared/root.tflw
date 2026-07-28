@@ -1,0 +1,5 @@
+action root(search)
+  login(env(USER_A_EMAIL), env(USER_A_PW))
+  open "/"
+  expect button "Log out" is visible
+  fill field "Search" with {search}

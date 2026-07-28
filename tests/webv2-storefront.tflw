@@ -25,21 +25,16 @@
 
 import "./shared/webv2-checkout.tflw"
 import "./shared/webv2-login.tflw"
+import "../shared/root.tflw"
 
 test "row-scoped add-to-cart on a page of a dozen identical buttons, with its async toast"
-  login(env(USER_A_EMAIL), env(USER_A_PW))
-  open "/"
-  expect button "Log out" is visible
-  fill field "Search" with "Bulk Item 100"
+  root("Bulk Item 100")
   within css "[aria-label='Bulk Item 100']"
     click button "Add to cart"
   expect text "Added 1 × Bulk Item 100 to your cart." is visible
 
 test "the Quick View modal traps focus, adds to cart, and closes on Escape"
-  login(env(USER_A_EMAIL), env(USER_A_PW))
-  open "/"
-  expect button "Log out" is visible
-  fill field "Search" with "Bulk Item 1"
+  root("Bulk Item 1")
   within css "[aria-label='Bulk Item 1']"
     click button "Quick view"
   expect button "Close" is visible
@@ -121,10 +116,7 @@ test "cart rows are drag-drop reorderable, verified row by row"
   checkout()
 
 test "reviews: a first submission succeeds, a duplicate 409s through the shadow-DOM rating widget"
-  login(env(USER_A_EMAIL), env(USER_A_PW))
-  open "/"
-  expect button "Log out" is visible
-  fill field "Search" with "Bulk Item 1"
+  root("Bulk Item 1")
   within css "[aria-label='Bulk Item 1']"
     click text "Reviews"
   within css "star-rating:not([readonly])"
@@ -283,10 +275,7 @@ test "the cart's Remove confirm() dialog: dismiss keeps the item, accept removes
   # T4's own flush precondition (cart rows are drag-drop reorderable test, above): a 422 "cart is
   # empty" here is expected and fine when nothing carried over from an earlier test.
 
-  login(env(USER_A_EMAIL), env(USER_A_PW))
-  open "/"
-  expect button "Log out" is visible
-  fill field "Search" with "Bulk Item 51"
+  root("Bulk Item 51")
   within css "[aria-label='Bulk Item 51']"
     click button "Add to cart"
   expect text "Added 1 × Bulk Item 51 to your cart." is visible

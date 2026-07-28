@@ -72,7 +72,7 @@ jobs:
       # (scripts/regression.mjs), archived per-phase into report-by-phase/ as it goes. `--verbose`
       # (and the resulting GitHub Actions ::group::/::endgroup:: log grouping, tflw decision
       # 111.8) is auto-detected from GITHUB_ACTIONS — no extra flag needed here.
-      - name: Full regression sweep (12 phases, each its own fresh Docker restart)
+      - name: Full regression sweep (16 phases, each its own fresh Docker restart)
         run: npm run regression
         working-directory: testFlow-tests
 

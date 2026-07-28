@@ -85,6 +85,12 @@ const PHASES = [
   // as safety-redaction-check above.
   { name: 'demo-fail-check', cmd: 'node scripts/verify-demofail.mjs' },
   { name: 'cli-flags-check', cmd: 'node scripts/verify-cli-flags.mjs' },
+  // M42 (PLAN_WEBV2_M40.md decision 3): CLI-verb dogfooding for `migrate`/`watch` — same "script it,
+  // don't trust a one-time manual check forever" reasoning, now covering the two remaining
+  // scriptable CLI verbs (`refactor apply` is deliberately one-off/mutating/human-reviewed, not
+  // scripted here; `pick` is deliberately manual, see PROGRESS.md's M42 section).
+  { name: 'migrate-check', cmd: 'node scripts/verify-migrate.mjs' },
+  { name: 'watch-check', cmd: 'node scripts/verify-watch.mjs' },
 ];
 
 function run(cmd, opts = {}) {
