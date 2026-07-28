@@ -152,6 +152,57 @@ test "the support page's drop-zone accepts a real file, surviving a per-render d
   drop file "./payloads/sample.csv" onto css ".drop-zone"
   expect text "sample.csv" is visible
 
+test "the Category <select> really filters the catalog, combined with Search"
+  # M40 (PLAN_WEBV2_M40.md): closes the `select "…" from field` gap — CatalogPage.tsx's Category
+  # <select> (a real <label>-associated element, tier 1) was never exercised by any test. Combined
+  # with Search rather than asserted alone, so a wrong category genuinely proves 0 results and the
+  # right one proves 1 — not just "the dropdown didn't error".
+  login(env(USER_A_EMAIL), env(USER_A_PW))
+  open "/"
+  select "Books" from field "Category"
+  fill field "Search" with "Wireless Mouse"
+  expect css ".product-grid li" has count 0
+  select "Electronics" from field "Category"
+  expect css ".product-grid li" has count 1
+  expect text "Wireless Mouse" is visible
+
+test "double click and right click are real, distinct browser events — not just two clicks"
+  # M40: closes the zero-use gap for both steps. `double click`'s two clicks land at the *same*
+  # screen coordinate (Playwright resolves the target position once, not per-click) — the first
+  # opens the Quick View modal, whose full-viewport `.modal-overlay` (styles.css) then covers that
+  # same point; since the row's button sits off-center (the overlay only centers `.modal-dialog`,
+  # not the backdrop), the second click actually lands on the backdrop and closes it
+  # (`ProductQuickViewModal.tsx`'s `e.target === e.currentTarget` self-close check) — a real,
+  # observable proof the step fires two independent click events against the live DOM as it
+  # changes between them, not a single coalesced "double-click" gesture. A right click never
+  # dispatches a `click` event at all (browsers reserve it for `contextmenu`) — the add-to-cart
+  # toast never appearing is what proves that, not an assumption.
+  login(env(USER_A_EMAIL), env(USER_A_PW))
+  open "/"
+  fill field "Search" with "Bulk Item 5"
+  within css "[aria-label='Bulk Item 5']"
+    double click button "Quick view"
+  expect button "Close" is hidden
+  fill field "Search" with "Bulk Item 6"
+  within css "[aria-label='Bulk Item 6']"
+    right click button "Add to cart"
+  expect text "Added 1 × Bulk Item 6 to your cart." is hidden
+
+test "the a11y-demo's accessible checkbox check/uncheck is real, after scroll to + hover"
+  # M40: closes check field/uncheck field/hover/scroll to together — a11y-demo's accessible
+  # checkbox (AccessibilityDemoPage.tsx) is real, labelled, and public (no login needed, App.tsx's
+  # route table). `scroll to` + `hover` land on its neighbouring "Save preferences" button first
+  # (a realistic "arrive, then act" sequence), then check/uncheck is verified against the field's
+  # actual `checked` state, not just "the click didn't error".
+  open "/a11y-demo"
+  expect field "Subscribe to updates" not is checked
+  scroll to button "Save preferences"
+  hover button "Save preferences"
+  check field "Subscribe to updates"
+  expect field "Subscribe to updates" is checked
+  uncheck field "Subscribe to updates"
+  expect field "Subscribe to updates" not is checked
+
 test "the happy-path product and catalog pages have no accessibility violations"
   api GET /products?q=Bulk%20Item%20100&pageSize=1
   expect status equals 200

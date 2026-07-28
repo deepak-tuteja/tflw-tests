@@ -14,10 +14,15 @@
 # not wrong locators, a real race between this rehydration and an unguarded click after a fresh
 # `open`). Callers that `open` a *different* page after calling this must re-assert
 # `expect button "Log out" is visible` post-navigation for the same reason.
+#
+# `fill form` (M40, PLAN_WEBV2_M40.md): this is the exact "2-3 fields in a row" spot the coverage
+# audit flagged as never using the table-sugar — every caller in `webv2-storefront.tflw` exercises
+# it via this one shared action.
 
 action login(email, password)
   open "/login"
-  fill field "Email" with {email}
-  fill field "Password" with {password}
+  fill form
+    | "Email"    | {email}    |
+    | "Password" | {password} |
   click button "Log in"
   expect button "Log out" is visible

@@ -17,6 +17,13 @@
 # default `web` — a real, confirmed failure mode this session hit directly, not a hypothetical.
 # Run explicitly instead: `npm run test:webv2-admin` (`tflw run --env webv2Admin
 # tests/.env-specific/webv2-admin.tflw`).
+#
+# `select`/`check field`/`fill form` (M40, PLAN_WEBV2_M40.md): the three admin EJS `<select>`s
+# (products/coupons/tickets list+form) and the ticket detail view's `isInternal` checkbox were
+# real, unexercised gaps in the coverage audit — closed below, each proven against a genuine
+# server-side effect (a GET-param filter, a role-filtered response body), not just "the control
+# didn't error". Every existing login block also now uses `fill form` instead of two bare
+# `fill field` lines, same sugar as `shared/webv2-login.tflw`'s storefront equivalent.
 
 test "admin replies to a review through the moderation view"
   api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
@@ -39,8 +46,9 @@ test "admin replies to a review through the moderation view"
   expect status equals 201
 
   open "/login"
-  fill field "Email" with env(ADMIN_EMAIL)
-  fill field "Password" with env(ADMIN_PW)
+  fill form
+    | "Email"    | env(ADMIN_EMAIL) |
+    | "Password" | env(ADMIN_PW)    |
   click button "Log in"
   expect button "Log out" is visible
 
@@ -71,8 +79,9 @@ test "a ticket's full lifecycle: created by a user, assigned by admin, worked by
   capture body.id as agentId
 
   open "/login"
-  fill field "Email" with env(ADMIN_EMAIL)
-  fill field "Password" with env(ADMIN_PW)
+  fill form
+    | "Email"    | env(ADMIN_EMAIL) |
+    | "Password" | env(ADMIN_PW)    |
   click button "Log in"
   expect button "Log out" is visible
 
@@ -82,8 +91,9 @@ test "a ticket's full lifecycle: created by a user, assigned by admin, worked by
   expect text "{agentId}" is visible
 
   click button "Log out"
-  fill field "Email" with env(AGENT_A_EMAIL)
-  fill field "Password" with env(AGENT_A_PW)
+  fill form
+    | "Email"    | env(AGENT_A_EMAIL) |
+    | "Password" | env(AGENT_A_PW)    |
   click button "Log in"
   expect button "Log out" is visible
 
@@ -97,3 +107,85 @@ test "a ticket's full lifecycle: created by a user, assigned by admin, worked by
   fill field "Add comment" with "Investigated and resolved — carrier confirmed delivery today."
   click button "Post comment"
   expect text "Investigated and resolved — carrier confirmed delivery today." is visible
+
+test "the products list's Category <select> really filters, combined with Search"
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+  api GET /categories
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  capture body[0].id as categoryId
+  capture body[0].name as categoryName
+  api POST /products body { name: unique("Admin Select Widget"), price: 9.99, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.name as productName
+
+  open "/login"
+  fill form
+    | "Email"    | env(ADMIN_EMAIL) |
+    | "Password" | env(ADMIN_PW)    |
+  click button "Log in"
+  expect button "Log out" is visible
+
+  open "/products"
+  fill field "Search" with "{productName}"
+  select "{categoryName}" from field "Category"
+  click button "Filter"
+  expect text "{productName}" is visible
+
+test "creating a coupon exercises a Type <select> and a 5-field fill form"
+  open "/login"
+  fill form
+    | "Email"    | env(ADMIN_EMAIL) |
+    | "Password" | env(ADMIN_PW)    |
+  click button "Log in"
+  expect button "Log out" is visible
+
+  open "/coupons"
+  select "fixed" from field "Type"
+  fill form
+    | "Code"                                             | unique("M40FixedCoupon") |
+    | "Value (percent: 0-100, fixed: currency amount)"    | "10.00"                 |
+    | "Expires at"                                        | "2027-01-01T10:00"      |
+    | "Minimum order amount"                              | "0"                     |
+    | "Usage limit"                                       | "5"                     |
+  click button "Create coupon"
+  expect css "tr:has(th:text-is('type')) td:text-is('fixed')" is visible
+
+test "the tickets list's Status <select> really filters, and check field-gated isInternal stays hidden from the ticket owner"
+  api POST /auth/login body { email: env(USER_B_EMAIL), password: env(USER_B_PW) }
+  expect status equals 200
+  capture body.accessToken as userBToken
+  api POST /tickets body { subject: unique("M40 Select Filter Ticket"), description: "Needs an internal escalation note." }
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 201
+  capture body.id as ticketId
+  capture body.subject as ticketSubject
+
+  open "/login"
+  fill form
+    | "Email"    | env(ADMIN_EMAIL) |
+    | "Password" | env(ADMIN_PW)    |
+  click button "Log in"
+  expect button "Log out" is visible
+
+  open "/tickets"
+  select "open" from field "Status"
+  click button "Filter"
+  expect text "{ticketSubject}" is visible
+
+  open "/tickets/{ticketId}"
+  check field "internal note (hidden from the ticket owner)"
+  fill field "Add comment" with "Internal note: escalate to L2."
+  click button "Post comment"
+  expect css "span.badge:text-is('internal')" is visible
+
+  # tickets.service.ts's findCommentsScoped filters `is_internal = false` for role USER — the real
+  # server-side effect `check field` above should have triggered, proven from the owner's own POV,
+  # not just that the admin's page rendered a badge.
+  api GET /tickets/{ticketId}/comments
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 200
+  expect all body.text not equals "Internal note: escalate to L2."
