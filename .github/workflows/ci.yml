@@ -72,8 +72,17 @@ jobs:
       # (scripts/regression.mjs), archived per-phase into report-by-phase/ as it goes. `--verbose`
       # (and the resulting GitHub Actions ::group::/::endgroup:: log grouping, tflw decision
       # 111.8) is auto-detected from GITHUB_ACTIONS — no extra flag needed here.
+      #
+      # `xvfb-run -a` (M42): the `watch-check` phase spawns a real `tflw watch`, which always
+      # forces a headed browser (`watchCommand`'s own `runOne` unconditionally appends `--headed`,
+      # regardless of any flag `watch` itself is given — PLAN_WEBV2_M40.md decision 3's claim that
+      # `watch` is headless-safe was wrong). Confirmed on the first CI run after M42 landed on main
+      # (run 30386703593): "Missing X server or $DISPLAY ... use 'xvfb-run <your-playwright-app>'",
+      # the same failure and fix `testFlow`'s own ci.yml already applies for its headed
+      # `watch.test.ts`. xvfb is preinstalled on the ubuntu-latest runner image, so no extra
+      # apt-get install is needed.
       - name: Full regression sweep (16 phases, each its own fresh Docker restart)
-        run: npm run regression
+        run: xvfb-run -a npm run regression
         working-directory: testFlow-tests
 
       # decision 9: surfaces pass/fail inline in the Actions run summary / PR checks, not just a
