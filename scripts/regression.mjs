@@ -99,6 +99,11 @@ const PHASES = [
   // run per its own header comments, never wired into any automated check. Same "script it, don't
   // trust a one-time manual check forever" reasoning as every other *-check phase above.
   { name: 'check-diagnostics', cmd: 'node scripts/verify-check-diagnostics.mjs' },
+  // M50 (PLAN_WEBV2_M45.md): `tflw pick` had only one manual, non-scripted verification pass
+  // (PROGRESS.md's M42 checklist) — a real click still isn't automatable (no CDP endpoint exposed,
+  // deliberately manual by design), but launching + a clean Ctrl+C exit now is, same "script it"
+  // reasoning as watch-check/migrate-check above.
+  { name: 'pick-check', cmd: 'node scripts/verify-pick.mjs' },
 ];
 
 function run(cmd, opts = {}) {

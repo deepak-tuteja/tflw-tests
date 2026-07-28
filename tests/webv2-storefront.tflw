@@ -27,11 +27,29 @@ import "./shared/webv2-checkout.tflw"
 import "./shared/webv2-login.tflw"
 import "../shared/root.tflw"
 
+# M50 (PLAN_WEBV2_M45.md): `after file` had zero dogfood anywhere in this suite (only `before
+# file` did, examples/hooks-explained.tflw) despite a real, genuine use existing right here — user
+# A's cart is a persistent server-side resource (SPEC §10) that otherwise survives past this
+# file's own last test, same reasoning "cart rows are drag-drop reorderable…" already flushes it
+# mid-file for. Runs once, its own isolated scope, after every test in this file has finished.
+# Mirrors that same test's own flush step exactly (no `expect status` on the checkout call — a 201
+# or a 422 "cart is empty" are both a legitimate outcome depending on what's left in the cart).
+after file
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as cleanupToken
+  api POST /cart/checkout
+    header "Authorization" is "Bearer {cleanupToken}"
+
 test "row-scoped add-to-cart on a page of a dozen identical buttons, with its async toast"
   root("Bulk Item 100")
   within css "[aria-label='Bulk Item 100']"
     click button "Add to cart"
   expect text "Added 1 × Bulk Item 100 to your cart." is visible
+  # M50 (PLAN_WEBV2_M45.md): explicit `screenshot "<name>"` had zero dogfood anywhere — every
+  # screenshot this suite ever captured before was an implicit failure-screenshot. Captured here,
+  # a genuine passing moment worth a named artifact, not fabricated just to exercise the step.
+  screenshot "cart-toast"
 
 test "the Quick View modal traps focus, adds to cart, and closes on Escape"
   root("Bulk Item 1")
