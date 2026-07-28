@@ -57,6 +57,16 @@ jobs:
         run: npm run refresh-tflw
         working-directory: testFlow-tests
 
+      # `playwright` (this repo's own devDependency, just installed above) has no postinstall
+      # browser-download hook — without this, every webV2 browser test (the `full suite` and
+      # `--tag adminOps` phases discover tests/webv2-storefront.tflw) fails with "Executable
+      # doesn't exist", confirmed on the first CI run after M7/webV2's suite actually landed on
+      # main (run 30316658886; mirrors the same fix in tflw's own ci.yml). Chromium only — this
+      # suite never exercises `--browser firefox`/`webkit`.
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: testFlow-tests
+
       # decisions 5-8: full suite + every feature-area tag + @smoke + every smoke,<area> combo +
       # the M25 mtls-rejection/safety-redaction-check phases — each its own fresh Docker restart
       # (scripts/regression.mjs), archived per-phase into report-by-phase/ as it goes. `--verbose`
