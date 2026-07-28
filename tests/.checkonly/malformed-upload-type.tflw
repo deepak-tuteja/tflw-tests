@@ -1,0 +1,9 @@
+# malformed-upload-type.tflw — CHECK-ONLY FIXTURE (M49, PLAN_WEBV2_M45.md): an `upload … type "…"`
+# value not shaped like `type/subtype` — demonstrates `tflw check`'s teaching diagnostic (TF032:
+# checker, a light regex check, not an IANA vocabulary gatekeeper).
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/malformed-upload-type.tflw
+
+test "a malformed upload content type"
+  api POST /uploads upload "./f.png" as "avatar" type "imagepng"

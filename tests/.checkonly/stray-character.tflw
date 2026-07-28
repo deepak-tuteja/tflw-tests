@@ -1,0 +1,10 @@
+# stray-character.tflw — CHECK-ONLY FIXTURE (M49, PLAN_WEBV2_M45.md): a character that cannot
+# begin any token — demonstrates `tflw check`'s teaching diagnostic (TF001: lexer, a character
+# that cannot begin any token).
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/stray-character.tflw
+
+test "a stray character the lexer can't tokenize at all"
+  api GET /health
+  expect status $ 200

@@ -1,0 +1,9 @@
+# unknown-method.tflw — CHECK-ONLY FIXTURE (M49, PLAN_WEBV2_M45.md): an unrecognised HTTP method
+# after `api` — demonstrates `tflw check`'s teaching diagnostic (TF012: parser, an unknown HTTP
+# method, "did you mean `PATCH`?").
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/unknown-method.tflw
+
+test "an http method tflw doesn't recognise"
+  api FETCH /health

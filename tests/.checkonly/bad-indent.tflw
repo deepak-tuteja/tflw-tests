@@ -1,0 +1,11 @@
+# bad-indent.tflw — CHECK-ONLY FIXTURE (M49, PLAN_WEBV2_M45.md): a dedent that lands between two
+# open indentation levels — demonstrates `tflw check`'s teaching diagnostic (TF003: lexer,
+# indentation that doesn't line up with any enclosing block).
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/bad-indent.tflw
+
+test "a dedent that lands between two open indentation levels"
+  api POST /health
+    header "Accept" is "application/json"
+   expect status equals 200

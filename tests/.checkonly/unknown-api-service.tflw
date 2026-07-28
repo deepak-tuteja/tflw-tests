@@ -1,0 +1,10 @@
+# unknown-api-service.tflw — CHECK-ONLY FIXTURE (M49, PLAN_WEBV2_M45.md): a typo'd named `api`
+# service — demonstrates `tflw check`'s teaching diagnostic (TF026: checker, an `api <service>`
+# name not declared in the active env, "did you mean `root`?"). `root` is a real named service
+# declared under `env local` (`tflw.config`).
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/unknown-api-service.tflw
+
+test "a typo'd named api service"
+  api roott GET /health

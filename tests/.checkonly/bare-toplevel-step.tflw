@@ -1,0 +1,12 @@
+# bare-toplevel-step.tflw — CHECK-ONLY FIXTURE (M49, PLAN_WEBV2_M45.md): a bare step line outside
+# any block — demonstrates `tflw check`'s teaching diagnostic (TF016: parser, top-level content
+# that isn't `test`/`action`/`import`/`use`/`before`/`after`).
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/bare-toplevel-step.tflw
+
+expect status equals 200
+
+test "a real test, so the file has at least one valid top-level construct too"
+  api GET /health
+  expect status equals 200

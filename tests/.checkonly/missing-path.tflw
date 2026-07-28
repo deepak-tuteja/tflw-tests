@@ -1,0 +1,9 @@
+# missing-path.tflw — CHECK-ONLY FIXTURE (M49, PLAN_WEBV2_M45.md): `api GET` with no path at all —
+# demonstrates `tflw check`'s teaching diagnostic (TF010: parser catch-all, an unexpected token
+# where the grammar didn't allow it).
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/missing-path.tflw
+
+test "api with no path at all"
+  api GET

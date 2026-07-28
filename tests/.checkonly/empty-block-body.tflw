@@ -1,0 +1,12 @@
+# empty-block-body.tflw — CHECK-ONLY FIXTURE (M49, PLAN_WEBV2_M45.md): a `before file` block with
+# no indented body — demonstrates `tflw check`'s teaching diagnostic (TF015: parser, a
+# test/action/hook block has no indented body).
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/empty-block-body.tflw
+
+before file
+
+test "a real test, so the file has at least one valid top-level construct too"
+  api GET /health
+  expect status equals 200

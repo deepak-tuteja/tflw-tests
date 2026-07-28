@@ -1,0 +1,11 @@
+# unbound-variable.tflw — CHECK-ONLY FIXTURE (M49, PLAN_WEBV2_M45.md): a `{var}` reference provably
+# never bound anywhere reachable in its scope — demonstrates `tflw check`'s teaching diagnostic
+# (TF030: checker, "did you mean `orderId`?" for a wrong-case reference to a real capture).
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/unbound-variable.tflw
+
+test "a provably-unbound variable reference"
+  api GET /health
+  capture body.ok as orderId
+  api GET /orders/{orderid}

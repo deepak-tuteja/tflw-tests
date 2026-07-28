@@ -1,0 +1,10 @@
+# unterminated-string.tflw — CHECK-ONLY FIXTURE (M49, PLAN_WEBV2_M45.md): a string literal with no
+# closing quote before end of line — demonstrates `tflw check`'s teaching diagnostic (TF002:
+# lexer, an unterminated string literal).
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/unterminated-string.tflw
+
+test "an unterminated string literal
+  api GET /health
+  expect status equals 200

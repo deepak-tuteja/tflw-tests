@@ -95,6 +95,10 @@ const PHASES = [
   // verify-cli-flags.mjs's own comment — neither was actually invoked/proven anywhere. Same
   // reasoning as migrate-check/watch-check above, own phase since both are safety/policy knobs.
   { name: 'safety-flags-check', cmd: 'node scripts/verify-safety-flags.mjs' },
+  // M49 (PLAN_WEBV2_M45.md): tests/.checkonly/ only covered 3 of 22 assigned TF0xx codes, manually
+  // run per its own header comments, never wired into any automated check. Same "script it, don't
+  // trust a one-time manual check forever" reasoning as every other *-check phase above.
+  { name: 'check-diagnostics', cmd: 'node scripts/verify-check-diagnostics.mjs' },
 ];
 
 function run(cmd, opts = {}) {

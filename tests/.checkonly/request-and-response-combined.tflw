@@ -1,0 +1,11 @@
+# request-and-response-combined.tflw — CHECK-ONLY FIXTURE (M49, PLAN_WEBV2_M45.md): a `request
+# connects`/`fails` assertion combined with a response-based assertion on the same request —
+# demonstrates `tflw check`'s teaching diagnostic (TF031: checker).
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/request-and-response-combined.tflw
+
+test "request connects combined with a response assertion on the same request"
+  api GET /health
+  expect request connects
+  expect status equals 200

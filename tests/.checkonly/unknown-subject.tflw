@@ -1,0 +1,10 @@
+# unknown-subject.tflw — CHECK-ONLY FIXTURE (M49, PLAN_WEBV2_M45.md): a typo'd `expect` subject —
+# demonstrates `tflw check`'s teaching diagnostic (TF013: parser, an unrecognised expect/capture
+# subject, "did you mean `status`?").
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/unknown-subject.tflw
+
+test "a typo'd assertion subject"
+  api GET /health
+  expect statuss equals 200

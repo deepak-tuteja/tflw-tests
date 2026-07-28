@@ -1,0 +1,15 @@
+# unknown-table-column.tflw — CHECK-ONLY FIXTURE (M49, PLAN_WEBV2_M45.md): a `{col}` reference not
+# among an inline `with each` table's declared columns — demonstrates `tflw check`'s teaching
+# diagnostic (TF027: checker, referencing `{prcie}` when the table's header column is `price`).
+# Only checked in the *test name* itself (`checker.ts#checkDataTables`) — a mismatched column
+# reference inside the test body is instead an ordinary TF030 "unknown variable" (there's no
+# static way to know a body reference was meant to be a table column vs. any other bound name).
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/unknown-table-column.tflw
+
+with each
+  | name | price |
+  | "Pen" | 1.5  |
+test "creates {name} at {prcie}"
+  api POST /products body { name: {name}, price: {price} }
