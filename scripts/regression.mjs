@@ -91,6 +91,10 @@ const PHASES = [
   // scripted here; `pick` is deliberately manual, see PROGRESS.md's M42 section).
   { name: 'migrate-check', cmd: 'node scripts/verify-migrate.mjs' },
   { name: 'watch-check', cmd: 'node scripts/verify-watch.mjs' },
+  // M47 (PLAN_WEBV2_M45.md): --forbid-insecure/--evidence had stale "already covered" claims in
+  // verify-cli-flags.mjs's own comment — neither was actually invoked/proven anywhere. Same
+  // reasoning as migrate-check/watch-check above, own phase since both are safety/policy knobs.
+  { name: 'safety-flags-check', cmd: 'node scripts/verify-safety-flags.mjs' },
 ];
 
 function run(cmd, opts = {}) {

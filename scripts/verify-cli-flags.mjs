@@ -4,11 +4,12 @@
 // caught a future tflw regression breaking any of them. Mirrors verify-redaction.mjs's pattern:
 // real assertions against real output artifacts, not hand-verification trusted forever.
 //
-// `--forbid-insecure`/`--evidence` are deliberately out of scope here: both already have durable
-// coverage elsewhere (`.github/workflows/ci.yml`'s CI job / `scripts/verify-redaction.mjs` and
-// `tests/safety-redaction.tflw`'s `--evidence` runs) — this script only covers the six flags the
-// M29 audit found with zero durable proof anywhere: `--failed`, `--bail`, `--format ndjson`,
-// `--now`, `--log-file`, `--no-timestamps`.
+// `--forbid-insecure`/`--evidence` are out of scope here — this script only covers the six flags
+// the M29 audit found with zero durable proof anywhere: `--failed`, `--bail`, `--format ndjson`,
+// `--now`, `--log-file`, `--no-timestamps`. (M47/PLAN_WEBV2_M45.md: the claim this comment used to
+// make — that `--forbid-insecure`/`--evidence` already had durable coverage elsewhere — was false;
+// neither was actually invoked/proven anywhere. Real coverage now lives in
+// `scripts/verify-safety-flags.mjs`, its own file since both are safety/policy knobs.)
 import { execFileSync, execSync } from 'node:child_process';
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';

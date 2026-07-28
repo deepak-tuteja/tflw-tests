@@ -14,8 +14,9 @@
 #
 # `evidence`'s levels have no per-test grammar surface to assert on directly (they trim what the
 # *report* shows, never what `expect`/`capture` see) — proven by running this same file under
-# `--evidence headers-only`/`--evidence none` and inspecting the emitted report.html, per the
-# manual verification step in plan_v2.md Part P / PROGRESS.md's M23 entry.
+# `--evidence headers-only`/`--evidence none` and inspecting the emitted `results.json`, now a
+# durable, scripted proof (M47, `scripts/verify-safety-flags.mjs`) rather than the one-time manual
+# check plan_v2.md Part P / PROGRESS.md's M23 entry originally documented.
 #
 # Gap #15 (TFLW-GAPS.md, fixed upstream in tflw 0.1.0, 2026-07-26): the second test below
 # (`capture body.phone as firstPhone` / `expect body.phone equals "{firstPhone}"`) is exactly the
