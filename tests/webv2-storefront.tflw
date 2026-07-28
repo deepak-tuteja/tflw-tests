@@ -66,6 +66,35 @@ test "a full checkout — product page, cart, the iframe payment widget, and the
   expect request to "/cart/checkout" with method "POST" was made
   expect status of request to "/cart/checkout" with method "POST" equals 201
 
+test "the payment gateway's real fetch is stubbed — a method-mismatch passes through untouched, a failure surfaces for real"
+  # M46 (PLAN_WEBV2_M45.md): `stub` (SPEC §9.7) had zero dogfood anywhere before this — `checkout()`
+  # only ever proves a *success* stub works. This test proves `stub` genuinely changes behavior on
+  # every axis SPEC documents, against the payment widget's real (permanently-unreachable) fetch:
+  #   - a method-mismatched stub (GET, registered first) never intercepts the real POST — proven
+  #     indirectly: if it had, the widget would show its success state (this GET stub's 200 body),
+  #     not the 500 error the POST stub below actually produces.
+  #   - a stubbed 500 surfaces as a real page-level error inside the iframe, not silently swallowed.
+  #   - the stub's own response is still observable via `request to`/`status of request to`, exactly
+  #     like a real network response would be.
+  api GET /products?q=Bulk%20Item%20100&pageSize=1
+  expect status equals 200
+  capture body[0].id as bulk100Id
+  login(env(USER_A_EMAIL), env(USER_A_PW))
+  open "/products/{bulk100Id}"
+  fill field "Quantity" with "1"
+  click button "Add to cart"
+  open "/cart"
+  stub GET "https://payments.example.test/v1/authorize" respond status 200 body { token: "tok_wrong_method" }
+  stub POST "https://payments.example.test/v1/authorize" respond status 500 body { error: "gateway down" }
+  within frame css "iframe[title='Payment']"
+    fill field "Card number" with "4111111111111111"
+    fill field "Expiry (MM/YY)" with "12/30"
+    fill field "CVC" with "123"
+    click button "Authorize payment"
+    expect text "The payment gateway declined this card (status 500)." is visible
+  expect request to "https://payments.example.test/v1/authorize" with method "POST" was made
+  expect status of request to "https://payments.example.test/v1/authorize" with method "POST" equals 500
+
 test "cart rows are drag-drop reorderable, verified row by row"
   api GET /products?q=Bulk%20Item%20100&pageSize=1
   expect status equals 200

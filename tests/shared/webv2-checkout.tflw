@@ -4,8 +4,14 @@
 # once they're ready to check out. `within frame` genuinely traverses the iframe's own document
 # (SPEC §9.5); the parent `button "Checkout"` only becomes enabled once the frame's own
 # `postMessage` handoff lands, so `wait until` (not a plain `expect`) covers that async gap.
+#
+# M46 (PLAN_WEBV2_M45.md, `stub` dogfood): the widget's "Authorize payment" now makes a real fetch()
+# to a permanently-unreachable https://payments.example.test — there's no real response to fall
+# back to, so every path through here must `stub` a success. `webv2-storefront.tflw`'s own dedicated
+# stub test proves the failure/method-mismatch cases this shared action deliberately doesn't need.
 
 action checkout()
+  stub POST "https://payments.example.test/v1/authorize" respond status 200 body { token: "tok_stub_success" }
   within frame css "iframe[title='Payment']"
     fill field "Card number" with "4111111111111111"
     fill field "Expiry (MM/YY)" with "12/30"

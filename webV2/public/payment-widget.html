@@ -31,12 +31,19 @@
   </head>
   <body>
     <!--
-      Tier C corner (webV2-3, PLAN_WEBV2_TARGETS.md): an iframe-embedded payment widget. This is a
-      plain static page (served same-origin by nginx alongside the SPA build, see webV2/Dockerfile)
-      with its own vanilla-JS form — no framework, no real payment gateway. It exists purely to
-      require frame traversal (filling fields lives inside this document, not the parent) and a
-      postMessage handoff: on a valid-looking submit it tells the parent window it's "authorized"
-      rather than actually charging anything.
+      Tier C corner (webV2-3, PLAN_WEBV2_TARGETS.md): an iframe-embedded payment widget. Plain
+      static page (served same-origin by nginx alongside the SPA build, see webV2/Dockerfile) with
+      its own vanilla-JS form — no framework. Requires frame traversal (filling fields lives inside
+      this document, not the parent) and a postMessage handoff on success.
+
+      M46 (PLAN_WEBV2_M45.md): the "Authorize payment" submit now makes a real fetch() to
+      https://payments.example.test/v1/authorize — a domain that will never resolve in any real
+      environment. That's deliberate: tflw's `stub` (SPEC §9.7) is reserved for "genuinely third-
+      party/unavailable" dependencies, and this app had nothing that actually needed it — every
+      network call anywhere else in webV2 hits the real apiV2 backend on purpose (house style,
+      tests/webv2-storefront.tflw's own header comment). A payment gateway is the canonical example
+      SPEC §9.7 itself names. Every test path through this widget now must `stub` this route —
+      there is no "real" response to fall back to.
     -->
     <form id="payment-form">
       <label for="card-number">Card number</label>
@@ -68,12 +75,32 @@
         }
 
         errorEl.hidden = true;
-        statusEl.hidden = false;
-        statusEl.textContent = 'Payment authorized.';
-        window.parent.postMessage(
-          { type: 'payment-authorized', token: 'tok_demo_' + Date.now() },
-          window.location.origin,
-        );
+        statusEl.hidden = true;
+
+        fetch('https://payments.example.test/v1/authorize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ number: number, expiry: expiry, cvc: cvc }),
+        })
+          .then(function (res) {
+            if (!res.ok) {
+              errorEl.hidden = false;
+              errorEl.textContent = 'The payment gateway declined this card (status ' + res.status + ').';
+              return;
+            }
+            return res.json().then(function (body) {
+              statusEl.hidden = false;
+              statusEl.textContent = 'Payment authorized.';
+              window.parent.postMessage(
+                { type: 'payment-authorized', token: body.token || 'tok_demo_' + Date.now() },
+                window.location.origin,
+              );
+            });
+          })
+          .catch(function () {
+            errorEl.hidden = false;
+            errorEl.textContent = 'Could not reach the payment gateway.';
+          });
       });
     </script>
   </body>
