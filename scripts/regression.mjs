@@ -108,6 +108,10 @@ const PHASES = [
   // a genuine, never-closed gap, not a stale claim. Same "script it, don't trust a one-time manual
   // check forever" reasoning as every other *-check phase above.
   { name: 'logging-check', cmd: 'node scripts/verify-logging.mjs' },
+  // PLAN_REPORT_OVERFLOW.md: a real report.html was scrolling the whole page sideways on a long
+  // unbroken token (a JWT) — fixed upstream in tflw, re-proven here against the real vendored
+  // build's actual output, not just tflw's own unit test.
+  { name: 'report-overflow-check', cmd: 'node scripts/verify-report-no-overflow.mjs' },
 ];
 
 function run(cmd, opts = {}) {
