@@ -32,6 +32,7 @@ test "creating a review, then reading it back via the nested list"
     header "Authorization" is "Bearer {userAToken}"
   expect status equals 201
   expect body.rating equals 5
+  log "5-star review posted for product {productId}, reading it back via the nested list"
 
   api GET /products/{productId}/reviews
   expect status equals 200

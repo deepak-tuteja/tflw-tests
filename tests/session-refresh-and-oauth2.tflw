@@ -20,6 +20,7 @@ test "an `as admin` session transparently refreshes once its 5s access token has
 
   # Past JWT_ACCESS_TTL (5s) — the session's cached bearer header is now genuinely stale.
   let waited = wait seconds(6)
+  log warn "admin session's cached bearer is now stale past its 5s TTL, expecting a transparent refresh"
 
   # Pre-M9 this would have failed with a bare 401 (the cached header was never re-checked).
   # tflw now retries this exact request once, having refreshed the `admin` session first.

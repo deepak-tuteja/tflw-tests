@@ -18,6 +18,7 @@ test "full product CRUD lifecycle"
   expect status equals 201
   expect body.stock equals 10
   capture body.id as id
+  log "product {id} created, walking it through its full CRUD lifecycle"
 
   api GET /products/{id}
   expect status equals 200

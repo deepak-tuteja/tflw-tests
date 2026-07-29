@@ -33,6 +33,7 @@ test "the category tree nests real subcategories, walked via nested captures"
   # A leaf node's own children array is still present, just empty — not omitted.
   expect body[1].children[0].children[0].children has count 0
   capture body[1].children[0].children[0].id as headphonesId
+  log "walked the tree three levels deep to leaf category {headphonesId} (Headphones)"
 
   # The tree's leaf is a real category record, findable through the ordinary flat endpoint too —
   # the tree is a different *view* of the same rows, not a separate resource.

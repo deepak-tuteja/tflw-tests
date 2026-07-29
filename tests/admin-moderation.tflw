@@ -25,6 +25,7 @@ test "an admin retries a flaky upstream dependency check before starting moderat
   let key = random string 8
   api POST /flaky-widget body { key: {key} }
   expect status equals 201
+  log warn "flaky-widget check for key {key} needed a retry before succeeding"
 
 @moderation @datatables @adminOps
 with each

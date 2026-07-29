@@ -52,6 +52,7 @@ test "validating a response against its own documented OpenAPI schema needs a JS
   # /openapi.json — the call itself *is* the assertion, since there's no declarative primitive
   # to point an `expect` at an externally-documented schema (SPEC §16 P#3, "OpenAPI/contract").
   let result = assert matches schema("ProductResponseDto", product)
+  log debug "schema check result: {result}"
 
   # Ideal (doesn't exist today), referencing the endpoint's own documented response shape with no
   # hardcoded schema name or JS helper:

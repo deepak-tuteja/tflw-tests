@@ -104,6 +104,10 @@ const PHASES = [
   // deliberately manual by design), but launching + a clean Ctrl+C exit now is, same "script it"
   // reasoning as watch-check/migrate-check above.
   { name: 'pick-check', cmd: 'node scripts/verify-pick.mjs' },
+  // M51 (PLAN_LOG_CONSUME.md): --log-output/--log-level had zero proof anywhere in this suite —
+  // a genuine, never-closed gap, not a stale claim. Same "script it, don't trust a one-time manual
+  // check forever" reasoning as every other *-check phase above.
+  { name: 'logging-check', cmd: 'node scripts/verify-logging.mjs' },
 ];
 
 function run(cmd, opts = {}) {

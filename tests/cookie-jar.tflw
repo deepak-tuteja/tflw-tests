@@ -18,6 +18,7 @@ test "a dual Set-Cookie login no longer crashes replaying its cookies — both c
   api GET /auth/profile
   expect status equals 200
   expect body.email equals env(USER_A_EMAIL)
+  log "both cookies from the dual Set-Cookie login carried forward automatically"
 
 @auth @cookiejar @identityOps
 test "session-refresh also works from the auto-tracked jar with no manual cookie replay"

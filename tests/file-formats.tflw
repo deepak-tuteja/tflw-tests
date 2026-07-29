@@ -37,6 +37,7 @@ test "a CSV upload round-trips byte-for-byte (raw) and via the json envelope (ba
   expect body.filename equals "sample.csv"
   expect body.contentType equals "text/csv"
   capture body.id as uploadId
+  log "upload {uploadId} stored, round-tripping it raw and via the json envelope"
 
   api GET /uploads/{uploadId}
     header "Authorization" is "Bearer {userAToken}"

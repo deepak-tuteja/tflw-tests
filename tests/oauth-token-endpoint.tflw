@@ -22,6 +22,7 @@ test "a valid client_credentials grant returns a well-formed bearer token, usabl
   expect body.scope equals "orders.read orders.write"
   expect body.expires_in is greater than 0
   capture body.access_token as token
+  log "client_credentials grant issued token {token}, usable immediately"
 
   get profile("Bearer {token}", "admin")
 

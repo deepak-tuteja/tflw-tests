@@ -192,6 +192,7 @@ A plain `npx tflw run` already exercises a lot of what to look for in `report/re
 | `@orderReturns` | return-requests.tflw (`PLAN_RETURNS.md` R3 — order return/refund requests: owner submits, admin approves/rejects, an approved decision fires a real async refund job) |
 | `@ticketing` | tickets.tflw (`PLAN_TICKETING.md` T3 — a third role (`AGENT`) scoped to specific resource instances, role-filtered comment visibility, a cross-endpoint cancel/resolve race, and the suite's first collection-level `wait until` combined with `has count`) |
 | `@fileFormats` | file-formats.tflw (`PLAN_FILEFORMATS.md` F2 — upload→download round-trips for CSV/TXT/PDF in both response-envelope modes, `body csv`/`body pdf text` against real generated content (the orders CSV export, a naturally multi-page order receipt), `tests/.demo-fail/malformed-{csv,pdf}-upload.tflw` for the loud-error negative cases; closes TFLW-GAPS.md gap #19, tflw M25) |
+| `@logging` | logging.tflw (`PLAN_LOG_CONSUME.md` M51 — `log` statement consumption: config-default `log destination`/`log level` resolution, override-not-accumulate semantics, and "an explicit `to …` clause always wins" over both config and `--log-output`/`--log-level`; every other file also gets one narration `log` line in its own clearest test, untagged) |
 
 ### Demo-fail / check-only / env-specific fixtures
 

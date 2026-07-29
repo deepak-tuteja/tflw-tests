@@ -13,6 +13,7 @@ test "full-text search over the bulk catalog returns an exact count at real volu
   expect status equals 200
   expect body has count 12
   expect all body.description contains "gadgetronic"
+  log debug "full-text search for gadgetronic returned 12 of ~120 bulk-seeded products"
 
   api GET /products?q=gadgetronic&page=1&pageSize=4
   expect status equals 200

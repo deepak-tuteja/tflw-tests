@@ -39,6 +39,7 @@ test "filtering, sorting, and full-text search combine, scoped to this test's ow
   expect body has count 3
   expect body[0].name equals "{tag} Cheap Item"
   expect body[2].name equals "{tag} Pricey Item"
+  log "facet {tag} filtered/sorted/searched to 3 matching products"
 
   api GET /products?q={tag}&sort=-price
   expect status equals 200

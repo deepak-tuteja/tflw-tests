@@ -49,6 +49,7 @@ test "uploading a product image via multipart/form-data stores just its metadata
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body.id as productId
+  log "product {productId} created, about to receive a multipart image upload"
 
   api POST /products/{productId}/image upload "./payloads/sample.png" as "image"
     header "Authorization" is "Bearer {adminToken}"

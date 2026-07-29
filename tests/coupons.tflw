@@ -54,6 +54,7 @@ test "an expired coupon is rejected"
     header "Authorization" is "Bearer {shopperToken}"
   expect status equals 422
   expect body.detail contains "expired"
+  log "coupon {code} rejected at checkout: expired {expiredDate}"
 
 @coupons @orderOps
 test "a coupon below its minimum order amount is rejected"

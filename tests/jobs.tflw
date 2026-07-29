@@ -37,6 +37,7 @@ test "an order progresses through fulfillment via a real async job, polled to co
   expect header "location" matches "/v1/jobs/"
   expect body.status equals "processing"
   capture body.jobId as jobId
+  log debug "polling fulfillment job {jobId} for order {orderId} until it completes"
 
   wait until api GET /jobs/{jobId}
     header "Authorization" is "Bearer {adminToken}"

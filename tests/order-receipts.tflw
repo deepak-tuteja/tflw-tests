@@ -35,6 +35,7 @@ test "a placed order's receipt is a real PDF with the right headers"
     header "Authorization" is "Bearer {userAToken}"
   expect status equals 201
   capture body.id as orderId
+  log "order {orderId} placed, fetching its receipt as a real PDF"
 
   api GET /orders/{orderId}/receipt
     header "Authorization" is "Bearer {userAToken}"

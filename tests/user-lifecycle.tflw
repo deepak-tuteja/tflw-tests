@@ -16,6 +16,7 @@ test "a user's full attribute lifecycle: enrich, conflict, retry, redact, then s
   api POST /auth/register body { name: unique("Lifecycle User"), email: {email}, password: {pw} }
   expect status equals 201
   capture body.accessToken as token
+  log "user registered, starting the full attribute lifecycle for token {token}"
 
   api GET /users/me
     header "Authorization" is "Bearer {token}"

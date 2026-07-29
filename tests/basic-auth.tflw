@@ -10,6 +10,7 @@ test "HTTP Basic authenticates the same credentials bearer/session login already
   let email = env(ADMIN_EMAIL)
   let pw = env(ADMIN_PW)
   let creds = base64 encode("{email}:{pw}")
+  log "authenticating via HTTP Basic with encoded creds {creds}"
 
   api GET /orders/all
     header "Authorization" is "Basic {creds}"

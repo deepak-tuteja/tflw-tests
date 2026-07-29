@@ -35,6 +35,7 @@ test "a rate-limited request honors a seconds-format Retry-After and succeeds"
   api POST /retry-demo body { key: random string 8, format: "seconds" }
     retry honoring "Retry-After" up to 2
   expect status equals 200
+  log warn "seconds-format Retry-After forced a retry before this request succeeded"
 
 @retryafter
 test "a rate-limited request honors an HTTP-date-format Retry-After and succeeds"

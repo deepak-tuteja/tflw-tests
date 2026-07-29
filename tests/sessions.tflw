@@ -52,6 +52,7 @@ test "a cookie-authed mutation with a matching CSRF token succeeds"
   api POST /auth/session-login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
   expect status equals 200
   capture body.csrfToken as csrf
+  log "cookie session csrf token {csrf} attached to the mutation"
 
   api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
     header "X-CSRF-Token" is "{csrf}"

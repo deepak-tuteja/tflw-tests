@@ -31,6 +31,7 @@ test "reading an order's nested items reflects what was ordered"
     header "Authorization" is "Bearer {userAToken}"
   expect status equals 201
   capture body.id as orderId
+  log "order {orderId} placed, reading its nested items back"
 
   api GET /orders/{orderId}/items
     header "Authorization" is "Bearer {userAToken}"

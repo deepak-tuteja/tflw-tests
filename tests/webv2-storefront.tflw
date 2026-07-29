@@ -46,6 +46,7 @@ test "row-scoped add-to-cart on a page of a dozen identical buttons, with its as
   within css "[aria-label='Bulk Item 100']"
     click button "Add to cart"
   expect text "Added 1 × Bulk Item 100 to your cart." is visible
+  log "row-scoped add-to-cart toast confirmed for Bulk Item 100"
   # M50 (PLAN_WEBV2_M45.md): explicit `screenshot "<name>"` had zero dogfood anywhere — every
   # screenshot this suite ever captured before was an implicit failure-screenshot. Captured here,
   # a genuine passing moment worth a named artifact, not fabricated just to exercise the step.

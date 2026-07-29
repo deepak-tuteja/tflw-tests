@@ -30,6 +30,7 @@ test "a session survives three expire-then-refresh cycles across many sequential
   expect status equals 200
   capture body.accessToken as accessToken2
   capture body.refreshToken as refreshToken2
+  log "cycle 1 complete: refreshed to accessToken2 {accessToken2}"
 
   api GET /auth/profile
     header "Authorization" is "Bearer {accessToken2}"

@@ -28,6 +28,7 @@ test "action + JS escape hatch: create, receipt, delete"
   let productId = create product(productName, 22.5, 10, categoryId, adminToken)
 
   let receipt = make receipt(productId, 22.5)
+  log "receipt {receipt} generated for product {productId}"
 
   api DELETE /products/{productId}
     header "Authorization" is "Bearer {adminToken}"

@@ -20,6 +20,7 @@ test "product ETag: an unchanged read repeats it, and a matching If-None-Match y
   expect status equals 201
   capture body.id as id
   capture header "etag" as etag1
+  log "product {id} created with etag {etag1}, checking If-None-Match repeats it"
 
   api GET /products/{id}
   expect status equals 200

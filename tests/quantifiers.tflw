@@ -39,6 +39,7 @@ test "quantifiers over one order's items"
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body.id as orderId
+  log "order {orderId} placed, checking quantifiers over its items"
 
   api GET /orders/{orderId}/items
     header "Authorization" is "Bearer {adminToken}"

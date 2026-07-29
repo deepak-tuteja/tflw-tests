@@ -22,6 +22,7 @@ test "creates {name} via an inline data table"
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   expect body.stock equals {stock}
+  log "row {name} created via inline data table, stock {stock}"
 
 @crud @tables @catalogOps
 with each from "./data/products.json"

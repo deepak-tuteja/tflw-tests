@@ -31,6 +31,7 @@ test "GET /catalog/:id — the default-follow request lands on the real product,
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body.id as productId
+  log "product {productId} created, following its legacy /catalog redirect through to 200"
 
   # No `without redirects` clause — the runtime's default `redirect: 'follow'` chases the 302
   # straight through to the real resource, same as a browser typing the old bookmarked URL.

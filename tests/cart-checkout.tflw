@@ -54,6 +54,7 @@ test "cart accepts over-stock quantities; checkout enforces stock atomically, al
   expect status equals 409
   expect body matches subset { type: "about:blank", title: "Conflict", status: 409 }
   expect body.detail contains "insufficient stock"
+  log warn "checkout for productA {productIdA} rejected: insufficient stock, all-or-nothing enforced"
 
   # All-or-nothing: productB (which DID have enough stock) was never decremented either.
   api GET /products/{productIdB}

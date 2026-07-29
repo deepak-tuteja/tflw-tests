@@ -43,6 +43,7 @@ test "`/profile/export` returns real PII — the assertion sees the true value e
   expect body.address.city matches "^[A-Za-z ]+$"
   expect body.address.postalCode matches "^[0-9]{5}$"
   expect body.phone matches "^\\+1-[0-9]{3}-[0-9]{3}-[0-9]{4}$"
+  log "profile export assertions saw the real PII; report will mask it on write"
 
 @auth @safety @identityOps
 test "the same profile export is stable across two calls (deterministic PII, not random)" as admin

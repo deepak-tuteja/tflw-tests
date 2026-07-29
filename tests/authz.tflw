@@ -39,6 +39,7 @@ test "user B cannot read user A's order"
     header "Authorization" is "Bearer {userAToken}"
   expect status equals 201
   capture body.id as orderId
+  log "order {orderId} placed by user A, about to be probed by user B"
 
   api GET /orders/{orderId}
     header "Authorization" is "Bearer {userBToken}"

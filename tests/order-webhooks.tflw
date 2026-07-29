@@ -49,6 +49,7 @@ test "fulfilling an order with a webhookUrl delivers a real order.fulfilled POST
   # unawaited fire-and-forget continuation (JobsService.deliverWebhook) — so this still polls
   # rather than checking once.
   let proof = assert webhook received(receiverUrl, "order.fulfilled", orderId, 2000)
+  log debug "order.fulfilled webhook delivered for order {orderId}: {proof}"
 
   let stopped = stop webhook receiver(receiverUrl)
 

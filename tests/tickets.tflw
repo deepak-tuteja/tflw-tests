@@ -38,6 +38,7 @@ test "the full ticket lifecycle: owner submits, an agent claims/starts/resolves,
   expect body.status equals "open"
   expect body.assignedTo equals null
   capture body.id as ticketId
+  log "ticket {ticketId} opened, walking it through claim/start/resolve/close"
 
   api GET /tickets/{ticketId}/history
     header "Authorization" is "Bearer {aliceToken}"

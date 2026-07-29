@@ -51,6 +51,7 @@ test "a new shopper registers, browses, checks out idempotently, and watches ful
   expect status equals 201
   expect body.status equals "pending"
   capture body.id as orderId
+  log "order {orderId} placed by shopper, checking out idempotently"
 
   api POST /orders body { items: [ { productId: {productIdA}, quantity: 2 }, { productId: {productIdB}, quantity: 1 } ] }
     header "Authorization" is "Bearer {shopperToken}"

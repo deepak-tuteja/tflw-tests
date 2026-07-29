@@ -42,6 +42,7 @@ test "a 61-item order round-trips correctly at real volume, not toy volume"
   expect status equals 201
   capture body.id as orderId
   expect body.items has count 61
+  log "order {orderId} round-tripped with 61 items at real volume"
 
   api GET /orders/{orderId}/items
     header "Authorization" is "Bearer {userAToken}"

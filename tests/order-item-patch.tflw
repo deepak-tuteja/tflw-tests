@@ -36,6 +36,7 @@ test "patching one item's quantity updates just that item, verified via matches 
   expect status equals 201
   capture body.id as orderId
   capture body.items[0].id as itemId
+  log "order {orderId} item {itemId} about to be patched to quantity 9"
 
   api PATCH /orders/{orderId}/items/{itemId} body { quantity: 9 }
     header "Authorization" is "Bearer {userAToken}"

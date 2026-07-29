@@ -56,6 +56,7 @@ test "an approved return request refunds the order via a real async job, polled 
   expect status equals 200
   expect body.status equals "approved"
   capture body.refundJobId as refundJobId
+  log "return request {returnRequestId} approved, polling refund job {refundJobId}"
 
   api GET /orders/{orderId}
     header "Authorization" is "Bearer {userAToken}"

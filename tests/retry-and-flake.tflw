@@ -15,6 +15,7 @@ test "flaky-widget succeeds after retrying" retry 2
   let key = random string 8
   api POST /flaky-widget body { key: {key}, name: "Flaky Thing" }
   expect status equals 201
+  log warn "flaky-widget {key} needed a retry before succeeding"
 
 @flaky @ratelimit
 test "flaky-widget's three attempts are individually observable: 503, then 429 with Retry-After, then 201"

@@ -43,6 +43,7 @@ test "an 8-hop chain threads real response data forward through all four body-in
     header "Authorization" is "Bearer {userAToken}"
   expect status equals 201
   capture body.id as orderId1
+  log "hop 3: order {orderId1} chains productA {productA} forward inline"
   capture body.items[0].quantity as qty
 
   # Hop 4: order, INLINE body, COMPLETE replacement (every value a hole — `qty` came from hop 3's

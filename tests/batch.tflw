@@ -36,6 +36,7 @@ test "batch-creates {label} alongside a fixed always-valid filler item"
   expect body.results[0].ok equals {shouldSucceed}
   expect body.results[1].ok equals true
   expect body.succeeded is greater than 0
+  log "batch item {label} resolved with shouldSucceed={shouldSucceed}"
 
 @batch @crud @catalogOps
 test "batch reports the invalid-price reason on the failing item"

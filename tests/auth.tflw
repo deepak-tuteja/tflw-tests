@@ -14,6 +14,7 @@ test "registering a new user returns a working bearer pair"
   api POST /auth/register body { name: unique("Auth User"), email: unique email, password: {pw} }
   expect status equals 201
   capture body.accessToken as accessToken
+  log "new bearer pair issued for accessToken {accessToken}"
 
   get profile("Bearer {accessToken}", "user")
 

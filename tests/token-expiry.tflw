@@ -23,6 +23,7 @@ test "an access token genuinely expires at its configured TTL, and refresh recov
   expect status equals 200
 
   let waited = wait seconds(6)
+  log warn "access token {accessToken} is now past its configured TTL, expecting a 401"
 
   # Deliberately a one-shot check, not `wait until api` — see the file header: that construct's
   # own wait budget would race this test's TTL rather than outlast it.

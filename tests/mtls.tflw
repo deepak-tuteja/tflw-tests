@@ -30,3 +30,4 @@ test "the `admin` session logs in and authenticates a real request through the m
   api GET /auth/profile
   expect status equals 200
   expect body.role equals "admin"
+  log "admin session authenticated through the mTLS-requiring listener"

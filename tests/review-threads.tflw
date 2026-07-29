@@ -50,6 +50,7 @@ test "a reply, a reply-to-that-reply, and a reply-to-that — three real levels 
   expect body[0].text equals "does this work with the wall mount?"
   expect body[0].children[0].text equals "yes, sold separately though"
   expect body[0].children[0].children[0].text equals "good to know, thanks!"
+  log "reply thread on review {reviewId} walked three levels deep to leaf reply {l2Id}'s own child"
   # A leaf's own children array is still present, just empty — same convention as
   # notifications-and-tree.tflw's category-tree leaf check.
   expect body[0].children[0].children[0].children has count 0
