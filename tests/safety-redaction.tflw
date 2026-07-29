@@ -26,8 +26,18 @@
 # no way to read back its own emitted report file, so the actual leak-check lives in
 # `scripts/verify-redaction.mjs` (updated to also walk every step's `detail` field, not just
 # `request.body`/`response.bodyText`), run via `npm run test:safety`.
+#
+# No `@identityOps` (or any other area tag) on either test below, deliberately: `regression.mjs`'s
+# `--tag <area>` phases run under plain `env local` (no `--env safetyRedaction` override), where
+# `redact` isn't configured at all — an area tag here would sweep this file into a report that
+# can't honor the very guarantee its own test title makes ("the report will mask it"), and it did:
+# a real `--tag identityOps` archive showed the fixture's fake phone/address in plaintext. Found by
+# inspecting a `report-by-phase/tag-identityops/report.html` from this project's own `npm run
+# regression`, 2026-07-29. This file's coverage is already fully proven by the dedicated
+# `safety-redaction-check` phase (`scripts/verify-redaction.mjs`, real `--env safetyRedaction`) —
+# an area tag added nothing except this failure mode.
 
-@auth @safety @identityOps
+@auth @safety
 test "`/profile/export` returns real PII — the assertion sees the true value even though the report will mask it" as admin
   api GET /profile/export
   expect status equals 200
@@ -45,7 +55,7 @@ test "`/profile/export` returns real PII — the assertion sees the true value e
   expect body.phone matches "^\\+1-[0-9]{3}-[0-9]{3}-[0-9]{4}$"
   log "profile export assertions saw the real PII; report will mask it on write"
 
-@auth @safety @identityOps
+@auth @safety
 test "the same profile export is stable across two calls (deterministic PII, not random)" as admin
   api GET /profile/export
   expect status equals 200
