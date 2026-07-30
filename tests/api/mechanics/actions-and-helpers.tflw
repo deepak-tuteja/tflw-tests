@@ -1,0 +1,57 @@
+# actions-and-helpers.tflw — a same-run `action`+`import` (shared/catalog.tflw) and the JS
+# escape hatch (`use`, helpers/receipt.ts), chained in one flow.
+#
+# The second test below is illustrative, not a real business scenario (M21, extended M29): unlike
+# `base64 encode` (a genuine apiV2 need — the existing Basic-auth guard, tests/basic-auth.tflw),
+# nothing in this app returns or consumes a hex-encoded value or a base64-encoded value that needs
+# *decoding*, and url encoding of request paths/queries already happens automatically on every
+# interpolated `{var}` (tflw decision 62) — so there's no organic gap for `hex`/`url`
+# encode/decode or `base64 decode` to close here (M29's coverage audit confirmed `base64 decode`
+# specifically had zero usage anywhere, same non-finding shape as hex/url). Kept only for dogfood
+# coverage of the forms decision 9/uuid/password/`base64 encode` didn't exercise.
+
+import "../../shared/catalog.tflw"
+use "../../helpers/receipt.ts"
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+@crud @actions @api
+test "action + JS escape hatch: create, receipt, delete"
+  let productName = unique("Action Widget")
+  let productId = create product(productName, 22.5, 10, categoryId, adminToken)
+
+  let receipt = make receipt(productId, 22.5)
+  log "receipt {receipt} generated for product {productId}"
+
+  api DELETE /products/{productId}
+    header "Authorization" is "Bearer {adminToken}"
+    header "X-Receipt" is "{receipt}"
+  expect status equals 204
+
+@crud @actions @api
+test "illustrative: hex/url/base64 transforms round-trip through a real request/response (M21, M29)"
+  let tag = unique("hex-url")
+  let hexed = hex encode("{tag}")
+  let unhexed = hex decode(hexed)
+  let urled = url encode("{tag} widget")
+  let unurled = url decode(urled)
+  let b64ed = base64 encode("{tag}")
+  let unb64ed = base64 decode(b64ed)
+  let productName = "{unhexed} {unurled} {unb64ed}"
+
+  api POST /products body { name: {productName}, price: 5, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  expect body.name equals "{productName}"
+  capture body.id as productId
+
+  api DELETE /products/{productId}
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 204

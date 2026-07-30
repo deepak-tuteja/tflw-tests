@@ -29,8 +29,8 @@ function ok(label, condition, detail = '') {
   }
 }
 
-console.log('Running tests/auth.tflw (produces real bearer JWTs in report.html) ...');
-execSync('npx tflw run tests/auth.tflw --no-color', { cwd: ROOT, stdio: 'inherit' });
+console.log('Running tests/api/identity/auth.tflw (produces real bearer JWTs in report.html) ...');
+execSync('npx tflw run tests/api/identity/auth.tflw --no-color', { cwd: ROOT, stdio: 'inherit' });
 
 const html = readFileSync(REPORT_PATH, 'utf8');
 const style = html.match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? '';

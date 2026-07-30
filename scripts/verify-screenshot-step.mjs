@@ -23,7 +23,7 @@ function ok(label, condition, detail = '') {
 }
 
 execSync(
-  'npx tflw run --only "row-scoped add-to-cart on a page of a dozen identical buttons, with its async toast" --no-color tests/webv2-storefront.tflw',
+  'npx tflw run --only "row-scoped add-to-cart on a page of a dozen identical buttons, with its async toast" --no-color tests/mixed/storefront.tflw',
   { cwd: ROOT, stdio: 'inherit' },
 );
 

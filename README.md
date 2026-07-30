@@ -27,7 +27,19 @@ webV2/               React+Vite+TS SPA storefront (webV2-0) — tflw's browser-a
 webV2/admin/         SSR admin console (webV2-1) — moderation/coupons/categories/tickets over
                      apiV2, plain Express+EJS full-page navigations (a different flake class
                      than the SPA above); talks to api:4001 server-to-server, no proxy needed; :8091
-tests/               .tflw test files, one per feature/scenario (being ported to v2, M1-M5)
+tests/               .tflw test files, split into a real api/ui/mixed layer structure (E1,
+                     PLAN_ENTERPRISE_REGRESSION.md) — folder placement communicates the layer to
+                     a human, an `@api`/`@ui`/`@mixed` tag on every test lets `tflw run --tag`
+                     select across it (combinable with area tags, e.g. `--tag ui,orgOps`)
+tests/api/           API-only tests, one subfolder per business area: identity/, catalog/,
+                     orders/, admin/, plus mechanics/ for DSL-mechanism demos that aren't tied to
+                     one business area (actions-and-helpers, body-types, logging, retry-and-flake)
+tests/ui/            UI-only tests (scaffolded in E1, populated in E2) — no `api` step in the
+                     asserted test body, only in `before`/`before file` setup hooks
+tests/mixed/         tests that drive the browser and assert through the API/DB together
+                     (storefront.tflw today; tests/.env-specific/webv2-admin.tflw too, tagged
+                     `@mixed` but kept under .env-specific/ for its own unrelated env-conflict
+                     reason, see below)
 tests/helpers/       JS escape-hatch helpers (page-walk, Retry-After sleep-and-retry, etc.)
 tests/shared/        actions shared across files (e.g. `create product`)
 tests/.demo-fail/    intentionally-failing fixtures, tag-gated + dot-dir-excluded from `tflw run`

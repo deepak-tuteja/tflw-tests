@@ -6,7 +6,7 @@
 // its own file since `log` is its own distinct DSL feature, mirroring verify-safety-flags.mjs's
 // own separate-script precedent.
 //
-// Drives tests/logging.tflw (three log lines: a bare `debug`, a bare `warn`, and an explicit
+// Drives tests/api/mechanics/logging.tflw (three log lines: a bare `debug`, a bare `warn`, and an explicit
 // `error ... to html`) under several `--log-output`/`--log-level` combinations and the dedicated
 // `logConfig` env (tflw.config: `log destination "console"` / `log level "warn"`), reading
 // report/results.json (recording, always complete regardless of flags) and console stdout
@@ -52,7 +52,7 @@ function logSteps() {
 
 // --- baseline: env logConfig (destination "console", level "warn"), no CLI overrides -----------
 {
-  const { stdout } = run('npx tflw run --env logConfig tests/logging.tflw --no-color');
+  const { stdout } = run('npx tflw run --env logConfig tests/api/mechanics/logging.tflw --no-color');
   const steps = logSteps();
   ok('results.json records all 3 log steps regardless of destination/level', steps.length === 3, `got ${steps.length}`);
   ok(
@@ -73,7 +73,7 @@ function logSteps() {
 
 // --- --log-level debug: lowers the render threshold for every log step, config's own included --
 {
-  const { stdout } = run('npx tflw run --env logConfig tests/logging.tflw --no-color --log-level debug');
+  const { stdout } = run('npx tflw run --env logConfig tests/api/mechanics/logging.tflw --no-color --log-level debug');
   ok('--log-level debug: the debug line now prints (threshold lowered below config)', /\[DEBUG\].*raw payload/.test(stdout));
   ok('--log-level debug: the warn line still prints', /\[WARN\].*stock check/.test(stdout));
   ok('--log-level debug: the explicit `to html` line still never reaches console', !/\[ERROR\]/.test(stdout));
@@ -81,7 +81,7 @@ function logSteps() {
 
 // --- --log-output html: bare lines' destination flips to html-only; explicit `to html` unaffected
 {
-  const { stdout } = run('npx tflw run --env logConfig tests/logging.tflw --no-color --log-output html');
+  const { stdout } = run('npx tflw run --env logConfig tests/api/mechanics/logging.tflw --no-color --log-output html');
   ok(
     '--log-output html: nothing prints to console — bare lines redirected, explicit `to html` line was already html-only',
     !/\[DEBUG\]|\[WARN\]|\[ERROR\]/.test(stdout),
@@ -94,7 +94,7 @@ function logSteps() {
 // --- --log-output console against env local (both/debug default): proves an explicit `to …` -----
 // clause always wins over a CLI override too, not just over config (SPEC.md §3.8/§12).
 {
-  const { stdout } = run('npx tflw run --env local tests/logging.tflw --no-color --log-output console');
+  const { stdout } = run('npx tflw run --env local tests/api/mechanics/logging.tflw --no-color --log-output console');
   ok('env local + --log-output console: the bare debug line prints (local default level is debug)', /\[DEBUG\].*raw payload/.test(stdout));
   ok('env local + --log-output console: the bare warn line prints', /\[WARN\].*stock check/.test(stdout));
   ok(

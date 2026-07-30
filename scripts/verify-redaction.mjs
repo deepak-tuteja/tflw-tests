@@ -33,8 +33,8 @@ function loadEnv(file) {
 
 const env = loadEnv(path.join(ROOT, '.env'));
 
-console.log('Running tests/safety-redaction.tflw ...');
-execSync('npx tflw run --env safetyRedaction tests/safety-redaction.tflw', { cwd: ROOT, stdio: 'inherit' });
+console.log('Running tests/api/identity/safety-redaction.tflw ...');
+execSync('npx tflw run --env safetyRedaction tests/api/identity/safety-redaction.tflw', { cwd: ROOT, stdio: 'inherit' });
 
 console.log('Fetching real, unredacted PII directly from the api as ground truth ...');
 const loginRes = await fetch('http://localhost:4001/v1/auth/login', {

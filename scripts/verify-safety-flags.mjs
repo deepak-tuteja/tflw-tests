@@ -2,7 +2,7 @@
 // M47 (PLAN_WEBV2_M45.md): `--forbid-insecure`/`--evidence` had *stale* coverage claims —
 // verify-cli-flags.mjs's own comment asserted both were "already covered" via CI/
 // verify-redaction.mjs/safety-redaction.tflw, but neither is actually true: `--forbid-insecure` is
-// never invoked anywhere as a real command, and `tests/safety-redaction.tflw`'s own comment points
+// never invoked anywhere as a real command, and `tests/api/identity/safety-redaction.tflw`'s own comment points
 // at `--evidence headers-only`/`--evidence none` as a *manual* verification step (PROGRESS.md's
 // M23 entry), never re-run since. Same "script it, don't trust a one-time manual check forever"
 // reasoning as verify-cli-flags.mjs/verify-redaction.mjs, split into its own file since both flags
@@ -49,7 +49,7 @@ function allApiSteps(results) {
 {
   // `insecure true` is genuinely active under mtlsSidecarNoCert (tflw.config) — the exact case
   // --forbid-insecure exists to catch before any test runs, not partway through one.
-  const { stdout, status } = run('npx tflw run --env mtlsSidecarNoCert --forbid-insecure --no-color tests/mtls.tflw');
+  const { stdout, status } = run('npx tflw run --env mtlsSidecarNoCert --forbid-insecure --no-color tests/api/identity/mtls.tflw');
   ok(
     '--forbid-insecure refuses to run when the active env has `insecure true`',
     status !== 0 && /forbid-insecure was set and env .* has `insecure true` active — refusing to run/.test(stdout),
@@ -67,7 +67,7 @@ function allApiSteps(results) {
 // --- --evidence headers-only/none: real content trimmed from the emitted report, ground-truth ---
 // checked against results.json rather than just "the flag parsed and nothing crashed".
 {
-  run('npx tflw run --env safetyRedaction --evidence headers-only --no-color tests/safety-redaction.tflw');
+  run('npx tflw run --env safetyRedaction --evidence headers-only --no-color tests/api/identity/safety-redaction.tflw');
   const results = JSON.parse(readFileSync(RESULTS_PATH, 'utf8'));
   const steps = allApiSteps(results);
   ok('--evidence headers-only: at least one api step captured', steps.length > 0);
@@ -81,7 +81,7 @@ function allApiSteps(results) {
   );
 }
 {
-  run('npx tflw run --env safetyRedaction --evidence none --no-color tests/safety-redaction.tflw');
+  run('npx tflw run --env safetyRedaction --evidence none --no-color tests/api/identity/safety-redaction.tflw');
   const results = JSON.parse(readFileSync(RESULTS_PATH, 'utf8'));
   const steps = allApiSteps(results);
   ok('--evidence none: at least one api step captured', steps.length > 0);
@@ -98,7 +98,7 @@ function allApiSteps(results) {
   // The control case: with no --evidence flag (tflw.config's own `evidence` default, "full"), the
   // real body must actually be present — otherwise the two checks above would trivially pass
   // against a tool that always omits everything, proving nothing about the flag's own effect.
-  run('npx tflw run --env safetyRedaction --no-color tests/safety-redaction.tflw');
+  run('npx tflw run --env safetyRedaction --no-color tests/api/identity/safety-redaction.tflw');
   const results = JSON.parse(readFileSync(RESULTS_PATH, 'utf8'));
   const steps = allApiSteps(results);
   ok(

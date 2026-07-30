@@ -1,0 +1,165 @@
+# http-maturity.tflw — plan_v2.md Cluster 3: ETag/If-Match optimistic concurrency, Idempotency-Key
+# on order creation, genuine 405s for verbs a resource doesn't support, a genuine 409 for a
+# reference conflict, and content negotiation (406/415). A per-test fresh admin login (M14)
+# unless a specific identity matters to the case (the cross-user Idempotency-Key conflict, which
+# needs two distinct users).
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+@httpMaturity @etag @adminOps @api
+test "product ETag: an unchanged read repeats it, and a matching If-None-Match yields 304"
+  api POST /products body { name: unique("ETag Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as id
+  capture header "etag" as etag1
+  log "product {id} created with etag {etag1}, checking If-None-Match repeats it"
+
+  api GET /products/{id}
+  expect status equals 200
+  expect header "etag" equals "{etag1}"
+
+  api GET /products/{id}
+    header "If-None-Match" is "{etag1}"
+  expect status equals 304
+
+@httpMaturity @etag @adminOps @api
+test "product If-Match: a stale ETag is rejected with 412, a fresh one succeeds"
+  api POST /products body { name: unique("Concurrency Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as id
+  capture header "etag" as etag
+
+  api PATCH /products/{id} body { price: 99 }
+    header "Authorization" is "Bearer {adminToken}"
+    header "If-Match" is "{etag}"
+  expect status equals 200
+  capture header "etag" as etag2
+
+  api PATCH /products/{id} body { price: 5 }
+    header "Authorization" is "Bearer {adminToken}"
+    header "If-Match" is "{etag}"
+  expect status equals 412
+  expect body matches subset { type: "about:blank", title: "Precondition Failed", status: 412 }
+
+  api PATCH /products/{id} body { price: 7 }
+    header "Authorization" is "Bearer {adminToken}"
+    header "If-Match" is "{etag2}"
+  expect status equals 200
+  expect body.price equals "7"
+
+@httpMaturity @statusVariety @adminOps @api
+test "a full-replace PUT on a product is a genuine 405, not a 404"
+  api POST /products body { name: unique("Immutable-shape Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as id
+
+  api PUT /products/{id} body { name: "Replaced", price: 1, stock: 1, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 405
+  expect body matches subset { type: "about:blank", title: "Method Not Allowed", status: 405 }
+
+@httpMaturity @statusVariety @adminOps @api
+test "mutating a category returns 405 — categories are read-only in this API"
+  let someId = random uuid
+  api POST /categories body { name: "New Category" }
+  expect status equals 405
+
+  api PATCH /categories/{someId} body { name: "x" }
+  expect status equals 405
+
+  api DELETE /categories/{someId}
+  expect status equals 405
+
+@httpMaturity @statusVariety @adminOps @api
+test "deleting a product still referenced by an order returns 409, not a stack trace"
+  api POST /products body { name: unique("Referenced Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+
+  api DELETE /products/{productId}
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 409
+  expect body matches subset { type: "about:blank", title: "Conflict", status: 409 }
+  expect body.detail contains "referenced"
+
+@httpMaturity @idempotency @adminOps @api
+test "Idempotency-Key: repeating the same key returns the original order, not a duplicate"
+  api POST /products body { name: unique("Idempotent Widget"), price: 10, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  # M29: an Idempotency-Key is exactly what `unique uuid` is for (collision-*guaranteed*, not just
+  # collision-allowed like `random uuid`) — matches real-world convention (Stripe et al. mint
+  # idempotency keys as UUIDs) better than the free-form `unique("order-key")` this used before.
+  let key = unique uuid
+
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+    header "Authorization" is "Bearer {adminToken}"
+    header "Idempotency-Key" is "{key}"
+  expect status equals 201
+  capture body.id as orderId
+
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+    header "Authorization" is "Bearer {adminToken}"
+    header "Idempotency-Key" is "{key}"
+  expect status equals 200
+  expect body.id equals "{orderId}"
+
+@httpMaturity @idempotency @authz @adminOps @api
+test "reusing another user's Idempotency-Key is a conflict, not a valid replay"
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as userAToken
+
+  api POST /auth/login body { email: env(USER_B_EMAIL), password: env(USER_B_PW) }
+  expect status equals 200
+  capture body.accessToken as userBToken
+
+  # A dedicated product with its own stock (M15) — the old `GET /products` + `body[0].id` grabbed
+  # *whatever* product currently sorted first in the whole catalog.
+  api POST /products body { name: unique("Cross-user Widget"), price: 10, stock: 10, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  let key = unique uuid
+
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+    header "Authorization" is "Bearer {userAToken}"
+    header "Idempotency-Key" is "{key}"
+  expect status equals 201
+
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+    header "Authorization" is "Bearer {userBToken}"
+    header "Idempotency-Key" is "{key}"
+  expect status equals 409
+
+@httpMaturity @contentNegotiation @adminOps @api
+test "requesting an unsupported representation returns 406"
+  api GET /products
+    header "Accept" is "application/xml"
+  expect status equals 406
+  expect body matches subset { type: "about:blank", title: "Not Acceptable", status: 406 }
+
+@httpMaturity @contentNegotiation @adminOps @api
+test "posting a non-JSON content type to a JSON endpoint returns 415"
+  api POST /products body text "not-json-data"
+    header "Content-Type" is "text/plain"
+  expect status equals 415
+  expect body matches subset { type: "about:blank", title: "Unsupported Media Type", status: 415 }

@@ -1,0 +1,197 @@
+# file-formats.tflw — F2 (PLAN_FILEFORMATS.md): `.tflw` coverage for the file-format parsing
+# initiative. F1 (backend: `uploads` module, multi-page order receipt, orders CSV export) already
+# shipped; this proves the new `body csv`/`body pdf text` grammar (TFLW-GAPS.md gap #19,
+# PLAN_GAPS_19.md, tflw M25) against real content this app produces/accepts: upload→download→parse
+# round-trips for all 3 formats (both the raw-stream and json-envelope response modes, on the same
+# stored bytes), a naturally-generated CSV export, a naturally multi-page PDF receipt (text
+# reachable across the page break), and the ownership/authz matrix every other resource here
+# already has. Malformed-content negative cases (the gap fix's "loud and specific error, not a
+# silent empty result" promise) live in `tests/.demo-fail/malformed-csv-upload.tflw` and
+# `malformed-pdf-upload.tflw` — a genuinely *failing* `.tflw` test has no way to stay green inside
+# this file (SPEC has no "expect this step to throw" form), so they follow this repo's own
+# established `.demo-fail/` pattern (dot-dir-excluded from `tflw run`/`check`, verified for real via
+# `scripts/verify-demofail.mjs`, same as every other intentionally-failing fixture here).
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as userAToken
+
+  api POST /auth/login body { email: env(USER_B_EMAIL), password: env(USER_B_PW) }
+  expect status equals 200
+  capture body.accessToken as userBToken
+
+@fileFormats @orderOps @api
+test "a CSV upload round-trips byte-for-byte (raw) and via the json envelope (base64 decode)"
+  api POST /uploads upload "../../payloads/sample.csv" as "file"
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  expect body.filename equals "sample.csv"
+  expect body.contentType equals "text/csv"
+  capture body.id as uploadId
+  log "upload {uploadId} stored, round-tripping it raw and via the json envelope"
+
+  api GET /uploads/{uploadId}
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  expect header "content-type" equals "text/csv; charset=utf-8"
+  expect body bytes matches file "../../payloads/sample.csv"
+
+  api GET /uploads/{uploadId}?as=json
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  expect body.filename equals "sample.csv"
+  expect body.contentType equals "text/csv"
+  # `base64 encode(...)` as an inline matcher value (not stored via `let` first) — compares the
+  # server-returned envelope against a client-computed encode of the exact original file content,
+  # proving the same stored bytes both ways without a lossy UTF-8 `base64 decode(...)` round-trip.
+  expect body.contentBase64 equals base64 encode("name,qty,note\nWidget,3,first row\nGadget,1,second row\n")
+
+@fileFormats @orderOps @api
+test "a TXT upload round-trips byte-for-byte (raw) and via the json envelope (base64 decode)"
+  api POST /uploads upload "../../payloads/sample.txt" as "file"
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  expect body.contentType equals "text/plain"
+  capture body.id as uploadId
+
+  api GET /uploads/{uploadId}
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  expect body bytes matches file "../../payloads/sample.txt"
+
+  api GET /uploads/{uploadId}?as=json
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  expect body.contentBase64 equals base64 encode("Plain text upload fixture.\nSecond line.\n")
+
+@fileFormats @orderOps @api
+test "a PDF upload round-trips byte-for-byte (raw), and the json envelope carries the same content"
+  api POST /uploads upload "../../payloads/sample.pdf" as "file"
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  expect body.contentType equals "application/pdf"
+  capture body.id as uploadId
+
+  api GET /uploads/{uploadId}
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  expect body bytes matches file "../../payloads/sample.pdf"
+  expect body pdf text contains "Hello from a test PDF fixture"
+
+  api GET /uploads/{uploadId}?as=json
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  expect body.filename equals "sample.pdf"
+  expect body.contentType equals "application/pdf"
+  # base64 length is deterministic for a fixed-size file (671 bytes -> 896 base64 chars) — proves
+  # the json envelope carries the whole file, without a `base64 decode(...)` round-trip through a
+  # lossy UTF-8 string (fine for CSV/TXT above, not for a binary PDF's own compressed bytes).
+  expect body.contentBase64 has count 896
+
+@fileFormats @orderOps @api
+test "body csv addresses rows/columns of an uploaded CSV directly, with any/all over it"
+  api POST /uploads upload "../../payloads/sample.csv" as "file"
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as uploadId
+
+  api GET /uploads/{uploadId}
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  expect body csv has count 2
+  expect body csv[0].name equals "Widget"
+  expect body csv[1].note equals "second row"
+  expect any body csv.name equals "Gadget"
+  expect all body csv.qty not equals ""
+
+@fileFormats @orders @orderOps @api
+test "the orders CSV export is a naturally-generated body csv target, admin-only"
+  api POST /products body { name: unique("CSV Export Widget"), price: 12, stock: 10, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as orderId
+
+  api GET /orders/export
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  expect header "content-type" equals "text/csv; charset=utf-8"
+  expect any body csv.id equals "{orderId}"
+
+  api GET /orders/export
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 403
+
+@fileFormats @orderOps @api
+test "a naturally multi-page order receipt's text is reachable across the page break"
+  api POST /products body { name: unique("Pagination Filler"), price: 3, stock: 5000, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /orders body from "../../payloads/receipt-pagination-order.json"
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as orderId
+  expect body.items has count 45
+
+  api GET /orders/{orderId}/receipt
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  # PAGE_LINE_BUDGET is 40 lines/page (order-receipt.util.ts); 45 items + 5 header lines + 2
+  # trailing (blank + Total) = 52 lines -> 2 real pages, not a contrived minimum-viable fixture.
+  # Page 1 opens with the header text; the Total line only exists on page 2 (extracted text joins
+  # pages with a blank line, so this is only reachable if the extractor actually walked /Kids past
+  # the first page, not just page one).
+  expect body pdf text contains "ORDER RECEIPT"
+  expect body pdf text contains "Total: $135.00"
+
+@fileFormats @authz @orderOps @api
+test "an upload is scoped exactly like every other owned resource here"
+  api POST /uploads upload "../../payloads/sample.txt" as "file"
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as uploadId
+
+  api GET /uploads/{uploadId}
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 403
+
+  api GET /uploads/{uploadId}
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+
+@fileFormats @orderOps @api
+test "an upload for a nonexistent id is a clean 404"
+  let uploadId = random uuid
+  api GET /uploads/{uploadId}
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 404
+
+@fileFormats @auth @orderOps @api
+test "fetching or creating an upload without auth is rejected"
+  api POST /uploads upload "../../payloads/sample.txt" as "file"
+  expect status equals 401
+
+  api GET /uploads/00000000-0000-0000-0000-000000000000
+  expect status equals 401
+
+@fileFormats @orderOps @api
+test "an unsupported upload content-type is rejected with a clean 400"
+  api POST /uploads upload "../../payloads/sample.png" as "file"
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 400
+  expect body.detail contains "unsupported content type"

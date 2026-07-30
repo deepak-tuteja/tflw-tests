@@ -1,0 +1,33 @@
+# data-tables.tflw — `with each` (SPEC §4.3), inline and file-backed, one reported case per row.
+# `{categoryId}` isn't a table column — it resolves from the enclosing `before` hook's capture,
+# same as any other in-scope variable, since a fresh Postgres means product creation needs a real
+# category id rather than the old API's free-text `category` string.
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+@crud @tables @catalogOps @api
+with each
+  | name        | price | stock |
+  | "Table Pen" | 1.5   | 20    |
+  | "Table Mug" | 6     | 15    |
+test "creates {name} via an inline data table"
+  api POST /products body { name: {name}, price: {price}, stock: {stock}, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  expect body.stock equals {stock}
+  log "row {name} created via inline data table, stock {stock}"
+
+@crud @tables @catalogOps @api
+with each from "../../data/products.json"
+test "creates {name} via a file-backed data table"
+  api POST /products body { name: {name}, price: {price}, stock: {stock}, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  expect body.name equals "{name}"

@@ -59,7 +59,7 @@ jobs:
 
       # `playwright` (this repo's own devDependency, just installed above) has no postinstall
       # browser-download hook — without this, every webV2 browser test (the `full suite` and
-      # `--tag adminOps` phases discover tests/webv2-storefront.tflw) fails with "Executable
+      # `--tag adminOps` phases discover tests/mixed/storefront.tflw) fails with "Executable
       # doesn't exist", confirmed on the first CI run after M7/webV2's suite actually landed on
       # main (run 30316658886; mirrors the same fix in tflw's own ci.yml). Chromium only — this
       # suite never exercises `--browser firefox`/`webkit`.

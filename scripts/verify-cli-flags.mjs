@@ -40,7 +40,7 @@ function run(cmd, opts = {}) {
 // --- --now: pins the run's notion of "now" to an exact instant --------------------------------
 {
   const pinned = '2027-05-01T00:00:00.000Z';
-  const { stdout } = run(`npx tflw run tests/mtls.tflw --env mtlsSidecar --now ${pinned} --seed 42 --no-color`);
+  const { stdout } = run(`npx tflw run tests/api/identity/mtls.tflw --env mtlsSidecar --now ${pinned} --seed 42 --no-color`);
   ok('--now pins the printed run instant exactly', stdout.includes(`now ${pinned}`), stdout.trim().split('\n').pop());
 }
 
@@ -96,7 +96,7 @@ function run(cmd, opts = {}) {
 
 // --- --format ndjson: report/events.ndjson is valid line-delimited JSON with the right shape ---
 {
-  run('npx tflw run tests/mtls.tflw --env mtlsSidecar --format ndjson --no-color');
+  run('npx tflw run tests/api/identity/mtls.tflw --env mtlsSidecar --format ndjson --no-color');
   const lines = readFileSync(path.join(REPORT_DIR, 'events.ndjson'), 'utf8').trim().split('\n');
   let allValid = true;
   const types = new Set();
@@ -130,7 +130,7 @@ import pty, os
 pid, fd = pty.fork()
 if pid == 0:
     os.chdir(${JSON.stringify(ROOT)})
-    os.execvp('npx', ['npx', 'tflw', 'run', 'tests/mtls.tflw', '--env', 'mtlsSidecar', '--log-file', ${JSON.stringify(logFilePath)}])
+    os.execvp('npx', ['npx', 'tflw', 'run', 'tests/api/identity/mtls.tflw', '--env', 'mtlsSidecar', '--log-file', ${JSON.stringify(logFilePath)}])
 else:
     output = b''
     while True:
@@ -163,8 +163,8 @@ else:
 // --- --no-timestamps: omits the HH:MM:SS.mmm prefix every console line otherwise gets ----------
 {
   const TIMESTAMP_RE = /^\d{2}:\d{2}:\d{2}\.\d{3} /m;
-  const { stdout: withTimestamps } = run('npx tflw run tests/mtls.tflw --env mtlsSidecar --no-color');
-  const { stdout: withoutTimestamps } = run('npx tflw run tests/mtls.tflw --env mtlsSidecar --no-color --no-timestamps');
+  const { stdout: withTimestamps } = run('npx tflw run tests/api/identity/mtls.tflw --env mtlsSidecar --no-color');
+  const { stdout: withoutTimestamps } = run('npx tflw run tests/api/identity/mtls.tflw --env mtlsSidecar --no-color --no-timestamps');
   ok('default output has an HH:MM:SS.mmm prefix', TIMESTAMP_RE.test(withTimestamps));
   ok('--no-timestamps omits the prefix', !TIMESTAMP_RE.test(withoutTimestamps));
 }
