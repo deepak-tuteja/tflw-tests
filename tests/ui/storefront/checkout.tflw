@@ -1,0 +1,33 @@
+# E2 (PLAN_ENTERPRISE_REGRESSION.md): pure UI-only backfill for the checkout happy path — every
+# checkout in `tests/mixed/storefront.tflw` walks there via its own UI add-to-cart step first; this
+# isolates the payment-iframe + confirmation flow alone. Per decision 5, the cart is seeded via a
+# real API call in `before` (setup, not assertion) rather than by clicking "Add to cart" — that
+# interaction already has its own dedicated coverage in `add-to-cart.tflw`. The flush-then-seed
+# order mirrors `tests/mixed/storefront.tflw`'s own "cart rows are drag-drop reorderable" test: user
+# A's cart is a real, persistent server-side resource (SPEC §10) that can carry state over from
+# whichever other file ran before this one in the same suite invocation — flushing first makes this
+# test's own assertions self-contained regardless of suite composition/order.
+
+import "../../shared/webv2-checkout.tflw"
+import "../../shared/webv2-login.tflw"
+
+before
+  api GET /products?q=Clean%20Code&pageSize=1
+  expect status equals 200
+  capture body[0].id as cleanCodeId
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as seedToken
+  api POST /cart/checkout
+    header "Authorization" is "Bearer {seedToken}"
+  # a 422 "cart is empty" here is expected and fine when nothing carried over from an earlier file.
+  api POST /cart/items body { productId: {cleanCodeId}, quantity: 1 }
+    header "Authorization" is "Bearer {seedToken}"
+  expect status equals 201
+
+@ui @orderOps
+test "the payment iframe checkout flow completes to a confirmed order, given an already-seeded cart"
+  login(env(USER_A_EMAIL), env(USER_A_PW))
+  open "/cart"
+  expect css "th[scope='row']:text-is('Clean Code')" is visible
+  checkout()

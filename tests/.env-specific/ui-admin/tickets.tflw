@@ -1,0 +1,39 @@
+# E2 (PLAN_ENTERPRISE_REGRESSION.md): pure UI-only backfill for the tickets list/detail views,
+# isolated from `.env-specific/webv2-admin.tflw`'s existing mixed tests — those cover an *admin*
+# assigning a ticket to a named agent, and a Status-filter-plus-isInternal-checkbox combo. Neither
+# ever exercises **Claim** (`tickets.js`'s own self-service assignment path, only ever available to
+# an agent on a still-unclaimed ticket) — genuinely new coverage this file adds. Seeded via a real
+# API call in `before` (decision 5): a fresh ticket, left unassigned on purpose.
+
+import "../../shared/webv2-admin-login.tflw"
+
+before
+  api POST /auth/login body { email: env(USER_B_EMAIL), password: env(USER_B_PW) }
+  expect status equals 200
+  capture body.accessToken as userBToken
+  api POST /tickets body { subject: unique("UI Claim Flow Ticket"), description: "Package shows delivered but never arrived." }
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 201
+  capture body.subject as ticketSubject
+
+@ui @adminOps @orderOps
+test "the tickets list's Status filter finds the fresh open ticket"
+  adminLogin(env(ADMIN_EMAIL), env(ADMIN_PW))
+  within css "nav"
+    click text "Tickets"
+  select "open" from field "Status"
+  click button "Filter"
+  expect text "{ticketSubject}" is visible
+
+@ui @adminOps @orderOps
+test "an agent claims an unassigned ticket, then starts and resolves it"
+  adminLogin(env(AGENT_A_EMAIL), env(AGENT_A_PW))
+  within css "nav"
+    click text "Tickets"
+  click text "{ticketSubject}"
+  click button "Claim"
+  expect css ".badge:text-is('open')" is visible
+  click button "Start"
+  expect css ".badge:text-is('in_progress')" is visible
+  click button "Resolve"
+  expect css ".badge:text-is('resolved')" is visible

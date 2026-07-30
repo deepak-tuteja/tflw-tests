@@ -1,0 +1,18 @@
+# E2 (PLAN_ENTERPRISE_REGRESSION.md): pure UI-only backfill for the read-only category tree view.
+# apiV2's seed data always has a real 3-level tree (Electronics > Audio > Headphones,
+# `apiV2/src/seed/seed.ts`), so nothing needs seeding here. See `login.tflw`'s header comment for
+# why this lives under `.env-specific/`.
+
+import "../../shared/webv2-admin-login.tflw"
+
+@ui @adminOps
+test "the categories tree renders its seeded 3-level hierarchy"
+  adminLogin(env(ADMIN_EMAIL), env(ADMIN_PW))
+  # the dashboard's own link list repeats the same nav text (`dashboard.tflw`'s own note) — scope
+  # the click to the persistent top nav specifically to avoid that ambiguity.
+  within css "nav"
+    click text "Categories"
+  expect css "h1:text-is('Categories')" is visible
+  expect text "Electronics" is visible
+  expect text "Audio" is visible
+  expect text "Headphones" is visible

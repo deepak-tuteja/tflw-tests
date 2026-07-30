@@ -1,0 +1,40 @@
+# E2 (PLAN_ENTERPRISE_REGRESSION.md): pure UI-only backfill for the products list's own navigation
+# — `.env-specific/webv2-admin.tflw`'s existing mixed test already covers the Category-select +
+# Search combo on a freshly created product; this file adds genuinely new coverage instead of
+# repeating that: plain Search alone, and the list's own Previous/Next pagination links, which no
+# test anywhere in this suite had ever clicked before (apiV2's seed data — 125 products at
+# `PAGE_SIZE = 15` — already guarantees more than one page with zero setup needed here).
+
+import "../../shared/webv2-admin-login.tflw"
+
+before
+  api GET /products?page=1&pageSize=15
+  expect status equals 200
+  capture body.data[0].name as page1FirstName
+
+@ui @adminOps @catalogOps
+test "the Search field alone narrows the products list down to one row"
+  adminLogin(env(ADMIN_EMAIL), env(ADMIN_PW))
+  within css "nav"
+    click text "Products / Moderation"
+  fill field "Search" with "Mechanical Keyboard"
+  click button "Filter"
+  expect css "table tbody tr" has count 1
+  expect text "Mechanical Keyboard" is visible
+
+@ui @adminOps @catalogOps
+test "the products list's pagination genuinely moves between pages"
+  adminLogin(env(ADMIN_EMAIL), env(ADMIN_PW))
+  within css "nav"
+    click text "Products / Moderation"
+  expect text "Page 1 of" is visible
+  # a bare `text "{page1FirstName}"` is a substring match (SPEC §9.3) — "Bulk Item 1" alone would
+  # also match "Bulk Item 112"/"113"/… on the next page, so this scopes to the row link's exact
+  # text instead, same ambiguity-avoidance every other test in this suite uses for bulk-catalog
+  # product names.
+  click text "Next"
+  expect text "Page 2 of" is visible
+  expect css "table tbody td a:text-is('{page1FirstName}')" is hidden
+  click text "Previous"
+  expect text "Page 1 of" is visible
+  expect css "table tbody td a:text-is('{page1FirstName}')" is visible

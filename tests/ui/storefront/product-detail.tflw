@@ -1,0 +1,16 @@
+# E2 (PLAN_ENTERPRISE_REGRESSION.md): pure UI-only backfill for the product detail page — every
+# scenario in `tests/mixed/storefront.tflw` that reaches this page immediately does something else
+# on it (add to cart, open a frame, …); this isolates the page itself: reached via a real catalog
+# row link (not a hardcoded `open "/products/{id}"`), showing name/price/stock and nothing more. No
+# `api` step in the test body (decision 5) — the seed catalog already has a stable, uniquely-named
+# product to search for.
+
+@ui @catalogOps
+test "opening a product from its catalog row shows its name, price, and stock"
+  open "/"
+  fill field "Search" with "Mechanical Keyboard"
+  click text "Mechanical Keyboard"
+  within css "#product-heading"
+    expect text "Mechanical Keyboard" is visible
+  expect text "$79.99" is visible
+  expect text "40 in stock" is visible

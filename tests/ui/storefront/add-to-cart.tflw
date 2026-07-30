@@ -1,0 +1,16 @@
+# E2 (PLAN_ENTERPRISE_REGRESSION.md): pure UI-only backfill for the catalog's row-scoped
+# add-to-cart action — `tests/mixed/storefront.tflw`'s own row-scoped test (on "Bulk Item 100")
+# folds this together with a `screenshot` call; this isolates the add-to-cart interaction and its
+# async toast alone, on a different named product ("French Press") to avoid any incidental overlap
+# with that file's own cart state. No `api` step in the test body (decision 5).
+
+import "../../shared/webv2-login.tflw"
+
+@ui @catalogOps
+test "row-scoped add-to-cart on the catalog shows its async toast"
+  login(env(USER_A_EMAIL), env(USER_A_PW))
+  open "/"
+  fill field "Search" with "French Press"
+  within css "[aria-label='French Press']"
+    click button "Add to cart"
+  expect text "Added 1 × French Press to your cart." is visible

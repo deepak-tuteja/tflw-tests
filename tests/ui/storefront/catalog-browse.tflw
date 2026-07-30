@@ -1,0 +1,26 @@
+# E2 (PLAN_ENTERPRISE_REGRESSION.md): pure UI-only backfill for catalog browse/search — folded
+# into larger scenarios throughout `tests/mixed/storefront.tflw` (every scenario there `open`s a
+# product page directly rather than exercising the search/filter/browse-all controls in their own
+# right). No `api` step in either test body (decision 5) — the seed catalog (apiV2's own bulk
+# products + fixed category set) is enough on its own; nothing needs to be created first. Neither
+# test logs in — the home catalog and the windowed all-products view are both public routes
+# (`webV2/src/App.tsx`), so this is genuinely unauthenticated browsing, not an oversight.
+
+@ui @catalogOps
+test "searching and filtering the home catalog by category, isolated from any cart action"
+  open "/"
+  select "Books" from field "Category"
+  fill field "Search" with "Wireless Mouse"
+  expect css ".product-grid li" has count 0
+  select "Electronics" from field "Category"
+  expect css ".product-grid li" has count 1
+  expect text "Wireless Mouse" is visible
+
+@ui @catalogOps
+test "the 'Browse all products' link opens the windowed all-products view, which filters via its own field"
+  open "/"
+  click text "Browse all products (windowed list)"
+  expect text "Browse all products" is visible
+  fill field "Filter products…" with "Bulk Item 100"
+  expect css ".virtual-list-row" has count 1
+  expect text "Bulk Item 100" is visible

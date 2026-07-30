@@ -1,0 +1,30 @@
+# E2 (PLAN_ENTERPRISE_REGRESSION.md): pure UI-only backfill for review submission — the mixed
+# file's own review test folds a duplicate-409 case in with the first submission on a fixed seeded
+# product ("Bulk Item 1"); this isolates the submission flow alone, against a fresh `unique(...)`
+# product created via the API in `before` (decision 5) so this test can rerun against a live stack
+# without ever hitting that product's own "already reviewed" state.
+
+import "../../shared/webv2-login.tflw"
+
+before
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+  api GET /categories
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  capture body[0].id as categoryId
+  api POST /products body { name: unique("UI Review Widget"), price: 9.99, stock: 10, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+@ui @catalogOps
+test "submitting a star-rating review through the shadow-DOM widget shows it in the list"
+  login(env(USER_A_EMAIL), env(USER_A_PW))
+  open "/products/{productId}/reviews"
+  within css "star-rating:not([readonly])"
+    click button "4 stars"
+  fill field "Comment (optional)" with "Solid, does the job."
+  click button "Submit review"
+  expect text "Solid, does the job." is visible

@@ -1,0 +1,16 @@
+# E2 (PLAN_ENTERPRISE_REGRESSION.md): the Support page's own top-level nav destination — the mixed
+# file's version of this test already has zero `api` steps in its body (only its shared `login()`
+# action), so it was already accidentally UI-only in execution despite living in a `@mixed` file;
+# this is its deliberate, isolated home in `tests/ui/`, reached by clicking the nav link itself
+# ("Support") rather than a hardcoded `open "/support"`, which no existing test does.
+
+import "../../shared/webv2-login.tflw"
+
+@ui
+test "navigating to Support via the top nav and dropping a file uploads it"
+  login(env(USER_A_EMAIL), env(USER_A_PW))
+  open "/"
+  click text "Support"
+  fill field "Subject" with "E2 UI-only dogfood upload"
+  drop file "../../payloads/sample.csv" onto css ".drop-zone"
+  expect text "sample.csv" is visible

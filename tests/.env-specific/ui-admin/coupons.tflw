@@ -1,0 +1,22 @@
+# E2 (PLAN_ENTERPRISE_REGRESSION.md): pure UI-only backfill for the coupon creation form, isolated
+# from `.env-specific/webv2-admin.tflw`'s existing mixed test — that test creates a "fixed"-type
+# coupon; this one creates a "percent"-type coupon instead, so the suite has real coverage of both
+# branches of the Type <select> rather than just re-asserting the same one.
+
+import "../../shared/webv2-admin-login.tflw"
+
+@ui @adminOps
+test "creating a percent-type coupon through the form shows its confirmation table"
+  adminLogin(env(ADMIN_EMAIL), env(ADMIN_PW))
+  within css "nav"
+    click text "Coupons"
+  select "percent" from field "Type"
+  fill form
+    | "Code"                                             | unique("UIPercentCoupon") |
+    | "Value (percent: 0-100, fixed: currency amount)"    | "15"                     |
+    | "Expires at"                                        | "2027-06-01T10:00"       |
+    | "Minimum order amount"                              | "0"                      |
+    | "Usage limit"                                       | "10"                     |
+  click button "Create coupon"
+  expect css "tr:has(th:text-is('type')) td:text-is('percent')" is visible
+  expect css "tr:has(th:text-is('value')) td:text-is('15')" is visible

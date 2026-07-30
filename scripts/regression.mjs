@@ -112,6 +112,14 @@ const PHASES = [
   // unbroken token (a JWT) — fixed upstream in tflw, re-proven here against the real vendored
   // build's actual output, not just tflw's own unit test.
   { name: 'report-overflow-check', cmd: 'node scripts/verify-report-no-overflow.mjs' },
+  // E2 (PLAN_ENTERPRISE_REGRESSION.md): `tests/.env-specific/ui-admin/`'s new UI-only admin
+  // console tests need their own `--env webv2Admin` phase for the same reason the file it lives
+  // alongside (`webv2-admin.tflw`) needs `env webv2Admin` at all — the default `env local`'s `web`
+  // base points at the storefront's :8090, not this console's :8091.
+  {
+    name: 'ui-admin-check',
+    cmd: ['npx', 'tflw', 'run', '--no-color', ...CI_VERBOSE, '--env', 'webv2Admin', 'tests/.env-specific/ui-admin/*.tflw'].join(' '),
+  },
 ];
 
 function run(cmd, opts = {}) {

@@ -1,0 +1,32 @@
+# E2 (PLAN_ENTERPRISE_REGRESSION.md): pure UI-only backfill for the storefront's login form —
+# `tests/mixed/storefront.tflw`'s `login()` shared action exercises the *successful* path as setup
+# for every other scenario there, but no test in this suite ever isolates the login screen itself,
+# and its inline-error rendering path (a wrong password) has never been exercised at all — a real,
+# previously-untested gap this file closes. No `api` step appears in any test body below (decision
+# 5) — only real UI interactions and assertions on what the page renders.
+
+@ui @identityOps
+test "logging in via the UI form grants access, and logging out returns to a logged-out state"
+  open "/login"
+  fill form
+    | "Email"    | env(USER_A_EMAIL) |
+    | "Password" | env(USER_A_PW)    |
+  click button "Log in"
+  expect button "Log out" is visible
+  click button "Log out"
+  expect button "Log out" is hidden
+  # the storefront's own `Log in` nav link and the login form's `Log in` submit button render the
+  # same text simultaneously once logged out on this very page — `css` sidesteps that ambiguity
+  # (SPEC §9.3's own escape hatch) rather than a bare `text "Log in"`/`button "Log in"` guess.
+  expect css "nav a:text-is('Log in')" is visible
+
+@ui @identityOps
+test "a wrong password shows an inline error and leaves the user logged out"
+  open "/login"
+  fill form
+    | "Email"    | env(USER_A_EMAIL) |
+    | "Password" | "definitely-wrong-password" |
+  click button "Log in"
+  expect text "invalid email or password" is visible
+  expect button "Log out" is hidden
+  expect css "nav a:text-is('Log in')" is visible

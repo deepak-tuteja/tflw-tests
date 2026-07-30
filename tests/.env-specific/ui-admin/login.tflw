@@ -1,0 +1,49 @@
+# E2 (PLAN_ENTERPRISE_REGRESSION.md): pure UI-only backfill for the SSR admin console's login
+# screen. **Lives under `tests/.env-specific/`, not a plain `tests/ui/admin/`** — same reason
+# `tests/.env-specific/webv2-admin.tflw` does (E1's own comment, carried forward here): `env`
+# selection is one value for the whole `tflw run` invocation (SPEC §3.1), and this console's `web`
+# base (:8091) conflicts with the storefront's default `web` base (:8090) that `env local` points at
+# — both apps even share the literal route `/login`, so a plain discoverable `tests/ui/admin/`
+# folder would silently run these against the *wrong* app under the default env, exactly the
+# confirmed failure mode E1's carried-forward comment describes. Run via `npm run test:ui-admin`
+# (`tflw run --env webv2Admin tests/.env-specific/ui-admin/`), not part of the default `npm test`
+# run — mirrors `test:webv2-admin` exactly, one folder instead of one file.
+#
+# The successful path is already implicit setup in every other `.env-specific/webv2-admin.tflw`
+# test; the two negative paths below are genuinely new — neither a wrong password nor a non-admin/
+# agent role's rejection (`auth.js`'s own console-gating check) had ever been exercised through the
+# UI before this file.
+
+@ui @adminOps
+test "logging in as admin reaches the dashboard, and logging out returns to the login screen"
+  open "/login"
+  fill form
+    | "Email"    | env(ADMIN_EMAIL) |
+    | "Password" | env(ADMIN_PW)    |
+  click button "Log in"
+  expect button "Log out" is visible
+  # the nav's own "Dashboard" link and this page's `<h1>Dashboard</h1>` render the same exact text
+  # simultaneously — scope to the heading specifically, same ambiguity-avoidance SPEC §9.3 expects.
+  expect css "h1:text-is('Dashboard')" is visible
+  click button "Log out"
+  expect button "Log in" is visible
+
+@ui @adminOps
+test "a wrong password shows an inline error and leaves the user logged out"
+  open "/login"
+  fill form
+    | "Email"    | env(ADMIN_EMAIL) |
+    | "Password" | "definitely-wrong-password" |
+  click button "Log in"
+  expect text "invalid email or password" is visible
+  expect button "Log in" is visible
+
+@ui @adminOps
+test "a plain USER account is rejected from this console with its own dedicated message"
+  open "/login"
+  fill form
+    | "Email"    | env(USER_A_EMAIL) |
+    | "Password" | env(USER_A_PW)    |
+  click button "Log in"
+  expect text "This console is for admin/agent accounts only." is visible
+  expect button "Log in" is visible

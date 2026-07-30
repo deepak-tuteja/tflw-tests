@@ -34,8 +34,15 @@ tests/               .tflw test files, split into a real api/ui/mixed layer stru
 tests/api/           API-only tests, one subfolder per business area: identity/, catalog/,
                      orders/, admin/, plus mechanics/ for DSL-mechanism demos that aren't tied to
                      one business area (actions-and-helpers, body-types, logging, retry-and-flake)
-tests/ui/            UI-only tests (scaffolded in E1, populated in E2) — no `api` step in the
-                     asserted test body, only in `before`/`before file` setup hooks
+tests/ui/            UI-only tests (E2, PLAN_ENTERPRISE_REGRESSION.md) — no `api` step in the
+                     asserted test body, only in `before`/`before file` setup hooks; storefront/
+                     backfill lives at tests/ui/storefront/ (login, catalog browse/search, product
+                     detail, add-to-cart, checkout, review submission, support, a11y-demo — every
+                     top-level nav destination the storefront exposes). The admin console's
+                     UI-only backfill is NOT here — see tests/.env-specific/ui-admin/ below; it
+                     needs the admin console's own `web` base (:8091), which conflicts with this
+                     folder's default `env local` (:8090), the same env-conflict reason
+                     `tests/.env-specific/webv2-admin.tflw` already has its own dedicated home.
 tests/mixed/         tests that drive the browser and assert through the API/DB together
                      (storefront.tflw today; tests/.env-specific/webv2-admin.tflw too, tagged
                      `@mixed` but kept under .env-specific/ for its own unrelated env-conflict
@@ -45,7 +52,9 @@ tests/shared/        actions shared across files (e.g. `create product`)
 tests/.demo-fail/    intentionally-failing fixtures, tag-gated + dot-dir-excluded from `tflw run`
 tests/.checkonly/    invalid-syntax fixtures, demonstrated via `tflw check <file>` only
 tests/.env-specific/ passing tests whose assertions only hold under a non-default env (M25),
-                     dot-dir-excluded from `tflw run`/`tflw check` for the same reason
+                     dot-dir-excluded from `tflw run`/`tflw check` for the same reason; also home
+                     to ui-admin/ (E2) — the SSR admin console's own UI-only backfill, run via
+                     `npm run test:ui-admin` (`--env webv2Admin`), same reason as webv2-admin.tflw
 tflw.config          services, sessions, env, `defaults: timeout wait 5s`
 vendor/              npm-packed tflw tarball (regenerated, not committed)
 scripts/             refresh-tflw.mjs
@@ -58,10 +67,11 @@ TFLW-FEATURE-GAPS.md genuine tflw DSL gaps found while building the v1 (plain-No
 cp .env.example .env   # Postgres creds, JWT secrets, seeded admin/userA/userB/OAuth-client credentials
 node cli.mjs start     # docker compose up -d --build --wait (postgres + api :4001 + nginx TLS sidecar + webV2 :8090)
 npm run refresh-tflw   # packs ../testFlow/packages/cli and installs the tarball
-npx tflw run           # runs tests/*.tflw against the running api
-npm run test:mtls      # runs tests/mtls.tflw against the sidecar's mTLS-requiring listener (own env, M22)
+npx tflw run           # runs the whole tests/ tree (api/ui/mixed) against the running api
+npm run test:mtls      # runs tests/api/identity/mtls.tflw against the sidecar's mTLS-requiring listener (own env, M22)
 npm run test:mtls-rejection  # runs .env-specific/mtls-rejection.tflw — no client cert, real rejection (M25)
-npm run test:safety    # runs tests/safety-redaction.tflw with `redact` active (own env, M23)
+npm run test:safety    # runs tests/api/identity/safety-redaction.tflw with `redact` active (own env, M23)
+npm run test:ui-admin  # runs tests/.env-specific/ui-admin/*.tflw against the SSR admin console (own env, E2)
 node cli.mjs stop      # docker compose down -v — drops the DB too (ephemeral per-run isolation)
 ```
 

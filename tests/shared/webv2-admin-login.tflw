@@ -1,0 +1,17 @@
+# Shared action (P#17, M6 CallStmt), added for E2 (PLAN_ENTERPRISE_REGRESSION.md): the SSR admin
+# console's own login form, mirroring `shared/webv2-login.tflw`'s storefront equivalent one level
+# up. `webv2-admin.tflw` (pre-E2) never extracted this itself — it repeats the same 4-line block
+# inline 6 times — but E2 adds 7 new files that all need it, so the DRY case is real here even
+# though it wasn't retrofitted onto the older file (out of scope for E2's own additions).
+#
+# Ends on the same real settle signal as the storefront's `login()` — `Log out` only renders once
+# the server session round-trips through `GET /` (server.js's `requireAuth` + `currentUser` locals)
+# — not just "the click landed".
+
+action adminLogin(email, password)
+  open "/login"
+  fill form
+    | "Email"    | {email}    |
+    | "Password" | {password} |
+  click button "Log in"
+  expect button "Log out" is visible

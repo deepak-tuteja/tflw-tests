@@ -1,0 +1,31 @@
+# E2 (PLAN_ENTERPRISE_REGRESSION.md): pure UI-only backfill for the dashboard's own nav
+# destination — every existing mixed test starts from `/login` and immediately navigates elsewhere;
+# nothing ever pauses on the dashboard itself. Also proves the admin-only nav gating (`nav.ejs`'s
+# `currentUser.role === 'admin'` check) from an agent's own point of view, not just admin's — no
+# existing test in this suite had ever logged an agent into this console's UI at all before this.
+# See `login.tflw`'s own header comment for why this lives under `.env-specific/`, not a plain
+# `tests/ui/admin/`.
+
+import "../../shared/webv2-admin-login.tflw"
+
+@ui @adminOps
+test "the dashboard lists every nav destination an admin has, including the admin-only links"
+  adminLogin(env(ADMIN_EMAIL), env(ADMIN_PW))
+  # the persistent top nav (`nav.ejs`) and the dashboard's own `<ul>` both render a link with the
+  # exact same text ("Categories", "Products / Moderation", …) — `within` scopes every assertion
+  # below to the dashboard's own list, sidestepping that real duplicate-text ambiguity.
+  within css "ul"
+    expect text "Categories" is visible
+    expect text "Products / Moderation" is visible
+    expect text "Tickets" is visible
+    expect text "Coupons" is visible
+    expect text "Download orders CSV" is visible
+
+@ui @adminOps
+test "an agent sees the same core nav, but not the admin-only Coupons link"
+  adminLogin(env(AGENT_A_EMAIL), env(AGENT_A_PW))
+  within css "ul"
+    expect text "Categories" is visible
+    expect text "Products / Moderation" is visible
+    expect text "Tickets" is visible
+    expect text "Coupons" is hidden

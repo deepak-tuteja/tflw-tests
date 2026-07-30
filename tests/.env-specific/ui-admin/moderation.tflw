@@ -1,0 +1,42 @@
+# E2 (PLAN_ENTERPRISE_REGRESSION.md): pure UI-only backfill for the product detail page's
+# moderation (review-reply) form, isolated from `.env-specific/webv2-admin.tflw`'s existing mixed
+# test — that test also drives the ticket lifecycle and the products-list select in the same file;
+# this is the moderation reply alone, reached via the products list rather than a hardcoded
+# `open "/products/{id}"`. Seeded via real API calls in `before` (decision 5): a fresh product and
+# a fresh review on it, so the reply form always starts from a real "unreplied" state.
+
+import "../../shared/webv2-admin-login.tflw"
+
+before
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+  api GET /categories
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  capture body[0].id as categoryId
+  api POST /products body { name: unique("UI Moderation Widget"), price: 9.99, stock: 5, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+  capture body.name as productName
+
+  api POST /auth/login body { email: env(USER_B_EMAIL), password: env(USER_B_PW) }
+  expect status equals 200
+  capture body.accessToken as userBToken
+  api POST /products/{productId}/reviews body { rating: 2, comment: "Packaging was damaged." }
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 201
+
+@ui @adminOps
+test "replying to a review through the product detail's moderation form"
+  adminLogin(env(ADMIN_EMAIL), env(ADMIN_PW))
+  within css "nav"
+    click text "Products / Moderation"
+  fill field "Search" with "{productName}"
+  click button "Filter"
+  click text "{productName}"
+  expect text "Packaging was damaged." is visible
+  fill field "Reply" with "Sorry about that — replacement shipped free of charge."
+  click button "Post reply"
+  expect css "p:has-text('Sorry about that — replacement shipped free of charge.')" is visible
