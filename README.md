@@ -90,24 +90,27 @@ node cli.mjs stop      # docker compose down -v — drops the DB too (ephemeral 
 
 Or use the `testflow-tests-app` skill to start/stop the stack.
 
-### Full regression sweep (M21, updated through E4)
+### Full regression sweep (M21, updated through E5)
 
 `npm run regression` — the thorough check to run after any change to apiV2, inventory-service, or
 `tests/*.tflw`: the full suite, each feature-area tag alone (`identityOps`/`catalogOps`/
-`orderOps`/`adminOps`/`orgOps`/`inventoryOps` — E4's 6th), `@smoke` alone, each `smoke,<area>`
-cross-axis combo, then a run of `*-check`/`*-rejection` phases proving specific CLI verbs/flags/
-fixtures that ad-hoc manual runs used to be the only evidence for: `mtls-rejection`,
-`safety-redaction-check`, `demo-fail-check`, `cli-flags-check`, `migrate-check`, `watch-check`,
-`safety-flags-check`, `check-diagnostics`, `pick-check`, `logging-check`, `report-overflow-check`,
-`ui-admin-check` (E2 + E3's own `orgs.tflw`), `webv2-admin-check` (pre-E3 housekeeping, + E3's own
-`orgs-mixed.tflw`) — 27 phases total, each on its own fresh Docker restart (`scripts/
-regression.mjs`; restarting every phase isn't optional — `unique(...)`'s counter resets per
-`tflw run` invocation but Postgres data doesn't, so chained phases on the same DB reproduce false
-collisions; `node cli.mjs stop`/`start` tears down and rebuilds **both** Postgres containers —
-apiV2's and inventory-service's own — every phase, same isolation guarantee for the second
-database E4 introduced). Exits non-zero if any phase fails. See `scripts/regression.mjs`'s own
-`PHASES` array for the authoritative, always-current list — this section restates it for a reader
-who won't open the script, so it can drift; if in doubt, the script wins.
+`orderOps`/`adminOps`/`orgOps`/`inventoryOps` — E4's 6th), each **layer** tag alone (`api`/`ui`/
+`mixed` — E5's orthogonal axis cutting by *how* a test executes rather than which feature area it
+covers; alone-phases only, no `smoke,<layer>` cross — `@smoke` alone already runs a mixed sample
+across all three layers together), `@smoke` alone, each `smoke,<area>` cross-axis combo, then a run
+of `*-check`/`*-rejection` phases proving specific CLI verbs/flags/fixtures that ad-hoc manual runs
+used to be the only evidence for: `mtls-rejection`, `safety-redaction-check`, `demo-fail-check`,
+`cli-flags-check`, `migrate-check`, `watch-check`, `safety-flags-check`, `check-diagnostics`,
+`pick-check`, `logging-check`, `report-overflow-check`, `ui-admin-check` (E2 + E3's own
+`orgs.tflw`), `webv2-admin-check` (pre-E3 housekeeping, + E3's own `orgs-mixed.tflw`) — 30 phases
+total, each on its own fresh Docker restart (`scripts/regression.mjs`; restarting every phase isn't
+optional — `unique(...)`'s counter resets per `tflw run` invocation but Postgres data doesn't, so
+chained phases on the same DB reproduce false collisions; `node cli.mjs stop`/`start` tears down
+and rebuilds **both** Postgres containers — apiV2's and inventory-service's own — every phase, same
+isolation guarantee for the second database E4 introduced). Exits non-zero if any phase fails. See
+`scripts/regression.mjs`'s own `PHASES` array for the authoritative, always-current list — this
+section restates it for a reader who won't open the script, so it can drift; if in doubt, the
+script wins.
 
 ### webV2 — browser-arc dogfood target (webV2-0)
 

@@ -1,8 +1,13 @@
 #!/usr/bin/env node
-// Full regression sweep: runs the whole suite, then each feature-area tag alone, then `@smoke`
-// alone, then each smoke+area cross-axis combo — everything M17-M20's manual verification passes
-// already exercised by hand, scripted so it runs the same way every time (M21). M25 adds two more
-// phases (mtls-rejection, safety-redaction-check) matching what CI needs per PLAN_CI.md decision 8.
+// Full regression sweep: runs the whole suite, then each feature-area tag alone, then each
+// layer tag alone, then `@smoke` alone, then each smoke+area cross-axis combo — everything
+// M17-M20's manual verification passes already exercised by hand, scripted so it runs the same
+// way every time (M21). M25 adds two more phases (mtls-rejection, safety-redaction-check)
+// matching what CI needs per PLAN_CI.md decision 8. E5 (PLAN_ENTERPRISE_REGRESSION.md) adds the
+// LAYER_TAGS axis (`--tag api`/`--tag ui`/`--tag mixed`, alone-phases only, no smoke cross — see
+// LAYER_TAGS's own comment below for why). Current total: 30 phases — PHASES below is the source
+// of truth for the exact count, not this comment; don't let this number drift the way README.md's
+// once did (fixed in E2a).
 //
 // Every phase gets its own fresh Docker restart first. Necessary, not just cautious: `unique(...)`
 // resets its counter each `tflw run` invocation, but Postgres data persists across invocations —
@@ -60,6 +65,16 @@ function archivePhaseReport(phaseName) {
 // needed.
 const AREA_TAGS = ['identityOps', 'catalogOps', 'orderOps', 'adminOps', 'orgOps', 'inventoryOps'];
 
+// E5 (PLAN_ENTERPRISE_REGRESSION.md): a second, orthogonal axis over the same suite — cutting by
+// *how* a test executes (api-only / browser-only / crosses a service boundary) rather than *which
+// feature area* it covers. Every test already carries exactly one of these three alongside its
+// area tag (E1's suite reorg put them there structurally, per directory: tests/api/, tests/ui/,
+// tests/mixed/). Its own alone-phases only, matching AREA_TAGS's own `--tag <area>` alone-phase
+// pattern — deliberately no `smoke,<layer>` cross: `--tag smoke` alone already runs a mixed sample
+// across all three layers together, so a per-layer smoke cross would just be re-slicing that same
+// set, not proving anything new the way `smoke,<area>` does for a specific feature area.
+const LAYER_TAGS = ['api', 'ui', 'mixed'];
+
 // `--verbose` only under real GitHub Actions (auto-detected via GITHUB_ACTIONS, same signal tflw
 // itself uses for decision 111.8's ::group::/::endgroup:: log grouping) — a local `npm run
 // regression` stays exactly as compact as it's always been; a CI run gets grouped per-step detail
@@ -75,6 +90,7 @@ const CI_VERBOSE = process.env.GITHUB_ACTIONS === 'true' ? ['--verbose'] : [];
 const PHASES = [
   { name: 'full suite', args: [] },
   ...AREA_TAGS.map((tag) => ({ name: `--tag ${tag}`, args: ['--tag', tag] })),
+  ...LAYER_TAGS.map((tag) => ({ name: `--tag ${tag}`, args: ['--tag', tag] })),
   { name: '--tag smoke', args: ['--tag', 'smoke'] },
   ...AREA_TAGS.map((tag) => ({ name: `--tag smoke,${tag}`, args: ['--tag', `smoke,${tag}`] })),
   {
