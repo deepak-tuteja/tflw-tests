@@ -12,6 +12,7 @@ import productsRouter from './routes/products.js';
 import ticketsRouter from './routes/tickets.js';
 import couponsRouter from './routes/coupons.js';
 import ordersRouter from './routes/orders.js';
+import orgsRouter from './routes/orgs.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -42,6 +43,7 @@ app.use('/products', requireAuth, productsRouter);
 app.use('/tickets', requireAuth, ticketsRouter);
 app.use('/coupons', requireAuth, couponsRouter);
 app.use('/orders', requireAuth, ordersRouter);
+app.use('/orgs', requireAuth, orgsRouter);
 
 // Every route below requireAuth reaches apiV2 through apiClient.js's apiRequest — a rejected
 // call throws ApiError instead of being handled inline, so one place renders the "apiV2 said no"

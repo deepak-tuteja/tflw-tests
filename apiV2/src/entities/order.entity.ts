@@ -77,6 +77,13 @@ export class Order {
   @Column({ name: 'webhook_url', type: 'varchar', nullable: true })
   webhookUrl: string | null;
 
+  // PLAN_ENTERPRISE_REGRESSION.md E3 — denormalized from the placing user's org membership at
+  // creation time (null if they have none). Lets an org owner/admin see every order placed by any
+  // member of their org (OrdersService.findAllForOrg/findOneScoped), on top of the existing
+  // per-user ownership scoping (findOwn stays user-scoped, unaffected).
+  @Column({ name: 'org_id', type: 'uuid', nullable: true })
+  orgId: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

@@ -8,11 +8,13 @@ import { TicketsController } from './tickets.controller';
 import { TicketsService } from './tickets.service';
 import { TicketSlaSweepService } from './ticket-sla-sweep.service';
 import { AuthModule } from '../auth/auth.module';
+import { OrgsModule } from '../orgs/orgs.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Ticket, TicketComment, TicketEvent, User]),
     AuthModule,
+    OrgsModule,
   ],
   controllers: [TicketsController],
   providers: [TicketsService, TicketSlaSweepService],

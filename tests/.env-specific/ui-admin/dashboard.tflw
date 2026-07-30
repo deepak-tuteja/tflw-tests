@@ -5,6 +5,9 @@
 # existing test in this suite had ever logged an agent into this console's UI at all before this.
 # See `login.tflw`'s own header comment for why this lives under `.env-specific/`, not a plain
 # `tests/ui/admin/`.
+#
+# E3 added the "Organizations" link (admin-only, same gate as Coupons) — extended here rather than
+# in a separate file, since this file already is "every nav destination an admin/agent has."
 
 import "../../shared/webv2-admin-login.tflw"
 
@@ -20,12 +23,14 @@ test "the dashboard lists every nav destination an admin has, including the admi
     expect text "Tickets" is visible
     expect text "Coupons" is visible
     expect text "Download orders CSV" is visible
+    expect text "Organizations" is visible
 
 @ui @adminOps
-test "an agent sees the same core nav, but not the admin-only Coupons link"
+test "an agent sees the same core nav, but not the admin-only Coupons or Organizations links"
   adminLogin(env(AGENT_A_EMAIL), env(AGENT_A_PW))
   within css "ul"
     expect text "Categories" is visible
     expect text "Products / Moderation" is visible
     expect text "Tickets" is visible
     expect text "Coupons" is hidden
+    expect text "Organizations" is hidden

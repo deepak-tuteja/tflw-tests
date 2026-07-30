@@ -1,0 +1,103 @@
+# organizations-crud.tflw — PLAN_ENTERPRISE_REGRESSION.md E3: full CRUD on the new Organization
+# resource (`/orgs`), platform-operator-only (system ADMIN, decision: no customer-org
+# self-service org-management endpoint exists this round — see orgs.service.ts's own comment).
+#
+# Inline admin login (not `as admin`/`session admin`) deliberately — this folder sorts after
+# tests/api/orders/ alphabetically, so by the time it runs the shared `admin` session's bearer
+# token (JWT_ACCESS_TTL=5s) risks being stale, the same fix schema-and-shape.tflw/reviews.tflw/
+# order-items.tflw already use for the same reason (see schema-and-shape.tflw's header comment).
+
+before
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+@smoke @orgOps @api
+test "creating an organization and reading it back, in both the list and by id"
+  api POST /orgs body { name: unique("Orgs CRUD Co"), plan: "business" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  expect body.plan equals "business"
+  capture body.id as orgId
+  capture body.name as orgName
+
+  api GET /orgs/{orgId}
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  expect body.name equals "{orgName}"
+
+  api GET /orgs
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  expect any body.id equals "{orgId}"
+
+@crud @orgOps @api
+test "an org with no plan given defaults to starter"
+  api POST /orgs body { name: unique("Default Plan Co") }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  expect body.plan equals "starter"
+
+@crud @orgOps @api
+test "updating an org's name and plan"
+  api POST /orgs body { name: unique("Update Me Co"), plan: "starter" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as orgId
+
+  let newName = unique("Updated Co")
+  api PATCH /orgs/{orgId} body { name: {newName}, plan: "enterprise" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  expect body.name equals "{newName}"
+  expect body.plan equals "enterprise"
+
+  api GET /orgs/{orgId}
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  expect body.plan equals "enterprise"
+
+@crud @orgOps @api
+test "creating an organization with a missing name is a clean 422"
+  api POST /orgs body { plan: "starter" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 422
+  expect any body.errors.field equals "name"
+
+@crud @orgOps @api
+test "fetching a nonexistent org is a clean 404"
+  let missingId = random uuid
+  api GET /orgs/{missingId}
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 404
+
+@authz @orgOps @api
+test "a non-admin identity cannot create, list, or update organizations — plain user, and an agent alike"
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as aliceToken
+
+  api POST /auth/login body { email: env(AGENT_A_EMAIL), password: env(AGENT_A_PW) }
+  expect status equals 200
+  capture body.accessToken as carolToken
+
+  api POST /orgs body { name: unique("Sneaky Co") }
+    header "Authorization" is "Bearer {aliceToken}"
+  expect status equals 403
+
+  api POST /orgs body { name: unique("Sneaky Co Agent") }
+    header "Authorization" is "Bearer {carolToken}"
+  expect status equals 403
+
+  api GET /orgs
+    header "Authorization" is "Bearer {aliceToken}"
+  expect status equals 403
+
+  api POST /orgs body { name: unique("Yet Another Co"), plan: "starter" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as orgId
+
+  api PATCH /orgs/{orgId} body { plan: "enterprise" }
+    header "Authorization" is "Bearer {aliceToken}"
+  expect status equals 403

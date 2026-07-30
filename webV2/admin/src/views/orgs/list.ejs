@@ -1,0 +1,35 @@
+<%- include('../partials/head', { title: 'Organizations' }) %>
+<%- include('../partials/nav') %>
+<h1>Organizations</h1>
+<p>Customer companies using the storefront on a B2B basis — plan/tier and per-org membership roles (owner/admin/member) are managed here, a system-admin-only capability.</p>
+<% if (error) { %><p class="error"><%= error %></p><% } %>
+
+<table>
+  <thead>
+    <tr><th>Name</th><th>Plan</th><th>Created</th></tr>
+  </thead>
+  <tbody>
+    <% orgs.forEach(function(o) { %>
+      <tr>
+        <td><a href="/orgs/<%= o.id %>"><%= o.name %></a></td>
+        <td><%= o.plan %></td>
+        <td><%= new Date(o.createdAt).toISOString() %></td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+
+<h2>Create organization</h2>
+<form method="post" action="/orgs">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+  <label for="name">Name</label>
+  <input id="name" name="name" required />
+  <label for="plan">Plan</label>
+  <select id="plan" name="plan">
+    <option value="starter">starter</option>
+    <option value="business">business</option>
+    <option value="enterprise">enterprise</option>
+  </select>
+  <p><button type="submit">Create organization</button></p>
+</form>
+<%- include('../partials/foot') %>

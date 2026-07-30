@@ -9,6 +9,7 @@
   <% if (currentUser.role === 'admin') { %>
     <li><a href="/coupons">Coupons</a> — create a coupon (apiV2 has no listing endpoint for these).</li>
     <li><a href="/orders/export">Download orders CSV</a></li>
+    <li><a href="/orgs">Organizations</a> — manage orgs and their members' roles.</li>
   <% } %>
 </ul>
 <%- include('partials/foot') %>

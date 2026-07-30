@@ -1,0 +1,243 @@
+# cross-org-visibility.tflw — PLAN_ENTERPRISE_REGRESSION.md E3: the actual retrofit semantics
+# ("a member sees only their own org's records, an org owner/admin sees all of their org's
+# records," decision 3) proven against the real seeded orgs — Acme Corp (erin=owner,
+# frank=admin, grace=member) and Globex Inc (heidi=owner, ivan=admin, judy=member), apiV2/src/
+# seed/seed.ts. Every test here only *reads* these seeded memberships — never promotes/demotes/
+# removes one (memberships-crud.tflw already proves that CRUD in full, against its own disposable
+# orgs, precisely so it can mutate freely without corrupting the fixed roles this file depends on).
+#
+# Inline logins throughout, same late-in-the-suite token-TTL reason as organizations-crud.tflw/
+# memberships-crud.tflw.
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+@smoke @orgOps @api
+test "an org owner's GET /orders/org sees an order placed by any member of their org — a different org's owner sees nothing of it"
+  api POST /products body { name: unique("Org Visibility Widget"), price: 15, stock: 20, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /auth/login body { email: env(ORG_A_MEMBER_EMAIL), password: env(ORG_A_MEMBER_PW) }
+  expect status equals 200
+  capture body.accessToken as graceToken
+
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+    header "Authorization" is "Bearer {graceToken}"
+  expect status equals 201
+  capture body.id as graceOrderId
+
+  # Grace herself: still strictly her own orders, org-blind — findOwn is unaffected by this
+  # retrofit on purpose.
+  api GET /orders
+    header "Authorization" is "Bearer {graceToken}"
+  expect status equals 200
+  expect any body.id equals "{graceOrderId}"
+
+  # Grace is a plain member, not owner/admin — /orders/org is forbidden to her.
+  api GET /orders/org
+    header "Authorization" is "Bearer {graceToken}"
+  expect status equals 403
+
+  # Erin (Acme owner) sees it via the new org-wide view.
+  api POST /auth/login body { email: env(ORG_A_OWNER_EMAIL), password: env(ORG_A_OWNER_PW) }
+  expect status equals 200
+  capture body.accessToken as erinToken
+
+  api GET /orders/org
+    header "Authorization" is "Bearer {erinToken}"
+  expect status equals 200
+  expect any body.id equals "{graceOrderId}"
+
+  # Heidi (Globex owner) — a different org's owner — sees none of Acme's orders.
+  api POST /auth/login body { email: env(ORG_B_OWNER_EMAIL), password: env(ORG_B_OWNER_PW) }
+  expect status equals 200
+  capture body.accessToken as heidiToken
+
+  api GET /orders/org
+    header "Authorization" is "Bearer {heidiToken}"
+  expect status equals 200
+  expect all body.id not equals "{graceOrderId}"
+
+@orgOps @api
+test "an org admin can open a fellow member's specific order by id — a different org's admin gets 403"
+  api POST /products body { name: unique("Org Order Detail Widget"), price: 12, stock: 20, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /auth/login body { email: env(ORG_A_MEMBER_EMAIL), password: env(ORG_A_MEMBER_PW) }
+  expect status equals 200
+  capture body.accessToken as graceToken
+
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
+    header "Authorization" is "Bearer {graceToken}"
+  expect status equals 201
+  capture body.id as graceOrderId
+
+  api POST /auth/login body { email: env(ORG_A_ADMIN_EMAIL), password: env(ORG_A_ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as frankToken
+
+  api GET /orders/{graceOrderId}
+    header "Authorization" is "Bearer {frankToken}"
+  expect status equals 200
+
+  api POST /auth/login body { email: env(ORG_B_ADMIN_EMAIL), password: env(ORG_B_ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as ivanToken
+
+  api GET /orders/{graceOrderId}
+    header "Authorization" is "Bearer {ivanToken}"
+  expect status equals 403
+
+@orgOps @api
+test "an org owner sees a fellow member's ticket in GET /tickets and by id — a different org's owner sees neither"
+  api POST /auth/login body { email: env(ORG_A_MEMBER_EMAIL), password: env(ORG_A_MEMBER_PW) }
+  expect status equals 200
+  capture body.accessToken as graceToken
+
+  api POST /tickets body { subject: unique("Org Ticket Visibility"), description: "grace's ticket" }
+    header "Authorization" is "Bearer {graceToken}"
+  expect status equals 201
+  capture body.id as graceTicketId
+
+  api POST /auth/login body { email: env(ORG_A_OWNER_EMAIL), password: env(ORG_A_OWNER_PW) }
+  expect status equals 200
+  capture body.accessToken as erinToken
+
+  api GET /tickets/{graceTicketId}
+    header "Authorization" is "Bearer {erinToken}"
+  expect status equals 200
+
+  api GET /tickets
+    header "Authorization" is "Bearer {erinToken}"
+  expect status equals 200
+  expect any body.id equals "{graceTicketId}"
+
+  api POST /auth/login body { email: env(ORG_B_OWNER_EMAIL), password: env(ORG_B_OWNER_PW) }
+  expect status equals 200
+  capture body.accessToken as heidiToken
+
+  api GET /tickets/{graceTicketId}
+    header "Authorization" is "Bearer {heidiToken}"
+  expect status equals 404
+
+  api GET /tickets
+    header "Authorization" is "Bearer {heidiToken}"
+  expect status equals 200
+  expect all body.id not equals "{graceTicketId}"
+
+@orgOps @api
+test "an org admin's coupon is redeemable by their own org's members, not another org's — and their own membership always wins over a claimed orgId"
+  api POST /products body { name: unique("Org Coupon Widget"), price: 25, stock: 20, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  # A throwaway org, unrelated to Frank's own Acme — used below purely as "some other org's id"
+  # to prove a caller's claimed orgId is ignored, not trusted.
+  api POST /orgs body { name: unique("Foreign Co") }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as foreignOrgId
+
+  api POST /auth/login body { email: env(ORG_A_ADMIN_EMAIL), password: env(ORG_A_ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as frankToken
+
+  let futureDate = random date in future
+  let code = unique("ACMEORG")
+  api POST /coupons body { code: {code}, type: "fixed", value: 5, expiresAt: "{futureDate}", minOrderAmount: 0, usageLimit: 10, orgId: {foreignOrgId} }
+    header "Authorization" is "Bearer {frankToken}"
+  expect status equals 201
+  # Frank claimed the foreign org's id, but CouponsService.create ignores it — the coupon is
+  # scoped to Frank's own org (Acme) regardless.
+  expect body.orgId not equals "{foreignOrgId}"
+
+  api POST /auth/login body { email: env(ORG_A_MEMBER_EMAIL), password: env(ORG_A_MEMBER_PW) }
+  expect status equals 200
+  capture body.accessToken as graceToken
+
+  api POST /cart/items body { productId: {productId}, quantity: 1 }
+    header "Authorization" is "Bearer {graceToken}"
+  expect status equals 201
+
+  api POST /cart/checkout body { couponCode: {code} }
+    header "Authorization" is "Bearer {graceToken}"
+  expect status equals 201
+  expect body.couponCode equals "{code}"
+
+  api POST /auth/login body { email: env(ORG_B_MEMBER_EMAIL), password: env(ORG_B_MEMBER_PW) }
+  expect status equals 200
+  capture body.accessToken as judyToken
+
+  api POST /cart/items body { productId: {productId}, quantity: 1 }
+    header "Authorization" is "Bearer {judyToken}"
+  expect status equals 201
+
+  # Judy (Globex) can't redeem Acme's org coupon — same "invalid coupon code" a genuinely
+  # nonexistent code gets, not a distinguishable "wrong org" error.
+  api POST /cart/checkout body { couponCode: {code} }
+    header "Authorization" is "Bearer {judyToken}"
+  expect status equals 404
+  expect body.detail contains "invalid coupon"
+
+@orgOps @api
+test "GET /coupons is org-scoped for an org admin (their org's + every global one), forbidden for a plain member"
+  let futureDate = random date in future
+  let globalCode = unique("GLOBALCODE")
+  api POST /coupons body { code: {globalCode}, type: "fixed", value: 1, expiresAt: "{futureDate}", minOrderAmount: 0, usageLimit: 1 }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+
+  api POST /auth/login body { email: env(ORG_A_ADMIN_EMAIL), password: env(ORG_A_ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as frankToken
+
+  let acmeCode = unique("ACMELIST")
+  api POST /coupons body { code: {acmeCode}, type: "fixed", value: 1, expiresAt: "{futureDate}", minOrderAmount: 0, usageLimit: 1 }
+    header "Authorization" is "Bearer {frankToken}"
+  expect status equals 201
+
+  api GET /coupons
+    header "Authorization" is "Bearer {frankToken}"
+  expect status equals 200
+  expect any body.code equals "{globalCode}"
+  expect any body.code equals "{acmeCode}"
+
+  api POST /auth/login body { email: env(ORG_A_MEMBER_EMAIL), password: env(ORG_A_MEMBER_PW) }
+  expect status equals 200
+  capture body.accessToken as graceToken
+
+  api GET /coupons
+    header "Authorization" is "Bearer {graceToken}"
+  expect status equals 403
+
+@orgOps @api
+test "a review's org affiliation is captured for provenance only — the public product review list stays public and org-blind"
+  api POST /products body { name: unique("Org Review Widget"), price: 9, stock: 20, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /auth/login body { email: env(ORG_A_MEMBER_EMAIL), password: env(ORG_A_MEMBER_PW) }
+  expect status equals 200
+  capture body.accessToken as graceToken
+
+  api POST /products/{productId}/reviews body { rating: 5, comment: "great, and I'm an org member" }
+    header "Authorization" is "Bearer {graceToken}"
+  expect status equals 201
+
+  # Deliberately no Authorization header at all — reviews.controller.ts's own comment ("reads are
+  # public, same as the catalog") is unchanged by this retrofit; org membership never gates this.
+  api GET /products/{productId}/reviews
+  expect status equals 200
+  expect any body.data.comment equals "great, and I'm an org member"

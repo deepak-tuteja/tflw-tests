@@ -4,6 +4,8 @@ import AppDataSource from '../data-source';
 import { User, UserRole } from '../entities/user.entity';
 import { Category } from '../entities/category.entity';
 import { Product } from '../entities/product.entity';
+import { Organization, OrgPlan } from '../entities/organization.entity';
+import { OrgMembership, OrgRole } from '../entities/org-membership.entity';
 
 // Deterministic — same identities/catalog every run — and idempotent, so it
 // is safe to run on every container start (upsert-by-natural-key, no
@@ -14,6 +16,8 @@ async function seed() {
   const userRepo = ds.getRepository(User);
   const categoryRepo = ds.getRepository(Category);
   const productRepo = ds.getRepository(Product);
+  const orgRepo = ds.getRepository(Organization);
+  const membershipRepo = ds.getRepository(OrgMembership);
 
   const users = [
     {
@@ -48,6 +52,46 @@ async function seed() {
       password: process.env.AGENT_B_PW ?? 'dave-pw-123',
       role: UserRole.AGENT,
     },
+    // PLAN_ENTERPRISE_REGRESSION.md E3 — dedicated org-affiliated seed users, deliberately
+    // separate from alice/bob (kept org-less) so the org-scoping retrofit's new visibility rules
+    // never change what any of the 285 pre-E3 tests already asserted about alice/bob/carol/dave.
+    // Two orgs, three org roles each (owner/admin/member) — see the org/membership seeding below.
+    {
+      name: 'Erin',
+      email: process.env.ORG_A_OWNER_EMAIL ?? 'erin@example.com',
+      password: process.env.ORG_A_OWNER_PW ?? 'erin-pw-123',
+      role: UserRole.USER,
+    },
+    {
+      name: 'Frank',
+      email: process.env.ORG_A_ADMIN_EMAIL ?? 'frank@example.com',
+      password: process.env.ORG_A_ADMIN_PW ?? 'frank-pw-123',
+      role: UserRole.USER,
+    },
+    {
+      name: 'Grace',
+      email: process.env.ORG_A_MEMBER_EMAIL ?? 'grace@example.com',
+      password: process.env.ORG_A_MEMBER_PW ?? 'grace-pw-123',
+      role: UserRole.USER,
+    },
+    {
+      name: 'Heidi',
+      email: process.env.ORG_B_OWNER_EMAIL ?? 'heidi@example.com',
+      password: process.env.ORG_B_OWNER_PW ?? 'heidi-pw-123',
+      role: UserRole.USER,
+    },
+    {
+      name: 'Ivan',
+      email: process.env.ORG_B_ADMIN_EMAIL ?? 'ivan@example.com',
+      password: process.env.ORG_B_ADMIN_PW ?? 'ivan-pw-123',
+      role: UserRole.USER,
+    },
+    {
+      name: 'Judy',
+      email: process.env.ORG_B_MEMBER_EMAIL ?? 'judy@example.com',
+      password: process.env.ORG_B_MEMBER_PW ?? 'judy-pw-123',
+      role: UserRole.USER,
+    },
   ];
 
   for (const u of users) {
@@ -63,6 +107,68 @@ async function seed() {
       }),
     );
     console.log(`seeded user: ${u.email} (${u.role})`);
+  }
+
+  // PLAN_ENTERPRISE_REGRESSION.md E3 — 2 orgs, each with all 3 org roles represented among the
+  // dedicated seed users above.
+  const orgs = [
+    { name: 'Acme Corp', plan: OrgPlan.BUSINESS },
+    { name: 'Globex Inc', plan: OrgPlan.ENTERPRISE },
+  ];
+  const orgEntities: Record<string, Organization> = {};
+  for (const o of orgs) {
+    let org = await orgRepo.findOne({ where: { name: o.name } });
+    if (!org) {
+      org = await orgRepo.save(orgRepo.create({ name: o.name, plan: o.plan }));
+      console.log(`seeded organization: ${o.name} (${o.plan})`);
+    }
+    orgEntities[o.name] = org;
+  }
+
+  const memberships: Array<{ org: string; email: string; orgRole: OrgRole }> = [
+    {
+      org: 'Acme Corp',
+      email: process.env.ORG_A_OWNER_EMAIL ?? 'erin@example.com',
+      orgRole: OrgRole.OWNER,
+    },
+    {
+      org: 'Acme Corp',
+      email: process.env.ORG_A_ADMIN_EMAIL ?? 'frank@example.com',
+      orgRole: OrgRole.ADMIN,
+    },
+    {
+      org: 'Acme Corp',
+      email: process.env.ORG_A_MEMBER_EMAIL ?? 'grace@example.com',
+      orgRole: OrgRole.MEMBER,
+    },
+    {
+      org: 'Globex Inc',
+      email: process.env.ORG_B_OWNER_EMAIL ?? 'heidi@example.com',
+      orgRole: OrgRole.OWNER,
+    },
+    {
+      org: 'Globex Inc',
+      email: process.env.ORG_B_ADMIN_EMAIL ?? 'ivan@example.com',
+      orgRole: OrgRole.ADMIN,
+    },
+    {
+      org: 'Globex Inc',
+      email: process.env.ORG_B_MEMBER_EMAIL ?? 'judy@example.com',
+      orgRole: OrgRole.MEMBER,
+    },
+  ];
+  for (const m of memberships) {
+    const user = await userRepo.findOne({ where: { email: m.email } });
+    if (!user) continue; // seeded above; should always exist
+    const orgId = orgEntities[m.org].id;
+    const existing = await membershipRepo.findOne({
+      where: { orgId, userId: user.id },
+    });
+    if (existing) continue;
+    await membershipRepo.save(
+      membershipRepo.create({ orgId, userId: user.id, orgRole: m.orgRole }),
+    );
+    console.log(`seeded org membership: ${m.email} -> ${m.org} (${m.orgRole})`);
   }
 
   const categories = [
@@ -95,7 +201,10 @@ async function seed() {
     let cat = await categoryRepo.findOne({ where: { name: sub.name } });
     if (!cat) {
       cat = await categoryRepo.save(
-        categoryRepo.create({ name: sub.name, parentId: categoryEntities[sub.parent].id }),
+        categoryRepo.create({
+          name: sub.name,
+          parentId: categoryEntities[sub.parent].id,
+        }),
       );
       console.log(`seeded subcategory: ${sub.name} (parent: ${sub.parent})`);
     }
@@ -103,11 +212,31 @@ async function seed() {
   }
 
   const products = [
-    { name: 'Wireless Mouse', category: 'Electronics', price: '19.99', stock: 100 },
-    { name: 'Mechanical Keyboard', category: 'Electronics', price: '79.99', stock: 40 },
-    { name: 'The Pragmatic Programmer', category: 'Books', price: '34.50', stock: 25 },
+    {
+      name: 'Wireless Mouse',
+      category: 'Electronics',
+      price: '19.99',
+      stock: 100,
+    },
+    {
+      name: 'Mechanical Keyboard',
+      category: 'Electronics',
+      price: '79.99',
+      stock: 40,
+    },
+    {
+      name: 'The Pragmatic Programmer',
+      category: 'Books',
+      price: '34.50',
+      stock: 25,
+    },
     { name: 'Clean Code', category: 'Books', price: '29.99', stock: 30 },
-    { name: 'French Press', category: 'Home & Kitchen', price: '24.00', stock: 60 },
+    {
+      name: 'French Press',
+      category: 'Home & Kitchen',
+      price: '24.00',
+      stock: 60,
+    },
   ];
 
   for (const p of products) {

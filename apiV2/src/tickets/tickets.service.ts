@@ -17,6 +17,7 @@ import { CreateTicketCommentDto } from './dto/create-ticket-comment.dto';
 import { FindTicketsQueryDto } from './dto/find-tickets-query.dto';
 import { AuthedUser } from '../auth/guards/bearer-auth.guard';
 import { SLA_WINDOW_MS } from './sla.constants';
+import { OrgsService } from '../orgs/orgs.service';
 
 // PLAN_TICKETING.md T1 — sync ticket-domain mechanics: creation, role-scoped read/list, the
 // assign/claim pair (decision 6), the full open->claim->start->resolve->close chain, the owner's
@@ -33,6 +34,7 @@ export class TicketsService {
     @InjectRepository(TicketEvent)
     private readonly events: Repository<TicketEvent>,
     @InjectRepository(User) private readonly users: Repository<User>,
+    private readonly orgs: OrgsService,
   ) {}
 
   private async logEvent(
@@ -47,14 +49,23 @@ export class TicketsService {
 
   // Decision 2's visibility rule: ADMIN sees everything; the owner always sees their own ticket;
   // an AGENT sees a ticket only while it's assigned to them or still unclaimed (to claim it) —
-  // never a ticket assigned to a different agent.
-  private canView(ticket: Ticket, requester: AuthedUser): boolean {
+  // never a ticket assigned to a different agent. PLAN_ENTERPRISE_REGRESSION.md E3 adds one more:
+  // a USER who's an org owner/admin also sees any ticket submitted by a fellow member of their org
+  // (AGENT/ADMIN visibility above is unaffected — agents/system admins are marketplace staff, not
+  // customer-org members).
+  private async canView(
+    ticket: Ticket,
+    requester: AuthedUser,
+  ): Promise<boolean> {
     if (requester.role === UserRole.ADMIN) return true;
     if (ticket.submittedBy === requester.id) return true;
     if (requester.role === UserRole.AGENT) {
       return ticket.assignedTo === null || ticket.assignedTo === requester.id;
     }
-    return false;
+    const membership = await this.orgs.getForUser(requester.id);
+    return (
+      this.orgs.isOwnerOrAdmin(membership) && membership.orgId === ticket.orgId
+    );
   }
 
   // ADMIN always counts (decision 2's "override any agent's status change"); an AGENT only counts
@@ -67,6 +78,9 @@ export class TicketsService {
   }
 
   async create(userId: string, dto: CreateTicketDto): Promise<Ticket> {
+    // PLAN_ENTERPRISE_REGRESSION.md E3 — denormalized at creation time, null if the submitter has
+    // no org membership (unaffected pre-E3 behavior).
+    const membership = await this.orgs.getForUser(userId);
     const ticket = this.tickets.create({
       subject: dto.subject,
       description: dto.description,
@@ -74,6 +88,7 @@ export class TicketsService {
       // T2's sweep target — stamped here (not left null until T2) since T1 and T2 share the same
       // Ticket row; decision 4's SLA_WINDOW_MS.
       slaDeadline: new Date(Date.now() + SLA_WINDOW_MS),
+      orgId: membership?.orgId ?? null,
     });
     const saved = await this.tickets.save(ticket);
     await this.logEvent(saved.id, TicketEventType.CREATED, userId);
@@ -82,7 +97,7 @@ export class TicketsService {
 
   async findOneScoped(id: string, requester: AuthedUser): Promise<Ticket> {
     const ticket = await this.tickets.findOne({ where: { id } });
-    if (!ticket || !this.canView(ticket, requester)) {
+    if (!ticket || !(await this.canView(ticket, requester))) {
       throw new NotFoundException('ticket not found');
     }
     return ticket;
@@ -98,7 +113,21 @@ export class TicketsService {
     const qb = this.tickets.createQueryBuilder('ticket');
 
     if (requester.role === UserRole.USER) {
-      qb.andWhere('ticket.submitted_by = :userId', { userId: requester.id });
+      // PLAN_ENTERPRISE_REGRESSION.md E3 — an org owner/admin's list broadens from "my own
+      // tickets" to "my own tickets, plus every ticket submitted by a fellow member of my org." A
+      // plain member (or a USER with no org at all) keeps today's exact behavior.
+      const membership = await this.orgs.getForUser(requester.id);
+      if (this.orgs.isOwnerOrAdmin(membership)) {
+        qb.andWhere(
+          '(ticket.submitted_by = :userId OR ticket.org_id = :orgId)',
+          {
+            userId: requester.id,
+            orgId: membership.orgId,
+          },
+        );
+      } else {
+        qb.andWhere('ticket.submitted_by = :userId', { userId: requester.id });
+      }
     } else if (requester.role === UserRole.AGENT) {
       qb.andWhere(
         '(ticket.assigned_to = :agentId OR ticket.assigned_to IS NULL)',

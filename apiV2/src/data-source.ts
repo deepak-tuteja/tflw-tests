@@ -12,6 +12,8 @@ import { Notification } from './entities/notification.entity';
 import { Coupon } from './entities/coupon.entity';
 import { Cart } from './entities/cart.entity';
 import { CartItem } from './entities/cart-item.entity';
+import { Organization } from './entities/organization.entity';
+import { OrgMembership } from './entities/org-membership.entity';
 
 // Used by both the TypeORM CLI (migration:generate/run) and NestJS's
 // TypeOrmModule.forRootAsync at bootstrap, so schema/migrations never drift
@@ -36,6 +38,8 @@ const AppDataSource = new DataSource({
     Coupon,
     Cart,
     CartItem,
+    Organization,
+    OrgMembership,
   ],
   migrations: [__dirname + '/migrations/*.{js,ts}'],
   synchronize: false,

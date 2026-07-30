@@ -1,0 +1,31 @@
+# E3 (PLAN_ENTERPRISE_REGRESSION.md): pure UI-only backfill for the new Organizations screen —
+# navigation, the seeded orgs rendering in the list, and creating a new one through the form. The
+# membership-management half (add/promote/demote/remove a member) is deliberately NOT here:
+# decision 5 keeps a UI-only test's asserted body `api`-free, but proving a role change actually
+# changed apiV2's own scoped-visibility behavior needs a real `api` call to verify against — that's
+# `.env-specific/orgs-mixed.tflw` instead (same UI-only/mixed split E2 already drew for
+# products.tflw vs. webv2-admin.tflw). Same reason this lives under `.env-specific/ui-admin/`, not
+# a plain `tests/ui/orgOps/`, as every other file in this folder.
+
+import "../../shared/webv2-admin-login.tflw"
+
+@ui @adminOps @orgOps
+test "the Organizations list shows both seeded orgs, and the create-org form adds a new one to it"
+  adminLogin(env(ADMIN_EMAIL), env(ADMIN_PW))
+  within css "nav"
+    click text "Organizations"
+  expect text "Acme Corp" is visible
+  expect text "Globex Inc" is visible
+
+  let newOrgName = unique("UI Created Org")
+  fill field "Name" with "{newOrgName}"
+  select "enterprise" from field "Plan"
+  click button "Create organization"
+  expect text "{newOrgName}" is visible
+
+@ui @adminOps @orgOps
+test "an agent is forbidden from the Organizations screen — same gate as Coupons"
+  adminLogin(env(AGENT_A_EMAIL), env(AGENT_A_PW))
+  open "/orgs"
+  expect text "Forbidden" is visible
+  expect text "requires the admin role" is visible

@@ -61,6 +61,13 @@ export class Ticket {
   @Column({ name: 'breached_at', type: 'timestamp', nullable: true })
   breachedAt: Date | null;
 
+  // PLAN_ENTERPRISE_REGRESSION.md E3 — denormalized from the submitter's org membership at
+  // creation time (null if they have none). Broadens canView/findAllScoped for an org owner/admin
+  // to every ticket submitted by any member of their org, on top of the existing
+  // submitted-by-me/assigned-to-me rules (both unaffected for a plain USER or an AGENT).
+  @Column({ name: 'org_id', type: 'uuid', nullable: true })
+  orgId: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

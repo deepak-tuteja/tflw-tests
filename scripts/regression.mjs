@@ -55,7 +55,10 @@ function archivePhaseReport(phaseName) {
   }
 }
 
-const AREA_TAGS = ['identityOps', 'catalogOps', 'orderOps', 'adminOps'];
+// E3 (PLAN_ENTERPRISE_REGRESSION.md) adds `orgOps` as a 5th area tag — its own `--tag orgOps` and
+// `smoke,orgOps` phases below fall out of the existing per-area-tag map, no separate wiring
+// needed.
+const AREA_TAGS = ['identityOps', 'catalogOps', 'orderOps', 'adminOps', 'orgOps'];
 
 // `--verbose` only under real GitHub Actions (auto-detected via GITHUB_ACTIONS, same signal tflw
 // itself uses for decision 111.8's ::group::/::endgroup:: log grouping) — a local `npm run
@@ -123,10 +126,12 @@ const PHASES = [
   // Pre-E3 housekeeping (found during E2, deliberately deferred there): `webv2-admin.tflw` itself
   // — the pre-existing *mixed* admin test living alongside `ui-admin/` — had never been wired into
   // this sweep at all, unlike every other `.env-specific/` file. Same `--env webv2Admin` reason as
-  // `ui-admin-check` above.
+  // `ui-admin-check` above. E3 (PLAN_ENTERPRISE_REGRESSION.md) adds `orgs-mixed.tflw` to this same
+  // phase — an explicit file list, not a `.env-specific/*.tflw` glob, since that directory also
+  // holds `mtls-rejection.tflw`/`unreachable-host.tflw`, which need their own different envs.
   {
     name: 'webv2-admin-check',
-    cmd: ['npx', 'tflw', 'run', '--no-color', ...CI_VERBOSE, '--env', 'webv2Admin', 'tests/.env-specific/webv2-admin.tflw'].join(' '),
+    cmd: ['npx', 'tflw', 'run', '--no-color', ...CI_VERBOSE, '--env', 'webv2Admin', 'tests/.env-specific/webv2-admin.tflw', 'tests/.env-specific/orgs-mixed.tflw'].join(' '),
   },
 ];
 

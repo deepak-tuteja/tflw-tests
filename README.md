@@ -24,16 +24,18 @@ nginx/               TLS sidecar (M22) — self-signed :8443 + mTLS-requiring :8
 webV2/               React+Vite+TS SPA storefront (webV2-0) — tflw's browser-arc dogfood target
                      (PLAN_WEBV2_TARGETS.md); own nginx image serves the build + proxies /v1/*
                      to api:4001 so the storefront and API share an origin; :8090
-webV2/admin/         SSR admin console (webV2-1) — moderation/coupons/categories/tickets over
-                     apiV2, plain Express+EJS full-page navigations (a different flake class
-                     than the SPA above); talks to api:4001 server-to-server, no proxy needed; :8091
+webV2/admin/         SSR admin console (webV2-1) — moderation/coupons/categories/tickets/
+                     organizations (E3) over apiV2, plain Express+EJS full-page navigations (a
+                     different flake class than the SPA above); talks to api:4001 server-to-server,
+                     no proxy needed; :8091
 tests/               .tflw test files, split into a real api/ui/mixed layer structure (E1,
                      PLAN_ENTERPRISE_REGRESSION.md) — folder placement communicates the layer to
                      a human, an `@api`/`@ui`/`@mixed` tag on every test lets `tflw run --tag`
                      select across it (combinable with area tags, e.g. `--tag ui,orgOps`)
 tests/api/           API-only tests, one subfolder per business area: identity/, catalog/,
-                     orders/, admin/, plus mechanics/ for DSL-mechanism demos that aren't tied to
-                     one business area (actions-and-helpers, body-types, logging, retry-and-flake)
+                     orders/, admin/, orgOps/ (E3 — org/membership CRUD + cross-org visibility
+                     proof), plus mechanics/ for DSL-mechanism demos that aren't tied to one
+                     business area (actions-and-helpers, body-types, logging, retry-and-flake)
 tests/ui/            UI-only tests (E2, PLAN_ENTERPRISE_REGRESSION.md) — no `api` step in the
                      asserted test body, only in `before`/`before file` setup hooks; storefront/
                      backfill lives at tests/ui/storefront/ (login, catalog browse/search, product
@@ -44,17 +46,19 @@ tests/ui/            UI-only tests (E2, PLAN_ENTERPRISE_REGRESSION.md) — no `a
                      folder's default `env local` (:8090), the same env-conflict reason
                      `tests/.env-specific/webv2-admin.tflw` already has its own dedicated home.
 tests/mixed/         tests that drive the browser and assert through the API/DB together
-                     (storefront.tflw today; tests/.env-specific/webv2-admin.tflw too, tagged
-                     `@mixed` but kept under .env-specific/ for its own unrelated env-conflict
-                     reason, see below)
+                     (storefront.tflw today; tests/.env-specific/webv2-admin.tflw and
+                     orgs-mixed.tflw (E3) too, tagged `@mixed` but kept under .env-specific/ for
+                     their own unrelated env-conflict reason, see below)
 tests/helpers/       JS escape-hatch helpers (page-walk, Retry-After sleep-and-retry, etc.)
 tests/shared/        actions shared across files (e.g. `create product`)
 tests/.demo-fail/    intentionally-failing fixtures, tag-gated + dot-dir-excluded from `tflw run`
 tests/.checkonly/    invalid-syntax fixtures, demonstrated via `tflw check <file>` only
 tests/.env-specific/ passing tests whose assertions only hold under a non-default env (M25),
                      dot-dir-excluded from `tflw run`/`tflw check` for the same reason; also home
-                     to ui-admin/ (E2) — the SSR admin console's own UI-only backfill, run via
-                     `npm run test:ui-admin` (`--env webv2Admin`), same reason as webv2-admin.tflw
+                     to ui-admin/ (E2, plus E3's own orgs.tflw) — the SSR admin console's own
+                     UI-only backfill, run via `npm run test:ui-admin` (`--env webv2Admin`), same
+                     reason as webv2-admin.tflw; orgs-mixed.tflw (E3) sits alongside
+                     webv2-admin.tflw for the same reason, run via `npm run test:webv2-admin`
 tflw.config          services, sessions, env, `defaults: timeout wait 5s`
 vendor/              npm-packed tflw tarball (regenerated, not committed)
 scripts/             refresh-tflw.mjs
@@ -77,18 +81,19 @@ node cli.mjs stop      # docker compose down -v — drops the DB too (ephemeral 
 
 Or use the `testflow-tests-app` skill to start/stop the stack.
 
-### Full regression sweep (M21, updated through pre-E3 housekeeping)
+### Full regression sweep (M21, updated through E3)
 
 `npm run regression` — the thorough check to run after any change to apiV2 or `tests/*.tflw`: the
-full suite, each feature-area tag alone (`identityOps`/`catalogOps`/`orderOps`/`adminOps`),
-`@smoke` alone, each `smoke,<area>` cross-axis combo, then a run of `*-check`/`*-rejection` phases
-proving specific CLI verbs/flags/fixtures that ad-hoc manual runs used to be the only evidence for:
-`mtls-rejection`, `safety-redaction-check`, `demo-fail-check`, `cli-flags-check`, `migrate-check`,
-`watch-check`, `safety-flags-check`, `check-diagnostics`, `pick-check`, `logging-check`,
-`report-overflow-check`, `ui-admin-check` (E2), `webv2-admin-check` (pre-E3 housekeeping) — 23
-phases total, each on its own fresh Docker restart (`scripts/regression.mjs`; restarting every
-phase isn't optional — `unique(...)`'s counter resets per `tflw run` invocation but Postgres data
-doesn't, so chained phases on the same DB reproduce false collisions). Exits non-zero if any phase
+full suite, each feature-area tag alone (`identityOps`/`catalogOps`/`orderOps`/`adminOps`/
+`orgOps` — E3's 5th), `@smoke` alone, each `smoke,<area>` cross-axis combo, then a run of
+`*-check`/`*-rejection` phases proving specific CLI verbs/flags/fixtures that ad-hoc manual runs
+used to be the only evidence for: `mtls-rejection`, `safety-redaction-check`, `demo-fail-check`,
+`cli-flags-check`, `migrate-check`, `watch-check`, `safety-flags-check`, `check-diagnostics`,
+`pick-check`, `logging-check`, `report-overflow-check`, `ui-admin-check` (E2 + E3's own
+`orgs.tflw`), `webv2-admin-check` (pre-E3 housekeeping, + E3's own `orgs-mixed.tflw`) — 25 phases
+total, each on its own fresh Docker restart (`scripts/regression.mjs`; restarting every phase isn't
+optional — `unique(...)`'s counter resets per `tflw run` invocation but Postgres data doesn't, so
+chained phases on the same DB reproduce false collisions). Exits non-zero if any phase
 fails. See `scripts/regression.mjs`'s own `PHASES` array for the authoritative, always-current list
 — this section restates it for a reader who won't open the script, so it can drift; if in doubt,
 the script wins.
@@ -111,22 +116,49 @@ not the mTLS sidecar above (that one is scoped to TLS/mTLS testing, M22, and ser
 ### webV2 admin — SSR full-page-nav dogfood target (webV2-1)
 
 `http://localhost:8091` after `node cli.mjs start` — a plain Express+EJS console (no client JS,
-no bundler) over apiV2's moderation (product reviews' reply endpoint), coupons, categories, and
-tickets domains, the "full-page navigations" flake class `PLAN_WEBV2_TARGETS.md` calls out as
-distinct from the storefront's async client-side re-renders: every page is a real server-rendered
-HTML response, every mutation is a `<form method="post">` that redirects on success (assign/claim/
-start/resolve a ticket, reply to a review, create a coupon). Log in as `admin@example.com` /
-`admin-pw-123` (full access) or `carol@example.com` / `carol-pw-123` (agent — tickets only, no
-coupons); a plain `user`-role login is rejected at the login form, since none of these four
+no bundler) over apiV2's moderation (product reviews' reply endpoint), coupons, categories,
+tickets, and (E3) organizations/memberships domains, the "full-page navigations" flake class
+`PLAN_WEBV2_TARGETS.md` calls out as distinct from the storefront's async client-side re-renders:
+every page is a real server-rendered HTML response, every mutation is a `<form method="post">`
+that redirects on success (assign/claim/start/resolve a ticket, reply to a review, create a
+coupon, add/promote/demote/remove an org member). Log in as `admin@example.com` / `admin-pw-123`
+(full access) or `carol@example.com` / `carol-pw-123` (agent — tickets only, no coupons or
+organizations); a plain `user`-role login is rejected at the login form, since none of these
 domains are user-facing. Architecture: this app never talks to apiV2 through nginx or the browser
 at all — it holds the apiV2 session cookie + CSRF token server-side (in its own `express-session`,
 a small BFF) and calls `api:4001` directly container-to-container, so there's no same-origin
 question to solve the way webV2's SPA has one. It carries its own CSRF token (separate from
 apiV2's) on every form, since a plain session-cookie-authenticated app with no such token would
-otherwise be genuinely vulnerable to CSRF from the browser's side. Two apiV2 surface gaps shaped
-the design, both documented in code comments: `coupons` has no listing endpoint (creation shows a
-one-time confirmation page, nothing to browse afterward), and there's no cross-product reviews
-listing (moderation is reached by browsing to a product's detail page, not a flat review inbox).
+otherwise be genuinely vulnerable to CSRF from the browser's side. One apiV2 surface gap shaped the
+design, documented in code comments: there's no cross-product reviews listing (moderation is
+reached by browsing to a product's detail page, not a flat review inbox) — coupons *did* have this
+same gap pre-E3 (creation showed a one-time confirmation page, nothing to browse afterward), closed
+by E3's own `GET /coupons` (org-scoped: a system admin sees every coupon, an org owner/admin sees
+their own org's plus every global one).
+
+### Organizations & the org-scoping retrofit (E3)
+
+`PLAN_ENTERPRISE_REGRESSION.md` E3 — a real multi-tenant layer: `Organization` (name, plan/tier)
+and `OrgMembership` (user × org, `orgRole`: owner/admin/member — a second, independent axis from
+the existing system-level `UserRole`: admin/user/agent). `orders`, `tickets`, `reviews`, and
+`coupons` each gained a nullable `orgId`, denormalized at creation time from the acting user's own
+membership; product/category catalog stays global/shared (single-seller-marketplace model, not
+org-scoped). The visibility rule: an org **member** sees exactly what they saw before this
+retrofit (their own orders/tickets, unaffected); an org **owner/admin** additionally sees every
+order/ticket placed by *any* member of their org (`GET /orders/org`, and broadened
+`GET /orders/:id`/`GET /tickets`/`GET /tickets/:id`) — a different org's owner/admin still gets
+403/404. A coupon's `orgId` (null = global, unchanged) scopes checkout-time redemption to that
+org's members and scopes who may create/list it. A review's `orgId` is captured for provenance
+only — `GET /products/:id/reviews` stays deliberately public and org-blind, since scoping the
+storefront's own review list by the viewer's org would break browsing for every shopper outside
+it. Org/membership *management* itself (`/orgs`) is platform-operator-only (system ADMIN, driven
+by the admin console's own new **Organizations** screen below) — there is no customer-facing
+self-service org-management endpoint this round; a customer org's own owner/admin never logs into
+this console, they just get broader visibility through the storefront-facing endpoints they
+already use. Seeded users: `erin@example.com`/`frank@example.com`/`grace@example.com`
+(Acme Corp — owner/admin/member) and `heidi@example.com`/`ivan@example.com`/`judy@example.com`
+(Globex Inc — owner/admin/member), all `<name>-pw-123`, deliberately separate from
+alice/bob/carol/dave so this retrofit changes nothing about what any pre-E3 test already asserted.
 
 ### webV2 Tier B corners (webV2-2)
 

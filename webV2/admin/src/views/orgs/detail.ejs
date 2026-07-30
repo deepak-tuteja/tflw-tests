@@ -1,0 +1,69 @@
+<%- include('../partials/head', { title: org.name }) %>
+<%- include('../partials/nav') %>
+<p><a href="/orgs">&larr; back to organizations</a></p>
+<h1><%= org.name %></h1>
+<p>Plan: <span class="badge"><%= org.plan %></span></p>
+<% if (error) { %><p class="error"><%= error %></p><% } %>
+
+<h2>Update organization</h2>
+<form method="post" action="/orgs/<%= org.id %>">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+  <label for="name">Name</label>
+  <input id="name" name="name" value="<%= org.name %>" required />
+  <label for="plan">Plan</label>
+  <select id="plan" name="plan">
+    <% ['starter', 'business', 'enterprise'].forEach(function(p) { %>
+      <option value="<%= p %>" <%= org.plan === p ? 'selected' : '' %>><%= p %></option>
+    <% }) %>
+  </select>
+  <p><button type="submit">Save</button></p>
+</form>
+
+<h2>Members</h2>
+<table>
+  <thead>
+    <tr><th>Name</th><th>Email</th><th>Role</th><th></th><th></th></tr>
+  </thead>
+  <tbody>
+    <% members.forEach(function(m) { %>
+      <tr>
+        <td><%= m.userName %></td>
+        <td><%= m.userEmail %></td>
+        <td><%= m.orgRole %></td>
+        <td>
+          <form class="inline" method="post" action="/orgs/<%= org.id %>/memberships/<%= m.id %>/role">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <label for="role-<%= m.id %>">Role for <%= m.userEmail %></label>
+            <select id="role-<%= m.id %>" name="orgRole">
+              <% ['owner', 'admin', 'member'].forEach(function(r) { %>
+                <option value="<%= r %>" <%= m.orgRole === r ? 'selected' : '' %>><%= r %></option>
+              <% }) %>
+            </select>
+            <button type="submit">Change role for <%= m.userEmail %></button>
+          </form>
+        </td>
+        <td>
+          <form class="inline" method="post" action="/orgs/<%= org.id %>/memberships/<%= m.id %>/remove">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <button type="submit">Remove <%= m.userEmail %></button>
+          </form>
+        </td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+
+<h2>Add member</h2>
+<form method="post" action="/orgs/<%= org.id %>/memberships">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+  <label for="email">User email</label>
+  <input id="email" name="email" type="email" required />
+  <label for="orgRole">New member's role</label>
+  <select id="orgRole" name="orgRole">
+    <option value="owner">owner</option>
+    <option value="admin">admin</option>
+    <option value="member">member</option>
+  </select>
+  <p><button type="submit">Add member</button></p>
+</form>
+<%- include('../partials/foot') %>

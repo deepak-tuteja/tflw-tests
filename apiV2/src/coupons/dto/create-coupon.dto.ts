@@ -1,5 +1,15 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsISO8601, IsInt, IsNumber, IsString, Min, MinLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  IsEnum,
+  IsISO8601,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Min,
+  MinLength,
+} from 'class-validator';
 import { CouponType } from '../../entities/coupon.entity';
 
 export class CreateCouponDto {
@@ -34,4 +44,13 @@ export class CreateCouponDto {
   @IsInt()
   @Min(1)
   usageLimit: number;
+
+  // PLAN_ENTERPRISE_REGRESSION.md E3 — omitted/undefined = a global coupon (today's only
+  // behavior). A system ADMIN may set this to any org's id; an org owner/admin caller may only
+  // ever create a coupon for their *own* org — CouponsService.create enforces both, ignoring an
+  // org caller's mismatched value rather than trusting it.
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  orgId?: string;
 }

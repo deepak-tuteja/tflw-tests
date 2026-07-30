@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Review } from '../entities/review.entity';
@@ -9,6 +13,7 @@ import { CreateReviewDto } from './dto/create-review.dto';
 import { ReplyToReviewDto } from './dto/reply-to-review.dto';
 import { isUniqueViolation } from '../common/db-errors';
 import { decodeCursor, encodeCursor } from '../common/cursor';
+import { OrgsService } from '../orgs/orgs.service';
 
 export interface ReviewPage {
   data: Review[];
@@ -21,16 +26,25 @@ export class ReviewsService {
     @InjectRepository(Review) private readonly reviews: Repository<Review>,
     private readonly products: ProductsService,
     private readonly notifications: NotificationsService,
+    private readonly orgs: OrgsService,
   ) {}
 
-  async create(productId: string, userId: string, dto: CreateReviewDto): Promise<Review> {
+  async create(
+    productId: string,
+    userId: string,
+    dto: CreateReviewDto,
+  ): Promise<Review> {
     await this.products.findOne(productId); // 404s if the product doesn't exist
 
+    // PLAN_ENTERPRISE_REGRESSION.md E3 — provenance only (see review.entity.ts's own comment on
+    // why this doesn't gate `findPageForProduct`'s deliberately-public read path).
+    const membership = await this.orgs.getForUser(userId);
     const review = this.reviews.create({
       productId,
       userId,
       rating: dto.rating,
       comment: dto.comment ?? '',
+      orgId: membership?.orgId ?? null,
     });
     try {
       return await this.reviews.save(review);
@@ -44,7 +58,11 @@ export class ReviewsService {
 
   // Cursor (keyset) pagination — nested list endpoint (plan_v2.md Cluster 4). Ordered by
   // (created_at, id) so the tie-break is stable even when two reviews land in the same instant.
-  async findPageForProduct(productId: string, cursor: string | undefined, limit: number): Promise<ReviewPage> {
+  async findPageForProduct(
+    productId: string,
+    cursor: string | undefined,
+    limit: number,
+  ): Promise<ReviewPage> {
     await this.products.findOne(productId);
 
     const qb = this.reviews
@@ -65,15 +83,18 @@ export class ReviewsService {
       );
     }
 
-    qb.orderBy('review.created_at', 'ASC').addOrderBy('review.id', 'ASC').take(limit + 1);
+    qb.orderBy('review.created_at', 'ASC')
+      .addOrderBy('review.id', 'ASC')
+      .take(limit + 1);
 
     const rows = await qb.getMany();
     const hasMore = rows.length > limit;
     const data = hasMore ? rows.slice(0, limit) : rows;
     const last = data[data.length - 1];
-    const nextCursor = hasMore && last
-      ? encodeCursor({ createdAt: last.createdAt.toISOString(), id: last.id })
-      : null;
+    const nextCursor =
+      hasMore && last
+        ? encodeCursor({ createdAt: last.createdAt.toISOString(), id: last.id })
+        : null;
 
     return { data, nextCursor };
   }
@@ -96,10 +117,14 @@ export class ReviewsService {
     const saved = await this.reviews.save(review);
 
     if (isFirstReply) {
-      await this.notifications.create(review.userId, NotificationType.REVIEW_REPLY, {
-        reviewId: review.id,
-        replyText: dto.replyText,
-      });
+      await this.notifications.create(
+        review.userId,
+        NotificationType.REVIEW_REPLY,
+        {
+          reviewId: review.id,
+          replyText: dto.replyText,
+        },
+      );
     }
 
     return saved;

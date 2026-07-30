@@ -37,6 +37,13 @@ export class Coupon {
   @Column({ name: 'used_count', type: 'int', default: 0 })
   usedCount: number;
 
+  // PLAN_ENTERPRISE_REGRESSION.md E3 — null (the pre-E3 default) means a global coupon, redeemable
+  // by anyone, exactly as today; non-null scopes redemption to members of that one org
+  // (OrdersService.applyCoupon) and restricts who may create/list it (CouponsService) to a system
+  // ADMIN or that org's own owner/admin.
+  @Column({ name: 'org_id', type: 'uuid', nullable: true })
+  orgId: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

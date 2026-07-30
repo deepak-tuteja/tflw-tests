@@ -5,6 +5,7 @@
   <a href="/products">Products / Moderation</a>
   <a href="/tickets">Tickets</a>
   <% if (currentUser.role === 'admin') { %><a href="/coupons">Coupons</a><% } %>
+  <% if (currentUser.role === 'admin') { %><a href="/orgs">Organizations</a><% } %>
   <span> — <%= currentUser.name %> (<%= currentUser.role %>)</span>
   <form class="inline" method="post" action="/logout">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>" />

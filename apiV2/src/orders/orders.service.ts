@@ -18,6 +18,7 @@ import { UserRole } from '../entities/user.entity';
 import { isUniqueViolation } from '../common/db-errors';
 import { JobsService } from '../jobs/jobs.service';
 import { Job } from '../entities/job.entity';
+import { OrgsService } from '../orgs/orgs.service';
 
 export interface CreateOrderResult {
   order: Order;
@@ -56,6 +57,7 @@ export class OrdersService {
     private readonly orderItems: Repository<OrderItem>,
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly jobsService: JobsService,
+    private readonly orgs: OrgsService,
   ) {}
 
   // Admin-only trigger (enforced by the controller's @Roles guard) for the 202-Accepted async
@@ -190,8 +192,12 @@ export class OrdersService {
     }
 
     const discountAmount = couponCode
-      ? await this.applyCoupon(manager, couponCode, subtotal)
+      ? await this.applyCoupon(manager, couponCode, subtotal, userId)
       : null;
+
+    // PLAN_ENTERPRISE_REGRESSION.md E3 — denormalized at creation time, null if the placing user
+    // has no org membership (unaffected pre-E3 behavior).
+    const membership = await this.orgs.getForUser(userId);
 
     const order = manager.create(Order, {
       userId,
@@ -200,6 +206,7 @@ export class OrdersService {
       couponCode: couponCode ?? null,
       discountAmount,
       webhookUrl: webhookUrl ?? null,
+      orgId: membership?.orgId ?? null,
     });
     return manager.save(Order, order);
   }
@@ -211,9 +218,20 @@ export class OrdersService {
     manager: EntityManager,
     code: string,
     subtotal: number,
+    userId: string,
   ): Promise<string> {
     const coupon = await manager.findOne(Coupon, { where: { code } });
     if (!coupon) throw new NotFoundException('invalid coupon code');
+    // PLAN_ENTERPRISE_REGRESSION.md E3 — a non-null orgId scopes redemption to that org's own
+    // members (any orgRole — management vs. redemption are different permissions, see
+    // CouponsService). Same "invalid coupon code" message as a genuinely nonexistent code, so a
+    // checkout attempt from outside the org can't distinguish "wrong org" from "doesn't exist."
+    if (coupon.orgId) {
+      const membership = await this.orgs.getForUser(userId);
+      if (!membership || membership.orgId !== coupon.orgId) {
+        throw new NotFoundException('invalid coupon code');
+      }
+    }
     if (coupon.expiresAt.getTime() < Date.now()) {
       throw new UnprocessableEntityException('this coupon has expired');
     }
@@ -286,6 +304,25 @@ export class OrdersService {
     });
   }
 
+  // PLAN_ENTERPRISE_REGRESSION.md E3 — org-scoped sibling of findAllAdmin: not system-role RBAC,
+  // an org owner/admin's own self-service view of every order placed by any member of their org
+  // (findOwn above stays strictly per-user, unaffected). 403 for anyone without an owner/admin
+  // membership, same "requires role" shape as an @Roles guard failure, since there's no org to
+  // scope to.
+  async findAllForOrg(requester: AuthedUser): Promise<Order[]> {
+    const membership = await this.orgs.getForUser(requester.id);
+    if (!this.orgs.isOwnerOrAdmin(membership)) {
+      throw new ForbiddenException(
+        'requires an owner or admin membership in an organization',
+      );
+    }
+    return this.orders.find({
+      where: { orgId: membership.orgId },
+      relations: { items: { product: { category: true } } },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
   // PLAN_FILEFORMATS.md D5 — id,status,total,createdAt,ownerEmail; total is the same
   // items-minus-discount computation order-receipt.util.ts's PDF already does, just summed rather
   // than itemized.
@@ -321,10 +358,20 @@ export class OrdersService {
       relations: { items: { product: { category: true } } },
     });
     if (!order) throw new NotFoundException('order not found');
-    if (requester.role !== UserRole.ADMIN && order.userId !== requester.id) {
-      throw new ForbiddenException('not your order');
+    if (requester.role === UserRole.ADMIN || order.userId === requester.id) {
+      return order;
     }
-    return order;
+    // PLAN_ENTERPRISE_REGRESSION.md E3 — an org owner/admin also sees any order placed by a fellow
+    // member of their own org; a member of a *different* org (or no org at all) still gets 403,
+    // same as before this retrofit.
+    const membership = await this.orgs.getForUser(requester.id);
+    if (
+      this.orgs.isOwnerOrAdmin(membership) &&
+      membership.orgId === order.orgId
+    ) {
+      return order;
+    }
+    throw new ForbiddenException('not your order');
   }
 
   // PATCH /orders/:id/items/:itemId (M6, plan_v2.md Part D decision 3a) — a real nested-resource

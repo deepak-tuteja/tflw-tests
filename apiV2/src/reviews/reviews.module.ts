@@ -10,6 +10,7 @@ import { ReviewThreadService } from './review-thread.service';
 import { ProductsModule } from '../products/products.module';
 import { AuthModule } from '../auth/auth.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { OrgsModule } from '../orgs/orgs.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     ProductsModule,
     AuthModule,
     NotificationsModule,
+    OrgsModule,
   ],
   controllers: [
     ReviewsController,

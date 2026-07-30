@@ -1,0 +1,61 @@
+# E3 (PLAN_ENTERPRISE_REGRESSION.md): the new Organizations screen driving a real membership +
+# role change, verified against apiV2's own scoped-visibility response afterward — decision 6's
+# "mixed" ask, distinct from `.env-specific/ui-admin/orgs.tflw`'s UI-only nav/list/create coverage
+# (that file's asserted body stays `api`-free per decision 5; this one deliberately calls `api` in
+# the test body to prove the browser-driven change had a real effect on apiV2's own authorization
+# logic, not just that the console re-rendered something).
+#
+# **Lives in `.env-specific/`, not `tests/mixed/orgOps/`** — same env-conflict reason
+# `webv2-admin.tflw`/`ui-admin/` already do: this screen is served by the admin console's own `web`
+# base (:8091), which conflicts with `tests/mixed/`'s default `env local` (:8090, the storefront).
+#
+# A throwaway org + a freshly registered user, never the seeded Acme Corp/Globex Inc/erin-frank-
+# grace-heidi-ivan-judy fixtures `tests/api/orgOps/cross-org-visibility.tflw` depends on staying
+# exactly as seeded — this test mutates a role, so it must not touch those.
+
+import "../shared/webv2-admin-login.tflw"
+
+before
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+  api POST /orgs body { name: unique("Mixed Test Co") }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as orgId
+
+  let memberEmail = unique email
+  let memberPw = random password
+  api POST /auth/register body { name: "Mixed Org Test User", email: {memberEmail}, password: {memberPw} }
+  expect status equals 201
+  capture body.accessToken as memberToken
+
+@mixed @orgOps
+test "adding a member and promoting them to owner through the Organizations screen actually changes their apiV2-side visibility"
+  adminLogin(env(ADMIN_EMAIL), env(ADMIN_PW))
+  open "/orgs/{orgId}"
+
+  fill field "User email" with "{memberEmail}"
+  select "member" from field "New member's role"
+  click button "Add member"
+  # a bare `text "…"` is a substring match (SPEC §9.3) — this exact email is also a substring of
+  # the row's own "Role for {memberEmail}"/"Change role for {memberEmail}"/"Remove {memberEmail}"
+  # labels, so it's genuinely ambiguous here, not just occasionally flaky. Scoped to the row's
+  # plain-text email cell instead, same ambiguity-avoidance E2's products.tflw already uses.
+  expect css "table tbody td:text-is('{memberEmail}')" is visible
+
+  # Baseline, still a plain member: apiV2 forbids the org-wide order view.
+  api GET /orders/org
+    header "Authorization" is "Bearer {memberToken}"
+  expect status equals 403
+
+  select "owner" from field "Role for {memberEmail}"
+  click button "Change role for {memberEmail}"
+  expect text "Members" is visible
+
+  # The actual proof: apiV2's own authorization logic now treats this user as an org owner,
+  # entirely because of the click above — no direct API role change anywhere in this test.
+  api GET /orders/org
+    header "Authorization" is "Bearer {memberToken}"
+  expect status equals 200

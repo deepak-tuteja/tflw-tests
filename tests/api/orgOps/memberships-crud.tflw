@@ -1,0 +1,158 @@
+# memberships-crud.tflw — PLAN_ENTERPRISE_REGRESSION.md E3: full CRUD on OrgMembership
+# (`/orgs/:id/memberships`), including the "org-role transition" ask (promote/demote) and who's
+# allowed to do it (system ADMIN only, same as organizations-crud.tflw).
+#
+# Every test here creates its own throwaway org + freshly registered user rather than touching the
+# seeded Acme Corp/Globex Inc orgs or their erin/frank/grace/heidi/ivan/judy memberships —
+# cross-org-visibility.tflw depends on those seeded memberships staying exactly as seeded, and a
+# mutation here (promote/demote/remove) would silently corrupt that file's assumptions if it ran
+# first. Inline admin login, same late-in-the-suite token-TTL reason as organizations-crud.tflw.
+
+before
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+@smoke @orgOps @api
+test "adding a member by email, then promoting and demoting their org role"
+  api POST /orgs body { name: unique("Membership Co") }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as orgId
+
+  let memberEmail = unique email
+  let memberPw = random password
+  api POST /auth/register body { name: "Membership Test User", email: {memberEmail}, password: {memberPw} }
+  expect status equals 201
+
+  api POST /orgs/{orgId}/memberships body { email: {memberEmail}, orgRole: "member" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  expect body.orgRole equals "member"
+  capture body.id as membershipId
+
+  api GET /orgs/{orgId}/memberships
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  expect any body.id equals "{membershipId}"
+  expect any body.userEmail equals "{memberEmail}"
+
+  # Promote member -> admin.
+  api PATCH /orgs/{orgId}/memberships/{membershipId} body { orgRole: "admin" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  expect body.orgRole equals "admin"
+
+  # Demote back down to member.
+  api PATCH /orgs/{orgId}/memberships/{membershipId} body { orgRole: "member" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  expect body.orgRole equals "member"
+
+@crud @orgOps @api
+test "removing a member"
+  api POST /orgs body { name: unique("Removal Co") }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as orgId
+
+  let memberEmail = unique email
+  let memberPw = random password
+  api POST /auth/register body { name: "Removal Test User", email: {memberEmail}, password: {memberPw} }
+  expect status equals 201
+
+  api POST /orgs/{orgId}/memberships body { email: {memberEmail}, orgRole: "member" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as membershipId
+
+  api DELETE /orgs/{orgId}/memberships/{membershipId}
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 204
+
+  api GET /orgs/{orgId}/memberships
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  expect all body.id not equals "{membershipId}"
+
+@crud @orgOps @api
+test "adding the same user to an org twice is a clean 409, not a duplicate row"
+  api POST /orgs body { name: unique("Dupe Membership Co") }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as orgId
+
+  let memberEmail = unique email
+  let memberPw = random password
+  api POST /auth/register body { name: "Dupe Test User", email: {memberEmail}, password: {memberPw} }
+  expect status equals 201
+
+  api POST /orgs/{orgId}/memberships body { email: {memberEmail}, orgRole: "member" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+
+  api POST /orgs/{orgId}/memberships body { email: {memberEmail}, orgRole: "admin" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 409
+  expect body.detail contains "already a member"
+
+@crud @orgOps @api
+test "adding a member with an email that doesn't exist is a clean 404"
+  api POST /orgs body { name: unique("Ghost Email Co") }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as orgId
+
+  api POST /orgs/{orgId}/memberships body { email: "nobody-real-here@example.com", orgRole: "member" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 404
+
+@crud @orgOps @api
+test "a membership id from a different org 404s against this org's path — no cross-org leakage even for the platform operator's own path shape"
+  api POST /orgs body { name: unique("Org X") }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as orgXId
+
+  api POST /orgs body { name: unique("Org Y") }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as orgYId
+
+  let memberEmail = unique email
+  let memberPw = random password
+  api POST /auth/register body { name: "Cross Org Test User", email: {memberEmail}, password: {memberPw} }
+  expect status equals 201
+
+  api POST /orgs/{orgXId}/memberships body { email: {memberEmail}, orgRole: "member" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as membershipId
+
+  # membershipId genuinely exists — just not under orgY's path.
+  api PATCH /orgs/{orgYId}/memberships/{membershipId} body { orgRole: "admin" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 404
+
+  api DELETE /orgs/{orgYId}/memberships/{membershipId}
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 404
+
+@authz @orgOps @api
+test "a non-admin identity cannot add, list, update, or remove memberships"
+  api POST /orgs body { name: unique("Guarded Co") }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as orgId
+
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as aliceToken
+
+  api POST /orgs/{orgId}/memberships body { email: env(USER_B_EMAIL), orgRole: "member" }
+    header "Authorization" is "Bearer {aliceToken}"
+  expect status equals 403
+
+  api GET /orgs/{orgId}/memberships
+    header "Authorization" is "Bearer {aliceToken}"
+  expect status equals 403

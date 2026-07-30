@@ -63,6 +63,14 @@ export class OrdersController {
     return this.orders.findAllAdmin();
   }
 
+  // PLAN_ENTERPRISE_REGRESSION.md E3 — an org owner/admin's own self-service view of every order
+  // placed by any member of their org (not system-role RBAC like `all` above). Declared before
+  // `:id` for the same route-ordering reason `all`/`export` are.
+  @Get('org')
+  findAllForOrg(@CurrentUser() user: AuthedUser) {
+    return this.orders.findAllForOrg(user);
+  }
+
   // PLAN_FILEFORMATS.md D5 — a naturally-computed CSV, not an upload echo. Declared before `:id`
   // so "export" is never swallowed by the id route (same reason `all` precedes it above).
   // Computed fresh per request — small synchronous read, no caching/background job needed.
