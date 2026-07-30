@@ -77,24 +77,31 @@ node cli.mjs stop      # docker compose down -v — drops the DB too (ephemeral 
 
 Or use the `testflow-tests-app` skill to start/stop the stack.
 
-### Full regression sweep (M21)
+### Full regression sweep (M21, updated through pre-E3 housekeeping)
 
 `npm run regression` — the thorough check to run after any change to apiV2 or `tests/*.tflw`: the
-full suite, then each feature-area tag alone (`identityOps`/`catalogOps`/`orderOps`/`adminOps`),
-then `@smoke` alone, then each `smoke,<area>` cross-axis combo, then `mtls-rejection`/
-`safety-redaction-check`, then (M29) `demo-fail-check`/`cli-flags-check` — 14 phases, each on its
-own fresh Docker restart (`scripts/regression.mjs`; restarting every phase isn't optional —
-`unique(...)`'s counter resets per `tflw run` invocation but Postgres data doesn't, so chained
-phases on the same DB reproduce false collisions). Exits non-zero if any phase fails.
+full suite, each feature-area tag alone (`identityOps`/`catalogOps`/`orderOps`/`adminOps`),
+`@smoke` alone, each `smoke,<area>` cross-axis combo, then a run of `*-check`/`*-rejection` phases
+proving specific CLI verbs/flags/fixtures that ad-hoc manual runs used to be the only evidence for:
+`mtls-rejection`, `safety-redaction-check`, `demo-fail-check`, `cli-flags-check`, `migrate-check`,
+`watch-check`, `safety-flags-check`, `check-diagnostics`, `pick-check`, `logging-check`,
+`report-overflow-check`, `ui-admin-check` (E2), `webv2-admin-check` (pre-E3 housekeeping) — 23
+phases total, each on its own fresh Docker restart (`scripts/regression.mjs`; restarting every
+phase isn't optional — `unique(...)`'s counter resets per `tflw run` invocation but Postgres data
+doesn't, so chained phases on the same DB reproduce false collisions). Exits non-zero if any phase
+fails. See `scripts/regression.mjs`'s own `PHASES` array for the authoritative, always-current list
+— this section restates it for a reader who won't open the script, so it can drift; if in doubt,
+the script wins.
 
 ### webV2 — browser-arc dogfood target (webV2-0)
 
 `http://localhost:8090` after `node cli.mjs start` — a React+Vite+TS SPA storefront (catalog →
 product → cart → checkout) over apiV2's REST + session-cookie auth, the Tier-A ("clean": proper
 ARIA roles, `<label>`-associated inputs, one unambiguous "Add to cart" button per product) target
-tflw's upcoming browser steps (`PLAN_BROWSER_PERF_SECURITY.md` M3a) will run against once they
-ship — no `.tflw` coverage yet, since tflw itself has no browser support until M3a lands. Log in as
-any seeded user (e.g. `alice@example.com` / `alice-pw-123`); its own nginx image (`webV2/Dockerfile`
+tflw's browser steps (`PLAN_BROWSER_PERF_SECURITY.md` M3a/M3b, shipped 2026-07-26) run against.
+`.tflw` coverage: `tests/mixed/storefront.tflw` (mixed, E1) plus the full UI-only backfill at
+`tests/ui/storefront/` (login, catalog browse/search, product detail, add-to-cart, checkout,
+review submission, support, a11y-demo — E2). Log in as any seeded user (e.g. `alice@example.com` / `alice-pw-123`); its own nginx image (`webV2/Dockerfile`
 + `webV2/nginx.conf`) builds the SPA and reverse-proxies `/v1/*` to `api:4001` so the storefront and
 API share an origin — required because apiV2 sets no CORS headers and its session-cookie/CSRF
 pairing (`apiV2/src/auth/auth.service.ts`) assumes same-origin. Deliberately its own nginx service,
