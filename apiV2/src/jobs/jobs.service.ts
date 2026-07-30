@@ -162,7 +162,10 @@ export class JobsService {
     return saved;
   }
 
-  private async continueAccountDeletion(jobId: string, userId: string): Promise<void> {
+  private async continueAccountDeletion(
+    jobId: string,
+    userId: string,
+  ): Promise<void> {
     await delay(STAGE_DELAY_MS);
     await this.users.update(userId, { attributes: {} });
 

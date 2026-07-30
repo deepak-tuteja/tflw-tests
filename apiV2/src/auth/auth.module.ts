@@ -13,7 +13,10 @@ import { AnyAuthGuard } from './guards/any-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, TokenRecord]), JwtModule.register({})],
+  imports: [
+    TypeOrmModule.forFeature([User, TokenRecord]),
+    JwtModule.register({}),
+  ],
   controllers: [AuthController],
   providers: [
     AuthService,

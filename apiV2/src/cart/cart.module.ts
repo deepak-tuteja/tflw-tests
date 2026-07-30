@@ -9,7 +9,11 @@ import { AuthModule } from '../auth/auth.module';
 import { OrdersModule } from '../orders/orders.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Cart, CartItem, Product]), AuthModule, OrdersModule],
+  imports: [
+    TypeOrmModule.forFeature([Cart, CartItem, Product]),
+    AuthModule,
+    OrdersModule,
+  ],
   controllers: [CartController],
   providers: [CartService],
 })

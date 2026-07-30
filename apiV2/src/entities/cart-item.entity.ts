@@ -17,7 +17,10 @@ export class CartItem {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => Cart, (cart) => cart.items, { onDelete: 'CASCADE', nullable: false })
+  @ManyToOne(() => Cart, (cart) => cart.items, {
+    onDelete: 'CASCADE',
+    nullable: false,
+  })
   @JoinColumn({ name: 'cart_id' })
   cart: Cart;
 

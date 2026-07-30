@@ -17,7 +17,10 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { FindProductsQueryDto } from './dto/find-products-query.dto';
 import { BatchProductItemDto } from './dto/batch-create-products.dto';
-import { BatchCreateProductsResult, BatchItemResult } from './dto/batch-create-products-result';
+import {
+  BatchCreateProductsResult,
+  BatchItemResult,
+} from './dto/batch-create-products-result';
 import { isForeignKeyViolation } from '../common/db-errors';
 
 // ETag values are just the row's version number, quoted per RFC7232 — opaque to the client,
@@ -40,7 +43,10 @@ const SORTABLE_COLUMNS: Record<string, string> = {
   stock: 'product.stock',
 };
 
-function applySort(qb: SelectQueryBuilder<Product>, sort: string | undefined): void {
+function applySort(
+  qb: SelectQueryBuilder<Product>,
+  sort: string | undefined,
+): void {
   if (!sort) {
     qb.orderBy('product.name', 'ASC');
     return;
@@ -60,7 +66,8 @@ function applySort(qb: SelectQueryBuilder<Product>, sort: string | undefined): v
 export class ProductsService {
   constructor(
     @InjectRepository(Product) private readonly products: Repository<Product>,
-    @InjectRepository(OrderItem) private readonly orderItems: Repository<OrderItem>,
+    @InjectRepository(OrderItem)
+    private readonly orderItems: Repository<OrderItem>,
     @InjectRepository(Review) private readonly reviews: Repository<Review>,
     private readonly categories: CategoriesService,
     private readonly notifications: NotificationsService,
@@ -69,11 +76,15 @@ export class ProductsService {
   // Filter (categoryId), full-text search (q), sort, and offset pagination (page+pageSize) —
   // plan_v2.md Cluster 4's query cluster. page/pageSize are only meaningful together; when
   // neither is given this returns a bare array, the same shape M1-M3's tests already assert.
-  async findAll(query: FindProductsQueryDto): Promise<Product[] | PaginatedProducts> {
+  async findAll(
+    query: FindProductsQueryDto,
+  ): Promise<Product[] | PaginatedProducts> {
     const qb = this.products.createQueryBuilder('product');
 
     if (query.categoryId) {
-      qb.andWhere('product.category_id = :categoryId', { categoryId: query.categoryId });
+      qb.andWhere('product.category_id = :categoryId', {
+        categoryId: query.categoryId,
+      });
     }
     if (query.q) {
       qb.andWhere(
@@ -87,7 +98,7 @@ export class ProductsService {
 
     applySort(qb, query.sort);
     if (paginated) {
-      qb.skip((query.page! - 1) * query.pageSize!).take(query.pageSize!);
+      qb.skip((query.page! - 1) * query.pageSize!).take(query.pageSize);
     }
 
     const data = await qb.getMany();
@@ -122,7 +133,11 @@ export class ProductsService {
     return this.products.save(product);
   }
 
-  async update(id: string, dto: UpdateProductDto, ifMatch?: string): Promise<Product> {
+  async update(
+    id: string,
+    dto: UpdateProductDto,
+    ifMatch?: string,
+  ): Promise<Product> {
     const product = await this.findOne(id);
 
     // Conditional-request check (RFC7232 §3.1): only enforced when the caller sends If-Match at
@@ -146,7 +161,10 @@ export class ProductsService {
 
     const saved = await this.products.save(product);
 
-    if (dto.price !== undefined && Number(saved.price) < Number(previousPrice)) {
+    if (
+      dto.price !== undefined &&
+      Number(saved.price) < Number(previousPrice)
+    ) {
       await this.notifyPriceDrop(saved, previousPrice, saved.price);
     }
 
@@ -155,7 +173,11 @@ export class ProductsService {
 
   // Real side-effect (M13, plan_v2.md Part F decision 3): every user who ordered or reviewed
   // this product gets a `price_drop` notification — no direct create-notification endpoint.
-  private async notifyPriceDrop(product: Product, oldPrice: string, newPrice: string): Promise<void> {
+  private async notifyPriceDrop(
+    product: Product,
+    oldPrice: string,
+    newPrice: string,
+  ): Promise<void> {
     const orderRows = await this.orderItems
       .createQueryBuilder('item')
       .innerJoin('item.order', 'itemOrder')
@@ -187,7 +209,9 @@ export class ProductsService {
   // independent per-item failure reasons: invalid price, unknown category, and a name reused
   // earlier in the same batch payload (not a DB-level constraint — products may share names
   // across separate, non-batched creates).
-  async createBatch(items: BatchProductItemDto[]): Promise<BatchCreateProductsResult> {
+  async createBatch(
+    items: BatchProductItemDto[],
+  ): Promise<BatchCreateProductsResult> {
     const results: BatchItemResult[] = [];
     const seenNames = new Set<string>();
 

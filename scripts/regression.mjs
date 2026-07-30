@@ -58,7 +58,7 @@ function archivePhaseReport(phaseName) {
 // E3 (PLAN_ENTERPRISE_REGRESSION.md) adds `orgOps` as a 5th area tag — its own `--tag orgOps` and
 // `smoke,orgOps` phases below fall out of the existing per-area-tag map, no separate wiring
 // needed.
-const AREA_TAGS = ['identityOps', 'catalogOps', 'orderOps', 'adminOps', 'orgOps'];
+const AREA_TAGS = ['identityOps', 'catalogOps', 'orderOps', 'adminOps', 'orgOps', 'inventoryOps'];
 
 // `--verbose` only under real GitHub Actions (auto-detected via GITHUB_ACTIONS, same signal tflw
 // itself uses for decision 111.8's ::group::/::endgroup:: log grouping) — a local `npm run

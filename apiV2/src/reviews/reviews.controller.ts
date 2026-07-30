@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ApiTags } from '@nestjs/swagger';
 import { ReviewsService } from './reviews.service';
@@ -33,10 +44,17 @@ export class ReviewsController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const limit = clampLimit(limitRaw);
-    const { data, nextCursor } = await this.reviews.findPageForProduct(productId, cursor, limit);
+    const { data, nextCursor } = await this.reviews.findPageForProduct(
+      productId,
+      cursor,
+      limit,
+    );
 
     if (nextCursor) {
-      const qs = new URLSearchParams({ cursor: nextCursor, limit: String(limit) }).toString();
+      const qs = new URLSearchParams({
+        cursor: nextCursor,
+        limit: String(limit),
+      }).toString();
       res.setHeader('Link', `<${req.path}?${qs}>; rel="next"`);
     }
 

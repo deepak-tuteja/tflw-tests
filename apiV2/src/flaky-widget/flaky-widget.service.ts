@@ -19,7 +19,10 @@ export class FlakyWidgetService {
     this.attempts.set(key, n);
 
     if (n === 1) {
-      return { status: 503, body: { key, attempt: n, detail: 'transiently unavailable, try again' } };
+      return {
+        status: 503,
+        body: { key, attempt: n, detail: 'transiently unavailable, try again' },
+      };
     }
     if (n === 2) {
       return {

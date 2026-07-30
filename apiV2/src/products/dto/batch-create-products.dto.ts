@@ -1,6 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsNumber,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from 'class-validator';
 
 // Deliberately looser than CreateProductDto: `price` has no @Min(0) and `categoryId` is a bare
 // string, not @IsUUID(). Batch items must fail independently in the service (per plan_v2.md Part

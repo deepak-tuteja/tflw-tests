@@ -44,7 +44,10 @@ export class UploadsController {
     @CurrentUser() user: AuthedUser,
     @Query('as') as: string | undefined,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<StreamableFile | { filename: string; contentType: string; contentBase64: string }> {
+  ): Promise<
+    | StreamableFile
+    | { filename: string; contentType: string; contentBase64: string }
+  > {
     const upload = await this.uploads.findOneScoped(id, user);
 
     if (as === 'json') {

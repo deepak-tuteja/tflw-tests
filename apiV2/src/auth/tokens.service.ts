@@ -26,8 +26,14 @@ export class TokensService {
 
   private secretFor(typ: TokenType): string {
     return typ === 'access' || typ === 'session'
-      ? this.config.get<string>('JWT_ACCESS_SECRET', 'dev-access-secret-change-me')
-      : this.config.get<string>('JWT_REFRESH_SECRET', 'dev-refresh-secret-change-me');
+      ? this.config.get<string>(
+          'JWT_ACCESS_SECRET',
+          'dev-access-secret-change-me',
+        )
+      : this.config.get<string>(
+          'JWT_REFRESH_SECRET',
+          'dev-refresh-secret-change-me',
+        );
   }
 
   private ttlFor(typ: TokenType): string {
@@ -43,7 +49,10 @@ export class TokensService {
     }
   }
 
-  sign(payload: Omit<DecodedToken, 'csrf'> & { csrf?: string }, ttlOverride?: string): string {
+  sign(
+    payload: Omit<DecodedToken, 'csrf'> & { csrf?: string },
+    ttlOverride?: string,
+  ): string {
     return this.jwt.sign(payload, {
       secret: this.secretFor(payload.typ),
       // Env-driven TTL strings ("5s"/"1h"/…) aren't literal types, so they can't satisfy
@@ -70,7 +79,13 @@ export class TokensService {
   }
 
   signSessionToken(user: User, csrf: string, jti: string): string {
-    return this.sign({ sub: user.id, role: user.role, csrf, jti, typ: 'session' });
+    return this.sign({
+      sub: user.id,
+      role: user.role,
+      csrf,
+      jti,
+      typ: 'session',
+    });
   }
 
   signSessionRefreshToken(user: User, jti: string): string {

@@ -64,7 +64,10 @@ export class ProductsController {
   @Post()
   @UseGuards(AnyAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  async create(@Body() dto: CreateProductDto, @Res({ passthrough: true }) res: Response) {
+  async create(
+    @Body() dto: CreateProductDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const product = await this.products.create(dto);
     res.setHeader('ETag', etagFor(product));
     return product;
@@ -86,7 +89,9 @@ export class ProductsController {
   @UseGuards(AnyAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   replaceNotSupported(): never {
-    throw new MethodNotAllowedException('products only support partial updates — use PATCH');
+    throw new MethodNotAllowedException(
+      'products only support partial updates — use PATCH',
+    );
   }
 
   // If-Match conditional PATCH (RFC7232): enforced only when the caller sends it, so this stays
@@ -112,7 +117,10 @@ export class ProductsController {
   @UseGuards(AnyAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @UseInterceptors(FileInterceptor('image'))
-  attachImage(@Param('id', ParseUUIDPipe) id: string, @UploadedFile() file: Express.Multer.File) {
+  attachImage(
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
     return this.products.attachImage(id, file);
   }
 

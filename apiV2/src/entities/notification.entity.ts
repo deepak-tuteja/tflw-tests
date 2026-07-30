@@ -12,6 +12,9 @@ export enum NotificationType {
   ORDER_STATUS_CHANGED = 'order_status_changed',
   REVIEW_REPLY = 'review_reply',
   PRICE_DROP = 'price_drop',
+  // PLAN_ENTERPRISE_REGRESSION.md E4 — inventory-service's reservation response reported a
+  // shortfall for at least one line item; payload is { orderId, productId, quantity, backorderId }.
+  STOCK_BACKORDERED = 'stock_backordered',
 }
 
 // Polymorphic by `type` (M13, plan_v2.md Part F): `payload`'s shape depends on it —

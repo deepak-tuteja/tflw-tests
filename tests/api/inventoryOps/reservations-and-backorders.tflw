@@ -1,0 +1,93 @@
+# reservations-and-backorders.tflw — PLAN_ENTERPRISE_REGRESSION.md E4: the reservation endpoint
+# apiV2's checkout calls over real HTTP (InventoryClientService), hit directly here to prove its
+# own contract independent of apiV2 — the happy path (full reservation, real atomic decrement) and
+# the first-class-outcome shortfall path (a BackorderRequest, not an error). See
+# tests/mixed/inventoryOps/ for the version of both that actually drives a real apiV2 checkout.
+
+before
+  api inventory POST /warehouses body { name: unique("Reservations Test Warehouse"), location: "Reno, NV" }
+  expect status equals 201
+  capture body.id as warehouseId
+
+@smoke @inventoryOps @api
+test "a reservation fully satisfied from on-hand stock decrements it for real, no backorder"
+  let productId = random uuid
+  api inventory POST /restock-events body { productId: {productId}, warehouseId: {warehouseId}, quantity: 20 }
+  expect status equals 201
+
+  api inventory POST /reservations body { items: [{ productId: {productId}, quantity: 12 }] }
+  expect status equals 201
+  expect body.fullyReserved equals true
+  expect body.items[0].reservedQuantity equals 12
+  expect body.items[0].backorderId equals null
+
+  api inventory GET /stock-levels?productId={productId}
+  expect status equals 200
+  expect body[0].quantity equals 8
+
+@inventoryOps @api
+test "a reservation that exceeds on-hand stock creates a real BackorderRequest for the shortfall"
+  let productId = random uuid
+  api inventory POST /restock-events body { productId: {productId}, warehouseId: {warehouseId}, quantity: 5 }
+  expect status equals 201
+
+  let orderId = random uuid
+  api inventory POST /reservations body { orderId: {orderId}, items: [{ productId: {productId}, quantity: 9 }] }
+  expect status equals 201
+  expect body.fullyReserved equals false
+  expect body.items[0].reservedQuantity equals 5
+  capture body.items[0].backorderId as backorderId
+
+  api inventory GET /stock-levels?productId={productId}
+  expect status equals 200
+  expect body[0].quantity equals 0
+
+  api inventory GET /backorders/{backorderId}
+  expect status equals 200
+  expect body.status equals "open"
+  expect body.quantity equals 4
+  expect body.orderId equals "{orderId}"
+
+@crud @inventoryOps @api
+test "transitioning a backorder's status to fulfilled"
+  # A product with *no* StockLevel row at all is untracked, not zero-stock (reservations.service.ts
+  # — an untracked SKU passes through rather than backordering, a real fix this milestone made
+  # after its first regression sweep caught every ad-hoc unique() test product in the suite
+  # spuriously backordering). A tiny real restock first is what actually makes this product
+  # "tracked but under-stocked," genuinely exercising the shortfall path.
+  let productId = random uuid
+  api inventory POST /restock-events body { productId: {productId}, warehouseId: {warehouseId}, quantity: 1 }
+  expect status equals 201
+
+  api inventory POST /reservations body { items: [{ productId: {productId}, quantity: 3 }] }
+  expect status equals 201
+  capture body.items[0].backorderId as backorderId
+
+  api inventory PATCH /backorders/{backorderId} body { status: "fulfilled" }
+  expect status equals 200
+  expect body.status equals "fulfilled"
+
+@inventoryOps @api
+test "a reservation spanning two warehouses drains the larger pool first, deterministically"
+  api inventory POST /warehouses body { name: unique("Second Reservations Warehouse"), location: "Boise, ID" }
+  expect status equals 201
+  capture body.id as secondWarehouseId
+
+  let productId = random uuid
+  api inventory POST /restock-events body { productId: {productId}, warehouseId: {warehouseId}, quantity: 30 }
+  expect status equals 201
+  api inventory POST /restock-events body { productId: {productId}, warehouseId: {secondWarehouseId}, quantity: 10 }
+  expect status equals 201
+
+  api inventory POST /reservations body { items: [{ productId: {productId}, quantity: 35 }] }
+  expect status equals 201
+  expect body.fullyReserved equals true
+  expect body.items[0].reservedQuantity equals 35
+
+  api inventory GET /stock-levels?productId={productId}&warehouseId={warehouseId}
+  expect status equals 200
+  expect body[0].quantity equals 0
+
+  api inventory GET /stock-levels?productId={productId}&warehouseId={secondWarehouseId}
+  expect status equals 200
+  expect body[0].quantity equals 5

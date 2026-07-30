@@ -21,7 +21,9 @@ export class AddOrgIdToRetrofittedEntities1785100100000 implements MigrationInte
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     for (const table of ['orders', 'tickets', 'reviews', 'coupons']) {
-      await queryRunner.query(`ALTER TABLE "${table}" DROP CONSTRAINT "FK_${table}_org_id"`);
+      await queryRunner.query(
+        `ALTER TABLE "${table}" DROP CONSTRAINT "FK_${table}_org_id"`,
+      );
       await queryRunner.query(`ALTER TABLE "${table}" DROP COLUMN "org_id"`);
     }
   }

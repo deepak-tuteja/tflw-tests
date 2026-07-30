@@ -1,4 +1,10 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, Unique } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  PrimaryGeneratedColumn,
+  Unique,
+} from 'typeorm';
 
 export enum CouponType {
   PERCENT = 'percent',
@@ -28,7 +34,12 @@ export class Coupon {
   @Column({ name: 'expires_at', type: 'timestamp' })
   expiresAt: Date;
 
-  @Column({ name: 'min_order_amount', type: 'numeric', precision: 10, scale: 2 })
+  @Column({
+    name: 'min_order_amount',
+    type: 'numeric',
+    precision: 10,
+    scale: 2,
+  })
   minOrderAmount: string;
 
   @Column({ name: 'usage_limit', type: 'int' })

@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Cart } from '../entities/cart.entity';
@@ -20,7 +24,8 @@ export interface CartView {
 export class CartService {
   constructor(
     @InjectRepository(Cart) private readonly carts: Repository<Cart>,
-    @InjectRepository(CartItem) private readonly cartItems: Repository<CartItem>,
+    @InjectRepository(CartItem)
+    private readonly cartItems: Repository<CartItem>,
     @InjectRepository(Product) private readonly products: Repository<Product>,
     private readonly orders: OrdersService,
   ) {}
@@ -33,12 +38,18 @@ export class CartService {
     return cart ? { id: cart.id, items: cart.items } : { id: null, items: [] };
   }
 
-  async addItem(userId: string, productId: string, quantity: number): Promise<CartItem> {
+  async addItem(
+    userId: string,
+    productId: string,
+    quantity: number,
+  ): Promise<CartItem> {
     const product = await this.products.findOne({ where: { id: productId } });
     if (!product) throw new NotFoundException(`product ${productId} not found`);
 
     const cart = await this.getOrCreateCart(userId);
-    const existing = await this.cartItems.findOne({ where: { cartId: cart.id, productId } });
+    const existing = await this.cartItems.findOne({
+      where: { cartId: cart.id, productId },
+    });
     if (existing) {
       // Atomic increment, not read-modify-write (M19 finding: 5 concurrent +1 requests against
       // an existing line each read the same stale quantity and clobbered each other's write,
@@ -48,19 +59,31 @@ export class CartService {
       return this.cartItems.findOneOrFail({ where: { id: existing.id } });
     }
     try {
-      return await this.cartItems.save(this.cartItems.create({ cartId: cart.id, productId, quantity }));
+      return await this.cartItems.save(
+        this.cartItems.create({ cartId: cart.id, productId, quantity }),
+      );
     } catch (err) {
       if (isUniqueViolation(err)) {
         // Lost a race to insert this cart's first row for this product — the winner's row is
         // now `existing` from the concurrent request's perspective; fold this one into it too.
-        await this.cartItems.increment({ cartId: cart.id, productId }, 'quantity', quantity);
-        return this.cartItems.findOneOrFail({ where: { cartId: cart.id, productId } });
+        await this.cartItems.increment(
+          { cartId: cart.id, productId },
+          'quantity',
+          quantity,
+        );
+        return this.cartItems.findOneOrFail({
+          where: { cartId: cart.id, productId },
+        });
       }
       throw err;
     }
   }
 
-  async updateItem(userId: string, itemId: string, quantity: number): Promise<CartItem> {
+  async updateItem(
+    userId: string,
+    itemId: string,
+    quantity: number,
+  ): Promise<CartItem> {
     const item = await this.findOwnItem(userId, itemId);
     item.quantity = quantity;
     return this.cartItems.save(item);
@@ -84,11 +107,17 @@ export class CartService {
     // Checked before the empty-cart guard below: a legitimate replay arrives *after* the
     // original request already cleared the cart, so "cart is empty" must never block it.
     if (idempotencyKey) {
-      const replay = await this.orders.findExistingByIdempotencyKey(idempotencyKey, userId);
+      const replay = await this.orders.findExistingByIdempotencyKey(
+        idempotencyKey,
+        userId,
+      );
       if (replay) return replay;
     }
 
-    const cart = await this.carts.findOne({ where: { userId }, relations: { items: true } });
+    const cart = await this.carts.findOne({
+      where: { userId },
+      relations: { items: true },
+    });
     if (!cart || cart.items.length === 0) {
       throw new UnprocessableEntityException('cart is empty');
     }
@@ -97,7 +126,12 @@ export class CartService {
       productId: item.productId,
       quantity: item.quantity,
     }));
-    const result = await this.orders.create(userId, items, idempotencyKey, couponCode);
+    const result = await this.orders.create(
+      userId,
+      items,
+      idempotencyKey,
+      couponCode,
+    );
     if (result.created) {
       await this.cartItems.delete({ cartId: cart.id });
     }
@@ -122,7 +156,9 @@ export class CartService {
 
   private async findOwnItem(userId: string, itemId: string): Promise<CartItem> {
     const cart = await this.carts.findOne({ where: { userId } });
-    const item = cart ? await this.cartItems.findOne({ where: { id: itemId, cartId: cart.id } }) : null;
+    const item = cart
+      ? await this.cartItems.findOne({ where: { id: itemId, cartId: cart.id } })
+      : null;
     if (!item) throw new NotFoundException('cart item not found');
     return item;
   }

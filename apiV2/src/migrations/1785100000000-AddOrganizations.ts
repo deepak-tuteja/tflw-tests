@@ -47,10 +47,16 @@ export class AddOrganizations1785100000000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE "org_memberships" DROP CONSTRAINT "FK_org_memberships_user_id"`);
-    await queryRunner.query(`ALTER TABLE "org_memberships" DROP CONSTRAINT "FK_org_memberships_org_id"`);
+    await queryRunner.query(
+      `ALTER TABLE "org_memberships" DROP CONSTRAINT "FK_org_memberships_user_id"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "org_memberships" DROP CONSTRAINT "FK_org_memberships_org_id"`,
+    );
     await queryRunner.query(`DROP TABLE "org_memberships"`);
-    await queryRunner.query(`DROP TYPE "public"."org_memberships_org_role_enum"`);
+    await queryRunner.query(
+      `DROP TYPE "public"."org_memberships_org_role_enum"`,
+    );
     await queryRunner.query(`DROP TABLE "organizations"`);
     await queryRunner.query(`DROP TYPE "public"."organizations_plan_enum"`);
   }

@@ -125,7 +125,9 @@ export class AuthService {
     }
   }
 
-  async profile(userId: string): Promise<Pick<User, 'id' | 'name' | 'email' | 'role'>> {
+  async profile(
+    userId: string,
+  ): Promise<Pick<User, 'id' | 'name' | 'email' | 'role'>> {
     const user = await this.users.findOneOrFail({ where: { id: userId } });
     return { id: user.id, name: user.name, email: user.email, role: user.role };
   }
@@ -189,7 +191,10 @@ export class AuthService {
     if (!sessionRefreshCookie) {
       throw new UnauthorizedException('missing session_refresh cookie');
     }
-    const decoded = await this.tokens.verify(sessionRefreshCookie, 'session_refresh');
+    const decoded = await this.tokens.verify(
+      sessionRefreshCookie,
+      'session_refresh',
+    );
     await this.tokenRecords.assertLive(decoded.jti!);
 
     const user = await this.users.findOneOrFail({ where: { id: decoded.sub } });

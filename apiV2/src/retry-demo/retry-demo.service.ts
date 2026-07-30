@@ -16,13 +16,21 @@ export interface RetryDemoResult {
 export class RetryDemoService {
   private readonly attempts = new Map<string, number>();
 
-  attempt(key: string, format: 'seconds' | 'date' = 'seconds'): RetryDemoResult {
+  attempt(
+    key: string,
+    format: 'seconds' | 'date' = 'seconds',
+  ): RetryDemoResult {
     const n = (this.attempts.get(key) ?? 0) + 1;
     this.attempts.set(key, n);
 
     if (n === 1) {
-      const retryAfterValue = format === 'date' ? new Date(Date.now() + 1000).toUTCString() : '1';
-      return { status: 429, retryAfterValue, body: { key, attempt: n, detail: 'rate limited, honor Retry-After' } };
+      const retryAfterValue =
+        format === 'date' ? new Date(Date.now() + 1000).toUTCString() : '1';
+      return {
+        status: 429,
+        retryAfterValue,
+        body: { key, attempt: n, detail: 'rate limited, honor Retry-After' },
+      };
     }
     return { status: 200, body: { key, attempt: n, detail: 'ok' } };
   }

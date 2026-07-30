@@ -1,0 +1,84 @@
+# checkout-inventory.tflw — PLAN_ENTERPRISE_REGRESSION.md E4: the real cross-service integration
+# point, exercised through an actual apiV2 checkout rather than hitting inventory-service directly
+# (see tests/api/inventoryOps/ for that). Both tests assert on state in *both* systems — an order
+# in apiV2's own DB, a stock movement (or backorder) in inventory-service's — the actual
+# consistency scenario this initiative exists to give tflw. Own dedicated products per test
+# (`unique(...)`, admin-created), restocked into inventory-service with a fully controlled
+# quantity in each test's own setup, same isolation convention every other checkout test in this
+# suite already uses (see cart-checkout.tflw's own header comment) — never touching the seeded
+# named products' shared inventory-service stock, so this file can never collide with anything
+# else in a full regression run.
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as userAToken
+
+  api inventory POST /warehouses body { name: unique("Checkout Inventory Warehouse"), location: "Reno, NV" }
+  expect status equals 201
+  capture body.id as warehouseId
+
+@smoke @inventoryOps @mixed
+test "a checkout with enough warehouse stock decrements inventory-service's stock level for real"
+  api POST /products body { name: unique("Inventory Happy Widget"), price: 9.99, stock: 100, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api inventory POST /restock-events body { productId: {productId}, warehouseId: {warehouseId}, quantity: 10 }
+  expect status equals 201
+
+  api POST /cart/items body { productId: {productId}, quantity: 3 }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+
+  api POST /cart/checkout
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as orderId
+
+  api inventory GET /stock-levels?productId={productId}
+  expect status equals 200
+  expect body[0].quantity equals 7
+
+@inventoryOps @mixed
+test "a checkout that outstrips warehouse stock still succeeds (apiV2's own stock gate is unaffected), but creates a real BackorderRequest and notifies the buyer"
+  api POST /products body { name: unique("Inventory Backorder Widget"), price: 9.99, stock: 100, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api inventory POST /restock-events body { productId: {productId}, warehouseId: {warehouseId}, quantity: 2 }
+  expect status equals 201
+
+  api POST /cart/items body { productId: {productId}, quantity: 5 }
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+
+  api POST /cart/checkout
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as orderId
+
+  api inventory GET /stock-levels?productId={productId}
+  expect status equals 200
+  expect body[0].quantity equals 0
+
+  api inventory GET /backorders?productId={productId}
+  expect status equals 200
+  expect body has count 1
+  expect body[0].quantity equals 3
+  expect body[0].orderId equals "{orderId}"
+
+  api GET /notifications
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  expect any body.orderId equals "{orderId}"

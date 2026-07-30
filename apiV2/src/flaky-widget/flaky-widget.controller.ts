@@ -12,7 +12,10 @@ export class FlakyWidgetController {
   constructor(private readonly widget: FlakyWidgetService) {}
 
   @Post()
-  handle(@Body() dto: FlakyWidgetDto, @Res({ passthrough: true }) res: Response) {
+  handle(
+    @Body() dto: FlakyWidgetDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const result = this.widget.attempt(dto.key);
     if (result.retryAfterSeconds !== undefined) {
       res.setHeader('Retry-After', String(result.retryAfterSeconds));

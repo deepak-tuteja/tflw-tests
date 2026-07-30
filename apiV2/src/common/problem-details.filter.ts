@@ -35,7 +35,9 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     const res = host.switchToHttp().getResponse<Response>();
 
     const status =
-      exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+      exception instanceof HttpException
+        ? exception.getStatus()
+        : HttpStatus.INTERNAL_SERVER_ERROR;
 
     const detail =
       exception instanceof ValidationProblemException
@@ -45,23 +47,34 @@ export class ProblemDetailsFilter implements ExceptionFilter {
           : 'an unexpected error occurred';
 
     if (status >= 500) {
-      this.logger.error(exception instanceof Error ? exception.stack : exception);
+      this.logger.error(
+        exception instanceof Error ? exception.stack : exception,
+      );
     }
 
-    res.status(status).type('application/problem+json').json({
-      type: 'about:blank',
-      title: STATUS_TITLES[status] ?? 'Error',
-      status,
-      detail,
-      ...(exception instanceof ValidationProblemException ? { errors: exception.errors } : {}),
-    });
+    res
+      .status(status)
+      .type('application/problem+json')
+      .json({
+        type: 'about:blank',
+        title: STATUS_TITLES[status] ?? 'Error',
+        status,
+        detail,
+        ...(exception instanceof ValidationProblemException
+          ? { errors: exception.errors }
+          : {}),
+      });
   }
 }
 
 function extractDetail(exception: HttpException): string {
   const response = exception.getResponse();
   if (typeof response === 'string') return response;
-  if (typeof response === 'object' && response !== null && 'message' in response) {
+  if (
+    typeof response === 'object' &&
+    response !== null &&
+    'message' in response
+  ) {
     const { message } = response as { message: string | string[] };
     return Array.isArray(message) ? message.join(', ') : message;
   }

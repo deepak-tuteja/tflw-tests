@@ -51,7 +51,10 @@ export class CartController {
 
   @Delete('items/:id')
   @HttpCode(204)
-  async removeItem(@CurrentUser() user: AuthedUser, @Param('id', ParseUUIDPipe) id: string) {
+  async removeItem(
+    @CurrentUser() user: AuthedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
     await this.cart.removeItem(user.id, id);
   }
 
@@ -64,7 +67,11 @@ export class CartController {
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { order, created } = await this.cart.checkout(user.id, dto.couponCode, idempotencyKey);
+    const { order, created } = await this.cart.checkout(
+      user.id,
+      dto.couponCode,
+      idempotencyKey,
+    );
     res.status(created ? 201 : 200);
     return order;
   }

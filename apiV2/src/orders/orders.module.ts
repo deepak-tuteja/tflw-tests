@@ -8,6 +8,8 @@ import { OrdersService } from './orders.service';
 import { AuthModule } from '../auth/auth.module';
 import { JobsModule } from '../jobs/jobs.module';
 import { OrgsModule } from '../orgs/orgs.module';
+import { InventoryClientModule } from '../inventory-client/inventory-client.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -15,6 +17,8 @@ import { OrgsModule } from '../orgs/orgs.module';
     AuthModule,
     JobsModule,
     OrgsModule,
+    InventoryClientModule,
+    NotificationsModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService],

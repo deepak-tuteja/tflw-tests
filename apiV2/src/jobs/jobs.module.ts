@@ -9,7 +9,11 @@ import { AuthModule } from '../auth/auth.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Job, Order, User]), AuthModule, NotificationsModule],
+  imports: [
+    TypeOrmModule.forFeature([Job, Order, User]),
+    AuthModule,
+    NotificationsModule,
+  ],
   controllers: [JobsController],
   providers: [JobsService],
   exports: [JobsService],

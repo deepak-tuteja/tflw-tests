@@ -14,6 +14,53 @@ services:
     # (plan_v2.md Part A); `node cli.mjs stop` runs `down -v` so every
     # `start` begins from a clean database.
 
+  # PLAN_ENTERPRISE_REGRESSION.md E4 — inventory-service's own Postgres, a genuinely separate
+  # instance (decision 1: a real second system, not a schema on the `postgres` container above).
+  # Same ephemeral-per-run isolation model (no named/host volume, `node cli.mjs stop` runs
+  # `down -v`).
+  postgres-inventory:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${INV_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${INV_DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${INV_DB_NAME:-inventory_service}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${INV_DB_USER:-postgres}"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  # PLAN_ENTERPRISE_REGRESSION.md E4 — warehouses/stock-levels/backorder-requests/restock-events,
+  # called by apiV2's checkout over real HTTP (InventoryClientService); also hit directly by
+  # tests/api/inventoryOps/ (env local's own `api inventory` named service, tflw.config). Depends
+  # on `api` being healthy (not just started) because its seed script looks up apiV2's real seeded
+  # product ids via `GET /v1/products` — apiV2 must not depend back on this service (that would be
+  # a dependency cycle); `docker compose up --wait` still guarantees both are healthy before
+  # `cli.mjs start` returns, well before any test or checkout call runs.
+  inventory-service:
+    build:
+      context: ./inventory-service
+    depends_on:
+      postgres-inventory:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    environment:
+      INV_DB_HOST: postgres-inventory
+      INV_DB_PORT: 5432
+      INV_DB_USER: ${INV_DB_USER:-postgres}
+      INV_DB_PASSWORD: ${INV_DB_PASSWORD:-postgres}
+      INV_DB_NAME: ${INV_DB_NAME:-inventory_service}
+      API_BASE_URL: http://api:4001/v1
+      PORT: 4002
+    ports:
+      - "4002:4002"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4002/v1/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
   api:
     build:
       context: ./apiV2
@@ -55,6 +102,12 @@ services:
       OAUTH_SHORT_CLIENT_ID: ${OAUTH_SHORT_CLIENT_ID:-tflw-oauth-short-client}
       OAUTH_SHORT_CLIENT_SECRET: ${OAUTH_SHORT_CLIENT_SECRET:-tflw-oauth-short-secret}
       OAUTH_SHORT_ACCESS_TTL: ${OAUTH_SHORT_ACCESS_TTL:-5s}
+      # PLAN_ENTERPRISE_REGRESSION.md E4 — checkout's real cross-service call
+      # (InventoryClientService). Deliberately no `depends_on: inventory-service` here — that
+      # service depends on `api` being healthy for its own seed step, so the reverse would be a
+      # cycle; `docker compose up --wait` still guarantees both are healthy before any request
+      # actually happens.
+      INVENTORY_SERVICE_URL: ${INVENTORY_SERVICE_URL:-http://inventory-service:4002/v1}
       PORT: 4001
     ports:
       - "4001:4001"

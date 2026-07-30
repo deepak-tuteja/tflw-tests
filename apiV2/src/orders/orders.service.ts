@@ -19,6 +19,9 @@ import { isUniqueViolation } from '../common/db-errors';
 import { JobsService } from '../jobs/jobs.service';
 import { Job } from '../entities/job.entity';
 import { OrgsService } from '../orgs/orgs.service';
+import { InventoryClientService } from '../inventory-client/inventory-client.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../entities/notification.entity';
 
 export interface CreateOrderResult {
   order: Order;
@@ -58,6 +61,8 @@ export class OrdersService {
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly jobsService: JobsService,
     private readonly orgs: OrgsService,
+    private readonly inventoryClient: InventoryClientService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // Admin-only trigger (enforced by the controller's @Roles guard) for the 202-Accepted async
@@ -108,6 +113,13 @@ export class OrdersService {
           webhookUrl,
         ),
       );
+      // PLAN_ENTERPRISE_REGRESSION.md E4 — fires only for a genuinely new order (never on an
+      // idempotency-key replay, which returns above before reaching here), and only *after* the
+      // order's own transaction has committed: this is a separate system's warehouse-fulfillment
+      // check, independent of the Product.stock gate (M15) that already let this order through.
+      // Awaited synchronously (not fire-and-forget) so a test asserting on inventory-service's
+      // state right after checkout returns never has to poll for eventual consistency.
+      await this.reserveInventory(order, items, userId);
       return { order, created: true };
     } catch (err) {
       if (idempotencyKey && isUniqueViolation(err)) {
@@ -209,6 +221,33 @@ export class OrdersService {
       orgId: membership?.orgId ?? null,
     });
     return manager.save(Order, order);
+  }
+
+  // PLAN_ENTERPRISE_REGRESSION.md E4 — the actual cross-service checkout integration point. A
+  // reservation shortfall is a first-class outcome (a BackorderRequest, created inventory-service
+  // side), never a checkout failure: this order has already committed by the time this runs, so
+  // the only apiV2-side reaction is a Notification per short-changed line item.
+  private async reserveInventory(
+    order: Order,
+    items: OrderItemInputDto[],
+    userId: string,
+  ): Promise<void> {
+    const result = await this.inventoryClient.reserve(order.id, items);
+    if (!result) return;
+
+    for (const item of result.items) {
+      if (!item.backorderId) continue;
+      await this.notifications.create(
+        userId,
+        NotificationType.STOCK_BACKORDERED,
+        {
+          orderId: order.id,
+          productId: item.productId,
+          quantity: item.requestedQuantity - item.reservedQuantity,
+          backorderId: item.backorderId,
+        },
+      );
+    }
   }
 
   // Same atomic-conditional-update pattern as stock: `usedCount` only increments if the coupon

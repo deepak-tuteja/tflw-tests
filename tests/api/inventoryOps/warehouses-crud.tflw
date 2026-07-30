@@ -1,0 +1,59 @@
+# warehouses-crud.tflw — PLAN_ENTERPRISE_REGRESSION.md E4: full CRUD on inventory-service's
+# Warehouse resource, hit directly via `env local`'s named `api inventory` service (tflw.config) —
+# no auth on this service at all (it's an internal system apiV2 calls server-to-server and this
+# suite calls directly, same "trusted within the docker network" model this project already gives
+# its own Postgres container, see warehouses.controller.ts's own header comment).
+
+@smoke @inventoryOps @api
+test "creating a warehouse and reading it back, in both the list and by id"
+  api inventory POST /warehouses body { name: unique("Test Warehouse"), location: "Reno, NV" }
+  expect status equals 201
+  expect body.location equals "Reno, NV"
+  capture body.id as warehouseId
+  capture body.name as warehouseName
+
+  api inventory GET /warehouses/{warehouseId}
+  expect status equals 200
+  expect body.name equals "{warehouseName}"
+
+  api inventory GET /warehouses
+  expect status equals 200
+  expect any body.id equals "{warehouseId}"
+
+@crud @inventoryOps @api
+test "updating a warehouse's name and location"
+  api inventory POST /warehouses body { name: unique("Update Me Warehouse"), location: "Reno, NV" }
+  expect status equals 201
+  capture body.id as warehouseId
+
+  let newLocation = "Boise, ID"
+  api inventory PATCH /warehouses/{warehouseId} body { location: {newLocation} }
+  expect status equals 200
+  expect body.location equals "{newLocation}"
+
+  api inventory GET /warehouses/{warehouseId}
+  expect status equals 200
+  expect body.location equals "{newLocation}"
+
+@crud @inventoryOps @api
+test "deleting a warehouse removes it from the list"
+  api inventory POST /warehouses body { name: unique("Delete Me Warehouse"), location: "Reno, NV" }
+  expect status equals 201
+  capture body.id as warehouseId
+
+  api inventory DELETE /warehouses/{warehouseId}
+  expect status equals 204
+
+  api inventory GET /warehouses/{warehouseId}
+  expect status equals 404
+
+@crud @inventoryOps @api
+test "creating a warehouse with a missing location is a clean 422"
+  api inventory POST /warehouses body { name: unique("No Location Warehouse") }
+  expect status equals 422
+
+@crud @inventoryOps @api
+test "fetching a nonexistent warehouse is a clean 404"
+  let missingId = random uuid
+  api inventory GET /warehouses/{missingId}
+  expect status equals 404

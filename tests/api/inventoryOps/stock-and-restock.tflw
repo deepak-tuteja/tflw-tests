@@ -1,0 +1,61 @@
+# stock-and-restock.tflw — PLAN_ENTERPRISE_REGRESSION.md E4: stock-level queries and the
+# restock-event write path (StockService.restock — an immutable audit-trail row plus the live
+# StockLevel.quantity it increments, upserting a brand-new product/warehouse pairing the same
+# "no separate creation step" way apiV2's own CartService.getOrCreateCart already works).
+# `productId` is a bare `random uuid` here, not a real apiV2 product — inventory-service has no FK
+# to apiV2's Product at all (a different Postgres instance entirely, decision 1), so a CRUD-only
+# test against this service's own resources never needs a real one.
+
+before
+  api inventory POST /warehouses body { name: unique("Stock Test Warehouse"), location: "Reno, NV" }
+  expect status equals 201
+  capture body.id as warehouseId
+
+@smoke @inventoryOps @api
+test "restocking a brand-new product/warehouse pairing creates both the stock level and a restock event"
+  let productId = random uuid
+  api inventory POST /restock-events body { productId: {productId}, warehouseId: {warehouseId}, quantity: 25 }
+  expect status equals 201
+  expect body.quantity equals 25
+
+  api inventory GET /stock-levels?productId={productId}
+  expect status equals 200
+  expect body has count 1
+  expect body[0].quantity equals 25
+  expect body[0].warehouseId equals "{warehouseId}"
+
+  api inventory GET /restock-events?productId={productId}
+  expect status equals 200
+  expect body has count 1
+  expect body[0].quantity equals 25
+
+@crud @inventoryOps @api
+test "a second restock against the same pairing accumulates onto the existing stock level, not a new row"
+  let productId = random uuid
+  api inventory POST /restock-events body { productId: {productId}, warehouseId: {warehouseId}, quantity: 10 }
+  expect status equals 201
+
+  api inventory POST /restock-events body { productId: {productId}, warehouseId: {warehouseId}, quantity: 15 }
+  expect status equals 201
+
+  api inventory GET /stock-levels?productId={productId}
+  expect status equals 200
+  expect body has count 1
+  expect body[0].quantity equals 25
+
+  api inventory GET /restock-events?productId={productId}
+  expect status equals 200
+  expect body has count 2
+
+@crud @inventoryOps @api
+test "restocking against a nonexistent warehouse is a clean 404"
+  let productId = random uuid
+  let missingWarehouseId = random uuid
+  api inventory POST /restock-events body { productId: {productId}, warehouseId: {missingWarehouseId}, quantity: 5 }
+  expect status equals 404
+
+@crud @inventoryOps @api
+test "restocking with a non-positive quantity is a clean 422"
+  let productId = random uuid
+  api inventory POST /restock-events body { productId: {productId}, warehouseId: {warehouseId}, quantity: 0 }
+  expect status equals 422

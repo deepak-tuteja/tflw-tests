@@ -1,20 +1,25 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Notification, NotificationType } from '../entities/notification.entity';
+import {
+  Notification,
+  NotificationType,
+} from '../entities/notification.entity';
 
 // Flattens `payload` into the top-level response object alongside `id`/`type`/`createdAt` — a
 // real polymorphic shape (SPEC-relevant for M13's gap-hunting), not a nested envelope, so
 // `expect any body matches subset { type: "price_drop", oldPrice: ... }` reads naturally.
-export type NotificationResponse = { id: string; type: NotificationType; createdAt: Date } & Record<
-  string,
-  unknown
->;
+export type NotificationResponse = {
+  id: string;
+  type: NotificationType;
+  createdAt: Date;
+} & Record<string, unknown>;
 
 @Injectable()
 export class NotificationsService {
   constructor(
-    @InjectRepository(Notification) private readonly notifications: Repository<Notification>,
+    @InjectRepository(Notification)
+    private readonly notifications: Repository<Notification>,
   ) {}
 
   // No public create endpoint (M13 decision 3) — every notification is a real side-effect of

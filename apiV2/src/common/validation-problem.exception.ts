@@ -29,6 +29,8 @@ function flatten(errors: ValidationError[], parentPath = ''): FieldError[] {
   return out;
 }
 
-export function toValidationProblem(errors: ValidationError[]): ValidationProblemException {
+export function toValidationProblem(
+  errors: ValidationError[],
+): ValidationProblemException {
   return new ValidationProblemException(flatten(errors));
 }

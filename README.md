@@ -17,8 +17,11 @@ plan and `PROGRESS.md` for build status.
 apiV2/               NestJS + TypeORM + Postgres e-commerce API — users/categories/products/
                      orders/order_items/reviews; migrations + deterministic idempotent seed
                      run on container start; /v1 prefix; OpenAPI at /openapi.json + /docs
+inventory-service/   PLAN_ENTERPRISE_REGRESSION.md E4 — standalone NestJS service, its own
+                     Postgres, warehouses/stock-levels/backorder-requests/restock-events;
+                     apiV2's checkout calls it over real HTTP at /v1/reservations; :4002
 docker-compose.yml   postgres (ephemeral per-run volume) + api + nginx (TLS sidecar) + webv2 +
-                     webv2-admin, healthchecked
+                     webv2-admin + postgres-inventory + inventory-service (E4), healthchecked
 nginx/               TLS sidecar (M22) — self-signed :8443 + mTLS-requiring :8444, proxying
                      unchanged to api:4001; certs generated fresh at every container start
 webV2/               React+Vite+TS SPA storefront (webV2-0) — tflw's browser-arc dogfood target
@@ -34,7 +37,9 @@ tests/               .tflw test files, split into a real api/ui/mixed layer stru
                      select across it (combinable with area tags, e.g. `--tag ui,orgOps`)
 tests/api/           API-only tests, one subfolder per business area: identity/, catalog/,
                      orders/, admin/, orgOps/ (E3 — org/membership CRUD + cross-org visibility
-                     proof), plus mechanics/ for DSL-mechanism demos that aren't tied to one
+                     proof), inventoryOps/ (E4 — warehouses/stock-levels/restock-events/
+                     reservations CRUD, hit directly via env local's own `api inventory` named
+                     service), plus mechanics/ for DSL-mechanism demos that aren't tied to one
                      business area (actions-and-helpers, body-types, logging, retry-and-flake)
 tests/ui/            UI-only tests (E2, PLAN_ENTERPRISE_REGRESSION.md) — no `api` step in the
                      asserted test body, only in `before`/`before file` setup hooks; storefront/
@@ -48,7 +53,11 @@ tests/ui/            UI-only tests (E2, PLAN_ENTERPRISE_REGRESSION.md) — no `a
 tests/mixed/         tests that drive the browser and assert through the API/DB together
                      (storefront.tflw today; tests/.env-specific/webv2-admin.tflw and
                      orgs-mixed.tflw (E3) too, tagged `@mixed` but kept under .env-specific/ for
-                     their own unrelated env-conflict reason, see below)
+                     their own unrelated env-conflict reason, see below); inventoryOps/
+                     checkout-inventory.tflw (E4) drives a real apiV2 checkout and asserts on
+                     state in *both* Postgres instances — no env conflict, lives here directly.
+                     No tests/ui/inventoryOps/ (decision 6: this area adds no new user-facing
+                     screen, so it owes zero UI-only tests)
 tests/helpers/       JS escape-hatch helpers (page-walk, Retry-After sleep-and-retry, etc.)
 tests/shared/        actions shared across files (e.g. `create product`)
 tests/.demo-fail/    intentionally-failing fixtures, tag-gated + dot-dir-excluded from `tflw run`
@@ -69,7 +78,7 @@ TFLW-FEATURE-GAPS.md genuine tflw DSL gaps found while building the v1 (plain-No
 
 ```sh
 cp .env.example .env   # Postgres creds, JWT secrets, seeded admin/userA/userB/OAuth-client credentials
-node cli.mjs start     # docker compose up -d --build --wait (postgres + api :4001 + nginx TLS sidecar + webV2 :8090)
+node cli.mjs start     # docker compose up -d --build --wait (postgres + api :4001 + nginx TLS sidecar + webV2 :8090 + inventory-service :4002)
 npm run refresh-tflw   # packs ../testFlow/packages/cli and installs the tarball
 npx tflw run           # runs the whole tests/ tree (api/ui/mixed) against the running api
 npm run test:mtls      # runs tests/api/identity/mtls.tflw against the sidecar's mTLS-requiring listener (own env, M22)
@@ -81,22 +90,24 @@ node cli.mjs stop      # docker compose down -v — drops the DB too (ephemeral 
 
 Or use the `testflow-tests-app` skill to start/stop the stack.
 
-### Full regression sweep (M21, updated through E3)
+### Full regression sweep (M21, updated through E4)
 
-`npm run regression` — the thorough check to run after any change to apiV2 or `tests/*.tflw`: the
-full suite, each feature-area tag alone (`identityOps`/`catalogOps`/`orderOps`/`adminOps`/
-`orgOps` — E3's 5th), `@smoke` alone, each `smoke,<area>` cross-axis combo, then a run of
-`*-check`/`*-rejection` phases proving specific CLI verbs/flags/fixtures that ad-hoc manual runs
-used to be the only evidence for: `mtls-rejection`, `safety-redaction-check`, `demo-fail-check`,
-`cli-flags-check`, `migrate-check`, `watch-check`, `safety-flags-check`, `check-diagnostics`,
-`pick-check`, `logging-check`, `report-overflow-check`, `ui-admin-check` (E2 + E3's own
-`orgs.tflw`), `webv2-admin-check` (pre-E3 housekeeping, + E3's own `orgs-mixed.tflw`) — 25 phases
-total, each on its own fresh Docker restart (`scripts/regression.mjs`; restarting every phase isn't
-optional — `unique(...)`'s counter resets per `tflw run` invocation but Postgres data doesn't, so
-chained phases on the same DB reproduce false collisions). Exits non-zero if any phase
-fails. See `scripts/regression.mjs`'s own `PHASES` array for the authoritative, always-current list
-— this section restates it for a reader who won't open the script, so it can drift; if in doubt,
-the script wins.
+`npm run regression` — the thorough check to run after any change to apiV2, inventory-service, or
+`tests/*.tflw`: the full suite, each feature-area tag alone (`identityOps`/`catalogOps`/
+`orderOps`/`adminOps`/`orgOps`/`inventoryOps` — E4's 6th), `@smoke` alone, each `smoke,<area>`
+cross-axis combo, then a run of `*-check`/`*-rejection` phases proving specific CLI verbs/flags/
+fixtures that ad-hoc manual runs used to be the only evidence for: `mtls-rejection`,
+`safety-redaction-check`, `demo-fail-check`, `cli-flags-check`, `migrate-check`, `watch-check`,
+`safety-flags-check`, `check-diagnostics`, `pick-check`, `logging-check`, `report-overflow-check`,
+`ui-admin-check` (E2 + E3's own `orgs.tflw`), `webv2-admin-check` (pre-E3 housekeeping, + E3's own
+`orgs-mixed.tflw`) — 27 phases total, each on its own fresh Docker restart (`scripts/
+regression.mjs`; restarting every phase isn't optional — `unique(...)`'s counter resets per
+`tflw run` invocation but Postgres data doesn't, so chained phases on the same DB reproduce false
+collisions; `node cli.mjs stop`/`start` tears down and rebuilds **both** Postgres containers —
+apiV2's and inventory-service's own — every phase, same isolation guarantee for the second
+database E4 introduced). Exits non-zero if any phase fails. See `scripts/regression.mjs`'s own
+`PHASES` array for the authoritative, always-current list — this section restates it for a reader
+who won't open the script, so it can drift; if in doubt, the script wins.
 
 ### webV2 — browser-arc dogfood target (webV2-0)
 
@@ -135,6 +146,38 @@ reached by browsing to a product's detail page, not a flat review inbox) — cou
 same gap pre-E3 (creation showed a one-time confirmation page, nothing to browse afterward), closed
 by E3's own `GET /coupons` (org-scoped: a system admin sees every coupon, an org owner/admin sees
 their own org's plus every global one).
+
+### inventory-service — standalone warehouse/stock service, own DB (E4)
+
+`http://localhost:4002` after `node cli.mjs start` (health `/v1/health`, docs `/docs`, spec
+`/openapi.json`) — a second, genuinely independent NestJS service with its own Postgres container
+(`postgres-inventory`, same ephemeral-per-run isolation as the main one), per decision 1: a real
+network/service boundary, not a second schema bolted onto apiV2's existing database. Entities:
+`Warehouse`, `StockLevel` (product x warehouse — `productId` is a bare uuid string, apiV2's own
+Product primary key, since there's no cross-database foreign key), `BackorderRequest`,
+`RestockEvent` (an immutable audit trail; `StockService.restock` both writes one and increments
+the `StockLevel` it refers to, upserting a brand-new pairing the same "no separate creation step"
+way apiV2's own `CartService.getOrCreateCart` already works). No auth at all — this service has no
+end-user-facing surface, only apiV2 (server-to-server) and this suite's own
+`tests/api/inventoryOps/` call it directly, the same "trusted within the docker network" model
+this project already gives its own Postgres container.
+
+apiV2's checkout calls `POST /reservations` here for real (`InventoryClientService`,
+`OrdersService.reserveInventory`) after its own order transaction has already committed —
+deliberately independent of apiV2's own `Product.stock` gate (M15, unchanged by this milestone):
+that field stays the storefront-facing "can this be sold at all" check, and this is a separate
+warehouse-fulfillment system discovering a real shortfall on its own, the actual cross-service-
+consistency scenario this initiative exists to give tflw. `ReservationsService` drains the
+largest warehouse pool first (same race-safe conditional-`UPDATE ... WHERE quantity >= :take`
+pattern as apiV2's own M15 stock decrement); any shortfall becomes a first-class
+`BackorderRequest`, never a checkout failure — `OrdersService` reports it back to the buyer as a
+`stock_backordered` notification (`GET /notifications`), not an error. Seeded (own idempotent seed
+script) by looking apiV2's real named products up by name via its already-public, unauthenticated
+`GET /products` at container-start time (`docker-compose.yml`'s `depends_on: api: condition:
+service_healthy` orders this correctly; the seed script's own retry loop is defense against a
+genuine race, not the primary ordering mechanism) — "French Press" is deliberately left with only
+1 unit of stock across both seeded warehouses, so any checkout ordering more than 1 exercises the
+backorder path for real without needing a test-only product just to trigger it.
 
 ### Organizations & the org-scoping retrofit (E3)
 

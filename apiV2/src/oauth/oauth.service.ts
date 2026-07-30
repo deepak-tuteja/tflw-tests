@@ -41,12 +41,21 @@ export class OauthService {
     return [
       {
         id: this.config.get<string>('OAUTH_CLIENT_ID', 'tflw-oauth-client'),
-        secret: this.config.get<string>('OAUTH_CLIENT_SECRET', 'tflw-oauth-secret'),
+        secret: this.config.get<string>(
+          'OAUTH_CLIENT_SECRET',
+          'tflw-oauth-secret',
+        ),
         ttl: this.config.get<string>('OAUTH_ACCESS_TTL', '1h'),
       },
       {
-        id: this.config.get<string>('OAUTH_SHORT_CLIENT_ID', 'tflw-oauth-short-client'),
-        secret: this.config.get<string>('OAUTH_SHORT_CLIENT_SECRET', 'tflw-oauth-short-secret'),
+        id: this.config.get<string>(
+          'OAUTH_SHORT_CLIENT_ID',
+          'tflw-oauth-short-client',
+        ),
+        secret: this.config.get<string>(
+          'OAUTH_SHORT_CLIENT_SECRET',
+          'tflw-oauth-short-secret',
+        ),
         ttl: this.config.get<string>('OAUTH_SHORT_ACCESS_TTL', '5s'),
       },
     ];
@@ -58,8 +67,13 @@ export class OauthService {
       throw new UnauthorizedException('invalid client_id or client_secret');
     }
 
-    const adminEmail = this.config.get<string>('ADMIN_EMAIL', 'admin@example.com');
-    const admin = await this.users.findOneOrFail({ where: { email: adminEmail } });
+    const adminEmail = this.config.get<string>(
+      'ADMIN_EMAIL',
+      'admin@example.com',
+    );
+    const admin = await this.users.findOneOrFail({
+      where: { email: adminEmail },
+    });
 
     return {
       access_token: this.tokens.signAccessTokenWithTtl(admin, client.ttl),
