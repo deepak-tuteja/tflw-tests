@@ -96,6 +96,9 @@ services:
       AGENT_A_PW: ${AGENT_A_PW:-carol-pw-123}
       AGENT_B_EMAIL: ${AGENT_B_EMAIL:-dave@example.com}
       AGENT_B_PW: ${AGENT_B_PW:-dave-pw-123}
+      # perf-0 (PLAN_WEBV2_TARGETS.md §2) — dedicated identity for tflw load scenarios.
+      LOAD_USER_EMAIL: ${LOAD_USER_EMAIL:-load@example.com}
+      LOAD_USER_PW: ${LOAD_USER_PW:-load-pw-123}
       OAUTH_CLIENT_ID: ${OAUTH_CLIENT_ID:-tflw-oauth-client}
       OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET:-tflw-oauth-secret}
       OAUTH_ACCESS_TTL: ${OAUTH_ACCESS_TTL:-1h}

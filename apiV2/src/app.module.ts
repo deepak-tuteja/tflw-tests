@@ -41,6 +41,7 @@ import { ReturnRequestsModule } from './return-requests/return-requests.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { OrgsModule } from './orgs/orgs.module';
+import { LoadAdminModule } from './load-admin/load-admin.module';
 
 @Module({
   imports: [
@@ -101,6 +102,7 @@ import { OrgsModule } from './orgs/orgs.module';
     TicketsModule,
     UploadsModule,
     OrgsModule,
+    LoadAdminModule,
   ],
 })
 export class AppModule {}

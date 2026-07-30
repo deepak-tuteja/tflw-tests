@@ -6,6 +6,12 @@ import { Category } from '../entities/category.entity';
 import { Product } from '../entities/product.entity';
 import { Organization, OrgPlan } from '../entities/organization.entity';
 import { OrgMembership, OrgRole } from '../entities/org-membership.entity';
+import {
+  LOAD_HOT_PRODUCT_BASELINE_STOCK,
+  LOAD_HOT_PRODUCT_NAME,
+  LOAD_USER_EMAIL,
+  LOAD_USER_PW,
+} from '../load-admin/load-target.constants';
 
 // Deterministic — same identities/catalog every run — and idempotent, so it
 // is safe to run on every container start (upsert-by-natural-key, no
@@ -90,6 +96,15 @@ async function seed() {
       name: 'Judy',
       email: process.env.ORG_B_MEMBER_EMAIL ?? 'judy@example.com',
       password: process.env.ORG_B_MEMBER_PW ?? 'judy-pw-123',
+      role: UserRole.USER,
+    },
+    // perf-0 (PLAN_WEBV2_TARGETS.md §2) — a dedicated identity for `tflw load` scenarios,
+    // deliberately separate from alice/bob/etc. so LoadAdminService's reset can scope its order
+    // deletes to this one user's id without ever touching functional-suite fixture data.
+    {
+      name: 'Load',
+      email: LOAD_USER_EMAIL,
+      password: LOAD_USER_PW,
       role: UserRole.USER,
     },
   ];
@@ -280,6 +295,27 @@ async function seed() {
     );
   }
   console.log(`seeded bulk catalog: ${BULK_COUNT} products`);
+
+  // perf-0 (PLAN_WEBV2_TARGETS.md §2) — the load-arc's deliberately-contended target. Stock is
+  // deliberately huge (not scarce): the contention is real Postgres row-lock serialization on
+  // this one row under concurrent checkouts, not stock exhaustion. LoadAdminService's reset
+  // restores this back to baseline between load runs (a long/large run can still deplete it).
+  const existingHotProduct = await productRepo.findOne({
+    where: { name: LOAD_HOT_PRODUCT_NAME },
+  });
+  if (!existingHotProduct) {
+    await productRepo.save(
+      productRepo.create({
+        name: LOAD_HOT_PRODUCT_NAME,
+        description:
+          'Seeded perf-arc target — every `tflw load` scenario checks out against this one product on purpose.',
+        price: '9.99',
+        stock: LOAD_HOT_PRODUCT_BASELINE_STOCK,
+        categoryId: categoryEntities['Electronics'].id,
+      }),
+    );
+    console.log(`seeded load target product: ${LOAD_HOT_PRODUCT_NAME}`);
+  }
 
   await ds.destroy();
   console.log('seed complete');

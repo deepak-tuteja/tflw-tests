@@ -11,6 +11,7 @@ import { Order } from '../entities/order.entity';
 import { OrderItem } from '../entities/order-item.entity';
 import { Product } from '../entities/product.entity';
 import { Coupon, CouponType } from '../entities/coupon.entity';
+import { OrgMembership } from '../entities/org-membership.entity';
 import { OrderItemInputDto } from './dto/create-order.dto';
 import { UpdateOrderItemDto } from './dto/update-order-item.dto';
 import { AuthedUser } from '../auth/guards/bearer-auth.guard';
@@ -209,7 +210,17 @@ export class OrdersService {
 
     // PLAN_ENTERPRISE_REGRESSION.md E3 — denormalized at creation time, null if the placing user
     // has no org membership (unaffected pre-E3 behavior).
-    const membership = await this.orgs.getForUser(userId);
+    //
+    // perf-0 finding: this used to go through `this.orgs.getForUser(userId)`, which reads via the
+    // module's default (non-transactional) repository — a *second* pool connection checked out
+    // while this transaction's own connection sits open holding the stock-row lock above. Under
+    // concurrent checkouts the pool (default max 10) fills with held-open transactions each
+    // waiting on a second connection that can never free up — a genuine deadlock, not just
+    // queueing latency, discovered load-testing perf-0's own contended endpoint at ~10 concurrent
+    // requests. Reading through `manager` instead reuses this transaction's own connection.
+    const membership = await manager.findOne(OrgMembership, {
+      where: { userId },
+    });
 
     const order = manager.create(Order, {
       userId,
@@ -266,7 +277,11 @@ export class OrdersService {
     // CouponsService). Same "invalid coupon code" message as a genuinely nonexistent code, so a
     // checkout attempt from outside the org can't distinguish "wrong org" from "doesn't exist."
     if (coupon.orgId) {
-      const membership = await this.orgs.getForUser(userId);
+      // perf-0 finding (see persistOrderAtomically above) — same second-connection deadlock risk;
+      // read through `manager` to stay on this transaction's own connection.
+      const membership = await manager.findOne(OrgMembership, {
+        where: { userId },
+      });
       if (!membership || membership.orgId !== coupon.orgId) {
         throw new NotFoundException('invalid coupon code');
       }
