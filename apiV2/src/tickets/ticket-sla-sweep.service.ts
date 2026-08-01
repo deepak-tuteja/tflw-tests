@@ -1,9 +1,10 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { LessThan, Repository } from 'typeorm';
 import { Ticket, TicketStatus } from '../entities/ticket.entity';
 import { TicketEvent, TicketEventType } from '../entities/ticket-event.entity';
 import { SLA_SWEEP_INTERVAL_MS } from './sla.constants';
+import { isForeignKeyViolation } from '../common/db-errors';
 
 // PLAN_TICKETING.md decision 4 — a real background sweep, not lazy-computed-on-read. Plain
 // setInterval/clearInterval, no @nestjs/schedule (consistent with JobsService's hand-rolled-timer
@@ -12,6 +13,7 @@ import { SLA_SWEEP_INTERVAL_MS } from './sla.constants';
 // "workflow stage" and "is it late" as independent axes.
 @Injectable()
 export class TicketSlaSweepService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(TicketSlaSweepService.name);
   private timer: NodeJS.Timeout | null = null;
 
   constructor(
@@ -52,17 +54,37 @@ export class TicketSlaSweepService implements OnModuleInit, OnModuleDestroy {
     });
 
     for (const ticket of overdue) {
-      await this.tickets.update(ticket.id, {
-        slaBreached: true,
-        breachedAt: new Date(),
-      });
-      await this.events.save(
-        this.events.create({
-          ticketId: ticket.id,
-          eventType: TicketEventType.SLA_BREACHED,
-          actorUserId: null,
-        }),
-      );
+      // M48 (PLAN_BROWSER_PERF_SECURITY.md §2.20) — a ticket found overdue at the top of this
+      // sweep can be deleted (e.g. `LoadAdminService.reset()`'s load-test cleanup) before this
+      // loop reaches it; the `events.save` below then hits a FK violation on the already-gone
+      // ticket_id. Caught and skipped per-ticket, not left to bubble up: `onModuleInit`'s
+      // `void this.sweep()` has no caller to catch a rejection, so an uncaught one here used to
+      // crash the entire process — a background sweep racing a deletion should never take the
+      // whole app down. Any other error still propagates (still logged, not silently swallowed).
+      try {
+        await this.tickets.update(ticket.id, {
+          slaBreached: true,
+          breachedAt: new Date(),
+        });
+        await this.events.save(
+          this.events.create({
+            ticketId: ticket.id,
+            eventType: TicketEventType.SLA_BREACHED,
+            actorUserId: null,
+          }),
+        );
+      } catch (err) {
+        if (isForeignKeyViolation(err)) {
+          this.logger.debug(
+            `ticket ${ticket.id} deleted concurrently with the SLA sweep — skipped`,
+          );
+          continue;
+        }
+        this.logger.error(
+          `SLA sweep failed for ticket ${ticket.id}`,
+          err instanceof Error ? err.stack : String(err),
+        );
+      }
     }
   }
 }

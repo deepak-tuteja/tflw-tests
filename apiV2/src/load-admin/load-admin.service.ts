@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Product } from '../entities/product.entity';
 import { Order } from '../entities/order.entity';
+import { Ticket } from '../entities/ticket.entity';
 import { User } from '../entities/user.entity';
 import {
   LOAD_HOT_PRODUCT_BASELINE_STOCK,
@@ -13,6 +14,7 @@ import {
 export interface LoadResetResult {
   hotProductStockReset: number;
   ordersDeleted: number;
+  ticketsDeleted: number;
 }
 
 @Injectable()
@@ -20,6 +22,7 @@ export class LoadAdminService {
   constructor(
     @InjectRepository(Product) private readonly products: Repository<Product>,
     @InjectRepository(Order) private readonly orders: Repository<Order>,
+    @InjectRepository(Ticket) private readonly tickets: Repository<Ticket>,
     @InjectRepository(User) private readonly users: Repository<User>,
   ) {}
 
@@ -51,9 +54,17 @@ export class LoadAdminService {
     }
     const deleteResult = await this.orders.delete({ userId: loadUser.id });
 
+    // M48 (PLAN_BROWSER_PERF_SECURITY.md §2.20, D82) — the ticket-write rung's own cleanup, same
+    // reasoning as the orders delete above: `tickets_events.ticket_id` cascades at the DB level
+    // (onDelete: CASCADE), so this one delete clears both tables.
+    const ticketsDeleteResult = await this.tickets.delete({
+      submittedBy: loadUser.id,
+    });
+
     return {
       hotProductStockReset: LOAD_HOT_PRODUCT_BASELINE_STOCK,
       ordersDeleted: deleteResult.affected ?? 0,
+      ticketsDeleted: ticketsDeleteResult.affected ?? 0,
     };
   }
 }
