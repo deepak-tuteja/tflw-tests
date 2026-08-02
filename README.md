@@ -68,6 +68,13 @@ tests/.env-specific/ passing tests whose assertions only hold under a non-defaul
                      UI-only backfill, run via `npm run test:ui-admin` (`--env webv2Admin`), same
                      reason as webv2-admin.tflw; orgs-mixed.tflw (E3) sits alongside
                      webv2-admin.tflw for the same reason, run via `npm run test:webv2-admin`
+tflw-acceptance/     DSL-vs-alternative comparison suite (tflw vs raw fetch+node:test, vs k6, vs
+                     Artillery; plus an external restful-booker dogfood and a webv2 UI-vs-tflw
+                     comparison) — moved here from testFlow/acceptance/
+                     (PLAN_UNIFIED_RUN_DOGFOOD_REORG.md Phase 2). A different purpose from tests/
+                     above (that's the tag-driven regression tree proving this app's own
+                     correctness); this is comparison/perf fixtures proving tflw's own value
+                     against alternatives — not merged with tests/
 tflw.config          services, sessions, env, `defaults: timeout wait 5s`
 vendor/              npm-packed tflw tarball (regenerated, not committed)
 scripts/             refresh-tflw.mjs
