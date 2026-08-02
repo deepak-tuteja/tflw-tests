@@ -18,6 +18,16 @@ test('a full checkout — product page, cart, the iframe payment widget, and the
       requests.push({ url: req.url(), method: req.method(), status: res ? res.status() : null });
     });
 
+    // The payment widget's "Authorize payment" makes a real fetch() to a permanently-unreachable
+    // https://payments.example.test/v1/authorize (webV2/public/payment-widget.html) — there's no
+    // real response to fall back to, so this route must be intercepted or the DNS lookup fails,
+    // the widget's own .catch() fires, and it never postMessages the parent to enable Checkout.
+    // tflw's counterpart handles this with one `stub` line; here it's the raw Playwright
+    // equivalent, `page.route()` + `route.fulfill()`.
+    await page.route('https://payments.example.test/v1/authorize', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: 'tok_stub_success' }) }),
+    );
+
     await loginAsUserA(page);
     await page.goto(`${WEB_BASE}/products/${product.id}`);
     await pollUntilVisible(page, page.locator('#product-heading', { hasText: 'Bulk Item 100' }));

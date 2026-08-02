@@ -164,6 +164,19 @@ cd tflw-acceptance/webv2/tflw && npx tflw run --no-color
 cd tflw-acceptance/webv2/raw && node --env-file=.env --test *.test.mjs
 ```
 
+**Bug found + fixed during Phase 2 move verification (2026-08-02):** scenario 2 (full checkout)
+failed on both sides — `wait until button "Checkout" is enabled` timed out on tflw, the equivalent
+hand-rolled poll timed out on raw. Root cause was already spelled out in `payment-widget.html`'s own
+comment: M46 (in the `testFlow-tests` app itself, after this suite's checkout scenario was last
+written) made "Authorize payment" call a real, permanently-unreachable
+`https://payments.example.test/v1/authorize` — every path through the widget must `stub` that route
+or the widget's own `fetch().catch()` fires and it never `postMessage`s the parent, so `Checkout`
+never enables. Neither side's checkout scenario had been updated for that change. Fixed by adding
+one `stub POST "https://payments.example.test/v1/authorize" respond status 200 body { token: … }`
+line on the tflw side and one `page.route(...).fulfill(...)` interception on the raw side — an
+app-side drift the acceptance suite hadn't kept pace with, not a migration regression (confirmed via
+an A/B run of the pre-move file through the pre-move CLI, which failed identically).
+
 Both passed 5/5 when this was last run — tflw in 5449ms, raw in 1188ms. The gap is **not** a tflw
 regression against the API-only leg's 3×-faster finding above: `node:test` runs test *files*
 concurrently by default (raw's 5 browsers launch in parallel, across processes), while `tflw run`
