@@ -70,7 +70,7 @@ test "a coupon below its minimum order amount is rejected"
   capture body.accessToken as shopperToken
 
   let code = unique("MINAMOUNT")
-  let futureDate = random date in future
+  let futureDate = random date between today + 2 days and today + 365 days
   api POST /coupons body { code: {code}, type: "fixed", value: 5, expiresAt: "{futureDate}", minOrderAmount: 100, usageLimit: 10 }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
@@ -98,7 +98,7 @@ test "a coupon that has reached its usage limit is rejected"
   capture body.accessToken as shopperToken
 
   let code = unique("LIMIT1")
-  let futureDate = random date in future
+  let futureDate = random date between today + 2 days and today + 365 days
   api POST /coupons body { code: {code}, type: "fixed", value: 2, expiresAt: "{futureDate}", minOrderAmount: 0, usageLimit: 1 }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
@@ -158,7 +158,7 @@ test "a valid coupon discounts a successful checkout"
   capture body.accessToken as shopperToken
 
   let code = unique("SAVE10PCT")
-  let futureDate = random date in future
+  let futureDate = random date between today + 2 days and today + 365 days
   api POST /coupons body { code: {code}, type: "percent", value: 10, expiresAt: "{futureDate}", minOrderAmount: 10, usageLimit: 5 }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
@@ -189,7 +189,7 @@ test "5 concurrent order requests against stock 3 produce exactly 3 successes an
 
 @coupons @crud @orderOps @api
 test "creating a coupon with malformed or missing fields is a clean 422"
-  let futureDate = random date in future
+  let futureDate = random date between today + 2 days and today + 365 days
   api POST /coupons body { code: unique("BADTYPE"), type: "bogus", value: 10, expiresAt: "{futureDate}", minOrderAmount: 0, usageLimit: 1 }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 422
@@ -207,7 +207,7 @@ test "creating a coupon with malformed or missing fields is a clean 422"
 
 @coupons @crud @orderOps @api
 test "creating a coupon with out-of-range values is a clean 422"
-  let futureDate = random date in future
+  let futureDate = random date between today + 2 days and today + 365 days
   api POST /coupons body { code: unique("NEGVALUE"), type: "fixed", value: -5, expiresAt: "{futureDate}", minOrderAmount: 0, usageLimit: 1 }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 422
@@ -220,7 +220,7 @@ test "creating a coupon with out-of-range values is a clean 422"
 
 @coupons @crud @regression @orderOps @api
 test "a percent coupon above 100 is rejected — the discount can never exceed the subtotal"
-  let futureDate = random date in future
+  let futureDate = random date between today + 2 days and today + 365 days
   api POST /coupons body { code: unique("OVER100PCT"), type: "percent", value: 150, expiresAt: "{futureDate}", minOrderAmount: 0, usageLimit: 1 }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 422
@@ -237,7 +237,7 @@ test "a non-admin bearer cannot create a coupon"
   expect status equals 200
   capture body.accessToken as userAToken
 
-  let futureDate = random date in future
+  let futureDate = random date between today + 2 days and today + 365 days
   api POST /coupons body { code: unique("SNEAKY"), type: "fixed", value: 5, expiresAt: "{futureDate}", minOrderAmount: 0, usageLimit: 1 }
     header "Authorization" is "Bearer {userAToken}"
   expect status equals 403
@@ -245,7 +245,7 @@ test "a non-admin bearer cannot create a coupon"
 @coupons @crud @orderOps @api
 test "creating a coupon with an already-used code is a clean 409, not a silent overwrite"
   let code = unique("DUPECODE")
-  let futureDate = random date in future
+  let futureDate = random date between today + 2 days and today + 365 days
   api POST /coupons body { code: {code}, type: "fixed", value: 5, expiresAt: "{futureDate}", minOrderAmount: 0, usageLimit: 1 }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
@@ -258,7 +258,7 @@ test "creating a coupon with an already-used code is a clean 409, not a silent o
 @coupons @concurrency @regression @orderOps @api
 test "3 concurrent checkouts against a usageLimit:1 coupon produce exactly 1 success and 2 conflicts"
   let code = unique("RACELIMIT")
-  let futureDate = random date in future
+  let futureDate = random date between today + 2 days and today + 365 days
   api POST /coupons body { code: {code}, type: "fixed", value: 1, expiresAt: "{futureDate}", minOrderAmount: 0, usageLimit: 1 }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 201

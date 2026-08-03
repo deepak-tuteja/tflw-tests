@@ -153,7 +153,7 @@ test "an org admin's coupon is redeemable by their own org's members, not anothe
   expect status equals 200
   capture body.accessToken as frankToken
 
-  let futureDate = random date in future
+  let futureDate = random date between today + 2 days and today + 365 days
   let code = unique("ACMEORG")
   api POST /coupons body { code: {code}, type: "fixed", value: 5, expiresAt: "{futureDate}", minOrderAmount: 0, usageLimit: 10, orgId: {foreignOrgId} }
     header "Authorization" is "Bearer {frankToken}"
@@ -192,7 +192,7 @@ test "an org admin's coupon is redeemable by their own org's members, not anothe
 
 @orgOps @api
 test "GET /coupons is org-scoped for an org admin (their org's + every global one), forbidden for a plain member"
-  let futureDate = random date in future
+  let futureDate = random date between today + 2 days and today + 365 days
   let globalCode = unique("GLOBALCODE")
   api POST /coupons body { code: {globalCode}, type: "fixed", value: 1, expiresAt: "{futureDate}", minOrderAmount: 0, usageLimit: 1 }
     header "Authorization" is "Bearer {adminToken}"
