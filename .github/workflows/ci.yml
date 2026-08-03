@@ -41,7 +41,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [1, 2, 3, 4]
+        # names, not numbers, so a failing/slow leg is identifiable from the job list alone —
+        # see scripts/regression.mjs's PHASE_GROUPS for what each actually contains (duration-
+        # bin-packed, not a strict semantic split).
+        group: [core, tooling, safety, security-ui]
     steps:
       - name: Checkout testFlow-tests
         uses: actions/checkout@v7

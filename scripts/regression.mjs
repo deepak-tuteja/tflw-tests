@@ -124,14 +124,18 @@ const PHASES = [
 // real per-phase CI timings pulled from run 30802717073 (2026-08-03, post-reorg; see PLAN_CI.md
 // Round 3 for the full table). Static, not computed at runtime: re-pack by hand if PHASES' own
 // shape changes enough to meaningfully skew a group's total (a phase added/removed), not for a
-// few seconds of drift between runs. `--group <n>` runs only that group's phases; with no flag,
-// every phase runs, unchanged from before this existed (a plain local `npm run regression` never
-// needs to know groups exist).
+// few seconds of drift between runs. `--group <name>` runs only that group's phases; with no
+// flag, every phase runs, unchanged from before this existed (a plain local `npm run regression`
+// never needs to know groups exist).
+//
+// Names are a readability label for each bin's dominant theme, chosen after the fact — the
+// packing itself is duration-driven, not semantic, so don't read a name as a strict partition
+// (e.g. `safety` also carries `--tag mixed`, and `core` carries `demo-fail-check`).
 const PHASE_GROUPS = {
-  1: ['full suite', '--tag orderOps', '--tag smoke,catalogOps', 'demo-fail-check', '--tag orgOps', '--tag inventoryOps', 'migrate-check'],
-  2: ['--tag api', 'watch-check', 'pick-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check'],
-  3: ['--tag identityOps', '--tag mixed', '--tag smoke,orderOps', '--tag adminOps', '--tag catalogOps', 'safety-flags-check', 'check-diagnostics', 'safety-redaction-check'],
-  4: ['--tag smoke,identityOps', 'cli-flags-check', '--tag smoke,adminOps', '--tag ui', 'webv2-admin-check', '--tag smoke,inventoryOps', 'logging-check', 'mtls-rejection'],
+  core: ['full suite', '--tag orderOps', '--tag smoke,catalogOps', 'demo-fail-check', '--tag orgOps', '--tag inventoryOps', 'migrate-check'],
+  tooling: ['--tag api', 'watch-check', 'pick-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check'],
+  safety: ['--tag identityOps', '--tag mixed', '--tag smoke,orderOps', '--tag adminOps', '--tag catalogOps', 'safety-flags-check', 'check-diagnostics', 'safety-redaction-check'],
+  'security-ui': ['--tag smoke,identityOps', 'cli-flags-check', '--tag smoke,adminOps', '--tag ui', 'webv2-admin-check', '--tag smoke,inventoryOps', 'logging-check', 'mtls-rejection'],
 };
 
 const groupFlagIndex = process.argv.indexOf('--group');
