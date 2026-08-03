@@ -87,6 +87,12 @@ const CI_VERBOSE = process.env.GITHUB_ACTIONS === 'true' ? ['--verbose'] : [];
 // Most phases share the plain `tflw run --no-color [args]` shape; a phase may instead supply its
 // own `cmd` (mtls-rejection needs a non-default `--env` + explicit file path; safety-redaction-check
 // isn't a `tflw run` invocation at all, it's the report-artifact proof script from M25).
+//
+// Bare `tflw run`'s no-file-args discovery is scoped by tflw.config's own `exclude
+// "tflw-acceptance"` (tflw 0.1.0 M58, D127/PLAN_DISCOVERY_EXCLUDE.md) — that second, independent
+// suite (own sessions/env, moved in from `testFlow` by PLAN_UNIFIED_RUN_DOGFOOD_REORG.md Phase 2)
+// is excluded at the config level now, so every below-`args`-array phase can rely on plain bare
+// discovery again; explicit-`cmd` phases already name their own files regardless.
 const PHASES = [
   { name: 'full suite', args: [] },
   ...AREA_TAGS.map((tag) => ({ name: `--tag ${tag}`, args: ['--tag', tag] })),

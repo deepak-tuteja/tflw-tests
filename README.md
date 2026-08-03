@@ -87,7 +87,9 @@ TFLW-FEATURE-GAPS.md genuine tflw DSL gaps found while building the v1 (plain-No
 cp .env.example .env   # Postgres creds, JWT secrets, seeded admin/userA/userB/OAuth-client credentials
 node cli.mjs start     # docker compose up -d --build --wait (postgres + api :4001 + nginx TLS sidecar + webV2 :8090 + inventory-service :4002)
 npm run refresh-tflw   # packs ../testFlow/packages/cli and installs the tarball
-npx tflw run           # runs the whole tests/ tree (api/ui/mixed) against the running api
+npm test               # tflw run over the whole tests/ tree (api/ui/mixed) against the running api —
+                        # tflw.config's `exclude "tflw-acceptance"` (tflw 0.1.0 M58) keeps bare
+                        # discovery from also sweeping that separate suite/config
 npm run test:mtls      # runs tests/api/identity/mtls.tflw against the sidecar's mTLS-requiring listener (own env, M22)
 npm run test:mtls-rejection  # runs .env-specific/mtls-rejection.tflw — no client cert, real rejection (M25)
 npm run test:safety    # runs tests/api/identity/safety-redaction.tflw with `redact` active (own env, M23)
@@ -259,8 +261,8 @@ shipped JS bundle entirely rather than just hiding them at runtime.
 
 ## Reporting
 
-A plain `npx tflw run` already exercises a lot of what to look for in `report/report.html` and
-`report/junit.xml`:
+A plain `npm test` (or any `npx tflw run` below) already exercises a lot of what to look for in
+`report/report.html` and `report/junit.xml`:
 
 - **Retries** — `retry-and-flake.tflw`'s flaky-widget test fails twice then passes; the report
   shows a `flaky` badge with every attempt's evidence (failed attempts collapsed above the final
