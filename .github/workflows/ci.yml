@@ -6,8 +6,42 @@ on:
     branches: [main]
 
 jobs:
-  regression:
+  # decision 3 (unchanged) + Round 3 decision 16: split out of the old single job so this cheap,
+  # fast-failing check doesn't get duplicated across every regression matrix leg below — it gates
+  # the matrix via `needs:`, exactly like it used to gate the rest of the one job by running first.
+  apiv2:
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout testFlow-tests
+        uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: apiV2 lint + test
+        run: |
+          npm ci
+          npm run lint
+          npm test
+        working-directory: apiV2
+
+  # Round 3 decision 16 (PLAN_CI.md, 2026-08-03 grill-me): the 30-phase sweep used to run
+  # sequentially in one job (~34min). Split into a 4-leg GH Actions job matrix — real per-phase
+  # timings pulled from run 30802717073 (2026-08-03) were greedy-LPT bin-packed into
+  # scripts/regression.mjs's PHASE_GROUPS, landing all 4 legs within ~8.0-8.7min of *sweep* time
+  # each. Deliberately duplicates the cold checkout/npm ci/refresh-tflw/playwright-install cost
+  # per leg (~2-3min) rather than engineering a shared build cache — each matrix leg is a fresh
+  # runner VM, which also means free port/network/Postgres isolation between legs with zero
+  # docker-compose project-namespacing work, the main reason "concurrent stacks on one runner"
+  # was dropped from scope entirely (see decision 16's full writeup).
+  regression:
+    needs: apiv2
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [1, 2, 3, 4]
     steps:
       - name: Checkout testFlow-tests
         uses: actions/checkout@v7
@@ -32,15 +66,6 @@ jobs:
       - name: Install tflw workspace deps
         run: npm ci
         working-directory: testFlow
-
-      # decision 3: apiV2's own lint + test first, before any Docker work — fails fast and
-      # cheaply on a real code/lint bug, ahead of the much slower Docker+regression steps below.
-      - name: apiV2 lint + test
-        run: |
-          npm ci
-          npm run lint
-          npm test
-        working-directory: testFlow-tests/apiV2
 
       # decision 10: no GitHub Secrets needed — docker-compose.yml already bakes a dev-safe
       # default into every credential it reads (`${ADMIN_EMAIL:-admin@example.com}` etc.). tflw
@@ -67,37 +92,69 @@ jobs:
         run: npx playwright install --with-deps chromium
         working-directory: testFlow-tests
 
-      # decisions 5-8: full suite + every feature-area tag + @smoke + every smoke,<area> combo +
-      # the M25 mtls-rejection/safety-redaction-check phases — each its own fresh Docker restart
-      # (scripts/regression.mjs), archived per-phase into report-by-phase/ as it goes. `--verbose`
-      # (and the resulting GitHub Actions ::group::/::endgroup:: log grouping, tflw decision
-      # 111.8) is auto-detected from GITHUB_ACTIONS — no extra flag needed here.
+      # decisions 5-8 + Round 3 decision 16: this matrix leg's slice of the 30 phases only
+      # (`--group`, scripts/regression.mjs), each its own fresh Docker restart, archived per-phase
+      # into report-by-phase/ as it goes. `--verbose` (and the resulting GitHub Actions
+      # ::group::/::endgroup:: log grouping, tflw decision 111.8) is auto-detected from
+      # GITHUB_ACTIONS — no extra flag needed here.
       #
-      # `xvfb-run -a` (M42): the `watch-check` phase spawns a real `tflw watch`, which always
-      # forces a headed browser (`watchCommand`'s own `runOne` unconditionally appends `--headed`,
-      # regardless of any flag `watch` itself is given — PLAN_WEBV2_M40.md decision 3's claim that
-      # `watch` is headless-safe was wrong). Confirmed on the first CI run after M42 landed on main
-      # (run 30386703593): "Missing X server or $DISPLAY ... use 'xvfb-run <your-playwright-app>'",
-      # the same failure and fix `testFlow`'s own ci.yml already applies for its headed
-      # `watch.test.ts`. xvfb is preinstalled on the ubuntu-latest runner image, so no extra
-      # apt-get install is needed.
-      - name: Full regression sweep (16 phases, each its own fresh Docker restart)
-        run: xvfb-run -a npm run regression
+      # `xvfb-run -a` (M42): the `watch-check` phase (group 2) spawns a real `tflw watch`, which
+      # always forces a headed browser (`watchCommand`'s own `runOne` unconditionally appends
+      # `--headed`, regardless of any flag `watch` itself is given — PLAN_WEBV2_M40.md decision 3's
+      # claim that `watch` is headless-safe was wrong). Confirmed on the first CI run after M42
+      # landed on main (run 30386703593): "Missing X server or $DISPLAY ... use 'xvfb-run
+      # <your-playwright-app>'", the same failure and fix `testFlow`'s own ci.yml already applies
+      # for its headed `watch.test.ts`. xvfb is preinstalled on the ubuntu-latest runner image, so
+      # no extra apt-get install is needed. Kept on every leg rather than only group 2's, since
+      # PHASE_GROUPS is repacked by hand over time and a future repack could move watch-check.
+      - name: Regression sweep — group ${{ matrix.group }} (each phase its own fresh Docker restart)
+        run: xvfb-run -a npm run regression -- --group ${{ matrix.group }}
         working-directory: testFlow-tests
 
+      # Round 3 decision 16: each leg's report-by-phase/ uploaded under its own artifact name —
+      # merged back into one before publishing, so the rest of CI (dorny/test-reporter, the final
+      # `regression-reports` artifact) keeps behaving exactly like the old single-job sweep did.
+      - name: Upload this leg's report-by-phase/
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: regression-reports-group-${{ matrix.group }}
+          path: testFlow-tests/report-by-phase/
+
+  # Round 3 decision 16: recombines the 4 matrix legs' artifacts into the single
+  # report-by-phase/ shape decisions 5-9 already relied on, so the JUnit publish step and the
+  # final artifact name are unchanged from before this matrix existed — nothing downstream of
+  # this job needed to learn groups exist.
+  merge-reports:
+    needs: regression
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      # dorny/test-reporter shells out to `git ls-files` internally — needs a real git repo at
+      # `working-directory` below, same reason the old single job checked this out (see that
+      # step's own history, preserved on the JUnit-publish step below). This job otherwise checks
+      # out nothing, unlike `regression`, so this checkout exists purely for that.
+      - name: Checkout testFlow-tests
+        uses: actions/checkout@v7
+        with:
+          path: testFlow-tests
+
+      - name: Download all groups' reports
+        uses: actions/download-artifact@v7
+        with:
+          pattern: regression-reports-group-*
+          path: testFlow-tests/report-by-phase
+          merge-multiple: true
+
       # decision 9: surfaces pass/fail inline in the Actions run summary / PR checks, not just a
-      # bare red X on the job. `working-directory` is required, not cosmetic — this action shells
-      # out to `git ls-files` internally, and the job's own root (GITHUB_WORKSPACE) isn't a git
-      # repo itself (both testFlow-tests and testFlow are checked out into subdirectories above);
-      # without it the step fails outright with "fatal: not a git repository", found empirically
-      # on the first real run of this workflow.
+      # bare red X on the job.
       #
       # `demo-fail-check`'s own junit.xml is never named `junit.xml` on disk in the first place
       # (scripts/regression.mjs's archivePhaseReport() renames it to `junit-by-design.xml` for
       # exactly this phase) — a plain `*/junit.xml` glob structurally can't pick it up.
       # scripts/verify-demofail.mjs's real pass/fail verdict is its own count-based `check()` logic
-      # (already gating this job via the step above's exit code), not the raw junit.xml that phase
-      # happens to produce — that's just whichever `npx tflw run` call the script made *last*
+      # (already gating the regression job above via its exit code), not the raw junit.xml that
+      # phase happens to produce — that's just whichever `npx tflw run` call the script made *last*
       # (currently allow-hosts-blocked.tflw under `--env allowHostsBlocked`, one intentionally-
       # failing test by design). A first attempt at this (M35, commit 286a679) tried excluding it
       # via a comma-separated `!`-negation in this same `path` input instead — confirmed wrong on
@@ -117,8 +174,9 @@ jobs:
 
       # decision 9: every phase's report.html/junit.xml/results.json (+ events.ndjson under
       # --format ndjson, unused here) uploaded — pass or fail, not failure-only — so a green run's
-      # evidence stays inspectable too, not just a failing one's.
-      - name: Upload full report artifacts (every phase)
+      # evidence stays inspectable too, not just a failing one's. Same artifact name as before the
+      # matrix existed (`regression-reports`), now assembled from all 4 legs instead of one job.
+      - name: Upload full report artifacts (every phase, merged)
         if: always()
         uses: actions/upload-artifact@v7
         with:

@@ -119,10 +119,33 @@ const PHASES = [
   },
 ];
 
+// PLAN_CI.md decision 16 (Round 3, 2026-08-03 grill-me): duration-balanced static groups for a
+// GitHub Actions matrix (4 legs) — greedy LPT (longest-processing-time-first) bin-packing against
+// real per-phase CI timings pulled from run 30802717073 (2026-08-03, post-reorg; see PLAN_CI.md
+// Round 3 for the full table). Static, not computed at runtime: re-pack by hand if PHASES' own
+// shape changes enough to meaningfully skew a group's total (a phase added/removed), not for a
+// few seconds of drift between runs. `--group <n>` runs only that group's phases; with no flag,
+// every phase runs, unchanged from before this existed (a plain local `npm run regression` never
+// needs to know groups exist).
+const PHASE_GROUPS = {
+  1: ['full suite', '--tag orderOps', '--tag smoke,catalogOps', 'demo-fail-check', '--tag orgOps', '--tag inventoryOps', 'migrate-check'],
+  2: ['--tag api', 'watch-check', 'pick-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check'],
+  3: ['--tag identityOps', '--tag mixed', '--tag smoke,orderOps', '--tag adminOps', '--tag catalogOps', 'safety-flags-check', 'check-diagnostics', 'safety-redaction-check'],
+  4: ['--tag smoke,identityOps', 'cli-flags-check', '--tag smoke,adminOps', '--tag ui', 'webv2-admin-check', '--tag smoke,inventoryOps', 'logging-check', 'mtls-rejection'],
+};
+
+const groupFlagIndex = process.argv.indexOf('--group');
+const groupArg = groupFlagIndex === -1 ? null : process.argv[groupFlagIndex + 1];
+if (groupArg !== null && !PHASE_GROUPS[groupArg]) {
+  console.error(`Unknown --group "${groupArg}" — expected one of: ${Object.keys(PHASE_GROUPS).join(', ')}`);
+  process.exit(1);
+}
+const activePhases = groupArg === null ? PHASES : PHASES.filter((p) => PHASE_GROUPS[groupArg].includes(p.name));
+
 rmSync(ARCHIVE_DIR, { recursive: true, force: true });
 
 const results = [];
-for (const phase of PHASES) {
+for (const phase of activePhases) {
   console.log(`\n=== ${phase.name} (fresh restart) ===\n`);
   restart();
   const cmd = phase.cmd ?? ['npx', 'tflw', 'run', '--no-color', ...CI_VERBOSE, ...phase.args].join(' ');
