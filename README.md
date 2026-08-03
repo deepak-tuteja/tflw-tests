@@ -121,6 +121,16 @@ isolation guarantee for the second database E4 introduced). Exits non-zero if an
 section restates it for a reader who won't open the script, so it can drift; if in doubt, the
 script wins.
 
+#### Fast local smoke check
+
+`npm run regression:smoke` (`scripts/regression-smoke.mjs`, PLAN_CI.md decision 15) — one Docker
+restart, then `--tag smoke` (a mixed sample across all three layers) plus `demo-fail-check`/
+`cli-flags-check`/`check-diagnostics`, the cheapest restart-agnostic `*-check` phases. Not a
+replacement for the full 30-phase sweep above — reserve that for changes that touch `testFlow`
+itself (a new tflw release is exactly the kind of cross-cutting change 30 independent phases exist
+to catch), or let CI catch it on push to `main`. Exits non-zero on any failure; archives its
+reports into `report-by-phase/` the same way the full sweep does.
+
 ### webV2 — browser-arc dogfood target (webV2-0)
 
 `http://localhost:8090` after `node cli.mjs start` — a React+Vite+TS SPA storefront (catalog →

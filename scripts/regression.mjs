@@ -14,51 +14,15 @@
 // chaining phases on the same DB reproduces the exact "unique(...)-email/data collision" false
 // failures this project has already hit and documented twice (PROGRESS.md M20, M21). A phase's
 // result is only trustworthy in isolation.
-import { execSync } from 'node:child_process';
-import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { rmSync } from 'node:fs';
+import { ARCHIVE_DIR, CI_VERBOSE, archivePhaseReport, restart, run } from './lib/regression-shared.mjs';
 
-const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const REPORT_DIR = path.join(ROOT, 'report');
 // PLAN_CI.md decision 9 wants every phase's report.html/junit.xml/results.json uploaded, not just
 // a green run's — but every phase writes to the same `report/`, and the next phase's restart
-// doesn't touch it (only tflw's next `run` overwrites it in place). Archive each phase's output
-// into its own subdirectory immediately after that phase finishes, before the next phase's `tflw
-// run` can clobber it.
-const ARCHIVE_DIR = path.join(ROOT, 'report-by-phase');
-
-function slug(name) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-}
-
-// M35 fixed this by excluding demo-fail-check's junit.xml from the `dorny/test-reporter` glob via
-// a comma-separated `!`-negation in the workflow's `path` input — confirmed wrong on the very next
-// real CI run (30132116208): dorny's `LocalFileProvider` splits `path` on `,` and calls fast-glob
-// *separately per segment* (see its src/input-providers/local-file-provider.ts), so the negation
-// segment just globs on its own (matching nothing, since a lone negative pattern has no positive
-// pattern to subtract from) and never touches the other segment's results — the exclusion was a
-// complete no-op. Fixed for real here instead: rename demo-fail-check's own junit.xml so it can
-// no longer match `report-by-phase/*/junit.xml` at all, structurally, rather than depending on
-// glob-exclusion semantics the action doesn't actually implement. The file is still archived and
-// still uploaded whole via the report-by-phase/ artifact step — just under a name a human (or the
-// verify-demofail.mjs script whose own count-based check() logic is this phase's real verdict) can
-// still open, but the JUnit-consuming action can't accidentally pick up.
-const JUNIT_EXCLUDED_PHASES = new Set(['demo-fail-check']);
-
-function archivePhaseReport(phaseName) {
-  if (!existsSync(REPORT_DIR)) return;
-  const dest = path.join(ARCHIVE_DIR, slug(phaseName));
-  rmSync(dest, { recursive: true, force: true });
-  mkdirSync(ARCHIVE_DIR, { recursive: true });
-  renameSync(REPORT_DIR, dest);
-  if (JUNIT_EXCLUDED_PHASES.has(slug(phaseName))) {
-    const junitPath = path.join(dest, 'junit.xml');
-    if (existsSync(junitPath)) {
-      renameSync(junitPath, path.join(dest, 'junit-by-design.xml'));
-    }
-  }
-}
+// doesn't touch it (only tflw's next `run` overwrites it in place). archivePhaseReport (shared
+// lib) archives each phase's output into its own subdirectory immediately after that phase
+// finishes, before the next phase's `tflw run` can clobber it. See the shared lib for the
+// demo-fail-check junit-renaming history (M35).
 
 // E3 (PLAN_ENTERPRISE_REGRESSION.md) adds `orgOps` as a 5th area tag — its own `--tag orgOps` and
 // `smoke,orgOps` phases below fall out of the existing per-area-tag map, no separate wiring
@@ -156,15 +120,6 @@ const PHASES = [
     cmd: ['npx', 'tflw', 'run', '--no-color', ...CI_VERBOSE, '--env', 'webv2Admin', 'tests/.env-specific/webv2-admin.tflw', 'tests/.env-specific/orgs-mixed.tflw'].join(' '),
   },
 ];
-
-function run(cmd, opts = {}) {
-  return execSync(cmd, { cwd: ROOT, stdio: 'inherit', ...opts });
-}
-
-function restart() {
-  run('node cli.mjs stop');
-  run('node cli.mjs start');
-}
 
 rmSync(ARCHIVE_DIR, { recursive: true, force: true });
 
