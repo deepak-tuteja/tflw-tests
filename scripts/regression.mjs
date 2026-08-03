@@ -39,14 +39,12 @@ const AREA_TAGS = ['identityOps', 'catalogOps', 'orderOps', 'adminOps', 'orgOps'
 // set, not proving anything new the way `smoke,<area>` does for a specific feature area.
 const LAYER_TAGS = ['api', 'ui', 'mixed'];
 
-// `--verbose` only under real GitHub Actions (auto-detected via GITHUB_ACTIONS, same signal tflw
-// itself uses for decision 111.8's ::group::/::endgroup:: log grouping) — a local `npm run
+// `--verbose` only under real GitHub Actions (CI_VERBOSE, imported above) — a local `npm run
 // regression` stays exactly as compact as it's always been; a CI run gets grouped per-step detail
 // automatically, no other YAML wiring needed. Deliberately no `--bail` here even in CI: decision 9
 // (PLAN_CI.md) wants every phase's *complete* artifact uploaded, pass or fail — bailing at the
 // first failing test would leave a truncated report for exactly the run you'd most want full
 // evidence from.
-const CI_VERBOSE = process.env.GITHUB_ACTIONS === 'true' ? ['--verbose'] : [];
 
 // Most phases share the plain `tflw run --no-color [args]` shape; a phase may instead supply its
 // own `cmd` (mtls-rejection needs a non-default `--env` + explicit file path; safety-redaction-check
