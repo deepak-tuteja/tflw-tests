@@ -33,6 +33,7 @@ import { JobsModule } from './jobs/jobs.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { FlakyWidgetModule } from './flaky-widget/flaky-widget.module';
 import { RetryDemoModule } from './retry-demo/retry-demo.module';
+import { SafetyDemoModule } from './safety-demo/safety-demo.module';
 import { ContractDemoModule } from './contract-demo/contract-demo.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { CouponsModule } from './coupons/coupons.module';
@@ -94,6 +95,7 @@ import { LoadAdminModule } from './load-admin/load-admin.module';
     ReviewsModule,
     FlakyWidgetModule,
     RetryDemoModule,
+    SafetyDemoModule,
     ContractDemoModule,
     NotificationsModule,
     CouponsModule,

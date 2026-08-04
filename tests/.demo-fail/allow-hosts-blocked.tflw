@@ -1,12 +1,20 @@
-# allow-hosts-blocked.tflw — DEMO-FAIL FIXTURE (M23, testFlow PLAN.md decision 101a): the
-# negative case for `allow hosts` — a request to a real, reachable host that just isn't on the
-# allowlist must be refused before any network I/O, not silently let through. Run under
-# `--env allowHostsBlocked` (tflw.config), whose allowlist deliberately excludes localhost.
+# allow-hosts-blocked.tflw — DEMO-FAIL FIXTURE (M23, testFlow PLAN.md decision 101a; reshaped for
+# tflw M85 / review cluster C1): the negative case for `allow hosts` — a request to a real,
+# reachable host that just isn't on the allowlist must be refused before any network I/O, not
+# silently let through. Run under `--env allowHostsBlocked` (tflw.config).
+#
+# The blocked host arrives by *redirect*, which is both the honest shape of the risk and the only
+# one still expressible: the dangerous host in practice is one the server picks, not one anybody
+# typed, and since M85 an env whose own base URL its own allowlist excludes is a `tflw check` error
+# (`TF036`) — so this fixture's old shape would now prove the checker rather than the guardrail.
+# `/safety-demo/offsite-redirect` 302s to `http://127.0.0.1:<port>/v1/health`: the same server,
+# spelled as a different host, healthy and listening. The request *would* have succeeded; it is
+# refused at the hop instead, so `expect status equals 200` never gets an answer.
 #
 # Run explicitly (dot-directory, invisible to a bare `tflw run`/`tflw check`):
 #   npx tflw run tests/.demo-fail/allow-hosts-blocked.tflw --env allowHostsBlocked --tag demofail
 
 @demofail @safety
-test "a request to a host outside `allow hosts` is refused before it ever reaches the real, healthy server"
-  api GET /health
+test "a redirect to a host outside `allow hosts` is refused before it ever reaches the real, healthy server"
+  api GET /safety-demo/offsite-redirect
   expect status equals 200

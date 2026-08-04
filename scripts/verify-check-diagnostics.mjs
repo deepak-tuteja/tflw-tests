@@ -8,6 +8,14 @@
 // read from `cwd` (`packages/cli/src/cli.ts`), so the config dialect's own diagnostics can't be
 // triggered against a real file living inside this project without breaking the whole suite.
 // TF004-009/TF017-019 are reserved, not assigned — nothing to dogfood there (SPEC.md).
+//
+// KNOWN DRIFT, recorded rather than quietly widened (2026-08-04): the closing line says "All N
+// assigned TF0xx codes", but N is `Object.keys(...).length` — this script's own fixture count, not
+// the count of codes tflw actually assigns. It was true at M49 and stopped being true the next time
+// tflw added one. `TF033`/`TF034`/`TF035` have no fixture here; `TF036` was added with the M85
+// consumption because it is that change's own code. The real repair is a guard that fails when a
+// member of tflw's `Codes` has no fixture — the same shape as tflw's own `grammarCoverage.test.ts`,
+// and the same lesson: a completeness claim with nothing enforcing it has already drifted.
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -78,6 +86,10 @@ const CONFIG_FIXTURES = {
   TF025: 'defaults\n  web "http://localhost:8090"\n\nenv local default\n  api "http://localhost:4001"\n',
   TF029:
     'env local default\n  api "http://localhost:4001"\n\nsession admin\n  api POST /auth/login body { email: "a@a.com", password: "x" }\n\nsession admin\n  api POST /auth/login body { email: "a@a.com", password: "x" }\n',
+  // tflw M85 (review cluster C1 / `A4-10`): the active env's own base URL against its own
+  // `allow hosts`. It has to be the *default* env here — the check is env-scoped, and this script
+  // runs `tflw check` with no `--env`.
+  TF036: 'env local default\n  api "http://localhost:4001"\n  allow hosts "example.com"\n',
 };
 
 const scratchDir = mkdtempSync(path.join(tmpdir(), 'tflw-check-config-'));

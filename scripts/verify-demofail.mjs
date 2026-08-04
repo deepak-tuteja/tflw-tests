@@ -6,9 +6,9 @@
 // supposed to prove-broken-without stopped failing) — that's exactly the gap this closes.
 //
 // `allow-hosts-blocked.tflw` is a genuine outlier among the `.demo-fail` set: its assertion
-// (`expect status equals 200` against `GET /health`) only fails under `env allowHostsBlocked`
-// (whose allowlist excludes localhost) — under the suite's default `env local` it's a perfectly
-// ordinary passing request. Confirmed empirically while building this script: running the whole
+// (`expect status equals 200` against `GET /safety-demo/offsite-redirect`) only fails under
+// `env allowHostsBlocked` — under the suite's default `env local`, whose allowlist covers both
+// `localhost` and the redirect's `127.0.0.1` target, it's a perfectly ordinary passing request. Confirmed empirically while building this script: running the whole
 // `tests/.demo-fail/*.tflw --tag demofail` glob together under the default env reports
 // `1/8 passed, 7 failed`, not `0/8` — exactly the silent-pass-instead-of-fail risk this script
 // exists to catch, not a hypothetical. So this runs two sub-checks, each against its own correct

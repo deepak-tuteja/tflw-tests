@@ -28,8 +28,19 @@
 
 @examples @security
 test "allow hosts — an allowlisted host's traffic passes through completely unaffected"
-  # tflw.config's `env local` declares `allow hosts "localhost"` — every one of this suite's ~35
-  # other files already depends on this never false-positive-blocking normal traffic; this test is
-  # the explicit, named proof of that fact, not an incidental side effect of it.
+  # tflw.config's `env local` declares `allow hosts "localhost", "127.0.0.1"` — every one of this
+  # suite's ~35 other files already depends on this never false-positive-blocking normal traffic;
+  # this test is the explicit, named proof of that fact, not an incidental side effect of it.
   api GET /health
   expect status equals 200
+
+@examples @security
+test "allow hosts — an allowlisted redirect target is followed like any other hop"
+  # tflw M85 (review cluster C1 / `B4-02`): the list is enforced on every hop of a chain, not only
+  # on the URL a step names. The companion to that is this — an *allowed* hop must still be taken,
+  # and taken identically to how it would be with no allowlist at all. Same endpoint the negative
+  # case uses (`tests/.demo-fail/allow-hosts-blocked.tflw`), same 302 to the `127.0.0.1` spelling
+  # of this machine; the only difference is that this env lists it.
+  api GET /safety-demo/offsite-redirect
+  expect status equals 200
+  expect body.status equals "ok"
