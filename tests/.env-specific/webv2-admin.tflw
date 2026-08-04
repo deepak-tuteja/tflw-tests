@@ -18,7 +18,7 @@
 # Run explicitly instead: `npm run test:webv2-admin` (`tflw run --env webv2Admin
 # tests/.env-specific/webv2-admin.tflw`).
 #
-# `select`/`check field`/`fill form` (M40, PLAN_WEBV2_M40.md): the three admin EJS `<select>`s
+# `select`/`tick field`/`fill form` (M40, PLAN_WEBV2_M40.md): the three admin EJS `<select>`s
 # (products/coupons/tickets list+form) and the ticket detail view's `isInternal` checkbox were
 # real, unexercised gaps in the coverage audit — closed below, each proven against a genuine
 # server-side effect (a GET-param filter, a role-filtered response body), not just "the control
@@ -159,7 +159,7 @@ test "creating a coupon exercises a Type <select> and a 5-field fill form"
   expect css "tr:has(th:text-is('type')) td:text-is('fixed')" is visible
 
 @mixed
-test "the tickets list's Status <select> really filters, and check field-gated isInternal stays hidden from the ticket owner"
+test "the tickets list's Status <select> really filters, and tick field-gated isInternal stays hidden from the ticket owner"
   api POST /auth/login body { email: env(USER_B_EMAIL), password: env(USER_B_PW) }
   expect status equals 200
   capture body.accessToken as userBToken
@@ -182,13 +182,13 @@ test "the tickets list's Status <select> really filters, and check field-gated i
   expect text "{ticketSubject}" is visible
 
   open "/tickets/{ticketId}"
-  check field "internal note (hidden from the ticket owner)"
+  tick field "internal note (hidden from the ticket owner)"
   fill field "Add comment" with "Internal note: escalate to L2."
   click button "Post comment"
   expect css "span.badge:text-is('internal')" is visible
 
   # tickets.service.ts's findCommentsScoped filters `is_internal = false` for role USER — the real
-  # server-side effect `check field` above should have triggered, proven from the owner's own POV,
+  # server-side effect `tick field` above should have triggered, proven from the owner's own POV,
   # not just that the admin's page rendered a badge.
   api GET /tickets/{ticketId}/comments
     header "Authorization" is "Bearer {userBToken}"

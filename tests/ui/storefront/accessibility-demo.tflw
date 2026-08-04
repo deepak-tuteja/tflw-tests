@@ -8,5 +8,5 @@ test "navigating to the Accessibility demo via the top nav renders its accessibl
   open "/"
   click text "Accessibility demo"
   expect field "Subscribe to updates" not is checked
-  check field "Subscribe to updates"
+  tick field "Subscribe to updates"
   expect field "Subscribe to updates" is checked

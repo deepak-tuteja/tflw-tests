@@ -239,19 +239,19 @@ test "double click and right click are real, distinct browser events — not jus
   expect text "Added 1 × Bulk Item 6 to your cart." is hidden
 
 @mixed
-test "the a11y-demo's accessible checkbox check/uncheck is real, after scroll to + hover"
-  # M40: closes check field/uncheck field/hover/scroll to together — a11y-demo's accessible
+test "the a11y-demo's accessible checkbox tick/untick is real, after scroll to + hover"
+  # M40: closes tick field/untick field (spelled `check`/`uncheck` before FS-04)/hover/scroll to together — a11y-demo's accessible
   # checkbox (AccessibilityDemoPage.tsx) is real, labelled, and public (no login needed, App.tsx's
   # route table). `scroll to` + `hover` land on its neighbouring "Save preferences" button first
-  # (a realistic "arrive, then act" sequence), then check/uncheck is verified against the field's
+  # (a realistic "arrive, then act" sequence), then tick/untick is verified against the field's
   # actual `checked` state, not just "the click didn't error".
   open "/a11y-demo"
   expect field "Subscribe to updates" not is checked
   scroll to button "Save preferences"
   hover button "Save preferences"
-  check field "Subscribe to updates"
+  tick field "Subscribe to updates"
   expect field "Subscribe to updates" is checked
-  uncheck field "Subscribe to updates"
+  untick field "Subscribe to updates"
   expect field "Subscribe to updates" not is checked
 
 @mixed
@@ -282,11 +282,11 @@ test "the render fixture: a masked snapshot absorbs a real checkbox change, unma
   # `tflw run` after that only ever reads and compares.
   open "/render-fixture"
   expect css "section[aria-labelledby='render-fixture-heading']" matches snapshot "render-fixture-unmasked"
-  check field "Subscribe to updates"
+  tick field "Subscribe to updates"
   expect css "section[aria-labelledby='render-fixture-heading']" not matches snapshot "render-fixture-unmasked"
-  uncheck field "Subscribe to updates"
+  untick field "Subscribe to updates"
   expect css "section[aria-labelledby='render-fixture-heading']" matches snapshot "render-fixture-masked" mask field "Subscribe to updates" mask css "section[aria-labelledby='render-fixture-heading'] img"
-  check field "Subscribe to updates"
+  tick field "Subscribe to updates"
   expect css "section[aria-labelledby='render-fixture-heading']" matches snapshot "render-fixture-masked" mask field "Subscribe to updates" mask css "section[aria-labelledby='render-fixture-heading'] img"
 
 @mixed
