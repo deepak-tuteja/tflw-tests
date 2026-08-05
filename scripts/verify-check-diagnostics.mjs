@@ -9,15 +9,20 @@
 // triggered against a real file living inside this project without breaking the whole suite.
 // TF004-009/TF017-019 are reserved, not assigned — nothing to dogfood there (SPEC.md).
 //
-// KNOWN DRIFT, recorded rather than quietly widened (2026-08-04): the closing line says "All N
-// assigned TF0xx codes", but N is `Object.keys(...).length` — this script's own fixture count, not
-// the count of codes tflw actually assigns. It was true at M49 and stopped being true the next time
-// tflw added one. `TF033`/`TF034`/`TF035` have no fixture here; `TF036` was added with the M85
-// consumption because it is that change's own code. The real repair is a guard that fails when a
-// member of tflw's `Codes` has no fixture — the same shape as tflw's own `grammarCoverage.test.ts`,
-// and the same lesson: a completeness claim with nothing enforcing it has already drifted.
+// DRIFT CLOSED (M86, 2026-08-04). The closing line used to read "All N assigned TF0xx codes" where
+// N was `Object.keys(...).length` — this script's own fixture count, not the count of codes tflw
+// assigns. The two were equal at M49 and stopped being equal the next time tflw added a code, and
+// the sentence went on claiming completeness for a year of milestones: at the point this was
+// noticed, `TF033`/`TF034`/`TF035` had no fixture at all and the line still said "all". A
+// completeness claim with nothing enforcing it is not a strong claim that might be stale — it is
+// already stale, and it is exactly the class of defect the launch review was opened to find.
+//
+// The repair is `assignedCodes()` below: the expected list is read out of the *installed tflw
+// bundle's* own §17 manifest, so adding a code to tflw and not dogfooding it here fails this
+// script. tflw's `packages/lang/test/diagnosticsCoverage.test.ts` (M86) is the other half — it
+// keeps that manifest in step with `Codes`, which is what makes it worth reading.
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -69,6 +74,9 @@ const FILE_FIXTURES = {
   TF030: 'unbound-variable.tflw',
   TF031: 'request-and-response-combined.tflw',
   TF032: 'malformed-upload-type.tflw',
+  TF033: 'workload-without-threshold.tflw',
+  TF034: 'threshold-unknown-label.tflw',
+  TF035: 'duplicate-action.tflw',
 };
 
 for (const [code, file] of Object.entries(FILE_FIXTURES)) {
@@ -103,9 +111,57 @@ try {
   rmSync(scratchDir, { recursive: true, force: true });
 }
 
-const total = Object.keys(FILE_FIXTURES).length + Object.keys(CONFIG_FIXTURES).length;
+// --- completeness: the expected list comes from tflw, not from this file ------------------------
+
+/**
+ * Every TF0xx code the *installed* tflw assigns, read out of the shipped bundle's own SPEC §17
+ * manifest (`DIAGNOSTICS` in `@tflw/lang`'s `spec-data.ts`, inlined into `dist/cli.cjs` by esbuild
+ * — `{ code: "TF001", meaning: …, example: … }`). `code:` followed by a quoted `TF` number is that
+ * manifest and nothing else; SPEC prose elsewhere in the bundle mentions codes in running text, not
+ * in that shape.
+ *
+ * Reading a bundle with a regex is the least appealing part of this script, and it is still the
+ * right trade: tflw publishes exactly one file with one `bin` entry and no library export, so the
+ * alternatives are a new public API existing only for this test (the `runLoad` mistake — a public
+ * export with no production caller), or a second hand-maintained list of codes, which is precisely
+ * the thing that drifted. If the bundle shape ever changes, this throws loudly by design: fix the
+ * pattern, do not delete the guard.
+ */
+function assignedCodes() {
+  const bundle = readFileSync(CLI_ENTRY, 'utf8');
+  const codes = new Set([...bundle.matchAll(/\bcode:\s*["'](TF\d{3})["']/g)].map((m) => m[1]));
+  if (codes.size === 0) {
+    throw new Error(
+      `could not read tflw's diagnostic manifest out of ${CLI_ENTRY}. The bundle's shape changed — ` +
+        'update the pattern in assignedCodes() (see @tflw/lang spec-data.ts DIAGNOSTICS). Do not ' +
+        'drop this check: without it the summary below is a claim about this file, not about tflw.',
+    );
+  }
+  return codes;
+}
+
+const dogfooded = new Set([...Object.keys(FILE_FIXTURES), ...Object.keys(CONFIG_FIXTURES)]);
+const assigned = assignedCodes();
+
+const uncovered = [...assigned].filter((code) => !dogfooded.has(code)).sort();
+ok(
+  `completeness: every TF0xx code the installed tflw assigns has a fixture here`,
+  uncovered.length === 0,
+  uncovered.length ? `no fixture for ${uncovered.join(', ')} — add one under tests/.checkonly/ (test dialect) or CONFIG_FIXTURES (config dialect)` : '',
+);
+
+const stale = [...dogfooded].filter((code) => !assigned.has(code)).sort();
+ok(
+  `completeness: every fixture here names a code the installed tflw still assigns`,
+  stale.length === 0,
+  stale.length ? `${stale.join(', ')} is dogfooded but no longer in tflw's manifest — the code was retired; delete the fixture` : '',
+);
+
 if (violations > 0) {
   console.error(`\n${violations} check-diagnostic proof violation(s).`);
   process.exit(1);
 }
-console.log(`\nAll ${total} assigned TF0xx diagnostic codes dogfooded against a real \`tflw check\`.`);
+console.log(
+  `\nAll ${assigned.size} TF0xx diagnostic codes the installed tflw assigns are dogfooded against a real \`tflw check\`` +
+    ` (${Object.keys(FILE_FIXTURES).length} test-dialect fixtures, ${Object.keys(CONFIG_FIXTURES).length} config-dialect).`,
+);

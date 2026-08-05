@@ -1,0 +1,17 @@
+# threshold-unknown-label.tflw — CHECK-ONLY FIXTURE (M86): a `threshold … for "label"` clause whose
+# label matches no `api` step in the same workload-bearing test — demonstrates `tflw check`'s
+# teaching diagnostic (TF034: checker, `checkWorkloadTests`, tflw M43/D70).
+#
+# The typo is the point. A scoped threshold that matches nothing is not an error at runtime — it
+# simply never binds to a step, so it can never breach, and the run goes green while the one
+# latency budget anybody cared about was silently unenforced. Scoping is per-test: a label declared
+# by another test's step does not satisfy this one.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/threshold-unknown-label.tflw
+
+test "a threshold scoped to a step that isn't there"
+  ramp to 1 users over 1s
+  threshold p95 duration for "checkotu" is less than 250ms
+  api GET /health as "checkout"
+  expect status equals 200

@@ -1,0 +1,22 @@
+# duplicate-action.tflw — CHECK-ONLY FIXTURE (M86): two `action`s in one file sharing a name —
+# demonstrates `tflw check`'s teaching diagnostic (TF035: checker, `checkActionDecls`, tflw
+# M60/A2-01). Reported at the *second* declaration, pointing back at the first.
+#
+# Actions are file-scoped, so the second declaration shadows nothing — the call below is simply
+# ambiguous, and the runtime refuses to build the file rather than pick one. Worth catching
+# statically: the two bodies here differ, so whichever a silent winner-takes-all rule chose, half
+# the suite would be asserting against the other one.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/duplicate-action.tflw
+
+action fetch health()
+  api GET /health
+  expect status equals 200
+
+action fetch health()
+  api GET /health
+  expect body.status equals "ok"
+
+test "calls an ambiguously-declared action"
+  fetch health()

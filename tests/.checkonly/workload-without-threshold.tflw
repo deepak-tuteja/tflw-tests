@@ -1,0 +1,18 @@
+# workload-without-threshold.tflw — CHECK-ONLY FIXTURE (M86): a workload-bearing `test` that
+# carries no `threshold` at all — demonstrates `tflw check`'s teaching diagnostic (TF033: checker,
+# `checkWorkloadTests`). A workload test's verdict comes *only* from its thresholds, so one with
+# none can never fail: it generates real load, reports real numbers, and passes unconditionally.
+# That is the shape worth catching before a run, not after (tflw M60/A4-01).
+#
+# TF033 is the load dialect's catch-all — the same code covers an invalid workload/threshold shape,
+# two workload tests in one file sharing a name, a `retry`/`with each` clause beside a workload, a
+# browser step or a `pause` on the wrong side of one, and the removed `scenario`/`think` keywords.
+# This fixture picks the missing-threshold branch because it is the one that stays *green* today.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/workload-without-threshold.tflw
+
+test "a workload with nothing to fail against"
+  ramp to 1 users over 1s
+  api GET /health
+  expect status equals 200
