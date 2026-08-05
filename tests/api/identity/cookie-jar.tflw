@@ -27,3 +27,50 @@ test "session-refresh also works from the auto-tracked jar with no manual cookie
 
   api POST /auth/session-refresh
   expect status equals 200
+
+# --- origin scoping (tflw M88c2, review cluster C2 / `B4-06`, D-M88-10) -------------------------
+#
+# The cookie jar is scoped by origin (`scheme://host:port`) as of tflw 0.1.0's M88c2. Before that
+# it tracked cookies by name alone, which meant this suite's own `session` cookie — issued by
+# apiV2 on :4001 — was attached to every `api inventory` call to :4002 as well, and
+# inventory-service's `inv_ops` cookie came straight back to apiV2 on the next step. A credential
+# crossing a service boundary with nothing having decided so.
+#
+# This is the assertion that could not be written anywhere else. tflw's own unit tests can fake two
+# origins, but only two real services on two real ports exercise whether the runtime files a cookie
+# under the origin that actually set it — which is why the whole thing lived undetected while 319
+# tests passed (every `inventoryOps` file is session-less, and `shopper`, the one cookie session,
+# never leaves :4001).
+#
+# Asserted as a *pair*, deliberately. "A's cookie reaches A" was already true of the broken jar;
+# the finding is entirely in the other direction.
+
+@auth @cookiejar @identityOps @inventoryOps @api
+test "a session cookie stays on the origin that issued it, in both directions"
+  # apiV2 (:4001) issues the session cookies. Nothing has touched :4002 yet.
+  api POST /auth/session-login-full body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+
+  api GET /auth/profile
+  expect status equals 200
+  expect body.email equals env(USER_A_EMAIL)
+
+  # …and inventory-service (:4002) is not handed them. This is the direction that used to fail.
+  api inventory GET /ops-session/echo
+  expect status equals 200
+  expect body.cookie equals null
+
+  # Now :4002 issues one of its own, and it goes back to :4002 on the next call…
+  api inventory POST /ops-session
+  expect status equals 201
+
+  api inventory GET /ops-session/echo
+  expect status equals 200
+  expect body.cookie contains "inv_ops=warehouse-ops-token"
+
+  # …but never to :4001, which still sees exactly its own two cookies and nothing else.
+  api GET /cookie-scope/echo
+  expect status equals 200
+  expect body.cookie contains "session="
+  expect body.cookie not contains "inv_ops"
+  log "each service received only the cookies it issued"
