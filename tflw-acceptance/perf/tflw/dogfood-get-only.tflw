@@ -8,3 +8,8 @@ test "M39 dogfood GET-only" as load
   ramp to 60 users over 20s
   api GET /health
   expect status equals 200
+  # `TF033` (tflw M60): a workload-bearing test's verdict comes only from its thresholds, so one is
+  # required. This rung measures rather than gates, so the bound is deliberately loose — but not
+  # vacuous: a `GET /health` that starts erroring is a real regression. See perf/README.md for how
+  # this ladder is run and checked.
+  threshold error rate is less than 1%

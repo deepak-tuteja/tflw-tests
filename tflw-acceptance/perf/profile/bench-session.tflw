@@ -12,3 +12,9 @@ test "profile bench (session)" as bench
   capture body[0].id as productId
   api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
   expect status equals 201
+  # `TF033` (tflw M60): a workload-bearing test's verdict comes only from its thresholds, so one is
+  # required. This rung measures rather than gates, so the bound is deliberately loose — but not
+  # vacuous: echo-server.mjs is a zero-latency local process, so an error here would most likely be
+  # the `bench` session — which is the one thing this file exists to measure. See perf/README.md for
+  # how this ladder is run and checked.
+  threshold error rate is less than 1%

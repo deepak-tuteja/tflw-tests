@@ -11,3 +11,9 @@ test "concurrency ground truth"
   capture body[0].id as productId
   api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
   expect status equals 201
+  # `TF033` (tflw M60): a workload-bearing test's verdict comes only from its thresholds, so one is
+  # required. This rung measures rather than gates, so the bound is deliberately loose — but not
+  # vacuous: echo-server-delayed-connlog.mjs is slow on purpose, not failing on purpose, so an error
+  # under 60 VUs would be the generator, not the delay. See perf/README.md for how this ladder is run
+  # and checked.
+  threshold error rate is less than 1%

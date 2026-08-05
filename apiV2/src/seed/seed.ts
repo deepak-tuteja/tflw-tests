@@ -8,6 +8,7 @@ import { Organization, OrgPlan } from '../entities/organization.entity';
 import { OrgMembership, OrgRole } from '../entities/org-membership.entity';
 import {
   LOAD_HOT_PRODUCT_BASELINE_STOCK,
+  LOAD_HOT_PRODUCT_ID,
   LOAD_HOT_PRODUCT_NAME,
   LOAD_USER_EMAIL,
   LOAD_USER_PW,
@@ -306,6 +307,9 @@ async function seed() {
   if (!existingHotProduct) {
     await productRepo.save(
       productRepo.create({
+        // Pinned, not generated — see LOAD_HOT_PRODUCT_ID's own comment for why the perf ladder
+        // needs this row's id to survive a reseed.
+        id: LOAD_HOT_PRODUCT_ID,
         name: LOAD_HOT_PRODUCT_NAME,
         description:
           'Seeded perf-arc target — every `tflw load` scenario checks out against this one product on purpose.',

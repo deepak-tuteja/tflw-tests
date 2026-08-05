@@ -2,9 +2,11 @@
 // ../tflw/dogfood-post-uncontended.tflw: isolated POST-uncontended rung against the real dogfood
 // target (`POST /cart/items`, static body, per-user cart row — no shared lock across VUs), with
 // the same login-once + retry-on-401 session handling as checkout-burst.js (D31). `productId`
-// below must stay in sync with the tflw side's hardcoded id (both resolved once by hand from the
-// same `GET /products?q=Load%20Test%20Widget` call). Same ramp shape as checkout-burst.js for
-// apples-to-apples comparison against the contended rung.
+// below is the seed's pinned `LOAD_HOT_PRODUCT_ID` (apiV2/src/load-admin/load-target.constants.ts)
+// and must stay in sync with the tflw and Artillery sides. It used to be a hand-resolved copy of a
+// randomly-generated UUID, so a reseed broke all three at once — silently here, because k6 has no
+// equivalent of `tflw check` and nothing compares this file against the running catalog. Same ramp
+// shape as checkout-burst.js for apples-to-apples comparison against the contended rung.
 
 import http from 'k6/http';
 import { check } from 'k6';
@@ -12,7 +14,7 @@ import { check } from 'k6';
 const BASE_URL = 'http://localhost:4001/v1';
 const LOAD_USER_EMAIL = __ENV.LOAD_USER_EMAIL || 'load@example.com';
 const LOAD_USER_PW = __ENV.LOAD_USER_PW || 'load-pw-123';
-const BODY = JSON.stringify({ productId: '6c0b2198-a3c4-4fe0-8aae-64a6714fff3c', quantity: 1 });
+const BODY = JSON.stringify({ productId: '10ad7e57-0000-4000-8000-000000000001', quantity: 1 });
 
 export const options = {
   scenarios: {

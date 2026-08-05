@@ -26,6 +26,48 @@ jobs:
           npm test
         working-directory: apiV2
 
+  # `tflw-acceptance/` is excluded from bare `tflw run` discovery on purpose (tflw.config's
+  # `exclude`, D127) — it is a second suite with its own sessions, env and targets, and `npm test`
+  # has no business starting it. The unnoticed consequence was that nothing *checked* it either, so
+  # `TF033`'s two tightenings (M60, M89c) silently un-parsed 10 of the 12 `.tflw` files under
+  # `tflw-acceptance/perf/` across four milestones, with nothing red anywhere. This job is the
+  # missing signal. Its own job rather than a step inside `regression`, for two reasons: the sweep
+  # is a 4-leg matrix and this would run four times, and this needs none of what those legs pay for
+  # — no Docker stack, no Playwright, no `.env`. Parse + checker only, so it does not `needs:` the
+  # apiV2 job and does not gate the matrix; a corpus that stopped parsing and a suite that failed
+  # are independent facts and should be reported independently.
+  acceptance-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout testFlow-tests
+        uses: actions/checkout@v7
+        with:
+          path: testFlow-tests
+
+      - name: Checkout tflw (testFlow)
+        uses: actions/checkout@v7
+        with:
+          repository: deepak-tuteja/tflw
+          path: testFlow
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Install tflw workspace deps
+        run: npm ci
+        working-directory: testFlow
+
+      - name: Refresh tflw from the checked-out build
+        run: npm run refresh-tflw
+        working-directory: testFlow-tests
+
+      # Every directory under tflw-acceptance/ holding a tflw.config, discovered rather than listed
+      # — see scripts/check-acceptance.mjs for why a hand-maintained list is the failure mode.
+      - name: Check every acceptance corpus parses against current tflw
+        run: npm run check:acceptance
+        working-directory: testFlow-tests
+
   # Round 3 decision 16 (PLAN_CI.md, 2026-08-03 grill-me): the 30-phase sweep used to run
   # sequentially in one job (~34min). Split into a 4-leg GH Actions job matrix — real per-phase
   # timings pulled from run 30802717073 (2026-08-03) were greedy-LPT bin-packed into

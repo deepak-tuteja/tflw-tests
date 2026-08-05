@@ -13,3 +13,8 @@ test "M48 search-read"
   ramp to 60 users over 20s
   api GET /products?q=gadgetronic
   expect status equals 200
+  # `TF033` (tflw M60): a workload-bearing test's verdict comes only from its thresholds, so one is
+  # required. This rung measures rather than gates, so the bound is deliberately loose — but not
+  # vacuous: the endpoint is public and read-only, so an error here is the server, not the load
+  # shape. See perf/README.md for how this ladder is run and checked.
+  threshold error rate is less than 1%
