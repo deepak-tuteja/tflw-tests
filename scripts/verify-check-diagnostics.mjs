@@ -77,6 +77,10 @@ const FILE_FIXTURES = {
   TF033: 'workload-without-threshold.tflw',
   TF034: 'threshold-unknown-label.tflw',
   TF035: 'duplicate-action.tflw',
+  TF037: 'unknown-call.tflw',
+  TF038: 'call-wrong-arity.tflw',
+  TF039: 'assert-before-any-request.tflw',
+  TF040: 'call-in-dead-position.tflw',
 };
 
 for (const [code, file] of Object.entries(FILE_FIXTURES)) {

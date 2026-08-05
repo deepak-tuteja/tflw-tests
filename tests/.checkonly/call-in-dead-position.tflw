@@ -1,0 +1,28 @@
+# call-in-dead-position.tflw — CHECK-ONLY FIXTURE (M87): a call written where its value is never
+# computed — demonstrates `tflw check`'s teaching diagnostic (TF040: checker, `checkCalls`, tflw
+# M87).
+#
+# This one was not on the review's list. It was found while fixing `A4-03`, by probing what the
+# checker's blind spot to callees was actually hiding, and it is the worst-behaved of the four:
+#
+#   api POST /tickets body { subject: make subject() }   →  sends {}          and reports ✓
+#   api POST /tickets body { tags: [make subject()] }    →  sends [null]      and reports ✓
+#   give make subject()                                  →  returns nothing   and reports ✓
+#
+# A green suite asserting against a request nobody wrote. tflw evaluates a call in exactly two
+# places — a bare call step, and the *whole* right-hand side of a `let` — because running one is
+# asynchronous while every other value is computed synchronously. Anywhere else it parses, checks,
+# and silently yields nothing.
+#
+# Reported alone: this file's call is also unknown *and* wrong-arity, and tflw says neither, because
+# the position is what has to change first and the rest may go with it.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/call-in-dead-position.tflw
+
+action make subject()
+  give "Printer jam"
+
+test "interpolates a call straight into a request body"
+  api POST /tickets body { subject: make subject(), body: "It jammed again." }
+  expect status equals 201

@@ -1,0 +1,30 @@
+# assert-before-any-request.tflw — CHECK-ONLY FIXTURE (M87): an assertion with no response to read
+# — demonstrates `tflw check`'s teaching diagnostic (TF039: checker, `checkResponseScopes`, tflw M87
+# / review `A4-16`, `FU-12`).
+#
+# Two shapes here, and the second is the interesting one.
+#
+# `test "asserts before making any request"` is the plain case `A4-16` filed: `expect status` as a
+# body's first step. Statically obvious, and it cost a whole run to discover.
+#
+# `test "asserts on an action's response"` is `FU-12`, and it looks correct. `fetch health()` really
+# does perform an `api` step — but a response never leaves the body it was made in. tflw's
+# interpreter keeps `lastResponse` per `execSteps` frame, and an `action`, a hook and each nested
+# `within`/`switch to new tab`/`download` block all get their own. So the action's own `expect`
+# passes, and the caller's next one has nothing to read. Same rule, applied where a reader's
+# intuition says otherwise — which is why it is worth a fixture rather than a footnote.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/assert-before-any-request.tflw
+
+action fetch health()
+  api GET /health
+  expect status equals 200
+
+test "asserts before making any request"
+  expect status equals 200
+  capture body.status as status
+
+test "asserts on an action's response"
+  fetch health()
+  expect status equals 200

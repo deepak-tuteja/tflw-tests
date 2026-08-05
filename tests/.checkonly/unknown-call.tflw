@@ -1,0 +1,24 @@
+# unknown-call.tflw — CHECK-ONLY FIXTURE (M87): a call that names nothing — demonstrates `tflw
+# check`'s teaching diagnostic (TF037: checker, `checkCalls`, tflw M87 / review `A4-03`, `FU-08`).
+#
+# Before tflw M87 the checker walked a call's *arguments* and never looked at the callee, so this
+# file reported "no problems found" and then died on its first step. `FU-08` filed it from a fresh
+# user's seat: a typo'd action name lints green.
+#
+# The suggestion is the point — `creat health()` is one edit from the action declared six lines
+# above, and the diagnostic says so rather than leaving the reader to spot it.
+#
+# Note what makes this file *decidable*: no `import`, no `use`, and the call sits in a `test` body.
+# TF037 is a negative claim and tflw only makes it where it is sound — a `use` line means a JS
+# helper could export any name, and an `action` body's calls bind late against whichever file
+# imports it. See unknown-call-suppressed.tflw for the other side of that line.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/unknown-call.tflw
+
+action fetch health()
+  api GET /health
+  expect status equals 200
+
+test "calls an action that does not exist"
+  creat health()
