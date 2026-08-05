@@ -3,7 +3,8 @@
 // same workload shape (closed-model VUs ramping 0→60 linearly over 20s, no hold stage), same
 // steps (look up the hot product by name, then check out one unit of it), same thresholds
 // (error rate < 1%, p95 duration < 250ms — k6's own `http_req_duration` metric, scoped to the
-// checkout request specifically via a tag).
+// checkout request specifically via a tag, and since M89 to successful requests only — see the
+// `expected_response:true` note on `thresholds` below).
 //
 // Real finding from developing this side-by-side (acceptance/README.md's perf leg has the full
 // write-up): apiV2's `JWT_ACCESS_TTL` is a deliberately short 5s in this dev environment
@@ -37,8 +38,28 @@ export const options = {
       gracefulStop: '0s',
     },
   },
+  // M89's D-M89-8 (tflw PLAN_M89_WORKLOAD_TRUTH.md §5). Until M89a, tflw's duration percentiles
+  // read *every* iteration and k6's read every request, so the two sides measured the same
+  // population and the perf leg's published gap compared like with like. M89a changed tflw's:
+  // a `threshold … duration` now reads only the iterations that **succeeded** (SPEC §12), because
+  // a fast-failing endpoint was satisfying a latency threshold. From that moment an unfiltered k6
+  // selector compares two different populations, and M49's published 3.54% p95 gap silently stops
+  // meaning what it says. It held only because this scenario runs at ~0% errors — where the two
+  // populations coincide — which was luck, not design.
+  //
+  // So `expected_response:true` aligns k6's threshold population with tflw's. Note this is not a
+  // no-op even at a 0.00% *scenario* error rate: `authedRequest` below absorbs a 401 by
+  // re-logging-in and retrying, so those fast 401 responses are real, successful-to-the-scenario
+  // iterations whose *requests* k6 tags `expected_response:false`. They were dragging the
+  // unfiltered p95 down.
+  //
+  // The unfiltered sub-metric is kept, at the same bound, so a single run reports both
+  // populations and the difference between them is measured rather than assumed. It is a real
+  // gate, not a report-only entry: unfiltered generally sits at or below filtered (it admits the
+  // fast 401s), so it failing while the aligned one passes would itself be a finding.
   thresholds: {
     'http_req_failed': ['rate<0.01'],
+    'http_req_duration{name:checkout,expected_response:true}': ['p(95)<250'],
     'http_req_duration{name:checkout}': ['p(95)<250'],
   },
   // M48 (PLAN_BROWSER_PERF_SECURITY.md §2.20, D84) — extended past k6's own default

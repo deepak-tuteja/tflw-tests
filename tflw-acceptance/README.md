@@ -1554,3 +1554,85 @@ Isolation scripts were throwaway (not committed), same convention as D78's own
 
 **Files.** Modified: `packages/runtime/src/httpPinned.ts` (`AbortSignal.timeout()` → manual
 `setTimeout`/`clearTimeout` deadline, D88).
+
+## M89 (D-M89-8) — aligning k6's threshold population with tflw's successful-only percentiles (2026-08-05)
+
+tflw's `M89a` (cluster `C3`, `B3-02`) changed what a `threshold … duration` reads: **only the
+iterations that succeeded** (`SPEC` §12), because a fast-failing endpoint was satisfying a latency
+threshold. From that moment this leg's k6 counterpart — `http_req_duration{name:checkout}`, with no
+filter — measured *every* request while tflw measured successful ones, so `M49`'s published 3.54%
+p95 gap silently compared two different populations. It happened to hold because this scenario runs
+at a near-zero error rate, where the populations coincide; that was luck, not design.
+
+`k6/checkout-burst.js` now thresholds `http_req_duration{name:checkout,expected_response:true}`.
+The unfiltered sub-metric is **kept, at the same bound**, so one run reports both populations and
+the difference between them is measured rather than assumed.
+
+### The k6 population shift, measured
+
+`expected_response:true` is not a no-op even at a 0.00% *scenario* error rate. `authedRequest`'s
+retry-on-401 absorbs `JWT_ACCESS_TTL=5s` expiries by re-logging-in, so those 401 responses are real
+requests k6 tags `expected_response:false` — 88-90 of every ~23,000 (0.37-0.39%), and fast:
+
+| k6 `{name:checkout}` (3 runs) | min | med | p95 | p99 |
+|---|--:|--:|--:|--:|
+| unfiltered (pre-M89) | 265-312µs | 36.64ms | 76.40ms | 97.77ms |
+| `expected_response:true` (aligned) | 2.35-2.50ms | 36.91ms | 76.49ms | 97.92ms |
+| effect of the alignment | — | +0.74% | **+0.13%** | +0.15% |
+
+The `min` column is the whole mechanism in one number: the unfiltered population's fastest
+"checkout" is a 300µs 401. **The alignment moves k6's p95 by 0.13% — necessary for correctness,
+numerically negligible at this error rate.** Now measured, per D-M89-8's own instruction not to
+assert that it did not move.
+
+### The re-measured gap (3 runs a side, load target reset before every run)
+
+| | tflw | k6 (aligned) | gap | M49's published gap |
+|---|--:|--:|--:|--:|
+| checkout-scoped p50 | 38.33ms | 36.91ms | +3.87% | +1.2% |
+| checkout-scoped p95 | 79.33ms | 76.49ms | **+3.71%** | **+3.54%** |
+| checkout-scoped p99 | 102.00ms | 97.92ms | +4.16% | +6.44% |
+| whole-iteration p95 | 103.00ms | 102.38ms | +0.61% | — |
+| whole-iteration max | 207.00ms | 223.93ms | **−7.56%** | +2.2% |
+| iterations completed | 11,583 | 11,481 | +0.89% | — |
+
+**The headline number survives: p95 3.54% → 3.71%**, a move smaller than this arc's own documented
+run-to-run spread, and of which the population alignment itself accounts for 0.13pp. M49's verdict
+stands unchanged — the gap is real, modest, and sits a hair above D79's <3% bar.
+
+Two things did move, both in tflw's favour and both reported because this leg reports what it
+measures: the p99 gap roughly halved (6.44% → 4.16%), and tflw's whole-iteration max is now
+*below* k6's rather than above it. Neither was chased — D79's "one bounded pass" discipline, the
+same one M49 invoked.
+
+**A reporting asymmetry to state plainly, since both tables say "error rate":** k6 reports 0.38%
+here and tflw reports 0.00%, from the *same* underlying 401s. Neither is wrong — k6 counts
+*requests*, tflw counts *iteration outcomes*, and the iteration genuinely succeeded after tflw's
+session model re-established and retried. They are different denominators over different events,
+not the same number disagreeing.
+
+### The Artillery leg's calibration is now stale — recorded, not re-bisected
+
+`artillery/checkout-burst.yml`'s 310/s flat rate was bisected at M46d to land "in the same ballpark
+as tflw/k6's closed-model p95 (~68-72ms)". It no longer does:
+
+| checkout p95 (310/s flat, unchanged config) | run 1 | run 2 | run 3 | run 4 |
+|---|--:|--:|--:|--:|
+| M46d (2026-08-01) | 106.7ms | 24.8ms | 23.8ms | — |
+| M89 (2026-08-05) | 1153.1ms | 608.0ms | 907.0ms | 487.9ms |
+
+All 4 runs: 6,200 arrivals, 0 failed, 12,400 requests. **This is Artillery-side, not target-side** —
+a k6 run interleaved immediately after run 4, on the same reset target, returned p95 75.17ms, right
+on top of the other three. The 2.4× spread across 4 runs is also worse than M46d's own already-noted
+instability.
+
+Uncontrolled variable, named rather than hidden: `npx artillery@latest` resolved to **2.0.33**
+today, and M46d pinned nothing (its own note: "used ephemerally… no `package.json` dependency
+added"), so the version it measured is unrecoverable. The rate was **not** re-bisected — Artillery
+is a corroborating third comparator here, D-M89-8's scope is the tflw/k6 population alignment, and
+M46d's verdict was already "directionally supportive, not proof". What this run changes is that the
+yml's calibration comment is now known-stale and says so.
+
+**Files.** Modified: `k6/checkout-burst.js` (threshold population alignment),
+`artillery/checkout-burst.yml` (calibration comment marked stale). Raw run logs were throwaway,
+same convention as M49's own isolation scripts.

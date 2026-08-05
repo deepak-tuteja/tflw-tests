@@ -13,6 +13,12 @@
 #    this comparison exists to measure).
 config:
   target: "http://localhost:4001/v1"
+  # STALE AS OF 2026-08-05 (M89/D-M89-8) — the calibration below no longer holds. Re-measured
+  # unchanged at 310/s, this rate now yields a checkout p95 of 488-1153ms across 4 runs, not the
+  # ~68-72ms it was bisected for. It is Artillery-side, not target-side: a k6 run interleaved
+  # immediately after, on the same reset target, came back at 75.17ms. Deliberately NOT
+  # re-bisected — see acceptance/README.md's M89 section for why and for the full numbers.
+  #
   # Flat, not ramped: a ramp that overshoots what an open-loop model can sustain compounds an
   # unrecoverable backlog within a 20s window (unlike closed-model VU-count backpressure). 310/s
   # was found by bisection to be a flat rate whose achieved checkout p95 lands in the same
