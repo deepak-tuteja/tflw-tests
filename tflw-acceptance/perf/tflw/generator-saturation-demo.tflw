@@ -13,3 +13,10 @@ test "generator self-saturation demo"
   ramp to 8 users over 3s
   let burned = burnCpu()
   threshold p95 duration is less than 100000ms
+  # Required as of tflw M89c (TF033): a `duration` threshold must be paired with an unscoped
+  # `error rate` one, because a duration threshold reads only the iterations that succeeded and so
+  # cannot observe failure on its own. Here it is close to unfalsifiable — this test has no `api`
+  # step at all, so the only way an iteration fails is `burnCpu()` throwing. That is tflw's own
+  # `B3-17`: the checker can require the line, only the author can make it mean something. It costs
+  # nothing here: a saturated run marks *every* threshold `skipped`, which is this file's whole point.
+  threshold error rate is less than 1%

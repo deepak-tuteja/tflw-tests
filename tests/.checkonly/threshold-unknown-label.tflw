@@ -12,6 +12,10 @@
 
 test "a threshold scoped to a step that isn't there"
   ramp to 1 users over 1s
+  # Not decoration: as of tflw M89c a `duration` threshold — scoped or not — must be paired with
+  # an unscoped `error rate` one (TF033). Without this line the fixture reports TF033 *and* TF034,
+  # and stops isolating the one code it exists to demonstrate.
+  threshold error rate is less than 1%
   threshold p95 duration for "checkotu" is less than 250ms
   api GET /health as "checkout"
   expect status equals 200
