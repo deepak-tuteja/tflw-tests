@@ -24,7 +24,7 @@
     "test:webv2-admin": "tflw run --env webv2Admin tests/.env-specific/webv2-admin.tflw tests/.env-specific/orgs-mixed.tflw",
     "test:ui-admin": "tflw run --env webv2Admin tests/.env-specific/ui-admin/*.tflw",
     "check:acceptance": "node scripts/check-acceptance.mjs",
-  "regression": "node scripts/regression.mjs",
+    "regression": "node scripts/regression.mjs",
     "regression:smoke": "node scripts/regression-smoke.mjs"
   },
   "dependencies": {
