@@ -1,0 +1,65 @@
+# action-call-cycle.tflw — CHECK-ONLY FIXTURE (M97d): an `action` that can reach itself —
+# demonstrates `tflw check`'s teaching diagnostic (TF044: checker, `checkActionCycles`, tflw M97d /
+# review `A4-13`).
+#
+# Most languages let you write recursion and trust you to add a base case. tflw cannot, and that is
+# not a limitation being worked around — it is *why* rejecting this statically is sound rather than
+# merely cautious. There is no `IfStmt` in the AST and no branching keyword in the parser, so a
+# cycle here is not *potentially* infinite but unconditionally so: no input terminates it, and the
+# only way such a run can end is by failing. The checker contract's first clause (D137) says the
+# checker may only reject what the runtime would have failed on, and this clears that bar for every
+# possible input, which almost no static rejection does.
+#
+# What it cost before M97d, measured on the built CLI against a two-line self-recursive action:
+#
+#   $ tflw check t.tflw
+#   1 file checked, no problems found.
+#   $ tflw run t.tflw
+#   Exception in PromiseRejectCallback: … RangeError: Maximum call stack size exceeded
+#
+# — and the message that reached the report was **14,505 characters on one line**, because
+# `execCall` prefixed `action "x" failed: ` onto its callee's already-prefixed string once per
+# frame, 671 frames deep. That produced a 32 KB results.json and a 55 KB report.html for a
+# two-line mistake. Both halves are fixed: the frames now travel as an array and the string is
+# rendered once.
+#
+# **Same-file only, and that boundary is real, not a simplification.** An edge here joins two
+# actions declared in one file, where a name can never be shadowed by an imported one
+# (`buildRegistry` throws on a duplicate and TF035 reports it), so the edge holds regardless of what
+# this file imports — which is why the check is *not* gated on a closed world the way TF037 is, and
+# still applies to a suite that `use`s a JS helper. A cycle that leaves the file through an `import`
+# and comes back is invisible here, because `KnownAction` carries a name and an arity but not a
+# body. That case is the runtime's guard, which reports the same path in the same arrow notation.
+#
+# The last action is the one to read. `settle` calls `charge` **twice, in sequence** — two frames
+# that never overlap — and reports nothing. It is the shape a real suite writes constantly (create
+# two of something), so a pass that confused "seen before" with "currently on the stack" would fire
+# here, and that false positive would be far more expensive than the bug being fixed.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/action-call-cycle.tflw
+
+action retry login()
+  api POST /auth/login body { email: "a@b.c", password: "pw" }
+  retry login()
+
+action place order()
+  api POST /orders body { sku: "SKU-1" }
+  confirm order()
+
+action confirm order()
+  api POST /orders/1/confirm
+  place order()
+
+action charge()
+  api POST /payments body { amount: 10 }
+  expect status equals 201
+
+action settle()
+  charge()
+  charge()
+
+test "the cycles above are what the checker reports; this test is just a call site"
+  retry login()
+  place order()
+  settle()

@@ -84,6 +84,7 @@ const FILE_FIXTURES = {
   TF041: 'value-subject-misplaced.tflw',
   TF042: 'matcher-subject-mismatch.tflw',
   TF043: 'missing-referenced-file.tflw',
+  TF044: 'action-call-cycle.tflw',
 };
 
 for (const [code, file] of Object.entries(FILE_FIXTURES)) {
