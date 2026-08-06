@@ -30,6 +30,12 @@ test "a session survives three expire-then-refresh cycles across many sequential
   expect status equals 200
   capture body.accessToken as accessToken2
   capture body.refreshToken as refreshToken2
+  # The invariant this test is named for, and until tflw 0.2 could not state (`FU-11`/M96): the
+  # refresh has to hand back a *different* pair. Without these lines an API that returned the same
+  # token and merely reset its expiry passes every other assertion here — a green suite over
+  # entirely broken rotation.
+  expect {accessToken2} not equals {accessToken1}
+  expect {refreshToken2} not equals {refreshToken1}
   log "cycle 1 complete: refreshed to accessToken2 {accessToken2}"
 
   api GET /auth/profile
@@ -52,6 +58,8 @@ test "a session survives three expire-then-refresh cycles across many sequential
   expect status equals 200
   capture body.accessToken as accessToken3
   capture body.refreshToken as refreshToken3
+  expect {accessToken3} not equals {accessToken2}
+  expect {refreshToken3} not equals {refreshToken2}
 
   api GET /auth/profile
     header "Authorization" is "Bearer {accessToken3}"
@@ -67,6 +75,7 @@ test "a session survives three expire-then-refresh cycles across many sequential
   api POST /auth/refresh body { refreshToken: "{refreshToken3}" }
   expect status equals 200
   capture body.accessToken as accessToken4
+  expect {accessToken4} not equals {accessToken3}
 
   api GET /auth/profile
     header "Authorization" is "Bearer {accessToken4}"
