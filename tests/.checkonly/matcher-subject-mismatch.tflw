@@ -1,0 +1,45 @@
+# matcher-subject-mismatch.tflw — CHECK-ONLY FIXTURE (M97b): a matcher pointed at a subject it
+# cannot read, and a quantifier on a matcher that cannot be applied per element — demonstrates
+# `tflw check`'s teaching diagnostic (TF042: checker, `checkMatcherSubjects`, tflw M97b / review
+# `A4-15` and `A4-11`).
+#
+# Until M97b this was a *documented* gap: SPEC §1 said matcher↔subject compatibility "is **not**
+# checked — that surfaces only as a runtime error when the step fires — and stays a post-v0.1
+# item". Honest, and expensive: `expect status is visible` linted green, ran, made the request, and
+# then failed with `matcher \`visible\` is not supported on an API subject` — a mistake fully
+# visible in the source text, reported at the worst possible moment.
+#
+# `test "points a UI matcher at an API subject"` is `A4-15`'s own repro. Note this is not a typo, so
+# it is not TF014: `is visible` is a real matcher, correctly spelled. It just needs a browser
+# element to look at, and `status` is a number off a response.
+#
+# `test "quantifies a matcher that reads a whole document"` is `A4-11`. SPEC §6.2.1 already claimed
+# "the checker/runtime rejects the combination loudly" — only the runtime did. `matches file` is the
+# worse of the two and is here for that reason: `matches schema` at least threw a clear runtime
+# error, while `matches file` under a quantifier fell through to a message about *UI* matchers, and
+# under `any` was swallowed whole into "expected any element … but none of N did". The invalid
+# matcher never appeared in the output at all.
+#
+# What TF042 deliberately does NOT check is worth as much as what it does. The rule is over the
+# subject's **kind** — a value, a UI locator, `page`, `request`, `request to "…"` — and never its
+# shape. `expect body.msg contains "x"` is silent here even though `contains` documents "strings,
+# arrays", because whether `body.msg` is either cannot be known before the response arrives.
+# Checking shape statically would start rejecting correct programs, which is `A4-05`'s
+# false-positive failure mode arriving as the fix for `A4-11`. So the last test below is *valid* and
+# reports nothing — it is in this file to be read alongside the two that do.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/matcher-subject-mismatch.tflw
+
+test "points a UI matcher at an API subject"
+  api GET /v1/health
+  expect status is visible
+
+test "quantifies a matcher that reads a whole document"
+  api GET /v1/orders
+  expect all body.items matches file "./expected-order.json"
+
+test "asks a shape question the checker leaves to the runtime"
+  api GET /v1/health
+  expect body.status contains "ok"
+  expect body.uptime is greater than 0

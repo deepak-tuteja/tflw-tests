@@ -82,6 +82,7 @@ const FILE_FIXTURES = {
   TF039: 'assert-before-any-request.tflw',
   TF040: 'call-in-dead-position.tflw',
   TF041: 'value-subject-misplaced.tflw',
+  TF042: 'matcher-subject-mismatch.tflw',
 };
 
 for (const [code, file] of Object.entries(FILE_FIXTURES)) {
