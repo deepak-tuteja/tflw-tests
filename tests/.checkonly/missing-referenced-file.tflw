@@ -1,0 +1,45 @@
+# missing-referenced-file.tflw — CHECK-ONLY FIXTURE (M97c): a path literal naming a file that is
+# not there — demonstrates `tflw check`'s teaching diagnostic (TF043: checker,
+# `checkReferencedFiles`, tflw M97c / review `A4-07`).
+#
+# SPEC §4.3 has said "checker verifies the file exists" since M2.5 and it never did. The review row
+# concluded the checker *could not*, because it does no I/O — a wrong conclusion from a true
+# premise. The no-I/O rule belongs to the `@tflw/lang` package, so the docs-site editor demo can run
+# the real checker in a browser; the `tflw check` *command* has read imported files from disk since
+# M87. So the check was implementable all along, and what it needed was placement.
+#
+# What that cost, measured on the built CLI before M97c:
+#
+#   $ tflw check t.tflw          # import "./nowhere.tflw"
+#   1 file checked, no problems found.
+#   $ tflw run t.tflw --verbose
+#     ✗ t.tflw (crashed) (0 ms)
+#
+# That is the *entire* console output of the run, `--verbose` included. The real message —
+# `could not read imported file "./nowhere.tflw"` — reached only `report/results.json`. Existence
+# checking removes the most common cause of that silent crash; it does not fix the swallowing,
+# which is the report-honesty group's row and still open.
+#
+# Seven syntaxes open a file — `import`, `use`, `with each from`, `body from`, `upload`,
+# `matches file`, `drop file` — and all seven are covered. Two are here; the rule is one pass over
+# a table, not seven hand-written cases, so a third would test the table rather than the pass.
+#
+# The last test is *valid* and reports nothing, and it is the important one to read. `upload
+# "./{name}.png"` names no file until the run picks a `name`, so the checker is silent: **not
+# knowable is not known-bad**. Inverting that would trade a checker that misses errors for one that
+# invents them, and a suite that legitimately builds fixture paths out of variables would stop
+# checking. That is the same permissive half `matcher-subject-mismatch.tflw` pins open for TF042.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/missing-referenced-file.tflw
+
+import "./nowhere.tflw"
+
+test "reads a request body from a file that is not there"
+  api POST /v1/orders body from "./payloads/nobody.json"
+  expect status equals 201
+
+test "an interpolated path is the runtime's question, not the checker's"
+  let name = "receipt"
+  api POST /v1/orders upload "./fixtures/{name}.png" as "file"
+  expect status equals 201
