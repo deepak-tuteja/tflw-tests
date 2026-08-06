@@ -81,6 +81,7 @@ const FILE_FIXTURES = {
   TF038: 'call-wrong-arity.tflw',
   TF039: 'assert-before-any-request.tflw',
   TF040: 'call-in-dead-position.tflw',
+  TF041: 'value-subject-misplaced.tflw',
 };
 
 for (const [code, file] of Object.entries(FILE_FIXTURES)) {

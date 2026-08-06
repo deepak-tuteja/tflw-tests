@@ -1,0 +1,38 @@
+# value-subject-misplaced.tflw — CHECK-ONLY FIXTURE (M96): a `{variable}` subject standing where a
+# value cannot — demonstrates `tflw check`'s teaching diagnostic (TF041: checker,
+# `checkValueSubjects`, tflw M96 / review `FU-11`).
+#
+# M96 made a bound value a *subject*, so `expect {orderId} equals "ord_1"` is now legal where before
+# you had to write the comparison the other way round. That opens two positions where the grammar
+# accepts a value but nothing can ever observe one, and both are here.
+#
+# `test "asserts a value with a live-handle matcher"` is the type-blind case. `is visible` is a
+# perfectly real matcher — this is not a typo, so it is not `TF014` — it just needs a browser
+# element to look at. A value bound by `capture` has no on-screen state to be visible *in*, whatever
+# its type happens to be. The same goes for `has value`, `matches snapshot`, `connects`, `was made`.
+#
+# `test "asserts a value inside wait until api"` is the subtler one, and it is why this is a
+# checker rule rather than a runtime error. It runs. It even passes, sometimes. `wait until api`
+# re-issues its request and re-evaluates its expects on every poll, but `{orderId}` was bound once
+# before the loop and nothing inside the loop can change it — so the condition is decided entirely
+# on the first attempt. Either it is true, and the wait is a no-op wearing a wait's clothes, or it
+# is false, and the block spends its whole budget timing out against an endpoint that never had any
+# say in the matter. The failure message blames `/orders/{orderId}`. The mistake is one line up.
+#
+# Note the matchers deliberately *not* rejected: `equals`, `contains`, `is greater than`,
+# `has count`, `matches …` all apply to a value and are silent here by design. A captured value must
+# not be held to a stricter standard than the response it was captured from (SPEC §6.2).
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/value-subject-misplaced.tflw
+
+test "asserts a value with a live-handle matcher"
+  api POST /v1/orders body { items: [] }
+  capture body.id as orderId
+  expect {orderId} is visible
+
+test "asserts a value inside wait until api"
+  api POST /v1/orders body { items: [] }
+  capture body.id as orderId
+  wait until api GET /v1/orders/{orderId}
+    expect {orderId} equals "ord_1"
