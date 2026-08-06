@@ -3,6 +3,7 @@
 // and reinstalls it here, as close to "npm install tflw" as possible without
 // actually publishing.
 import { execSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +12,7 @@ const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const CLI_DIR = path.join(ROOT, '..', 'testFlow', 'packages', 'cli');
 const VENDOR_DIR = path.join(ROOT, 'vendor');
 const PKG_PATH = path.join(ROOT, 'package.json');
+const LOCK_PATH = path.join(ROOT, 'package-lock.json');
 
 if (!fs.existsSync(CLI_DIR)) {
   console.error(`tflw CLI package not found at ${CLI_DIR}`);
@@ -44,5 +46,52 @@ fs.writeFileSync(PKG_PATH, JSON.stringify(pkg, null, 2) + '\n');
 // hash from what's actually on disk right now.
 console.log('Reinstalling...');
 execSync(`npm install "./vendor/${tarballName}"`, { cwd: ROOT, stdio: 'inherit' });
+
+// ...and then drop the `integrity` hash npm just wrote back for it. `vendor/*.tgz` is gitignored
+// (ci.yml decision 2: no committed tarball — every run dogfoods tflw's actual current `main`), so
+// that hash is a content claim about a file no checkout ever contains. Leaving it committed is
+// worse than useless in three distinct ways:
+//
+//   1. It is the *only* thing in this lockfile that changes when tflw's code changes, so every
+//      milestone commit carries a meaningless one-line diff.
+//   2. npm's cache is content-addressed by exactly this hash. On a machine that has packed tflw
+//      before, `npm ci` with no `vendor/` at all still "succeeds" — resolving the package out of
+//      _cacache and installing a build with no relation to the sibling repo's current `main`. The
+//      same silent-staleness as the workaround above, one layer down.
+//   3. On a cold cache it fails with `tarball data ... seems to be corrupted`, which sends you
+//      looking for a damaged tarball instead of an absent one.
+//
+// With no hash recorded, all three go away: nothing churns, npm cannot resolve from cache, and a
+// missing tarball reports a plain ENOENT naming the path it wanted. The other entries here
+// (playwright, axe-core) are ordinary registry deps and stay fully pinned — this removes exactly
+// one line, for the one dependency that is a regenerated build input rather than a fixed version.
+const lock = JSON.parse(fs.readFileSync(LOCK_PATH, 'utf8'));
+const tflwEntry = lock.packages?.['node_modules/tflw'];
+if (tflwEntry?.integrity) {
+  delete tflwEntry.integrity;
+  fs.writeFileSync(LOCK_PATH, JSON.stringify(lock, null, 2) + '\n');
+  console.log('Dropped the vendored tarball\'s integrity hash from package-lock.json.');
+}
+
+// Prove the install actually took. Every green run of this suite is a claim about the tflw build
+// sitting in ../testFlow right now, so an install that quietly no-ops is not a small bug — it makes
+// the entire dogfood loop report on a build nobody is looking at. M21 was exactly that, and it was
+// found by hand rather than by anything failing. Compare the shipped entrypoint in node_modules
+// against the one inside the tarball just packed; they are the same bytes or this run is a lie.
+const packedCli = execSync(`tar -xzOf "${path.join(VENDOR_DIR, tarballName)}" package/dist/cli.cjs`, {
+  maxBuffer: 64 * 1024 * 1024,
+});
+const installedCliPath = path.join(ROOT, 'node_modules', 'tflw', 'dist', 'cli.cjs');
+const sha = (buf) => createHash('sha256').update(buf).digest('hex');
+if (!fs.existsSync(installedCliPath) || sha(fs.readFileSync(installedCliPath)) !== sha(packedCli)) {
+  console.error(
+    `\nInstalled tflw does not match the tarball just packed — node_modules/tflw is stale.\n` +
+      `  packed:    ${sha(packedCli)}\n` +
+      `  installed: ${fs.existsSync(installedCliPath) ? sha(fs.readFileSync(installedCliPath)) : '<missing>'}\n` +
+      `Delete node_modules/tflw and re-run; do not trust a suite run against this tree.`,
+  );
+  process.exit(1);
+}
+console.log('Verified node_modules/tflw matches the freshly packed tarball.');
 
 console.log(`Done. tflw installed from ${tarballName}.`);
