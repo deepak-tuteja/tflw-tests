@@ -37,10 +37,34 @@ function run(cmd, opts = {}) {
   }
 }
 
+// Every flag here is a property of *how* a run reports, not of whether it passes — so each block
+// asserts on the shape of some real run's output. That left a hole this script fell straight into:
+// when tflw's M104 path-resolution change broke `mtls.tflw` outright, all six assertions still
+// held (the timestamps were still timestamps, the ndjson still parsed, the log file still had no
+// ANSI) and this script printed six ✓ over a suite that had failed both its tests. The only thing
+// that noticed was CI's report aggregator, reading the junit.xml this script leaves behind — a
+// non-required job, since it runs `if: always()`. A driver that ignores its subject's verdict is a
+// green check that means less than it looks like, so the runs that are *meant* to pass now say so.
+//
+// Deliberately excluded: the `--failed` and `--bail` blocks below, whose whole point is to drive a
+// failing suite. Their non-zero exit is the fixture, not a regression.
+function runPassing(cmd, what) {
+  const result = run(cmd);
+  ok(
+    `${what}: the run it drives actually passed`,
+    result.status === 0,
+    `exit ${result.status}; last line: ${result.stdout.trim().split('\n').pop()}`,
+  );
+  return result;
+}
+
 // --- --now: pins the run's notion of "now" to an exact instant --------------------------------
 {
   const pinned = '2027-05-01T00:00:00.000Z';
-  const { stdout } = run(`npx tflw run tests/api/identity/mtls.tflw --env mtlsSidecar --now ${pinned} --seed 42 --no-color`);
+  const { stdout } = runPassing(
+    `npx tflw run tests/api/identity/mtls.tflw --env mtlsSidecar --now ${pinned} --seed 42 --no-color`,
+    '--now',
+  );
   ok('--now pins the printed run instant exactly', stdout.includes(`now ${pinned}`), stdout.trim().split('\n').pop());
 }
 
@@ -96,7 +120,7 @@ function run(cmd, opts = {}) {
 
 // --- --format ndjson: report/events.ndjson is valid line-delimited JSON with the right shape ---
 {
-  run('npx tflw run tests/api/identity/mtls.tflw --env mtlsSidecar --format ndjson --no-color');
+  runPassing('npx tflw run tests/api/identity/mtls.tflw --env mtlsSidecar --format ndjson --no-color', '--format ndjson');
   const lines = readFileSync(path.join(REPORT_DIR, 'events.ndjson'), 'utf8').trim().split('\n');
   let allValid = true;
   const types = new Set();
@@ -125,6 +149,11 @@ function run(cmd, opts = {}) {
   // package) to allocate one.
   const logFilePath = path.join('/tmp', `tflw-logfile-verify-${process.pid}.log`);
   const ptyStdoutPath = path.join('/tmp', `tflw-pty-stdout-verify-${process.pid}.txt`);
+  // `runPassing` can't reach this one — the run happens inside the forked pty, so its exit code is
+  // only knowable to the Python parent. It gets written out alongside the captured stdout so the
+  // same verdict check applies here as everywhere else; without it, a totally failing run still
+  // satisfies "stdout has ANSI, log file doesn't".
+  const ptyStatusPath = path.join('/tmp', `tflw-pty-status-verify-${process.pid}.txt`);
   const pyScript = `
 import pty, os
 pid, fd = pty.fork()
@@ -141,14 +170,22 @@ else:
         if not data:
             break
         output += data
-    os.waitpid(pid, 0)
+    _, status = os.waitpid(pid, 0)
     with open(${JSON.stringify(ptyStdoutPath)}, 'wb') as f:
         f.write(output)
+    with open(${JSON.stringify(ptyStatusPath)}, 'w') as f:
+        f.write(str(os.waitstatus_to_exitcode(status)))
 `;
   try {
     execFileSync('python3', ['-c', pyScript], { cwd: ROOT, stdio: ['ignore', 'ignore', 'inherit'] });
     const ptyStdout = readFileSync(ptyStdoutPath, 'utf8');
     const logFile = readFileSync(logFilePath, 'utf8');
+    const ptyStatus = readFileSync(ptyStatusPath, 'utf8').trim();
+    ok(
+      '--log-file: the run it drives actually passed',
+      ptyStatus === '0',
+      `exit ${ptyStatus}; last line: ${logFile.trim().split('\n').pop()}`,
+    );
     const ESC = '\x1b[';
     ok(
       '--log-file strips ANSI even though the real (pty) stdout has color',
@@ -156,15 +193,21 @@ else:
       `pty stdout had color: ${ptyStdout.includes(ESC)}, log file had color: ${logFile.includes(ESC)}`,
     );
   } finally {
-    for (const p of [logFilePath, ptyStdoutPath]) if (existsSync(p)) unlinkSync(p);
+    for (const p of [logFilePath, ptyStdoutPath, ptyStatusPath]) if (existsSync(p)) unlinkSync(p);
   }
 }
 
 // --- --no-timestamps: omits the HH:MM:SS.mmm prefix every console line otherwise gets ----------
 {
   const TIMESTAMP_RE = /^\d{2}:\d{2}:\d{2}\.\d{3} /m;
-  const { stdout: withTimestamps } = run('npx tflw run tests/api/identity/mtls.tflw --env mtlsSidecar --no-color');
-  const { stdout: withoutTimestamps } = run('npx tflw run tests/api/identity/mtls.tflw --env mtlsSidecar --no-color --no-timestamps');
+  const { stdout: withTimestamps } = runPassing(
+    'npx tflw run tests/api/identity/mtls.tflw --env mtlsSidecar --no-color',
+    'default timestamps',
+  );
+  const { stdout: withoutTimestamps } = runPassing(
+    'npx tflw run tests/api/identity/mtls.tflw --env mtlsSidecar --no-color --no-timestamps',
+    '--no-timestamps',
+  );
   ok('default output has an HH:MM:SS.mmm prefix', TIMESTAMP_RE.test(withTimestamps));
   ok('--no-timestamps omits the prefix', !TIMESTAMP_RE.test(withoutTimestamps));
 }
