@@ -67,19 +67,24 @@ test "a receipt's exact bytes round-trip byte-for-byte across two fetches (gap #
 
   api GET /orders/{orderId}/receipt
     header "Authorization" is "Bearer {userAToken}"
-  # `tflw check` emits a TF043 **warning** on this line on a clean checkout, and that is expected
-  # and correct rather than something to silence. The file genuinely is not there when the checker
-  # looks; the line above creates it. `scratchPath` is captured and then not used because
-  # `matches file`'s path operand is the one file operand tflw does not interpolate — `body from`,
-  # `upload` and `drop file` all call `evalValue`, this one reads `.value` — so the path has to be
-  # written out a second time here (filed against tflw; when it interpolates, `{scratchPath}` will
-  # replace this literal and the warning goes away by itself, since an interpolated path is not
-  # statically known).
+  # The path comes from `scratchPath`, which the JS helper above returned after writing the file —
+  # so the assertion names the file that was actually just written, rather than a literal repeating
+  # a path the helper also hard-codes. Those two could drift; now they cannot.
   #
-  # This line is why TF043 has two severities at all. It was an *error* for the length of the
-  # M97/M98 stack, which made this whole suite unrunnable — see tflw M97e/D147, and the header of
-  # tests/.checkonly/missing-referenced-file.tflw for the full account.
-  expect body bytes matches file "../../.scratch/receipt-roundtrip.bin"
+  # This line is the whole reason `matches file` interpolates at all (tflw `A4-OS-09`/M101/D174).
+  # Through v0.1 it was the one file operand that read its literal text while `body from`, `upload`
+  # and `drop file` all called `evalValue`, so this suite had to write the path out twice and say
+  # why in a comment. It is also why TF043 has two severities: as a literal, this path was
+  # statically known and named a file the *next* line creates, and TF043 shipped as an error for
+  # the length of the M97/M98 stack, which made this whole suite unrunnable — see tflw M97e/D147
+  # and the header of tests/.checkonly/missing-referenced-file.tflw.
+  #
+  # An interpolated path is not statically known, so the checker now skips this line entirely and
+  # the standing TF043 warning is gone. That is the correct report about a path the run computes —
+  # not knowable is not known-bad. The warning tier still matters and is still covered; its fixture
+  # lives in tests/.checkonly/missing-referenced-file.tflw, deliberately, rather than depending on
+  # this suite continuing to have a workaround in it.
+  expect body bytes matches file "{scratchPath}"
 
 @orderReceipts @authz @orderOps @api
 test "a receipt is scoped exactly like the parent order"
