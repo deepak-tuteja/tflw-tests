@@ -95,6 +95,7 @@ const FILE_FIXTURES = {
   TF047: 'unknown-escape.tflw',
   TF048: 'tab-indent.tflw',
   TF049: 'hidden-character.tflw',
+  TF050: 'confusable-word.tflw',
 };
 
 for (const [code, file] of Object.entries(FILE_FIXTURES)) {

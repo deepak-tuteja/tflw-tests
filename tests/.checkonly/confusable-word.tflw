@@ -1,0 +1,51 @@
+# confusable-word.tflw — CHECK-ONLY FIXTURE (M103): a word that is visible and lies — demonstrates
+# `tflw check`'s teaching diagnostic (TF050: lexer, tflw M103 / review `M98d-02`).
+#
+# The other half of the Trojan Source class. `TF049` (hidden-character.tflw, next door) covers
+# characters with *no glyph*. These have a glyph and it is somebody else's: a Cyrillic `а` (U+0430)
+# is not a Latin `a`, and `"аdmin"` renders exactly like `"admin"` while comparing unequal to it.
+#
+# **The severity comes from the negative matchers.** In `is`/`equals` a confusable makes the test
+# *fail*, which is loud and self-correcting. In `not equals`/`not contains` — the shape a
+# leak-prevention assertion takes, and this suite has a real one at
+# tests/.env-specific/webv2-admin.tflw:196 proving an internal comment is hidden from a non-owner —
+# it makes the test **pass without asserting anything**, with no evidence in an editor, in a diff,
+# in a pull request, or in `tflw check`. The first `expect` below is that exact shape.
+#
+# The rule's unit is one **word**, not one string (D178): a `.tflw` string is prose and prose is
+# legitimately multilingual, so the bilingual line below stays legal — two scripts, no mixed word.
+# Only scripts with Latin lookalikes count (D179): `"東京Tower"` mixes Latin and Han in one word and
+# deceives nobody, because Han has no Latin homoglyphs. Common and Inherited never count, which is
+# what keeps `—`, `§`, `…`, `→` and `×` off the rule.
+#
+# **Strings only** (D180), unlike `TF049`, which also fires in comments. A comment has no `\u{…}` to
+# escape into, and a rule with no way to comply is a capability removed rather than a lint — so the
+# Cyrillic in *this* comment is deliberate and legal: оk.
+#
+# **Not covered:** a word written entirely in one non-Latin script that still reads as Latin
+# (`"аԁmіn"` in all Cyrillic). That needs the UTS #39 confusables table, and by shape it is
+# indistinguishable from legitimate Russian data. Stated so the guarantee is not read as wider.
+#
+# The offending characters are invisible *as differences*. Read this file with
+# `rg --pcre2 "[\u0400-\u04FF\u0370-\u03FF]" tests/.checkonly/confusable-word.tflw`, not by eye.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/confusable-word.tflw
+
+test "a leak guard that passes without asserting anything"
+  api GET /health
+  # U+043E where a Latin `o` belongs: this assertion can never fail.
+  expect body.status not equals "оk"
+  # U+03BF (Greek omicron) inside an otherwise-Latin word.
+  expect body.page not contains "lοgin"
+
+test "the legal neighbours the rule must not touch"
+  api GET /health
+  # Two scripts, one string, no mixed word — a bilingual label, not a spoof.
+  log "Willkommen — добро пожаловать"
+  # Latin + Han in one word: Han has no Latin lookalikes.
+  log "東京Tower"
+  # Latin with diacritics, and Common-script punctuation.
+  log "Zürich naïve café · Order — 42 × items → §3"
+  # The escape hatch: the same Cyrillic letter, written so it says so in plain sight.
+  log "\u{0430}dmin"
