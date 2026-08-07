@@ -1,9 +1,37 @@
 name: CI
 
-# PLAN_CI.md decision 1: post-merge signal only, no PR gate, no branch-protection changes.
+# PLAN_CI.md decision 1 said **post-merge signal only, no PR gate, no branch-protection changes**.
+# Reversed 2026-08-07. Decision 1's premise was that a gate costs more than it is worth on a solo
+# repo, and two things have since stopped being true of it:
+#
+#   - `main` here carried a `required_approving_review_count: 1` that GitHub structurally forbids a
+#     solo owner from satisfying (no self-approval), so `main`'s only protection was a rule that
+#     blocked every PR and verified nothing. Dropping it to 0 left the branch with no *verifying*
+#     gate at all — a post-merge-only signal is a report, not a gate, and finds the breakage after
+#     it is already on `main`.
+#   - The signal has twice caught a real defect *after* the merge rather than before it — `M97e`
+#     (a `TF043` false positive that made a valid suite unrunnable) and `M100` (`body pdf text` on
+#     0.36% of payloads). Both were red on `main` before anyone knew, on a repo whose whole job is
+#     to be the place tflw's breakage surfaces first.
+#
+# Decision 1's cost argument also does not survive the facts: this repo and `deepak-tuteja/tflw`
+# are both **public**, so Actions minutes are free and unmetered. A full PR-head run is ~11 minutes
+# wall-clock (measured on run 31196196601: apiv2 0:29, acceptance-check 0:27, the 4 regression legs
+# 8:50-10:14 in parallel, merge-reports 0:11).
+#
+# This mirrors `../testFlow/.github/workflows/ci.yml`, which has always been `push: main` +
+# `pull_request` with its jobs as required contexts.
 on:
   push:
     branches: [main]
+  pull_request:
+
+# A PR head gets re-pushed (`update-branch` under `strict`, review fixups) more often than `main`
+# does, and a superseded run's verdict is about a commit nobody will merge. Cancel those; never
+# cancel a `push: main` run, whose result is the record for a commit that is already permanent.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # decision 3 (unchanged) + Round 3 decision 16: split out of the old single job so this cheap,
