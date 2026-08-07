@@ -78,6 +78,12 @@ test "a full checkout — product page, cart, the iframe payment widget, and the
     expect text "Bulk Item 100" is visible
   fill field "Quantity" with "1"
   click button "Add to cart"
+  # `click` dispatches and moves on — it doesn't wait for the async `POST /cart/items` the handler
+  # fires (the rule the drag-drop test spells out below). Losing that race here isn't slow, it's
+  # permanent: `open "/cart"` fetches the cart exactly once, an empty cart makes CartPage.tsx
+  # render "Your cart is empty" and return before the table exists, and nothing refetches — so the
+  # retry below spends its whole timeout on a page that can no longer change. Settle on the toast.
+  expect text "Added 1 × Bulk Item 100 to your cart." is visible
   open "/cart"
   expect css "th[scope='row']:text-is('Bulk Item 100')" is visible
   checkout()
@@ -106,6 +112,11 @@ test "the payment gateway's real fetch is stubbed — a method-mismatch passes t
   open "/products/{bulk100Id}"
   fill field "Quantity" with "1"
   click button "Add to cart"
+  # The same settle the checkout test above needs, and the expensive one to skip: the wait below
+  # is `within frame`, and that iframe only exists on a non-empty cart — so a lost race burns the
+  # full frame timeout before failing, which is exactly how it presented in CI: a 30s payment-widget
+  # timeout that re-ran green, reading as iframe flake rather than the add-to-cart race it was.
+  expect text "Added 1 × Bulk Item 100 to your cart." is visible
   open "/cart"
   stub GET "https://payments.example.test/v1/authorize" respond status 200 body { token: "tok_wrong_method" }
   stub POST "https://payments.example.test/v1/authorize" respond status 500 body { error: "gateway down" }
