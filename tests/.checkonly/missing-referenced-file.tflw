@@ -24,11 +24,28 @@
 # `matches file`, `drop file` — and all seven are covered. Two are here; the rule is one pass over
 # a table, not seven hand-written cases, so a third would test the table rather than the pass.
 #
-# The last test is *valid* and reports nothing, and it is the important one to read. `upload
+# **This file shows all three of TF043's outcomes, in order, and the ordering is the lesson**
+# (tflw M97e / D147). The `import` is an **error**: `tflw check` opens that file itself, so a
+# missing one degrades the very analysis that is running. The `body from` is a **warning**: the
+# checker never opens it, it only `stat`s it on behalf of a step that has not run yet — and a step
+# that has not run yet is one an earlier step, a hook, or a `use`d JS action may be about to
+# create. And the last test reports nothing at all.
+#
+# The middle tier exists because **this repo found the bug**. M97c shipped all seven as errors; the
+# first CI run afterwards went red on `tests/api/orders/order-receipts.tflw`, which asserts
+# `matches file` against a scratch file the test itself writes three lines earlier. That suite had
+# run for eleven milestones. Since `loadAndValidate` returns EXIT_USAGE on any error-severity
+# diagnostic, a valid suite became unrunnable with no override — the exact failure mode of D137
+# clause 1, whose own written test strategy names this corpus as its evidence. It worked, and it
+# worked on the first run.
+#
+# The last test is *valid* and reports nothing, and it is still the important one to read. `upload
 # "./{name}.png"` names no file until the run picks a `name`, so the checker is silent: **not
 # knowable is not known-bad**. Inverting that would trade a checker that misses errors for one that
 # invents them, and a suite that legitimately builds fixture paths out of variables would stop
 # checking. That is the same permissive half `matcher-subject-mismatch.tflw` pins open for TF042.
+# D147 is that same sentence carried one step further: a path can be perfectly *knowable* and still
+# name a file that does not exist **yet**, and D144 stopped one word short of noticing.
 #
 # Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
 #   npx tflw check tests/.checkonly/missing-referenced-file.tflw
