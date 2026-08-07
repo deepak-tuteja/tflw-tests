@@ -67,6 +67,18 @@ test "a receipt's exact bytes round-trip byte-for-byte across two fetches (gap #
 
   api GET /orders/{orderId}/receipt
     header "Authorization" is "Bearer {userAToken}"
+  # `tflw check` emits a TF043 **warning** on this line on a clean checkout, and that is expected
+  # and correct rather than something to silence. The file genuinely is not there when the checker
+  # looks; the line above creates it. `scratchPath` is captured and then not used because
+  # `matches file`'s path operand is the one file operand tflw does not interpolate — `body from`,
+  # `upload` and `drop file` all call `evalValue`, this one reads `.value` — so the path has to be
+  # written out a second time here (filed against tflw; when it interpolates, `{scratchPath}` will
+  # replace this literal and the warning goes away by itself, since an interpolated path is not
+  # statically known).
+  #
+  # This line is why TF043 has two severities at all. It was an *error* for the length of the
+  # M97/M98 stack, which made this whole suite unrunnable — see tflw M97e/D147, and the header of
+  # tests/.checkonly/missing-referenced-file.tflw for the full account.
   expect body bytes matches file "../../.scratch/receipt-roundtrip.bin"
 
 @orderReceipts @authz @orderOps @api

@@ -21,7 +21,7 @@
 // bundle's* own §17 manifest, so adding a code to tflw and not dogfooding it here fails this
 // script. tflw's `packages/lang/test/diagnosticsCoverage.test.ts` (M86) is the other half — it
 // keeps that manifest in step with `Codes`, which is what makes it worth reading.
-import { execFileSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -40,18 +40,23 @@ function ok(label, condition, detail = '') {
   }
 }
 
+// Both streams, whatever the exit code — and `spawnSync` rather than `execFileSync` for exactly
+// that reason. `execFileSync` hands back **stdout only** on success and reaches stderr solely via
+// the thrown error, so the old success branch here could return `''` and be right: every shipped
+// diagnostic was error-severity, so anything that reported also exited 2 and took the catch.
+//
+// tflw M97e/D147 ended that. `TF043`'s run tier is a **warning**, written to stderr at exit 0, so
+// a fixture whose only diagnostic is a warning would have had its output discarded and been
+// reported here as not reporting its code — a loud failure, but one blaming tflw for a defect in
+// this script. The guard is supposed to be the thing that can be trusted when the two disagree.
 function runCheck(args, opts = {}) {
-  try {
-    execFileSync('node', [CLI_ENTRY, 'check', '--no-color', ...args], {
-      cwd: ROOT,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-      ...opts,
-    });
-    return '';
-  } catch (err) {
-    return (err.stdout ?? '') + (err.stderr ?? '');
-  }
+  const { stdout, stderr } = spawnSync('node', [CLI_ENTRY, 'check', '--no-color', ...args], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    ...opts,
+  });
+  return (stdout ?? '') + (stderr ?? '');
 }
 
 // --- test-dialect codes: real fixtures under tests/.checkonly/, checked against the real project
