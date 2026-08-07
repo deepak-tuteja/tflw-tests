@@ -1,0 +1,25 @@
+# unbalanced-bracket.tflw — CHECK-ONLY FIXTURE (M98b): a `{` that is never closed — demonstrates
+# `tflw check`'s teaching diagnostic (TF045: lexer, bracket accounting does not balance, tflw M98b /
+# review `A1-10`/`A1-20`).
+#
+# Both directions carry this one code — an unclosed `{`/`[` and a `}`/`]` that closes nothing are the
+# same fact seen from either side.
+#
+# The unclosed case is the one worth understanding, because of what a bracket does to the lexer:
+# while one is open, no `newline`/`indent`/`dedent` is emitted at all. That is what lets an object
+# literal span several hand-formatted lines, and it also means a single stray `{` absorbs every
+# following line into the same logical line. Before M98b the lexer tracked only a *count*, which is
+# enough to decide continuation and leaves nothing to point at, so this file failed as:
+#
+#   TF010: expected a field name, found a dedent
+#
+# — carets on a *synthesized* dedent past the end of the source, underlining nothing, blaming a line
+# the author did not write. The report is now at the opening bracket, and only at the innermost one:
+# an outer entry is a consequence of the same typo, not a separate mistake.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/unbalanced-bracket.tflw
+
+test "an object literal whose opening brace is never closed"
+  api POST /orders body { sku: "SKU-1", qty: 2
+  expect status equals 201

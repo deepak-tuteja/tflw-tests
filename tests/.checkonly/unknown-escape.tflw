@@ -1,0 +1,35 @@
+# unknown-escape.tflw — CHECK-ONLY FIXTURE (M98b/M98d): a string escape outside the supported set —
+# demonstrates `tflw check`'s teaching diagnostic (TF047: lexer, tflw M98b / review `A1-05`, widened
+# by M98d / D166).
+#
+# Supported: `\"`, `\\`, `\n`, `\r`, `\t`, and `\u{XXXX}`. Everything else is an error.
+#
+# `"^\d+$"` used to decode to `^d+$` — the backslash silently dropped — and the run then matched
+# against a pattern nobody wrote, printing the written form in the step echo and the mangled form in
+# the reason line without ever connecting the two.
+#
+# **An error rather than a preserved backslash, and that is the permanent choice.** Preserving it is
+# what a regex author wants; but under that rule the meaning of `"\q"` depends on membership in a
+# small table, so every escape added to the table later would silently change the value of existing
+# suites. A rejected program becoming legal is additive. The reverse is not — and additive is the
+# only direction a frozen surface can move. JS, Java and non-raw Python all land here. In a regular
+# expression, write the backslash twice.
+#
+# The last two lines are M98d's widening: `\u{XXXX}` is the escape hatch TF049 needs in order to be a
+# lint rather than a removed capability, and every way of getting it wrong reports this same code —
+# no braces (what a JS author's fingers produce), no code point, unclosed, above `\u{10FFFF}`, or
+# naming a surrogate half. One code widened rather than a second one added, because the *fix* is the
+# same in every case: spell the escape the way tflw spells it. Contrast `TF003`, which M98c split
+# precisely because re-indenting a block and changing an editor setting are unrelated repairs.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/unknown-escape.tflw
+
+test "a regular expression written with a single backslash"
+  api GET /health
+  expect status equals 200
+  expect body.id matches "^\d+$"
+
+test "the JS spelling of a unicode escape, which tflw does not accept"
+  api GET /health
+  expect body.name equals "\u0041"

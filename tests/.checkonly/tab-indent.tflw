@@ -1,0 +1,28 @@
+# tab-indent.tflw — CHECK-ONLY FIXTURE (M98c): a file indented with tabs — demonstrates `tflw
+# check`’s teaching diagnostic (TF048: lexer, tflw M98c / review `A1-12`/`A1-13`).
+#
+# Split out of `TF003`, which was carrying this *and* "indentation does not line up with any
+# enclosing block" under one code while documenting only the second. That row is what SPEC §17, the
+# docs-site Reference page and LSP hover are all generated from, so one code meaning two things made
+# four surfaces wrong at once — and the two conditions have unrelated repairs: re-indent a block, or
+# change an editor setting.
+#
+# Reported **once per file**, at the first offending line, with the number of remaining lines in the
+# help. The rule fired once per *line* before, so one wrong editor setting produced 100 identical
+# errors on a 100-line file — none of them a separate mistake, all of them with the same one-setting
+# fix. The rule itself is unchanged; M98c is also where it was first written down in `GRAMMAR.md`
+# § Lexical, having never appeared there.
+#
+# Every body line below is indented with a literal tab, so the count in the `= help:` line is the
+# part to read.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw’s header for why):
+#   npx tflw check tests/.checkonly/tab-indent.tflw
+
+test "a body indented with tabs instead of spaces"
+	api GET /health
+	expect status equals 200
+
+test "a second tab-indented test, so the help line has more than zero to count"
+	api GET /products
+	expect status equals 200

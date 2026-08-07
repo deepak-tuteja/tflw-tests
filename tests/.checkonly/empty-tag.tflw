@@ -1,0 +1,20 @@
+# empty-tag.tflw — CHECK-ONLY FIXTURE (M98b): a tag with no usable name — demonstrates `tflw
+# check`'s teaching diagnostic (TF046: lexer, tflw M98b / review `A1-11`).
+#
+# The tag token used to be pushed unconditionally, so a bare `@` became `tag:""` and `tflw check`
+# reported no problems at all. The cost is specific rather than cosmetic: a tag that is not a
+# writable identifier can never appear in a `--tag` expression, so the test carrying it can be
+# neither selected nor excluded. That is the expensive failure class — a filter that appears to work
+# and silently runs the wrong set.
+#
+# `@ smoke` earns its own help line for a reason. By the time the parser sees it the `@` is already
+# gone, so the error the author used to get was ``expected `test`, found `smoke``` — a message about
+# a word they typed correctly, with no mention of the space that caused it.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/empty-tag.tflw
+
+@ smoke
+test "a tag with a stray space between the @ and its name"
+  api GET /health
+  expect status equals 200

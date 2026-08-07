@@ -85,6 +85,11 @@ const FILE_FIXTURES = {
   TF042: 'matcher-subject-mismatch.tflw',
   TF043: 'missing-referenced-file.tflw',
   TF044: 'action-call-cycle.tflw',
+  TF045: 'unbalanced-bracket.tflw',
+  TF046: 'empty-tag.tflw',
+  TF047: 'unknown-escape.tflw',
+  TF048: 'tab-indent.tflw',
+  TF049: 'hidden-character.tflw',
 };
 
 for (const [code, file] of Object.entries(FILE_FIXTURES)) {
