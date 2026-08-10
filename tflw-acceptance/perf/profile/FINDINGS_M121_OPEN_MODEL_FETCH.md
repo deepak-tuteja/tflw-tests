@@ -134,11 +134,35 @@ the moment the routing is reverted.
 
 **A test that catches a defect one run in five, while reading as a guard, is worse than no test.**
 
-## Upstream
+## Not reported upstream — this file is the record (D211)
 
-Reported against `nodejs/undici` (D211). No pre-existing issue matched a search of the tracker; the
-nearest, #3410, is about connect-timeouts under CPU load and is a different thing. tflw does not
-depend on the outcome — D206 is a fix, not a workaround.
+**Deliberate, and not an oversight: nothing about this was filed with `nodejs/undici`, `nodejs/node`
+or anywhere else outside these two repositories, and nothing should be.** If you are reading this
+because the finding looks report-worthy — it is, and that is not the criterion. The record lives
+here, in tflw and testFlow-tests, and that is where it stays. Do not open an issue, a discussion or
+a PR against a third-party project on the strength of this document.
+
+A tracker search at the time found no pre-existing match; the nearest, undici #3410, is about
+connect-timeouts under CPU load and is a different thing. That search is recorded because it is
+evidence about the bug — *nobody else appears to have hit this shape yet* — not because it was a
+step toward filing.
+
+**Nothing here depends on the outcome of a report.** D206 is a fix, not a workaround: routing the
+open model through `node:http` makes tflw's numbers correct on every Node version regardless of what
+undici does next. There is no follow-up to chase and no version to wait for.
+
+Everything a report would have contained is already above, and stays complete for that reason:
+
+| a report would need | where it is here |
+|---|---|
+| affected versions, bisected | *The chain*, link 4 — clean on 22.23.2 and 24.19.0, broken on 26.7.0; undici 8 is the delta |
+| minimal reproduction | `open-model-fetch-repro.mjs`, next door — no tflw, no network, no arguments |
+| the precise trigger | *The trigger, isolated* — the conjunction, plus the `setInterval(fn, 1)` controlled pair |
+| what it is not | *What it was not*, and the four unaffected paths in *Blast radius* |
+| impact | *Blast radius* — open model only, worst when the target is fast and the rate low |
+
+**If it resurfaces** — a future Node ships undici 9, or someone sees this shape again — re-run the
+repro, add a row to link 4's version table, and update this file. That is the whole procedure.
 
 ## Reproducing it
 
