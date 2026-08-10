@@ -1,0 +1,43 @@
+# capture-uncapturable-subject.tflw — CHECK-ONLY FIXTURE (M116): binding a name to something that
+# has no value to bind — demonstrates `tflw check`'s TF053 (checker, tflw M116 / review
+# `M97a-11`–`M97a-14`).
+#
+# Four subjects can be *asserted about* but not captured: `page`, `request`, a UI locator, and an
+# observed `request to "…"`. The runtime throws from five sites for these; the checker carries one
+# code for all of them, because all five say the same sentence — and the help line names the
+# operation each subject actually supports, which is the part the author needs.
+#
+# **`of request to "…"` is the case that is easy to get wrong.** `status`/`header`/`body`/`body
+# text` are ordinary value subjects, and `capture status as n` is perfectly legal — the last two
+# lines of this file prove it. It is the `of` modifier that makes them uncapturable, because an
+# observed network request is read from the browser's network log rather than from the last api
+# step's response. So the rule tests the modifier *before* the subject kind; a kind-only rule looks
+# complete and passes `capture status of request to "/x" as n` straight through, which is how this
+# was found.
+#
+# **Distinct from `TF041`** (value-subject-misplaced.tflw, next door), which is the mirror image:
+# there a bound *value* stands where a live handle is needed. Here a live handle stands where a
+# value is needed. Same boundary, opposite directions.
+#
+# **Not covered:** `capture` against a subject whose value simply does not exist at run time —
+# `capture body.missing as x` is statically fine and a run-time concern, per D140.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/capture-uncapturable-subject.tflw
+
+test "the four subjects that cannot be bound to a name"
+  api GET /health
+  # Reports connection outcome; it is a matcher subject, never a value.
+  capture request as r
+  # The `of` modifier is what does it — `status` alone would be legal, see below.
+  capture status of request to "/health" as s
+  # `page` is only ever an a11y subject.
+  capture page as p
+  # A UI locator is something to assert about.
+  capture text "Total" as t
+
+test "the legal neighbours the rule must not touch"
+  api GET /health
+  # The same `status` word, without the `of request to "…"` modifier: an ordinary value subject.
+  capture status as n
+  capture body.status as st
