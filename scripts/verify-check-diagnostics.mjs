@@ -22,7 +22,7 @@
 // script. tflw's `packages/lang/test/diagnosticsCoverage.test.ts` (M86) is the other half — it
 // keeps that manifest in step with `Codes`, which is what makes it worth reading.
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -96,6 +96,8 @@ const FILE_FIXTURES = {
   TF048: 'tab-indent.tflw',
   TF049: 'hidden-character.tflw',
   TF050: 'confusable-word.tflw',
+  TF052: 'mask-without-snapshot.tflw',
+  TF053: 'capture-uncapturable-subject.tflw',
 };
 
 for (const [code, file] of Object.entries(FILE_FIXTURES)) {
@@ -130,6 +132,65 @@ try {
   rmSync(scratchDir, { recursive: true, force: true });
 }
 
+// --- TF051: the two-operand code — a real fixture file, checked against generated configs -------
+//
+// Every other test-dialect fixture above is checked against this project's own `tflw.config`.
+// `TF051` cannot be, and that is a property of the rule rather than an inconvenience: it fires on
+// the gap between what a step needs and what the active env declares, and every env in this
+// project declares an `api` base while the two that run browser steps declare `web` too. That is
+// the correct state for a suite that works — so no file dropped into `tests/.checkonly/` can
+// trigger it, and hijacking one of the api-only envs (`unreachableHost`, `mtlsSidecar`) with
+// `--env` would cover only the `web` half while coupling this proof to an env that exists for an
+// unrelated reason.
+//
+// So the fixture stays a real, readable file in the repo — it is dogfood, not a string in a script
+// — and gets copied into a scratch directory that supplies the second operand. Each config
+// withholds one half, and the *same unmodified file* reports a different diagnostic under each,
+// which is the demonstration that the rule reads the config rather than the source text.
+//
+// The counts are asserted, not just the presence of the code. Under a config with no `web` exactly
+// one site fires; under a config with no default `api` exactly two do — the un-prefixed request
+// line and the relative `matches schema … from` source. Presence alone would stay green if the
+// named-service control (`api orders GET /health`) started reporting, and that control is the one
+// with real blast radius: it is the shape this project's own `env local` uses for `api inventory`.
+const ENV_FIXTURE_FILE = 'missing-base-url.tflw';
+const ENV_FIXTURES = [
+  {
+    label: 'an env that declares `api` but no `web`',
+    config: 'env local default\n  api "http://localhost:4001"\n  api orders "http://localhost:5000"\n',
+    expect: '`open` needs a `web` base URL',
+    forbid: 'needs an `api` base URL',
+    count: 1,
+  },
+  {
+    label: 'an env that declares `web` but no default `api`',
+    config: 'env local default\n  web "http://localhost:8090"\n  api orders "http://localhost:5000"\n',
+    expect: 'needs an `api` base URL',
+    forbid: 'needs a `web` base URL',
+    count: 2,
+  },
+];
+
+const envDir = mkdtempSync(path.join(tmpdir(), 'tflw-check-env-'));
+try {
+  copyFileSync(path.join(ROOT, 'tests', '.checkonly', ENV_FIXTURE_FILE), path.join(envDir, ENV_FIXTURE_FILE));
+  // The fixture's last test names `./schema.json` relative to itself. Present so the run under test
+  // is a clean `TF051` rather than `TF051` plus a `TF043` warning about a file this proof never
+  // meant to be missing.
+  writeFileSync(path.join(envDir, 'schema.json'), '{}\n');
+  for (const { label, config, expect, forbid, count } of ENV_FIXTURES) {
+    writeFileSync(path.join(envDir, 'tflw.config'), config);
+    const out = runCheck([ENV_FIXTURE_FILE], { cwd: envDir });
+    const fired = out.split('[TF051]').length - 1;
+    ok(`TF051: ${ENV_FIXTURE_FILE} under ${label} reports TF051`, out.includes('[TF051]'), out.trim().split('\n')[0]);
+    ok(`TF051: ${label} names the missing half`, out.includes(expect), `expected to see "${expect}"`);
+    ok(`TF051: ${label} stays silent on the half it declares`, !out.includes(forbid), `unexpectedly saw "${forbid}"`);
+    ok(`TF051: ${label} fires at exactly ${count} site(s)`, fired === count, `fired at ${fired} — a control regressed, or a site was added`);
+  }
+} finally {
+  rmSync(envDir, { recursive: true, force: true });
+}
+
 // --- completeness: the expected list comes from tflw, not from this file ------------------------
 
 /**
@@ -159,7 +220,7 @@ function assignedCodes() {
   return codes;
 }
 
-const dogfooded = new Set([...Object.keys(FILE_FIXTURES), ...Object.keys(CONFIG_FIXTURES)]);
+const dogfooded = new Set([...Object.keys(FILE_FIXTURES), ...Object.keys(CONFIG_FIXTURES), 'TF051']);
 const assigned = assignedCodes();
 
 const uncovered = [...assigned].filter((code) => !dogfooded.has(code)).sort();
@@ -182,5 +243,6 @@ if (violations > 0) {
 }
 console.log(
   `\nAll ${assigned.size} TF0xx diagnostic codes the installed tflw assigns are dogfooded against a real \`tflw check\`` +
-    ` (${Object.keys(FILE_FIXTURES).length} test-dialect fixtures, ${Object.keys(CONFIG_FIXTURES).length} config-dialect).`,
+    ` (${Object.keys(FILE_FIXTURES).length} test-dialect fixtures, ${Object.keys(CONFIG_FIXTURES).length} config-dialect,` +
+    ` and ${ENV_FIXTURE_FILE} against ${ENV_FIXTURES.length} generated configs).`,
 );

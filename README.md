@@ -61,7 +61,10 @@ tests/mixed/         tests that drive the browser and assert through the API/DB 
 tests/helpers/       JS escape-hatch helpers (page-walk, Retry-After sleep-and-retry, etc.)
 tests/shared/        actions shared across files (e.g. `create product`)
 tests/.demo-fail/    intentionally-failing fixtures, tag-gated + dot-dir-excluded from `tflw run`
-tests/.checkonly/    invalid-syntax fixtures, demonstrated via `tflw check <file>` only
+tests/.checkonly/    invalid-syntax fixtures, demonstrated via `tflw check <file>` only — plus
+                     missing-base-url.tflw, which is valid syntax and invalid only against a
+                     config that withholds a base URL, so scripts/verify-check-diagnostics.mjs
+                     checks it in a scratch dir against two generated configs instead
 tests/.env-specific/ passing tests whose assertions only hold under a non-default env (M25),
                      dot-dir-excluded from `tflw run`/`tflw check` for the same reason; also home
                      to ui-admin/ (E2, plus E3's own orgs.tflw) — the SSR admin console's own

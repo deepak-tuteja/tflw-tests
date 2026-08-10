@@ -1,0 +1,52 @@
+# missing-base-url.tflw — CHECK-ONLY FIXTURE (M116): a step that needs a base URL its env does not
+# declare — demonstrates `tflw check`'s TF051 (checker, tflw M116 / review `M97a-04`/`M97a-15`).
+#
+# **This is the one fixture here that is not checked against this project's own `tflw.config`, and
+# it cannot be.** TF051 is a rule with *two* operands: the AST says which kind of base URL a step
+# needs, `tflw.config` says which kinds the active env declares, and the diagnostic is the gap
+# between them. Every env in this project's config declares an `api` base, and the two that run
+# browser steps declare `web` as well — which is the correct state for a suite that works, and
+# exactly why no file placed here can trigger the rule on its own. `verify-check-diagnostics.mjs`
+# therefore copies this file into a scratch directory and checks it **twice**, under two generated
+# configs that each withhold one half. See ENV_FIXTURES there.
+#
+# That the same unmodified file reports a different diagnostic under each config is the point: it
+# demonstrates the rule is reading the config, not pattern-matching the source.
+#
+# **An error, not a warning, and the contrast with `TF043` is the reason.** A path a step opens may
+# be created by an earlier step, a hook or a fixture build, so `TF043`'s run tier is a *prediction*.
+# A base URL cannot appear after the config is resolved — so this is an *observation*, and there is
+# no later moment at which it could come true.
+#
+# **Three sites, and the third is the one nobody expects.** `open` needs `web`; an api request line
+# with no `<service>` prefix needs the default `api`; and `matches schema "…" from "<relative>"`
+# resolves its source against the default service too (`contract.ts`), so a relative schema path
+# needs `api` exactly as a request does. An `http(s)://` source needs nothing, and the last test
+# below proves it stays silent.
+#
+# **The service prefix is the control that matters most.** `api orders GET /health` resolves against
+# a named service and stays silent even when the env declares no default `api` at all — a
+# multi-service config with no default is an ordinary shape, not a mistake. A rule that skipped this
+# would break every config in that shape, and this project's own `env local` is one of them
+# (`api inventory`).
+#
+# **Not covered:** whether a declared base URL is reachable, or correct. That is `expect request
+# connects` and a run, not a check.
+#
+# Checking this file on its own says nothing — it needs the second operand. Run the proof that
+# supplies it (also the `check-diagnostics` phase of `npm run regression`):
+#   node scripts/verify-check-diagnostics.mjs
+
+test "open needs a web base URL"
+  open "/login"
+
+test "an un-prefixed api line needs the default api base URL"
+  api GET /health
+
+test "a named service resolves without the default, and an absolute schema source needs nothing"
+  api orders GET /health
+  expect body.x matches schema "S" from "https://example.test/s.json"
+
+test "a relative schema source needs the default api base URL too"
+  api orders GET /health
+  expect body.x matches schema "S" from "./schema.json"

@@ -1,0 +1,37 @@
+# mask-without-snapshot.tflw — CHECK-ONLY FIXTURE (M116): a clause that is silently doing nothing
+# — demonstrates `tflw check`'s TF052 (checker, tflw M116 / review `M97a-05`).
+#
+# A `mask <locator>` blanks a region *of a snapshot* before comparing it. Against any other matcher
+# there is nothing for it to blank, so the clause has no effect at all — and that is the failure
+# worth a diagnostic, because the author plainly believed it was masking something. Nothing fails,
+# nothing warns at run time, and the mask reads as protection that was never there.
+#
+# **The parser accepts a mask after any matcher by design** (`parseSnapshotMasks`). Rejecting it in
+# the grammar would produce a parse error pointing at whichever token came next; the checker points
+# at the mask itself, which is the thing to delete.
+#
+# **One diagnostic per mask, not per statement** — each mask is a separate thing the author wrote
+# and expected to do something, so the second line below reports twice. Deleting one of them still
+# leaves a mask that does nothing, and a per-statement rule would go quiet as soon as the first was
+# fixed.
+#
+# **Not covered:** whether a mask that *is* alongside `matches snapshot` actually selects anything.
+# `mask css ".nonexistent"` is a well-formed mask over an element that may not exist, which is a
+# run-time fact about a rendered page, not a static one. Stated so the guarantee is not read wider
+# than it is.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/mask-without-snapshot.tflw
+
+test "masks against matchers that have no snapshot to blank"
+  api GET /health
+  # A value matcher. There is no rendered region here at all.
+  expect status equals 200 mask field "Email"
+  # Two masks on one statement — reported twice, once each.
+  expect body.status contains "ok" mask css ".secret" mask field "Name"
+
+test "the legal neighbour the rule must not touch"
+  open "/"
+  # The one matcher a mask means something against — masks and all. Silent, and it has to stay
+  # silent: this is the exact shape tests/mixed/storefront.tflw:299 runs for real.
+  expect css "main" matches snapshot "checkonly-masked" mask field "Subscribe to updates" mask css "main img"
