@@ -1,0 +1,29 @@
+# data-table-extension.tflw — CHECK-ONLY FIXTURE (M129): a file-backed data table whose file is
+# neither CSV nor JSON — demonstrates `tflw check`'s TF056 (checker, tflw M124 / review `M97a-01`).
+#
+# The loader picks its parser by extension — a header row for `.csv`, an array of row objects for
+# `.json` — so anything else is refused. It is refused *after* the file is opened, though, which is
+# the whole point of the code: the run gets as far as reading a path whose problem was legible in
+# the source before anything started.
+#
+# **Its own code rather than `TF043`, and the distinction is not bookkeeping.** `TF043` is
+# MISSING_FILE, and here the file is very likely *present* — being present is what leaves the
+# extension as the only thing wrong. `rows.txt` sits next to this fixture for exactly that reason:
+# without it this file would report `TF043` as well, and a reader could not tell which code the
+# fixture was demonstrating. The two also sit on opposite sides of D147 — a missing file may be
+# created by an earlier step, so `TF043` is a prediction and a warning; an extension cannot change
+# between check and run, so this is an observation and an error.
+#
+# **Not covered:** a `.csv` whose header row is malformed, or a `.json` that is not an array of
+# objects. Both need the file's *contents*, and `@tflw/lang` does no I/O — that is a run-time
+# failure with a run-time message. Interpolated paths are skipped for the same reason they are
+# everywhere else in M124's rules: `with each from "./{env}.csv"` names no file until the run picks
+# one.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/data-table-extension.tflw
+
+with each from "./rows.txt"
+test "reads {name} from a table the loader cannot parse"
+  api GET /health
+  expect status equals 200

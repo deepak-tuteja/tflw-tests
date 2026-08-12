@@ -1,0 +1,76 @@
+# D295, the "it fires" half — one test per rule that has a constructible positive.
+#
+# Written with the **negated** matcher (`not has no …`), which is green exactly when the pack found
+# something. That is what makes recall runnable rather than a claim: every test in this file fails if
+# a rule stops firing against a response that VULNS.md says it must.
+#
+# What it does not pin is *which* rule fired, only that something at that severity did. The severity
+# floor narrows it as far as the DSL can, and
+# `../../scripts/verify-security-acceptance.mjs` does the rest — it reads the same run's report and
+# checks the exact rule ids. Two instruments because they fail differently: this one goes red in an
+# ordinary `tflw run`, the grader measures precision per rule.
+#
+# Run under `--env secureLocal` (default). The three plaintext-only rows live in `plaintext.tflw`.
+
+@security @vuln
+test "sec/cors-wildcard-with-credentials fires on `*` plus credentials (V1)"
+  api GET /vuln/cors-wildcard
+  expect status equals 200
+  # Isolated by severity as far as the grammar allows: over https this response sets no cookie, so
+  # of the three critical rules only the CORS one can engage at all.
+  expect response not has no critical security violations
+
+@security @vuln
+test "the cookie-flag rules fire on a cookie with no HttpOnly, no Secure and SameSite=None (V3)"
+  api POST /vuln/weak-cookie
+  expect status equals 201
+  # Three findings from one response — `cookie-not-httponly` and `cookie-not-secure` at critical,
+  # `cookie-samesite-none` at moderate. Asserted at both floors so a regression in either band is
+  # visible here rather than only in the grader.
+  expect response not has no critical security violations
+  expect response not has no moderate security violations
+
+@security @vuln
+test "sec/csp-missing and sec/x-frame-options fire on a bare document (V4)"
+  api GET /vuln/document
+  expect status equals 200
+  # `csp-missing` is serious, `x-frame-options` moderate — and a floor is a *minimum*, not a band, so
+  # the moderate line below also carries everything above it. Both are asserted because the two rules
+  # are independent controls that a hardened document sets separately (see `negatives.tflw`), and
+  # asserting only the serious floor would leave `x-frame-options` demonstrated nowhere.
+  expect response not has no serious security violations
+  expect response not has no moderate security violations
+
+@security @tls
+test "sec/hsts-missing fires on every TLS response the sidecar serves"
+  # Not a fixture. nginx.conf sets no `add_header` at all, so this is the untouched app answering —
+  # the §0 prediction, still holding.
+  api GET /health
+  expect status equals 200
+  expect response not has no serious security violations
+
+@security @tls
+test "sec/server-version-disclosure fires through the sidecar, which advertises its build"
+  api GET /health
+  expect status equals 200
+  # `minor` is the floor nothing else in the pack sits at, so this one *is* fully isolated by the
+  # DSL: a green here can only mean `server-version-disclosure` fired.
+  expect response not has no minor security violations
+
+@security
+test "sec/nosniff-missing fires on a response that sets no X-Content-Type-Options"
+  api GET /health
+  expect status equals 200
+  # Moderate over https on a JSON body with no cookie: `x-frame-options` and `cookie-samesite-none`
+  # are not applicable and `authenticated-response-cacheable` needs credentials this test does not
+  # send, so nosniff is the only moderate rule that can engage.
+  expect response not has no moderate security violations
+
+@security @sessions
+test "sec/authenticated-response-cacheable fires on an authenticated response with no Cache-Control" as shopper
+  api GET /auth/profile
+  expect status equals 200
+  # Now two moderate rules can fire (nosniff and this one), which is why the grader checks ids. The
+  # value of the assertion here is that the *session's* credentials reached the rule at all — the
+  # cookie comes from tflw's jar, not from a header this test wrote.
+  expect response not has no moderate security violations

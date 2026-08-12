@@ -1,0 +1,37 @@
+# hold-exceeds-wait-timeout.tflw — CHECK-ONLY FIXTURE (M129): a hold window at least as long as the
+# budget the step has to close it — demonstrates `tflw check`'s TF055 (checker, tflw M124 / review
+# `M97a-06`).
+#
+# `wait until <locator> … for <duration>` asks a condition to stay true *continuously* for the
+# window. When the window is at least `timeout wait`, the step cannot end by succeeding — only by
+# timing out, and the timeout then reports a slow application, which is the one thing that was not
+# wrong. The author is told at check time instead.
+#
+# **A warning, not an error, and the tier is the whole decision** (D147). The second operand lives
+# in `tflw.config` and differs per env: a suite whose CI env raises `timeout wait` to 120s is
+# correct, and an error would make it unrunnable with no override. `wait until … for 60s` here is a
+# real defect against this project's `defaults timeout wait 5s` and a perfectly good step against a
+# config that allows longer.
+#
+# **This project's own config is the second operand**, and unlike `TF051`'s fixture next door this
+# one needs no scratch directory: `defaults timeout wait 5s` at the top of `tflw.config` (there to
+# keep `tests/.demo-fail/wait-timeout.tflw` fast) is exactly the budget this file exceeds. The
+# coupling is deliberate and worth knowing about — raise that default past 60s and this fixture
+# stops reporting, which `verify-check-diagnostics.mjs` would then fail on, loudly, in the right
+# direction.
+#
+# **Not covered:** a hold window that fits the budget but not the application's real latency. That
+# is a run, and the diagnostic for it is the timeout itself.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/hold-exceeds-wait-timeout.tflw
+
+test "a hold window twelve times the step's own budget"
+  open "/"
+  # 60s held against a 5s budget: the condition can never be observed long enough to pass.
+  wait until text "Never Appears" is hidden for 60s
+
+test "the neighbour the rule must not touch"
+  open "/"
+  # Comfortably inside the 5s budget — an ordinary settle, and the shape most of this suite uses.
+  wait until text "Storefront" is visible for 2s

@@ -1,0 +1,37 @@
+# service-with-absolute-url.tflw — CHECK-ONLY FIXTURE (M129): a named api service and an absolute
+# URL on the same step — demonstrates `tflw check`'s TF059 (checker, tflw M125b1 / review `FU-18`,
+# D266).
+#
+# A service names the base URL to send to. An absolute URL already is one. So one of the two is dead
+# text that the author believes is doing something, and picking a winner silently is the failure
+# class the row was filed about.
+#
+# **An error rather than a warning, and the contrast with `TF057`/`TF058` next door is the clearest
+# statement of D147 in the whole manifest.** Those two read an operand out of `tflw.config`, so they
+# are predicting what *this* run will do and must stay overridable. Both of this rule's operands are
+# written in the file — no config can make the combination meaningful, so there is nothing to
+# predict and nothing an env could fix.
+#
+# **The hint names both ways out without preferring one**, since which of the two the author meant
+# is genuinely not knowable from the step: drop the service, or make the path relative.
+#
+# **`inventory` is this project's real service** (`env local`'s `api inventory
+# "http://localhost:4002/v1"`), not an invented one — the fixture is dogfood, so the shape it breaks
+# is the shape `tests/api/inventoryOps/` uses for real. Note that the first test also reports
+# `TF057`: it *is* an absolute URL, and both statements about it are true. The proof script asserts
+# on `TF059`'s presence, and the two codes carry different hints, so nothing is being papered over.
+#
+# **Not covered:** a service name that does not exist — that is `TF026`, and it fires whether or not
+# an absolute URL follows.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/service-with-absolute-url.tflw
+
+test "a service and an absolute URL, each naming a different base"
+  api inventory GET https://other.example/warehouses
+
+test "the neighbours the rule must not touch"
+  # A service with a relative path — the ordinary multi-service shape.
+  api inventory GET /warehouses
+  # An absolute URL with no service — unportable (TF057), but not contradictory.
+  api GET https://api.example.com/orders

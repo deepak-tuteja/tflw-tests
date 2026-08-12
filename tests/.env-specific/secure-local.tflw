@@ -1,0 +1,41 @@
+# secure-local.tflw — testFlow M128a (PLAN_M128_PENTEST_TIER1.md, D293): the executable proof that
+# `env secureLocal` is a real target and not just a config block nobody points at.
+#
+# Why it exists at all, given M128a ships no tflw changes. The pentest arc's rule pack (M128b/M128c)
+# is largely a set of claims about a *TLS* response, so `env secureLocal` is the ground every one of
+# those claims will stand on. Adding the env and leaving it unexercised until M128c would mean a
+# whole milestone in which the target is asserted to work rather than shown to — the exact shape
+# this suite keeps finding on the wrong end of (see PROGRESS.md's "two green checks that weren't").
+# Two assertions now cost nothing and fail loudly if the sidecar, the cert regeneration or the
+# 8443 listener ever stops working.
+#
+# Own file under `tests/.env-specific/` — same discovery-exclusion mechanism as
+# `mtls-rejection.tflw`, and for the same reason: `expect header "server" matches "nginx"` is only
+# true *through* the sidecar. Under the default `env local` this file would hit the api directly,
+# get no `Server` header at all, and fail.
+#
+#   npx tflw run --env secureLocal tests/.env-specific/secure-local.tflw
+#   (or: npm run test:secure-local)
+
+@auth @tls @identityOps @api
+test "the 8443 sidecar serves the same api over TLS"
+  api GET /health
+  expect status equals 200
+  # Proves the request actually went through nginx rather than resolving to the plaintext backend:
+  # Express sends no `Server` header, nginx always does. It is also the response
+  # `sec/server-version-disclosure` will fire on in M128b — recorded in VULNS.md as a prediction
+  # about the untouched app, and this is where that prediction becomes a running assertion.
+  expect header "server" matches "nginx"
+
+@auth @tls @sessions @identityOps @api
+test "the session cookie carries Secure over TLS"
+  # The dogfood-side regression guard for M128a's first real fix. Before it, `res.cookie()` in
+  # apiV2/src/auth/auth.service.ts set HttpOnly/SameSite/Max-Age/Path and no `Secure`, so the
+  # session cookie came back unprotected over exactly this listener. The flag is conditional on the
+  # request scheme (X-Forwarded-Proto, set by nginx/nginx.conf), which is why the plaintext half of
+  # this pair lives in scripts/verify-security-target.mjs instead — one `--env` per run, and the
+  # negative it asserts is "Secure is ABSENT over http".
+  api POST /auth/session-login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  expect header "set-cookie" matches "Secure"
+  expect header "set-cookie" matches "HttpOnly"

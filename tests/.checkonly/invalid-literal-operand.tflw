@@ -1,0 +1,53 @@
+# invalid-literal-operand.tflw — CHECK-ONLY FIXTURE (M129): an operand written in the file that the
+# step will reject the moment it evaluates — demonstrates `tflw check`'s TF054 (checker, tflw M124 /
+# review `M97a-02`/`M97a-03`/`M97a-16`).
+#
+# Seven runtime `throw`s, one code. The rule's subject is not "this value is wrong" but "this value
+# is wrong **and was legible as wrong in the source**": an empty `random number` range, a
+# `random password` too short for the four character classes it guarantees, a `hex`/`base64`/`url`
+# decode over a literal that cannot decode, and a `matches`/`fails matching` pattern that is not a
+# valid regular expression.
+#
+# **It fires on literals only, and that is the rule rather than a limit of it.** `random number
+# {lo} to {hi}` is ordinary, legal, and unknowable until the run binds those names — so an
+# interpolated operand stays the runtime's business. The last test here is that control, and it is
+# the one that matters: a rule that reached interpolation would report an error on a program that
+# runs fine, which is the failure class D137 clause 1 exists to forbid.
+#
+# **The decode tests are imported from the same module the interpreter uses** (`literalValidity.ts`)
+# rather than restated, because "valid hex" has a length clause and "valid base64" excludes the
+# URL-safe alphabet — a second copy would drift precisely where a user meets it.
+#
+# **Not covered:** a *runtime* value that fails the same test. `hex decode({token})` where `token`
+# binds to junk is a run-time error and stays one; nothing static can see it. Also not covered:
+# whether a valid regex matches anything, which is a fact about a response.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/invalid-literal-operand.tflw
+
+test "generator operands that cannot produce a value"
+  # An empty range: there is no number that is both ≥ 5 and ≤ 1.
+  let impossible = random number 5 to 1
+  # Four character classes are guaranteed, so two characters cannot carry them.
+  let tooShort = random password 2
+
+test "transform operands that cannot decode"
+  # `!` is not a hex digit, and the length is odd besides.
+  let notHex = hex decode("not-hex!")
+  # `*` is outside the standard base64 alphabet.
+  let notBase64 = base64 decode("****")
+
+test "matcher patterns that are not valid regular expressions"
+  api GET /health
+  # An unclosed group — the same string the runtime would hand to `new RegExp`.
+  expect body.status matches "("
+  # `fails matching` reads the identical operand and must report identically.
+  expect body.status fails matching "[a-"
+
+test "the interpolated neighbours the rule must not touch"
+  # Bound at run time, so neither bound is knowable here — silent by design, and the run may still
+  # reject them. That is the correct division of labour, not a gap.
+  let lo = random number 1 to 5
+  let hi = random number 1 to 5
+  let maybeEmpty = random number {lo} to {hi}
+  let maybeShort = random password {lo}

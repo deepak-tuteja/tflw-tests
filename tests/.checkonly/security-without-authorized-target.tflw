@@ -1,0 +1,47 @@
+# security-without-authorized-target.tflw — CHECK-ONLY FIXTURE (M129): a security assertion with no
+# declaration behind it — demonstrates `tflw check`'s TF060 (checker, tflw M128b / D291, the pentest
+# arc's Tier 1).
+#
+# `expect response has no … security violations` is the first construct in this language that scans
+# a host rather than asserting about a response it was already given. D21's safety model says a scan
+# needs an author affirming in writing that they are permitted to point it there — `authorized
+# target "<origin>" reason "<why>"` in `tflw.config` — and this code is that requirement being
+# load-bearing from the milestone that introduced the grammar rather than from the one that first
+# sends a probe. **A safety control nothing exercises is not a safety control.**
+#
+# **Matching is by origin — scheme + host + port — not by the pattern rules `allow hosts` uses.** A
+# declaration for `https://x.example.com` does not authorize `https://x.example.com:8443`: that is a
+# different listener and may belong to a different team. **Loopback is not exempt**, deliberately,
+# because exempting it would exempt exactly the target this arc is tested against and ship the
+# requirement untested.
+#
+# **This project's own `tflw.config` is the second operand and declares nothing** — `env local`'s
+# `api "http://localhost:4001/v1"` has no `authorized target` beside it, which is the correct state
+# for a suite that does no scanning. The declared side lives in `tflw-acceptance/security/`, whose
+# own config carries the declaration and the reason; that corpus is where the *passing* form is
+# dogfooded. So the two halves of D291 are demonstrated in two places on purpose: refusal here,
+# permission there.
+#
+# **Narrow in the same three ways `TF036` is:** only the env's default `api` base, only a fully
+# literal one, and skipped entirely when no config was resolved.
+#
+# **Not covered:** whether the declared reason is *true*. Nothing can check that, which is why the
+# field is prose and why it is embedded in the report next to the findings it permitted.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/security-without-authorized-target.tflw
+
+test "a scan against an env that authorizes nothing"
+  api GET /health
+  expect response has no security violations
+
+test "a severity floor does not change the requirement"
+  api GET /health
+  # The floor narrows which rules run; it has nothing to do with permission to run them at all.
+  check response has no critical security violations
+
+test "the neighbours the rule must not touch"
+  api GET /health
+  # Ordinary assertions about a response already in hand — no host is being scanned.
+  expect status equals 200
+  expect header "content-type" contains "json"

@@ -15,6 +15,7 @@ import { parseDurationMs } from './ms';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { isUniqueViolation } from '../common/db-errors';
+import { isSecureRequest } from '../common/request-scheme';
 
 export interface BearerTokenPair {
   accessToken: string;
@@ -141,6 +142,7 @@ export class AuthService {
   ) {
     res.cookie(name, value, {
       httpOnly: true,
+      secure: isSecureRequest(res.req),
       sameSite,
       maxAge: parseDurationMs(ttl),
       path: '/',
@@ -210,8 +212,21 @@ export class AuthService {
     sessionRefreshCookie: string | undefined,
     res: Response,
   ): Promise<void> {
-    res.clearCookie(SESSION_COOKIE, { path: '/' });
-    res.clearCookie(SESSION_REFRESH_COOKIE, { path: '/' });
+    // `M128a`: the clearing `Set-Cookie` carries the same flags as the one it retires. A logout
+    // response is a `Set-Cookie` like any other, so `session=; Expires=1970` with no `HttpOnly` and
+    // no `Secure` is a finding on its own — the same defect as the issuing path's missing `Secure`,
+    // one code path over, found the same way. Attribute matching is also what a browser wants for
+    // the removal to be unambiguous.
+    const clear = {
+      path: '/',
+      httpOnly: true,
+      secure: isSecureRequest(res.req),
+    };
+    res.clearCookie(SESSION_COOKIE, { ...clear, sameSite: 'lax' as const });
+    res.clearCookie(SESSION_REFRESH_COOKIE, {
+      ...clear,
+      sameSite: 'strict' as const,
+    });
 
     for (const [cookie, typ] of [
       [sessionCookie, 'session'],

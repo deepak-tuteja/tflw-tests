@@ -1,5 +1,13 @@
 # Acceptance: tflw vs. raw fetch + node:test
 
+> **`security/` is a different kind of corpus.** Everything below compares tflw against a hand-rolled
+> baseline on line count and readability. `security/` measures a *coverage claim* instead — testFlow
+> `M128c`'s D295 bar for the pentest arc's rule pack — and is graded by
+> `scripts/verify-security-acceptance.mjs` (`npm run verify:security-acceptance`), not by whether it
+> is green. It needs `VULN_MODE=1 node cli.mjs start`. See `../VULNS.md` for the ledger and the
+> measured result.
+
+
 PLAN.md decision 41's publish gate: ~10 scenarios implemented twice — once as `.tflw` tests, once
 as the honest "no tool" baseline (`node:test` + the global `fetch`, Node's own built-ins, zero
 dependencies) — judged on line count, readability, and report quality. Both sides run against the

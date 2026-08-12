@@ -117,6 +117,27 @@ const PHASES = [
     name: 'webv2-admin-check',
     cmd: ['npx', 'tflw', 'run', '--no-color', ...CI_VERBOSE, '--env', 'webv2Admin', 'tests/.env-specific/webv2-admin.tflw', 'tests/.env-specific/orgs-mixed.tflw'].join(' '),
   },
+  // M128a (testFlow PLAN_M128_PENTEST_TIER1.md, D293): the pentest arc's target. Two phases,
+  // because they need two different things from the stack and only one of them needs anything
+  // unusual.
+  //
+  // `secure-local-check` is an ordinary `tflw run` against the clean app through the 8443 TLS
+  // sidecar — `--env secureLocal`, same reason `mtls-rejection` needs its own `--env`.
+  {
+    name: 'secure-local-check',
+    cmd: ['npx', 'tflw', 'run', '--no-color', ...CI_VERBOSE, '--env', 'secureLocal', 'tests/.env-specific/secure-local.tflw'].join(' '),
+  },
+  // `security-target-check` is the only phase that needs the stack itself brought up differently
+  // (`VULN_MODE=1`, the hygiene fixture slice). It asserts VULNS.md's claims against the running
+  // target — no rule pack exists yet, so a failure here means apiV2/nginx/VULNS.md disagree, never
+  // that tflw regressed. It is in the sweep from day one rather than "once M128c needs it" for the
+  // reason its own header gives: the acceptance numbers M128c will publish are only as true as the
+  // assumption that this target still answers the way the ledger says.
+  {
+    name: 'security-target-check',
+    cmd: 'node scripts/verify-security-target.mjs',
+    stackEnv: { VULN_MODE: '1' },
+  },
 ];
 
 // PLAN_CI.md decision 16 (Round 3, 2026-08-03 grill-me): duration-balanced static groups for a
@@ -131,12 +152,41 @@ const PHASES = [
 // Names are a readability label for each bin's dominant theme, chosen after the fact — the
 // packing itself is duration-driven, not semantic, so don't read a name as a strict partition
 // (e.g. `safety` also carries `--tag mixed`, and `core` carries `demo-fail-check`).
+//
+// M128a adds two short phases. They are placed on the two smallest bins by count rather than by
+// measured duration — both are seconds of work dominated by the restart every phase pays anyway —
+// so they should be folded into a real re-pack the next time per-phase CI timings are pulled,
+// not treated as a considered placement.
 const PHASE_GROUPS = {
-  core: ['full suite', '--tag orderOps', '--tag smoke,catalogOps', 'demo-fail-check', '--tag orgOps', '--tag inventoryOps', 'migrate-check'],
-  tooling: ['--tag api', 'watch-check', 'pick-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check'],
+  core: ['full suite', '--tag orderOps', '--tag smoke,catalogOps', 'demo-fail-check', '--tag orgOps', '--tag inventoryOps', 'migrate-check', 'secure-local-check'],
+  tooling: ['--tag api', 'watch-check', 'pick-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check', 'security-target-check'],
   safety: ['--tag identityOps', '--tag mixed', '--tag smoke,orderOps', '--tag adminOps', '--tag catalogOps', 'safety-flags-check', 'check-diagnostics', 'safety-redaction-check'],
   'security-ui': ['--tag smoke,identityOps', 'cli-flags-check', '--tag smoke,adminOps', '--tag ui', 'webv2-admin-check', '--tag smoke,inventoryOps', 'logging-check', 'mtls-rejection'],
 };
+
+// The groups are a hand-maintained partition of PHASES, and CI runs *only* the groups (a 4-leg
+// matrix, PLAN_CI.md decision 16). So a phase that belongs to no group is not a phase that runs
+// unbalanced — it is a phase that never runs in CI at all, silently, while four legs go green.
+// That is this pair of repos' oldest recurring failure shape (see testFlow's M127: an empty shard
+// is an error, not an early return), and the cheapest place to make it impossible is here, where
+// the two lists are both in scope.
+{
+  const grouped = Object.values(PHASE_GROUPS).flat();
+  const names = PHASES.map((p) => p.name);
+  const ungrouped = names.filter((n) => !grouped.includes(n));
+  const unknown = grouped.filter((n) => !names.includes(n));
+  const duplicated = grouped.filter((n, i) => grouped.indexOf(n) !== i);
+  const problems = [
+    ...ungrouped.map((n) => `phase "${n}" is in no group — CI would never run it`),
+    ...unknown.map((n) => `group entry "${n}" matches no phase`),
+    ...duplicated.map((n) => `phase "${n}" appears in more than one group`),
+  ];
+  if (problems.length > 0) {
+    console.error('PHASE_GROUPS is not a partition of PHASES:');
+    for (const p of problems) console.error(`  - ${p}`);
+    process.exit(1);
+  }
+}
 
 const groupFlagIndex = process.argv.indexOf('--group');
 const groupArg = groupFlagIndex === -1 ? null : process.argv[groupFlagIndex + 1];
@@ -150,8 +200,11 @@ rmSync(ARCHIVE_DIR, { recursive: true, force: true });
 
 const results = [];
 for (const phase of activePhases) {
-  console.log(`\n=== ${phase.name} (fresh restart) ===\n`);
-  restart();
+  const envNote = phase.stackEnv
+    ? ` — ${Object.entries(phase.stackEnv).map(([k, v]) => `${k}=${v}`).join(' ')}`
+    : '';
+  console.log(`\n=== ${phase.name} (fresh restart${envNote}) ===\n`);
+  restart(phase.stackEnv);
   const cmd = phase.cmd ?? ['npx', 'tflw', 'run', '--no-color', ...CI_VERBOSE, ...phase.args].join(' ');
   try {
     run(cmd);

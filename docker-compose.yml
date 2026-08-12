@@ -111,6 +111,11 @@ services:
       # cycle; `docker compose up --wait` still guarantees both are healthy before any request
       # actually happens.
       INVENTORY_SERVICE_URL: ${INVENTORY_SERVICE_URL:-http://inventory-service:4002/v1}
+      # testFlow M128a (PLAN_M128_PENTEST_TIER1.md D293) — the pentest arc's hygiene fixture slice
+      # (apiV2/src/vuln/, VULNS.md). Passed through from the host, defaulting to off, so a bare
+      # `node cli.mjs start` gives the ~45 other files the same clean app they have always had and
+      # `VULN_MODE=1 node cli.mjs start` adds five deliberately-flawed-or-hardened responses.
+      VULN_MODE: ${VULN_MODE:-}
       PORT: 4001
     ports:
       - "4001:4001"

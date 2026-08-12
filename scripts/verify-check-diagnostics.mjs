@@ -28,7 +28,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const CLI_ENTRY = path.join(ROOT, 'node_modules', 'tflw', 'dist', 'cli.cjs');
+// The *installed* tflw by default, which is the question this proof exists to answer: does the tflw
+// a user would get have a fixture for every code it assigns. `TFLW_CLI_ENTRY` asks the other
+// question — does a build in hand — and it is the same D9 split `check-acceptance.mjs`'s `TFLW_BIN`
+// makes, for the same reason. It matters more here than it looks: this script reads tflw's
+// diagnostic manifest out of the bundle, so against a stale vendored tarball it grades the fixtures
+// against a *stale list of codes* and can fail in either direction — missing fixtures for codes
+// that shipped, or "stale" fixtures for codes that had not yet. `M128-04` is the driver that made
+// that easy to hit; this is how you check a branch build without reinstalling one.
+const CLI_ENTRY = process.env.TFLW_CLI_ENTRY ?? path.join(ROOT, 'node_modules', 'tflw', 'dist', 'cli.cjs');
 
 let violations = 0;
 function ok(label, condition, detail = '') {
@@ -98,6 +106,13 @@ const FILE_FIXTURES = {
   TF050: 'confusable-word.tflw',
   TF052: 'mask-without-snapshot.tflw',
   TF053: 'capture-uncapturable-subject.tflw',
+  TF054: 'invalid-literal-operand.tflw',
+  // TF055's second operand is this project's own `defaults timeout wait 5s`, so unlike TF051 and
+  // TF057/TF058 below it needs no scratch config — the real config already withholds the budget.
+  TF055: 'hold-exceeds-wait-timeout.tflw',
+  TF056: 'data-table-extension.tflw',
+  TF059: 'service-with-absolute-url.tflw',
+  TF060: 'security-without-authorized-target.tflw',
 };
 
 for (const [code, file] of Object.entries(FILE_FIXTURES)) {
@@ -119,6 +134,15 @@ const CONFIG_FIXTURES = {
   // `allow hosts`. It has to be the *default* env here — the check is env-scoped, and this script
   // runs `tflw check` with no `--env`.
   TF036: 'env local default\n  api "http://localhost:4001"\n  allow hosts "example.com"\n',
+  // tflw M128b (pentest arc Tier 1 / D291): a declaration that authorizes nothing. A wildcard is
+  // rejected here even though `allow hosts` accepts one, and the two only look alike: `allow hosts`
+  // bounds where ordinary traffic may go, and a bound expressed as a pattern is still a bound. This
+  // one is an author affirming they are permitted to scan a named host — and nobody is authorized
+  // to scan `*.example.com`, because a pattern records a claim whose scope its author could not
+  // have known when they wrote it. (The sibling case, a target with no scheme, reports the same
+  // code one step earlier: `TF060` compares origins, and a bare hostname has none.)
+  TF061:
+    'defaults\n  authorized target "https://*.example.com" reason "staging sweep"\n\nenv local default\n  api "http://localhost:4001"\n',
 };
 
 const scratchDir = mkdtempSync(path.join(tmpdir(), 'tflw-check-config-'));
@@ -191,6 +215,71 @@ try {
   rmSync(envDir, { recursive: true, force: true });
 }
 
+// --- TF057/TF058: one file, two configs, and the absence of a declaration is the operand --------
+//
+// The same shape as `TF051` above and for the same reason — the rule has two operands and one of
+// them is the config — but with an inversion worth stating outright, because it is the only place
+// in the language where *not* declaring something means more enforcement rather than less. An
+// absolute URL under an env that declares `allow hosts` is merely unportable (`TF057`, "`--env`
+// will not move it"). The identical line under an env that declares none is a request the run will
+// **refuse to send** (`TF058`), because writing an absolute URL is what opts a suite into declaring
+// where it may reach.
+//
+// So neither code can be proven against this project's own `tflw.config`: `env local` declares
+// `allow hosts "localhost", "127.0.0.1"`, which settles the choice at `TF057` and makes `TF058`
+// unreachable from any file dropped into `tests/.checkonly/`. Hijacking `env webv2Admin` — which
+// happens to declare no allowlist — would work and is exactly what `TF051`'s header argues against:
+// it couples this proof to an env that exists for an unrelated reason, so the day someone adds an
+// allowlist to the admin console's env this proof would go quiet rather than red.
+//
+// Each case forbids the other's message as well as asserting its own, since the failure that
+// matters here is not "no diagnostic" but "the *other* diagnostic" — the two are chosen between,
+// and a rule that picked wrong would still report something.
+const ALLOWLIST_FIXTURE_FILE = 'absolute-url.tflw';
+const ALLOWLIST_FIXTURES = [
+  {
+    label: 'an env that declares an allowlist',
+    // `localhost` belongs in this allowlist even though the fixture never asks for it: an env whose
+    // own `api` base is not in its own `allow hosts` is `TF036`, an *error*, and the check stops
+    // there — so the first draft of this case proved nothing about `TF057` and said so by reporting
+    // `TF036` instead. A scratch config that declares an allowlist has to allow its own base.
+    config:
+      'env local default\n  api "http://localhost:4001"\n  web "http://localhost:8090"\n  allow hosts "localhost", "api.example.com", "example.com"\n',
+    code: 'TF057',
+    forbid: 'TF058',
+  },
+  {
+    label: 'an env that declares no allowlist',
+    config: 'env local default\n  api "http://localhost:4001"\n  web "http://localhost:8090"\n',
+    code: 'TF058',
+    forbid: 'TF057',
+  },
+];
+
+const allowDir = mkdtempSync(path.join(tmpdir(), 'tflw-check-allow-'));
+try {
+  copyFileSync(
+    path.join(ROOT, 'tests', '.checkonly', ALLOWLIST_FIXTURE_FILE),
+    path.join(allowDir, ALLOWLIST_FIXTURE_FILE),
+  );
+  for (const { label, config, code, forbid } of ALLOWLIST_FIXTURES) {
+    writeFileSync(path.join(allowDir, 'tflw.config'), config);
+    const out = runCheck([ALLOWLIST_FIXTURE_FILE], { cwd: allowDir });
+    ok(
+      `${code}: ${ALLOWLIST_FIXTURE_FILE} under ${label} reports ${code}`,
+      out.includes(`[${code}]`),
+      out.trim().split('\n')[0],
+    );
+    ok(
+      `${code}: ${label} does not also report ${forbid}`,
+      !out.includes(`[${forbid}]`),
+      `both codes fired — the rule stopped choosing between them`,
+    );
+  }
+} finally {
+  rmSync(allowDir, { recursive: true, force: true });
+}
+
 // --- completeness: the expected list comes from tflw, not from this file ------------------------
 
 /**
@@ -220,7 +309,12 @@ function assignedCodes() {
   return codes;
 }
 
-const dogfooded = new Set([...Object.keys(FILE_FIXTURES), ...Object.keys(CONFIG_FIXTURES), 'TF051']);
+const dogfooded = new Set([
+  ...Object.keys(FILE_FIXTURES),
+  ...Object.keys(CONFIG_FIXTURES),
+  'TF051',
+  ...ALLOWLIST_FIXTURES.map((f) => f.code),
+]);
 const assigned = assignedCodes();
 
 const uncovered = [...assigned].filter((code) => !dogfooded.has(code)).sort();
@@ -244,5 +338,6 @@ if (violations > 0) {
 console.log(
   `\nAll ${assigned.size} TF0xx diagnostic codes the installed tflw assigns are dogfooded against a real \`tflw check\`` +
     ` (${Object.keys(FILE_FIXTURES).length} test-dialect fixtures, ${Object.keys(CONFIG_FIXTURES).length} config-dialect,` +
-    ` and ${ENV_FIXTURE_FILE} against ${ENV_FIXTURES.length} generated configs).`,
+    ` ${ENV_FIXTURE_FILE} against ${ENV_FIXTURES.length} generated configs, and ${ALLOWLIST_FIXTURE_FILE} against` +
+    ` ${ALLOWLIST_FIXTURES.length} more).`,
 );

@@ -42,7 +42,13 @@ export function run(cmd, opts = {}) {
   return execSync(cmd, { cwd: ROOT, stdio: 'inherit', ...opts });
 }
 
-export function restart() {
+// `stackEnv` (M128a): a phase may need the stack brought up differently from every other phase.
+// The first case is `VULN_MODE=1`, which adds the pentest arc's hygiene fixture slice
+// (apiV2/src/vuln/) — deliberately absent by default, so the ~45 files that run against the clean
+// app keep running against the clean app. Because each phase restarts anyway, this costs nothing
+// and, more to the point, it cannot leak: the next phase's own restart takes the variable away
+// again, so "started with the fixtures" is scoped to exactly the phase that asked for it.
+export function restart(stackEnv = {}) {
   run('node cli.mjs stop');
-  run('node cli.mjs start');
+  run('node cli.mjs start', { env: { ...process.env, ...stackEnv } });
 }
