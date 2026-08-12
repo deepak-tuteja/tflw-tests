@@ -1,0 +1,49 @@
+# absolute-url.tflw — CHECK-ONLY FIXTURE (M129): a step whose target is written as an absolute URL
+# rather than a path under the active env's base — demonstrates `tflw check`'s TF057 **and** TF058
+# (checker, tflw M125b1 / review `FU-18`, D245/D246).
+#
+# **One file, two codes, and which one you get is a property of the config rather than of this
+# text.** That is the entire reason the fixture is shaped like `missing-base-url.tflw` next door:
+# `verify-check-diagnostics.mjs` copies it into a scratch directory and checks it twice, under one
+# config that declares `allow hosts` and one that declares none. Same unmodified file, two
+# different diagnostics — the demonstration that the rule reads the config.
+#
+#   allowlist declared     → TF057   "this step is fixed where it points; `--env` will not move it"
+#   no allowlist declared  → TF058   "the run will refuse to send it"
+#
+# **The absence of an allowlist meaning *enforcement* is the one inversion in the language**, and it
+# is why these two codes exist as a pair. `allow hosts` is opt-in and unset means every host is
+# permitted, which is the right default for a suite written entirely against its env's base URL —
+# that base *is* the declaration of where it talks. An absolute URL is the one form that can reach a
+# host `tflw.config` never mentions, so writing one opts the suite into declaring where it may
+# reach. A suite with no allowlist and an absolute URL is therefore not permissive; it is a run that
+# will refuse to send.
+#
+# **Both are warnings, and both are predictions** (D147): the operand comes from `tflw.config` and
+# differs per env, so a suite whose CI env declares an allowlist is correct and an error would make
+# it unrunnable with no override. TF058's *runtime* half is a refusal rather than a warning, because
+# by then the config is resolved and the URL is in hand — an observation, not a prediction.
+#
+# **Not phrased as a mistake, because it frequently is not one.** A one-off request to a second host
+# is the case `FU-18` was filed about. The warning exists so that "this step ignores the env" is
+# something the file says out loud rather than something a reader has to notice.
+#
+# **Not covered:** an absolute URL naming a host the allowlist *excludes*. That is a refusal at run
+# time with its own message, not a static fact — the checker knows the allowlist but not what the
+# author meant by writing past it.
+#
+# Checking this file against this project's own config demonstrates TF057 only, since `env local`
+# declares `allow hosts`. Run the proof that supplies both operands (also the `check-diagnostics`
+# phase of `npm run regression`):
+#   node scripts/verify-check-diagnostics.mjs
+
+test "an absolute api target"
+  api GET https://api.example.com/orders
+
+test "an absolute browser target — the form that used to be silently concatenated"
+  open "https://example.com/checkout"
+
+test "the relative neighbours the rule must not touch"
+  # Resolved against the env's base, which is what makes `--env staging` mean anything.
+  api GET /health
+  open "/"
