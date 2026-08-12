@@ -35,6 +35,22 @@ import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
+/**
+ * **`TFLW_BIN` names the build to check against, and `npx` is only the default** (M128c).
+ *
+ * `npx tflw` resolves this suite's *vendored* `tflw-0.1.0.tgz`, which is the right default — this
+ * corpus' job is to check against a released tflw — and the wrong thing entirely when the question is
+ * "does the branch under review still check clean". `scripts/exec.mjs` already states that rule as
+ * D9 and takes the absolute path to `packages/cli/dist/cli.cjs`; this is the same rule, in the second
+ * script that needed it.
+ *
+ * It is not a convenience. `tflw-acceptance/security/` uses `authorized target`, which the vendored
+ * 0.1.0 build has never heard of, so with the default this script correctly reports that corpus as
+ * failing — a real statement about the released build, not a bug — and there would otherwise be no
+ * way to ask the other question at all.
+ */
+const TFLW_BIN = process.env.TFLW_BIN ?? null;
+
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const acceptanceRoot = join(repoRoot, 'tflw-acceptance');
 
@@ -65,7 +81,9 @@ if (roots.length === 0) {
 let failed = 0;
 for (const root of roots) {
   const rel = relative(repoRoot, root);
-  const result = spawnSync('npx', ['tflw', 'check', '--no-color'], { cwd: root, encoding: 'utf8', shell: false });
+  const result = TFLW_BIN
+    ? spawnSync(process.execPath, [TFLW_BIN, 'check', '--no-color'], { cwd: root, encoding: 'utf8', shell: false })
+    : spawnSync('npx', ['tflw', 'check', '--no-color'], { cwd: root, encoding: 'utf8', shell: false });
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trimEnd();
   if (result.status === 0) {
     // Matched, not `.pop()`ed: a clean check can still print a trailing `reuse[RF…]` hint block

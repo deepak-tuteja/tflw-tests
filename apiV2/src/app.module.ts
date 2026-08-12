@@ -43,6 +43,7 @@ import { TicketsModule } from './tickets/tickets.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { OrgsModule } from './orgs/orgs.module';
 import { LoadAdminModule } from './load-admin/load-admin.module';
+import { VulnModule, VULN_MODE_ENABLED } from './vuln/vuln.module';
 
 @Module({
   imports: [
@@ -105,6 +106,10 @@ import { LoadAdminModule } from './load-admin/load-admin.module';
     UploadsModule,
     OrgsModule,
     LoadAdminModule,
+    // The pentest-arc hygiene fixture slice, absent unless `VULN_MODE=1` (see vuln/vuln.module.ts).
+    // Conditional at the imports array, so "off" means the routes do not exist rather than that
+    // they refuse to answer.
+    ...(VULN_MODE_ENABLED ? [VulnModule] : []),
   ],
 })
 export class AppModule {}

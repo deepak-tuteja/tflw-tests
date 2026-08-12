@@ -23,7 +23,13 @@ inventory-service/   PLAN_ENTERPRISE_REGRESSION.md E4 — standalone NestJS serv
 docker-compose.yml   postgres (ephemeral per-run volume) + api + nginx (TLS sidecar) + webv2 +
                      webv2-admin + postgres-inventory + inventory-service (E4), healthchecked
 nginx/               TLS sidecar (M22) — self-signed :8443 + mTLS-requiring :8444, proxying
-                     unchanged to api:4001; certs generated fresh at every container start
+                     unchanged to api:4001; certs generated fresh at every container start.
+                     :8443 is the pentest arc's target as of M128a (`env secureLocal`); both
+                     listeners now forward X-Forwarded-Proto, which is how apiV2 knows to mark
+                     the session cookie `Secure`
+apiV2/src/vuln/      M128a — the pentest arc's hygiene fixture slice: five routes with deliberately
+                     wrong (or deliberately correct) headers and cookie flags, absent from the app
+                     entirely unless `VULN_MODE=1`. Headers only, no logic flaws. See VULNS.md
 webV2/               React+Vite+TS SPA storefront (webV2-0) — tflw's browser-arc dogfood target
                      (PLAN_WEBV2_TARGETS.md); own nginx image serves the build + proxies /v1/*
                      to api:4001 so the storefront and API share an origin; :8090
@@ -70,7 +76,11 @@ tests/.env-specific/ passing tests whose assertions only hold under a non-defaul
                      to ui-admin/ (E2, plus E3's own orgs.tflw) — the SSR admin console's own
                      UI-only backfill, run via `npm run test:ui-admin` (`--env webv2Admin`), same
                      reason as webv2-admin.tflw; orgs-mixed.tflw (E3) sits alongside
-                     webv2-admin.tflw for the same reason, run via `npm run test:webv2-admin`
+                     webv2-admin.tflw for the same reason, run via `npm run test:webv2-admin`;
+                     secure-local.tflw (M128a) needs `--env secureLocal` for its own such reason
+VULNS.md             the known-answer ledger for tflw's pentest arc (M128a) — every deliberately
+                     flawed or deliberately hardened response, and which rule each answers.
+                     scripts/verify-security-target.mjs asserts it against the running stack
 tflw-acceptance/     DSL-vs-alternative comparison suite (tflw vs raw fetch+node:test, vs k6, vs
                      Artillery; plus an external restful-booker dogfood and a webv2 UI-vs-tflw
                      comparison) — moved here from testFlow/acceptance/
@@ -97,7 +107,15 @@ npm run test:mtls      # runs tests/api/identity/mtls.tflw against the sidecar's
 npm run test:mtls-rejection  # runs .env-specific/mtls-rejection.tflw — no client cert, real rejection (M25)
 npm run test:safety    # runs tests/api/identity/safety-redaction.tflw with `redact` active (own env, M23)
 npm run test:ui-admin  # runs tests/.env-specific/ui-admin/*.tflw against the SSR admin console (own env, E2)
+npm run test:secure-local    # runs .env-specific/secure-local.tflw through the sidecar's plain https listener (own env, M128a)
 node cli.mjs stop      # docker compose down -v — drops the DB too (ephemeral per-run isolation)
+```
+
+The pentest arc's hygiene fixture slice is off unless asked for — see [VULNS.md](VULNS.md):
+
+```sh
+VULN_MODE=1 node cli.mjs start         # adds apiV2/src/vuln/'s five routes; absent (404) without it
+npm run verify:security-target         # asserts every claim VULNS.md makes about the running target
 ```
 
 Or use the `testflow-tests-app` skill to start/stop the stack.
@@ -351,6 +369,12 @@ npm run test:mtls-rejection
 # own HTTP-level 400 (a wrong-CA client cert was tried first and empirically confirmed to degrade
 # to that same soft-400 shape, not a hard connection failure — see the file's own header comment)
 npm run test:unreachable-host
+
+# M128a: the pentest arc's target — the same nginx sidecar's *plain* https listener (8443, no
+# client cert), which M22 built and nothing ever pointed an env at. `expect header "server"
+# matches "nginx"` is only true through the sidecar; under the default env local this file would
+# reach the api directly, get no `Server` header at all, and fail
+npm run test:secure-local
 ```
 
 See `TFLW-GAPS.md` for genuine tflw DSL gaps found while building this suite (no page-walk

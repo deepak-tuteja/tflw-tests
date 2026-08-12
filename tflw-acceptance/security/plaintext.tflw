@@ -1,0 +1,66 @@
+# D295's third state, and the rows that only exist over http.
+#
+# Run under `--env plaintext` — `npx tflw run --env plaintext plaintext.tflw`, or through
+# `npm run verify:security-acceptance`, which runs both envs.
+#
+# Applicability is the state a boolean cannot express and therefore the one a corpus can silently
+# stop covering. It is also the state the DSL cannot assert directly: `expect response has no …
+# security violations` passes whether a rule ran and found nothing or never ran at all. So the tests
+# here assert the *consequence* of a rule standing down — and the grader
+# (`../../scripts/verify-security-acceptance.mjs`) reads the counts line and the not-applicable
+# listing from the same run to check it rule by rule.
+
+@security
+test "over plaintext, every critical rule stands down — the assertion has no power to fail (D285)"
+  api GET /health
+  expect status equals 200
+  # The one case in this whole corpus that is *supposed* to fail, so it is written as the failure it
+  # is rather than hidden behind a `check`. All three critical rules are about cookies and CORS, and
+  # this response has neither, so nothing engages — and tflw refuses to green an assertion that had
+  # no power to fail.
+  #
+  # Deliberately in a `.demo-fail`-shaped position: the grader runs this file and asserts the
+  # failure, its wording, and the four preconditions it names. A green here would mean D285 was
+  # removed.
+  #
+  #   expect response has no critical security violations   ← would FAIL, by design
+  #
+  # It is not written as a step, because a failing step in a corpus that is otherwise green trains
+  # people to ignore red. The grader owns it; this test proves the *setup* is what the grader thinks
+  # it is.
+  # The setup, asserted with matchers that exist: this response carries neither a cookie nor a CORS
+  # header, which is precisely why all three critical rules stand down.
+  expect header "content-type" contains "json"
+  expect body.status equals "ok"
+
+@security
+test "sec/server-version-disclosure stays silent against the app itself"
+  # The negative for a rule that has no not-applicable case: it applies unconditionally, so silence
+  # is the only other state it has. Express sends no `Server` header, and `X-Powered-By: Express`
+  # names a framework with no version in it — which is the caveat VULNS.md left open for M128b and
+  # M128b resolved by making the rule require a version token.
+  api GET /health
+  expect status equals 200
+  expect response has no minor security violations
+
+@security @vuln
+test "the cookie rules that fire over TLS are not-applicable over plaintext (V3)"
+  # The same fixture as `positives.tflw`'s cookie test, on the other scheme. `cookie-not-secure`
+  # stands down because a `Secure` cookie is not merely unset over http but *unsettable* — a browser
+  # would refuse to store it — so firing here would tell an author to make a change that breaks
+  # their own plaintext suite. That is the false positive D284 exists for.
+  #
+  # `cookie-not-httponly` is critical and still applies, so the critical band is not empty and this
+  # is a real assertion rather than another D285 case.
+  api POST /vuln/weak-cookie
+  expect status equals 201
+  expect response not has no critical security violations
+
+@security @vuln
+test "sec/hsts-missing is not-applicable over plaintext, where a browser ignores the header"
+  # Over https this response is `hsts-missing`'s negative (it sets the header); over http the rule
+  # does not run at all. Same response, two states, and the difference is the scheme — which is the
+  # whole reason this corpus has two envs.
+  api GET /vuln/document-hardened
+  expect status equals 200
+  expect response has no serious security violations

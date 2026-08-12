@@ -1,0 +1,74 @@
+# D295, the "it stays silent" half — the rule was applicable, ran, and found nothing.
+#
+# This is the half that is easy to fake and worth being careful about. A rule that never engaged has
+# not been shown to stay silent, so every test here is written against a response that genuinely
+# meets the rule's precondition: `/vuln/document-hardened` really is a document, `/vuln/cors-scoped`
+# really does carry CORS headers, and the session cookie really is a cookie. Two of those routes are
+# deliberately *clean* fixtures for exactly this reason (D293) — clean apiV2 cannot produce them,
+# because its responses are JSON and same-origin.
+#
+# Run under `--env secureLocal` (default).
+
+@security @vuln
+test "sec/cors-wildcard-with-credentials stays silent on credentialed CORS scoped to one origin (V2)"
+  api GET /vuln/cors-scoped
+  expect status equals 200
+  # Applicable — the response carries `Access-Control-Allow-Origin` — and correct. Over https with
+  # no cookie set, this is the only critical rule that can engage, so a green here is that rule
+  # having run and found nothing.
+  expect response has no critical security violations
+
+@security @sessions
+test "the cookie-flag rules stay silent on the real session cookie"
+  # The regression guard for both real defects M128a fixed: the session cookie had no `Secure`, and
+  # the logout clearing cookie carried no flags at all. Both would fire here.
+  api POST /auth/session-login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  expect header "set-cookie" matches "Secure"
+  expect response has no critical security violations
+  # `SameSite=Lax`, so the moderate cookie rule is applicable and silent. Written as the negated form
+  # because two *other* moderate-or-worse rules do fire on this response — `hsts-missing` and
+  # `nosniff-missing`, both properties of the nginx in front rather than of the cookie — and the
+  # grader checks the exact ids.
+  expect response not has no moderate security violations
+
+@security @vuln
+test "sec/csp-missing, x-frame-options, hsts-missing and nosniff stay silent on the hardened document (V5)"
+  api GET /vuln/document-hardened
+  expect status equals 200
+  # Four rules, one response, all applicable: it is a document (csp, x-frame-options), it arrived
+  # over https (hsts), and nosniff applies unconditionally. The one rule left in the serious band is
+  # the pair of TLS rules — see `applicability.tflw` for why they are the interesting case here.
+  expect response has no serious security violations
+  expect response has no moderate security violations
+
+@security @vuln
+test "sec/authenticated-response-cacheable stays silent when the response sets Cache-Control"
+  # Applicable — the rule's precondition is "the request carried session or bearer credentials", and
+  # this one does — and correct, because the route sets `Cache-Control: no-store`. Without a route
+  # that is *both* credentialed and correctly non-cacheable, the rule would only ever have been shown
+  # firing.
+  #
+  # **Deliberately not `as shopper`, and the reason is D287 rather than convenience.** A session-using
+  # test carries its session's *login-response* findings into every security assertion it makes, and
+  # the login goes through the same header-less nginx — so `hsts-missing` and `nosniff-missing` would
+  # be folded in here and this assertion could never be green, no matter what the route sets. That is
+  # D287 working exactly as designed; see `positives.tflw`'s cacheable test for the case that shows
+  # it. The header below is a bearer token this route never validates, which is all the rule needs.
+  api GET /vuln/document-hardened
+    header "Authorization" is "Bearer acceptance-fixture-not-a-real-token"
+  expect status equals 200
+  expect response has no moderate security violations
+
+@security @tls
+test "the TLS rules stay silent against the sidecar's own configuration"
+  # The live negative for `sec/tls-version-old` and `sec/tls-weak-cipher`. Both are applicable here —
+  # the probe connects and reports a real protocol and cipher — and both are correctly silent,
+  # because nginx on OpenSSL 3 negotiates TLS 1.2/1.3 with a modern suite.
+  #
+  # **Their positives are not constructible and this is not an oversight**; see VULNS.md's "Not
+  # planted, on purpose" section for the measurement. The positive is covered by unit tests against
+  # synthetic handshake facts, which is stated there rather than left to be inferred from a gap.
+  api GET /vuln/document-hardened
+  expect status equals 200
+  expect response has no serious security violations
