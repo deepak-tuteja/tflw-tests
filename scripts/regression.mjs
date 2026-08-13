@@ -128,9 +128,10 @@ const PHASES = [
     cmd: ['npx', 'tflw', 'run', '--no-color', ...CI_VERBOSE, '--env', 'secureLocal', 'tests/.env-specific/secure-local.tflw'].join(' '),
   },
   // `security-target-check` is the only phase that needs the stack itself brought up differently
-  // (`VULN_MODE=1`, the hygiene fixture slice). It asserts VULNS.md's claims against the running
-  // target — no rule pack exists yet, so a failure here means apiV2/nginx/VULNS.md disagree, never
-  // that tflw regressed. It is in the sweep from day one rather than "once M128c needs it" for the
+  // (`VULN_MODE=1`, the fixture slice — Tier 1's hygiene routes plus, since M130a, Tier 2's
+  // broken-authorization ones). It asserts VULNS.md's claims against the running target — no rule
+  // pack for either tier's findings runs here, so a failure means apiV2/nginx/VULNS.md disagree,
+  // never that tflw regressed. It is in the sweep from day one rather than "once M128c needs it" for the
   // reason its own header gives: the acceptance numbers M128c will publish are only as true as the
   // assumption that this target still answers the way the ledger says.
   {
