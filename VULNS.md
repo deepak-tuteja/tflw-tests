@@ -222,11 +222,48 @@ coverage table with a silent hole in it reads as complete:
 did not fire, and the applicable count leaves room for it. That is a necessary condition, not a
 sufficient one, and the grader's own header says so.
 
-**The table above is Tier 1's twelve rules only.** `sec/authz-object-leak` and
-`sec/authz-collection-leak` do not appear because no tflw ships them yet — `M130a` planted their
-target, `M130b` builds the rules, and `M130c` is what adds their two rows here and teaches
-`verify-security-acceptance.mjs` to grade them. Until then the absence is a sequencing fact, not a
-gap in the measurement.
+## The Tier 2 acceptance measurement (`M130c`, D319)
+
+The same corpus and the same grader, extended. `tflw-acceptance/security/authz.tflw` demonstrates
+both authorization rules; the third state and D311's default half are expected-to-fail probes inside
+the grader, because an assertion where nothing applied *fails* by D285 and therefore cannot be
+written as a passing test.
+
+Last run — **both rules demonstrated live in all three states, no gaps**:
+
+```
+  rule                                     fires  silent  n/a
+  sec/authz-object-leak                      ✓      ✓      ✓
+  sec/authz-collection-leak                  ✓      ✓      ✓
+```
+
+**What the tier costs, measured rather than estimated:** 5 assertion sites, 10 extra requests,
+**2.0 per site**. That number is a property of the *config*, not of the feature — this corpus
+declares `shopper`, `peer` and a `privileged` `admin`, so a `peer`-owned assertion probes two; the
+root `tflw.config` also declares two `oauth2` sessions, so the same assertion in the dogfood suite
+would probe four. The grader derives it from the run for exactly that reason.
+
+**`V8` is a positive the oracle cannot reach, and that is now a recorded bound rather than a
+prediction.** The plan expected `probe mutating` to probe the `DELETE` *and find the leak*. It does
+the first only. The route is genuinely exploitable — `verify-security-target.mjs` deletes an order as
+a non-owner and proves it every run — but Tier 2 judges by re-issuing the request it observed, and
+the owner's own `DELETE` destroys the row before any probe replays it. Both doors are shut by
+construction: a successful owning request leaves nothing to leak, and a failed one is a `4xx` the
+rules decline. **The bound is destruction, not mutation** — an idempotent `PUT`/`PATCH` would leak
+normally, and planting one is the cheap repair if `probe mutating` should have a reachable positive.
+Filed as `M130-05`.
+
+What the opt-in *does* prove is still worth having, and the corpus pins it by contrast: the same
+`DELETE`, the same two principals, differing only in whether the target says `probe mutating` —
+
+| target | probe line |
+| --- | --- |
+| opt-in (`secureLocal`) | `2 principals probed — 1 inconclusive, 1 refused` |
+| default (`plaintext`) | `2 principals probed — 2 not probed` |
+
+The `inconclusive` is the CSRF caveat below, live: a cookie-borne principal refused `403` on a
+mutating verb has not demonstrated an authorization boundary, and the report says so instead of
+scoring it clean.
 
 ## Not planted, on purpose
 
