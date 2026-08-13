@@ -4,16 +4,18 @@ Every deliberately-flawed and deliberately-hardened response this suite can prod
 tflw rule each one is the answer to. Written for testFlow `M128a`
 ([PLAN_M128_PENTEST_TIER1.md](../testFlow/PLAN_M128_PENTEST_TIER1.md), D293/D295); consumed by
 `M128c`'s acceptance pass, which measures the Tier 1 rule pack's precision and recall against it.
+Extended for `M130a` ([PLAN_M130_PENTEST_TIER2.md](../testFlow/PLAN_M130_PENTEST_TIER2.md), D317)
+with the arc's Tier 2 slice — broken object authorization.
 
 **A planted flaw with no row here is how a target drifts out of sync with the acceptance that
 depends on it.** So the rule is: no route in `apiV2/src/vuln/` without a row, and no row without a
 route. `scripts/verify-security-target.mjs` enforces both halves against the running stack —
-it curls every case below and asserts the header and cookie facts this file claims.
+it curls every case below and asserts the header, cookie and authorization facts this file claims.
 
-**Nothing in this file is a real vulnerability in a real endpoint.** The `vuln/` slice is
-header-and-cookie-flags only, gated behind `VULN_MODE=1`, and absent from the app entirely without
-it. Application-logic flaws (broken object authorization, injection) are Tier 2's problem and are
-deliberately not here — see `apiV2/src/vuln/vuln.controller.ts` for why.
+**Nothing in this file is a real vulnerability in a real endpoint.** The `vuln/` slice is gated
+behind `VULN_MODE=1` and absent from the app entirely without it, and every flaw lives in a route
+that exists only to carry it. `plan_v2.md` §4.2's rule — real endpoints stay clean — is what makes
+the other ~45 files' results mean anything.
 
 ## How to run against it
 
@@ -35,6 +37,14 @@ differently on the two, and that difference is itself part of the ledger.
 | `V3` | `POST /v1/vuln/weak-cookie` | **positive** | `sec/cookie-not-httponly` · `sec/cookie-samesite-none` · `sec/cookie-not-secure` (https only) | critical · moderate · critical |
 | `V4` | `GET /v1/vuln/document` | **positive** | `sec/csp-missing` · `sec/x-frame-options` | serious · moderate |
 | `V5` | `GET /v1/vuln/document-hardened` | **negative** | `sec/csp-missing` · `sec/x-frame-options` · `sec/hsts-missing` · `sec/nosniff-missing` · `sec/authenticated-response-cacheable` | — |
+| `V6` | `GET /v1/vuln/orders/:id` | **positive** | `sec/authz-object-leak` | critical |
+| `V7` | `GET /v1/vuln/orders` | **positive** | `sec/authz-collection-leak` | critical |
+| `V8` | `DELETE /v1/vuln/orders/:id` | **positive** | `sec/authz-object-leak` (under `probe mutating` only) | critical |
+
+`V1`–`V5` are Tier 1's, and they are claims a response makes about *itself* — headers and cookie
+flags. `V6`–`V8` are Tier 2's, and they are claims about *who is allowed to see what*, which is a
+different kind of fixture: nothing in the response is malformed, and every one of them is a `200` a
+correct endpoint would also have returned to somebody.
 
 What each one actually sends:
 
@@ -48,11 +58,72 @@ What each one actually sends:
   frame-ancestors 'none'`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
   `Strict-Transport-Security: max-age=31536000; includeSubDomains`, `Cache-Control: no-store`.
 
-**Two of the five are clean, and that is the part worth reading twice.** Clean apiV2 gives
+- **`V6`** — an order by id with no ownership check at all. Authenticated (`AnyAuthGuard`, so a
+  credential-less caller still gets `401`) and not authorized. Relations mirror
+  `OrdersService.findOneScoped` exactly — order → items[] → product → category — so the leaked
+  object is byte-identical to the one its owner would have received. `ParseUUIDPipe` is kept, and a
+  missing order is a `404`: the route plants exactly one defect.
+- **`V7`** — every user's orders, unfiltered, with `findOwn`'s relations and ordering. The clean
+  counterpart `GET /v1/orders` answers the same `200` with a JSON array; only *which* orders are in
+  it differs.
+- **`V8`** — deletes any order and answers `{ "deleted": true, "id": "<the id>" }`. Genuinely
+  destructive; `order_items`, `jobs` and `return_requests` all cascade on the order FK.
+
+**Two of the first five are clean, and that is the part worth reading twice.** Clean apiV2 gives
 `csp-missing`, `x-frame-options` and `cors-wildcard-with-credentials` their *not-applicable* case —
 its responses are JSON and same-origin, so those rules never engage. A rule that never engaged has
 not been shown to stay silent, so `V2` and `V5` exist to supply the **negative** that clean apiV2
 structurally cannot.
+
+**Tier 2's slice is shaped the other way round, and the reason is the more interesting half of
+`M130a`.** Its negatives need no fixture at all: the real `GET /v1/orders/:id` and `GET /v1/orders`
+*are* the negative cases, because they are correct. `PLAN_M130_PENTEST_TIER2.md` §0(d) went looking
+for a natural BOLA in this app and found none — every owner-scoped resource routes through a scoping
+service, and the `:id` routes with no `@CurrentUser` (`/orgs/*`, `/products/*`, `/categories/*`) are
+`@Roles(ADMIN)` platform-operator surfaces by design. That is the opposite of `M128a`, which found
+two real defects in `auth.service.ts` by reading. So Tier 1 had to plant its *negatives* and Tier 2
+has to plant its **positives**, and `plan_v2.md:765`'s claim that a "missing `ParseUUIDPipe` IDOR
+already occurs naturally" is no longer true of this tree — every `:id` route reached carries the
+pipe.
+
+### The clean counterparts `V6`–`V8` are measured against
+
+Not fixtures. These are the real routes, and their correctness is the negative half of the
+acceptance bar.
+
+| case | request, as a non-owner | expected |
+|---|---|---|
+| `sec/authz-object-leak` **negative** | `GET /v1/orders/{someone else's id}` | `403 not your order` (`orders.service.ts:409`) |
+| `sec/authz-object-leak` **negative** | the same, unauthenticated | `401` — `AnyAuthGuard` |
+| `sec/authz-collection-leak` **negative** | `GET /v1/orders` | `200`, containing only the caller's own orders |
+| both rules **not applicable** | any request whose *owner* response was not `2xx` | nothing to leak (tflw D315) |
+
+**An admin is a non-owning principal that legitimately gets `200`.** `findOneScoped` admits the
+owner, any admin, and an owner/admin of the placing user's org. That is correct behaviour and it is
+indistinguishable from `V6` by status code alone — which is why tflw's oracle compares resource
+identity rather than status (D305), and why `session admin` has to be declared `privileged` in the
+acceptance config (D307, landing in `M130c`).
+
+### The CSRF caveat, which is a real limit on what Tier 2 can probe
+
+`AnyAuthGuard` requires an `X-CSRF-Token` header matching the session token's own claim on every
+`POST`/`PUT`/`PATCH`/`DELETE` made with a **cookie** session, and a tflw `session` block does not
+expose that token to the test (`tests/api/identity/sessions.tflw` captures `body.csrfToken` by hand
+for exactly this reason).
+
+So a cookie-borne probe of a mutating endpoint is refused with `403 missing or invalid CSRF token`
+**before the authorization check runs at all**. Under a differential oracle that reads a `403` as
+"correctly denied", that is a false negative — the probe never reached the code whose authorization
+was in question. Two consequences, both deliberate:
+
+1. **`session peer` is bearer, not cookie**, correcting `PLAN_M130`'s D317 (which said "cookie
+   transport, mirroring `shopper`"). What mattered about mirroring `shopper` is that `peer` is an
+   ordinary user rather than an administrator — a fact about the seeded role, not the transport.
+   `authz.tflw`, this file's control, already logs user B in over `/auth/login` for the same reason.
+2. **`shopper` remains a cookie session and remains in the probe set**, so a mutating probe as
+   `shopper` under `probe mutating` will hit CSRF rather than authorization. That is a limitation of
+   the target's transport, not of the rule, and tflw should say so rather than count it as a
+   refusal — filed for `M130b`.
 
 ## What the real app answers, with nothing planted
 
@@ -151,6 +222,12 @@ coverage table with a silent hole in it reads as complete:
 did not fire, and the applicable count leaves room for it. That is a necessary condition, not a
 sufficient one, and the grader's own header says so.
 
+**The table above is Tier 1's twelve rules only.** `sec/authz-object-leak` and
+`sec/authz-collection-leak` do not appear because no tflw ships them yet — `M130a` planted their
+target, `M130b` builds the rules, and `M130c` is what adds their two rows here and teaches
+`verify-security-acceptance.mjs` to grade them. Until then the absence is a sequencing fact, not a
+gap in the measurement.
+
 ## Not planted, on purpose
 
 - **TLS version and cipher — measured, and the answer is that neither positive is constructible.**
@@ -175,7 +252,17 @@ sufficient one, and the grader's own header says so.
   current client nothing better, so it cannot see a server that merely still *offers* RC4 alongside
   AES-GCM. That is the right answer for a per-response assertion and the wrong tool for an audit;
   enumerating a server's whole offer takes one handshake per suite and is Tier 3's job (tflw D299).
-- **Broken object authorization (BOLA/IDOR).** Tier 2. A passive header scan cannot see it, so
-  planting it now would be cost with no coverage behind it.
+- **~~Broken object authorization (BOLA/IDOR).~~** **Planted in `M130a` as `V6`–`V8`** — this row
+  said "Tier 2; a passive header scan cannot see it, so planting it now would be cost with no
+  coverage behind it", and Tier 2 is what arrived. Kept struck through rather than deleted because
+  the reasoning is the arc's sequencing rule and still applies to what is below.
+- **Injection (SQLi, command, template).** Tier 3. Finding it needs request *mutation* against a
+  strict oracle, not a re-attributed replay of a request the suite already made, and a planted
+  injection point with no fuzzer behind it is the same cost-with-no-coverage this list keeps
+  refusing.
 - **Anything in a real endpoint.** The suite's ~45 other files run against the clean app, and
   `plan_v2.md` §4.2's rule — real endpoints stay clean — is what makes their results mean anything.
+  Tier 2 does not weaken this: `V6`–`V8` are dedicated routes, never a `VULN_MODE` branch inside
+  `OrdersService.findOneScoped`. The cheaper version would exercise the genuine route with its
+  genuine body, and it would put an authorization bypass inside authorization code, one misread
+  environment variable away from being real.

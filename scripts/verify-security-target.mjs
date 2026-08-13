@@ -111,6 +111,59 @@ const attrValue = (cookie, attr) => {
   return found?.slice(attr.length + 1);
 };
 
+// ── M130a helpers: JSON over bearer auth ─────────────────────────────────────────────────────
+//
+// V1–V5 needed only headers, so `probe` above returns the body as text and nothing parses it.
+// V6–V8 are claims about *which resource* came back, so they need the body as data and they need
+// to be made as a named principal. Bearer rather than cookie throughout, and not for convenience:
+// `AnyAuthGuard` demands an `X-CSRF-Token` matching the session token's own claim on every mutating
+// request made with a cookie, so a cookie-borne `DELETE` (V8) would be refused for CSRF *before*
+// the authorization check this section is about. See VULNS.md's CSRF caveat.
+let counter = 0;
+
+/** One JSON request as an optional bearer principal; body parsed when it parses. */
+async function json(base, route, { method = 'GET', token, body } = {}) {
+  const res = await probe(base, route, {
+    method,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  let parsed;
+  try {
+    parsed = JSON.parse(res.body);
+  } catch {
+    parsed = undefined;
+  }
+  return { status: res.status, body: parsed, raw: res.body };
+}
+
+/** An access token for a seeded identity, or a setup failure — never a silent undefined. */
+async function bearerLogin(label, email, password) {
+  const res = await json(HTTP_BASE, '/auth/login', {
+    method: 'POST',
+    body: { email, password },
+  });
+  if (res.status !== 200 || !res.body?.accessToken) {
+    die(`bearer login for ${label} returned ${res.status} — check .env's seeded identities`);
+  }
+  return res.body.accessToken;
+}
+
+/** An order owned by whoever holds `token`, or undefined with the failure already reported. */
+async function placeOrder(token, productId) {
+  const res = await json(HTTP_BASE, '/orders', {
+    method: 'POST',
+    token,
+    body: { items: [{ productId, quantity: 1 }] },
+  });
+  ok('an order can be placed for the fixture product', res.status === 201,
+    `status ${res.status} ${res.raw?.slice(0, 200)}`);
+  return res.body?.id;
+}
+
 async function login(base) {
   const res = await probe(base, '/auth/session-login', {
     method: 'POST',
@@ -265,21 +318,189 @@ section('sec/authenticated-response-cacheable — the untouched-app positive');
   ok('not applicable unauthenticated: /health carries no credentials', anon.status === 200);
 }
 
+// ── V6/V7/V8 — broken object authorization (M130a, PLAN_M130_PENTEST_TIER2.md D317) ──────────
+//
+// A different kind of claim from everything above, and the assertions have to be built differently
+// because of it. V1–V5 are facts about one response's own headers, so one curl answers each. A BOLA
+// fixture is a fact about *two* principals and a resource that belongs to one of them, so this
+// section has to manufacture the resource first: an admin creates a dedicated product, user A
+// places an order with it, and user B — who owns nothing here — is the non-owner every probe below
+// is made as.
+//
+// The dedicated product mirrors what `tests/api/identity/authz.tflw` does and for the same reason:
+// grabbing whatever `GET /products` sorts first risks colliding with some other test's
+// low-remaining-stock item.
+//
+// **Every clean counterpart is asserted beside its plant.** The plant alone would prove only that
+// the route leaks; what makes the pair a known-answer ledger entry is that the real route, asked
+// the identical question by the identical caller, refuses. Those are the negative cases tflw's
+// acceptance bar reads, and nothing else in this repo asserts them.
+section('V6/V7/V8 setup — a dedicated product, an order owned by user A, and a non-owner');
+const authz = {};
+{
+  const adminToken = await bearerLogin('admin', process.env.ADMIN_EMAIL, process.env.ADMIN_PW);
+  authz.owner = await bearerLogin('user A (the owner)', process.env.USER_A_EMAIL, process.env.USER_A_PW);
+  authz.peer = await bearerLogin('user B (the non-owner)', process.env.USER_B_EMAIL, process.env.USER_B_PW);
+  authz.admin = adminToken;
+
+  const categories = await json(HTTP_BASE, '/categories');
+  ok('categories are seeded', Array.isArray(categories.body) && categories.body.length > 0);
+  const categoryId = categories.body?.[0]?.id;
+
+  const product = await json(HTTP_BASE, '/products', {
+    method: 'POST',
+    token: adminToken,
+    body: {
+      name: `Authz Fixture Widget ${process.pid}-${counter++}`,
+      price: 10,
+      stock: 10,
+      categoryId,
+    },
+  });
+  ok('admin can create the fixture product', product.status === 201, `status ${product.status}`);
+
+  authz.productId = product.body?.id;
+  authz.orderId = await placeOrder(authz.owner, authz.productId);
+  ok("user A's order was placed", authz.orderId !== undefined);
+}
+
+section('V6 — GET /vuln/orders/:id  (positive: sec/authz-object-leak)');
+if (authz.orderId) {
+  const leak = await json(HTTP_BASE, `/vuln/orders/${authz.orderId}`, { token: authz.peer });
+  ok('a non-owner gets 200', leak.status === 200, `status ${leak.status}`);
+  ok("…and the body is user A's order, by id", leak.body?.id === authz.orderId,
+    `got id ${leak.body?.id}`);
+  // The oracle tflw will use compares resource identity, so the fixture has to leak an object that
+  // is identifiable as the owner's — not merely a 200 with some plausible order in it.
+  ok('…carrying the owner\'s user id, so it is genuinely their row', typeof leak.body?.userId === 'string');
+  ok('…with items expanded, as the owner would have received', Array.isArray(leak.body?.items));
+
+  const anon = await json(HTTP_BASE, `/vuln/orders/${authz.orderId}`);
+  ok('unauthenticated is still 401 — the plant is broken authz, not a public route',
+    anon.status === 401, `status ${anon.status}`);
+
+  const missing = await json(HTTP_BASE, '/vuln/orders/00000000-0000-4000-8000-000000000000',
+    { token: authz.peer });
+  ok('a bad id is 404, not a leak — exactly one defect is planted', missing.status === 404,
+    `status ${missing.status}`);
+}
+
+section('V6 clean counterpart — GET /orders/:id refuses the same caller');
+if (authz.orderId) {
+  const denied = await json(HTTP_BASE, `/orders/${authz.orderId}`, { token: authz.peer });
+  ok('the real route answers 403 to a non-owner', denied.status === 403, `status ${denied.status}`);
+  ok('…with the ownership message, not a role message',
+    /not your order/i.test(JSON.stringify(denied.body)), JSON.stringify(denied.body));
+
+  const anon = await json(HTTP_BASE, `/orders/${authz.orderId}`);
+  ok('…and 401 with no credentials at all', anon.status === 401, `status ${anon.status}`);
+
+  // The D307 case, and the reason a status-code oracle cannot do this tier's job: a non-owning
+  // principal that legitimately receives the owner's order, byte-identically.
+  const asAdmin = await json(HTTP_BASE, `/orders/${authz.orderId}`, { token: authz.admin });
+  ok('an admin — non-owning — legitimately gets 200 (tflw D307 privileged)',
+    asAdmin.status === 200, `status ${asAdmin.status}`);
+  ok("…and it is the same order, so only a privilege declaration separates it from V6",
+    asAdmin.body?.id === authz.orderId);
+}
+
+section('V7 — GET /vuln/orders  (positive: sec/authz-collection-leak)');
+if (authz.orderId) {
+  const leak = await json(HTTP_BASE, '/vuln/orders', { token: authz.peer });
+  ok('a non-owner gets 200', leak.status === 200, `status ${leak.status}`);
+  ok('…and an array', Array.isArray(leak.body));
+  ok("…containing user A's order id", (leak.body ?? []).some((o) => o.id === authz.orderId));
+}
+
+section("V7 clean counterpart — GET /orders returns only the caller's own");
+if (authz.orderId) {
+  const own = await json(HTTP_BASE, '/orders', { token: authz.peer });
+  ok('a non-owner gets 200 here too — the status is identical to V7', own.status === 200,
+    `status ${own.status}`);
+  ok("…and the array does NOT contain user A's order id",
+    !(own.body ?? []).some((o) => o.id === authz.orderId));
+  // Stronger than "user A's one order is absent": every row it *did* return belongs to the caller.
+  // The weaker check would pass against a route that filtered out exactly one order by accident.
+  const me = await json(HTTP_BASE, '/auth/profile', { token: authz.peer });
+  ok('the caller can be identified', typeof me.body?.id === 'string');
+  ok('…and every order returned belongs to them',
+    (own.body ?? []).every((o) => o.userId === me.body?.id),
+    `${(own.body ?? []).filter((o) => o.userId !== me.body?.id).length} foreign order(s)`);
+}
+
+section('V8 — DELETE /vuln/orders/:id  (positive: sec/authz-object-leak, mutating)');
+{
+  // Its own order, because this one really is destroyed.
+  const victimId = await placeOrder(authz.owner, authz.productId);
+  ok('a second order was placed to be destroyed', victimId !== undefined);
+  if (victimId) {
+    const gone = await json(HTTP_BASE, `/vuln/orders/${victimId}`, {
+      method: 'DELETE',
+      token: authz.peer,
+    });
+    ok('a non-owner can delete it', gone.status === 200, `status ${gone.status}`);
+    ok('…and the response names the id it destroyed', gone.body?.id === victimId);
+
+    // The damage is real, which is the entire argument for tflw's `probe mutating` opt-in being
+    // default-off: a probe that succeeds here has destroyed state the rest of a suite may depend on.
+    const after = await json(HTTP_BASE, `/orders/${victimId}`, { token: authz.owner });
+    ok('…and the owner can no longer read their own order (404) — the deletion was real',
+      after.status === 404, `status ${after.status}`);
+  }
+}
+
+section('V8 clean counterpart — the real API has no DELETE /orders/:id at all');
+if (authz.orderId) {
+  const noRoute = await json(HTTP_BASE, `/orders/${authz.orderId}`, {
+    method: 'DELETE',
+    token: authz.peer,
+  });
+  // 404 here is "no such route" rather than "no such order" — Nest's router has no handler. Worth
+  // asserting rather than assuming: it confirms the plant is not shadowing or overriding a real
+  // route, only sitting beside one.
+  ok('DELETE /orders/:id is 404 (no handler), so V8 shadows nothing',
+    noRoute.status === 404, `status ${noRoute.status}`);
+  const stillThere = await json(HTTP_BASE, `/orders/${authz.orderId}`, { token: authz.owner });
+  ok("…and user A's order survived the attempt", stillThere.status === 200,
+    `status ${stillThere.status}`);
+}
+
 // ── ledger parity: no route without a row, no row without a route ────────────────────────────
 section('VULNS.md parity — every fixture route has a row, and every row has a route');
 {
-  const controller = readFileSync(path.join(ROOT, 'apiV2/src/vuln/vuln.controller.ts'), 'utf8');
   const ledger = readFileSync(path.join(ROOT, 'VULNS.md'), 'utf8');
 
-  const routes = [...controller.matchAll(/@(?:Get|Post|Put|Patch|Delete)\('([^']+)'\)/g)].map((m) => m[1]);
-  ok('the controller declares routes at all', routes.length > 0);
-  for (const route of routes) {
-    ok(`/vuln/${route} appears in VULNS.md`, ledger.includes(`/v1/vuln/${route}`));
+  // M130a: two controllers now, and the second one's routes carry a path parameter. Both halves of
+  // this check had to widen for it, and the narrower versions would have failed *open* rather than
+  // loudly — `@Get(':id')` on a controller this loop never read is a route with no row, reported as
+  // nothing at all. A parity check that cannot see half the routes is the vacuous shape this file's
+  // own header warns about.
+  //
+  // The prefix comes from `@Controller('…')` rather than being assumed to be `vuln`, so a fixture
+  // controller mounted somewhere else is still checked against the ledger under its real path.
+  const controllers = ['vuln/vuln.controller.ts', 'vuln/vuln-orders.controller.ts'];
+  const routes = [];
+  for (const file of controllers) {
+    const src = readFileSync(path.join(ROOT, 'apiV2/src', file), 'utf8');
+    const prefix = /@Controller\('([^']+)'\)/.exec(src)?.[1];
+    ok(`${file} declares a @Controller prefix`, prefix !== undefined);
+    if (!prefix) continue;
+    // `@Get()` with no argument is the collection route — the prefix itself.
+    for (const m of src.matchAll(/@(?:Get|Post|Put|Patch|Delete)\((?:'([^']*)')?\)/g)) {
+      routes.push(m[1] ? `${prefix}/${m[1]}` : prefix);
+    }
+  }
+  ok('the fixture controllers declare routes at all', routes.length > 0);
+  for (const route of new Set(routes)) {
+    ok(`/v1/${route} appears in VULNS.md`, ledger.includes(`/v1/${route}`));
   }
 
-  const ledgerRoutes = [...ledger.matchAll(/\/v1\/vuln\/([a-z-]+)/g)].map((m) => m[1]);
+  // `:` and `/` join the character class so `orders/:id` survives; the trailing `(?![\w:/-])`
+  // stops `/v1/vuln/orders` from also matching the prefix of `/v1/vuln/orders/:id` and reporting a
+  // route that was never declared.
+  const ledgerRoutes = [...ledger.matchAll(/\/v1\/(vuln\/[a-z:/-]+)(?![\w:/-])/g)].map((m) => m[1]);
   for (const route of new Set(ledgerRoutes)) {
-    ok(`VULNS.md's /vuln/${route} exists in the controller`, routes.includes(route));
+    ok(`VULNS.md's /v1/${route} exists in a fixture controller`, routes.includes(route));
   }
 }
 
