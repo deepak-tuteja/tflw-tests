@@ -1,0 +1,47 @@
+# authz-generated.tflw — the same claims as `authz.tflw` next door, asked by tflw's authorization
+# matcher instead of by hand (testFlow M130c, PLAN_M130_PENTEST_TIER2.md D319 item 3).
+#
+# **`authz.tflw` stays unchanged, and that is the design.** Two instruments that fail differently:
+# one spells out every identity and asserts a status, one declares an owner and lets tflw re-issue
+# the request under every other principal it knows about. Agreement is the invariant; a disagreement
+# is a finding about the generator, which is the whole reason the hand-written control is not being
+# ported. Porting it would make the strongest possible dogfood claim and destroy the only thing that
+# could catch the matrix being confidently wrong.
+#
+# Run: `npx tflw run tests/api/identity/authz-generated.tflw` against a running stack.
+
+import "../../shared/catalog.tflw"
+
+before
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  # Its own product with its own stock (M15) — the acceptance corpus paid for this lesson again in
+  # M130c, ordering whatever sorted first and failing on `409 insufficient stock` a few runs later.
+  let productId = create product(unique("Authz Generated Widget"), 10, 10, categoryId, adminToken)
+
+  api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
+  expect status equals 201
+  capture body.id as orderId
+
+@authz @identityOps @api
+test "no principal but the owner may read this order" as peer
+  # `authz.tflw`'s first two claims, folded into one assertion. The hand-written pair says "user B
+  # gets 403" and "user A gets 200"; this says the same thing from the other side — the request user
+  # A actually made, re-issued as everyone else, returned nobody else's business.
+  api GET /orders/{orderId}
+  expect status equals 200
+  expect response has no authorization violations
+
+@authz @identityOps @api
+test "an order list carries only its owner's orders" as peer
+  # `authz.tflw`'s fourth claim. There it is `expect all body.id not equals "{bOrderId}"` against one
+  # known foreign id; here the oracle compares the whole set of root ids each principal received.
+  api GET /orders
+  expect status equals 200
+  expect response has no authorization violations

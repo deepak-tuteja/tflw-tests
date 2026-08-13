@@ -112,7 +112,9 @@ const FILE_FIXTURES = {
   TF055: 'hold-exceeds-wait-timeout.tflw',
   TF056: 'data-table-extension.tflw',
   TF059: 'service-with-absolute-url.tflw',
-  TF060: 'security-without-authorized-target.tflw',
+  // TF060 is NOT here — it moved to its own scratch-config pair below when the root config gained
+  // an `authorized target` (M130c). See that block for why.
+  //
   // The pentest arc's Tier 2 (tflw `M130b2`). Three codes, not the two the plan budgeted, because a
   // diagnostic code is one *repair* rather than one topic: TF062 says move the credential into a
   // `session`, TF063 says give the assertion an identity to subtract, TF064 says poll first and
@@ -294,6 +296,67 @@ try {
   rmSync(allowDir, { recursive: true, force: true });
 }
 
+// --- TF060: one file, two configs, and the absence of a declaration is the operand --------------
+//
+// **This case used to be a plain `FILE_FIXTURES` row, and M130c is what proved it could not stay
+// one.** A `.checkonly` fixture is checked from the repo root, so it reads the *root* `tflw.config`
+// — and `TF060` fires on the absence of an `authorized target`. That made the proof depend on the
+// shared config never declaring one, which is a dependency on an **absence**, invisible at both
+// ends: nothing in the fixture said so, and nothing in `tflw.config` said "adding this here breaks
+// a proof over there".
+//
+// It broke exactly that way. `M130c` gave env `local` an `authorized target` so the dogfood suite
+// could run `authz-generated.tflw`, and this row went red with `1 file checked, no problems found`
+// — the fixture still existed, still parsed, and had quietly stopped demonstrating anything.
+//
+// This is the shape `TF051`'s and `TF057`/`TF058`'s headers already argue against; `TF060` was the
+// one that had not been converted yet. Its own scratch configs make the operand explicit, and the
+// conversion buys a case the old form could not express at all: the **positive** direction, where a
+// declared target silences the diagnostic. An absence-based proof can only ever assert the absence.
+const AUTHZ_TARGET_FIXTURE_FILE = 'security-without-authorized-target.tflw';
+const AUTHZ_TARGET_FIXTURES = [
+  {
+    label: 'an env that declares no `authorized target`',
+    config: 'env local default\n  api "http://localhost:4001"\n',
+    expect: 'TF060',
+  },
+  {
+    label: 'an env that declares one naming the base',
+    config:
+      'env local default\n  api "http://localhost:4001"\n  authorized target "http://localhost:4001" reason "self-hosted fixture"\n',
+    expect: null,
+  },
+];
+
+const targetDir = mkdtempSync(path.join(tmpdir(), 'tflw-check-target-'));
+try {
+  copyFileSync(
+    path.join(ROOT, 'tests', '.checkonly', AUTHZ_TARGET_FIXTURE_FILE),
+    path.join(targetDir, AUTHZ_TARGET_FIXTURE_FILE),
+  );
+  for (const { label, config, expect } of AUTHZ_TARGET_FIXTURES) {
+    writeFileSync(path.join(targetDir, 'tflw.config'), config);
+    const out = runCheck([AUTHZ_TARGET_FIXTURE_FILE], { cwd: targetDir });
+    if (expect) {
+      ok(
+        `${expect}: ${AUTHZ_TARGET_FIXTURE_FILE} under ${label} reports ${expect}`,
+        out.includes(`[${expect}]`),
+        out.trim().split('\n')[0],
+      );
+    } else {
+      // The half that matters most after M130c: a suite that *has* permission must not be nagged,
+      // and this is what would have caught the old row going quiet instead of red.
+      ok(
+        `TF060: ${AUTHZ_TARGET_FIXTURE_FILE} under ${label} is silent`,
+        !out.includes('[TF060]'),
+        out.trim().split('\n')[0],
+      );
+    }
+  }
+} finally {
+  rmSync(targetDir, { recursive: true, force: true });
+}
+
 // --- completeness: the expected list comes from tflw, not from this file ------------------------
 
 /**
@@ -328,6 +391,7 @@ const dogfooded = new Set([
   ...Object.keys(CONFIG_FIXTURES),
   'TF051',
   ...ALLOWLIST_FIXTURES.map((f) => f.code),
+  ...AUTHZ_TARGET_FIXTURES.map((f) => f.expect).filter(Boolean),
 ]);
 const assigned = assignedCodes();
 
@@ -352,6 +416,6 @@ if (violations > 0) {
 console.log(
   `\nAll ${assigned.size} TF0xx diagnostic codes the installed tflw assigns are dogfooded against a real \`tflw check\`` +
     ` (${Object.keys(FILE_FIXTURES).length} test-dialect fixtures, ${Object.keys(CONFIG_FIXTURES).length} config-dialect,` +
-    ` ${ENV_FIXTURE_FILE} against ${ENV_FIXTURES.length} generated configs, and ${ALLOWLIST_FIXTURE_FILE} against` +
-    ` ${ALLOWLIST_FIXTURES.length} more).`,
+    ` ${ENV_FIXTURE_FILE} against ${ENV_FIXTURES.length} generated configs, ${ALLOWLIST_FIXTURE_FILE} against` +
+    ` ${ALLOWLIST_FIXTURES.length} more, and ${AUTHZ_TARGET_FIXTURE_FILE} against ${AUTHZ_TARGET_FIXTURES.length}).`,
 );
