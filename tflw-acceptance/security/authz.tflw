@@ -1,0 +1,138 @@
+# D319, the pentest arc Tier 2 half of this corpus (testFlow M130c, PLAN_M130_PENTEST_TIER2.md) —
+# `expect response has no authorization violations`, demonstrated firing and staying silent against
+# the same app, one rule at a time.
+#
+# **The owner is `peer`, not `shopper`, and that is forced rather than chosen.** Tier 2 judges a
+# request that was actually made, so every test here needs a resource its owner really owns — and the
+# seed creates users but no orders, so each test places one. `POST /orders` is a mutating request,
+# and `shopper` is a cookie session: `AnyAuthGuard` would refuse it for a missing `X-CSRF-Token`
+# before any of this got started. `peer` is bearer, so it can place the order it then asks about.
+#
+# That inversion is a gift rather than a cost. It puts `shopper` in the **probe set** instead of the
+# owner slot, which is where a cookie-borne principal is actually interesting (`M130-01`): on the
+# mutating case it is refused for CSRF and must be reported *inconclusive*, not as a boundary that
+# held. A corpus with the cookie session in the owner slot would never exercise that path.
+#
+# The probe set for every test in this file is therefore `{shopper, anonymous}` — `admin` is declared
+# `privileged` and excluded, and each assertion says so on its own line. Two probes per assertion
+# site, which is the number D319 asks this corpus to measure.
+#
+# **What the third state is doing somewhere else.** "Not applicable" cannot be written as a passing
+# test: an assertion where nothing applied *fails*, by D285, and that is the whole point of it. So it
+# lives in `scripts/verify-security-acceptance.mjs` as an expected-to-fail probe, the same place and
+# for the same reason M128c put Tier 1's.
+#
+# Run under `--env secureLocal` (default), with `VULN_MODE=1` — the `vuln/` routes below do not
+# exist without it, and their absence would read as a rule that stopped firing.
+
+# ── the two positives ────────────────────────────────────────────────────────────────────────────
+
+@authz @vuln
+test "sec/authz-object-leak fires on a route that serves any order by id (V6)" as peer
+  api GET /products
+  expect status equals 200
+  capture body[0].id as productId
+
+  api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
+  expect status equals 201
+  capture body.id as orderId
+
+  # The clean counterpart is `GET /orders/{orderId}`, three tests down. Both answer `200` with the
+  # same body to their owner; the only difference is who *else* gets it, which is exactly the
+  # difference a status-code oracle cannot see.
+  api GET /vuln/orders/{orderId}
+  expect status equals 200
+  # `shopper` re-issues this and gets `peer`'s order back — same root `id`, so the identity the
+  # comparison is on is shared, and that is the finding. `anonymous` is refused `401` by
+  # `AnyAuthGuard`, which is correct and counted rather than ignored.
+  expect response not has no critical authorization violations
+
+@authz @vuln
+test "sec/authz-collection-leak fires on a route that returns every user's orders (V7)" as peer
+  api GET /products
+  expect status equals 200
+  capture body[0].id as productId
+
+  api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
+  expect status equals 201
+
+  api GET /vuln/orders
+  expect status equals 200
+  # A `200` carrying a JSON array is what the clean `GET /orders` returns too. The rule compares the
+  # root ids in the owner's array against the ones each probe received; here they overlap completely,
+  # because this route filters by nothing at all.
+  expect response not has no critical authorization violations
+
+# ── the same two rules, applicable and silent ────────────────────────────────────────────────────
+
+@authz
+test "sec/authz-object-leak stays silent on the real ownership-scoped route" as peer
+  api GET /products
+  expect status equals 200
+  capture body[0].id as productId
+
+  api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
+  expect status equals 201
+  capture body.id as orderId
+
+  # Applicable, and correct. `findOneScoped` admits the owner, an admin, and an owner/admin of the
+  # placing user's org, and throws `ForbiddenException('not your order')` for anyone else — so
+  # `shopper` gets `403` and the boundary is *demonstrated*, not merely un-violated.
+  api GET /orders/{orderId}
+  expect status equals 200
+  expect response has no authorization violations
+
+@authz
+test "sec/authz-collection-leak stays silent on the real order list" as peer
+  api GET /products
+  expect status equals 200
+  capture body[0].id as productId
+
+  api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
+  expect status equals 201
+
+  # `findOwn(user.id)` scopes to the caller, so `shopper` gets her own list and none of `peer`'s ids
+  # appear in it. The rule ran on a response that genuinely meets its precondition — an array of
+  # objects with root ids — which is what separates "silent" from "never engaged".
+  #
+  # Measured outcome: `1 served different content, 1 refused`. This is the only place in the corpus
+  # where D313's **served-different** state occurs live, and it is the state most easily mistaken
+  # for a leak — `shopper` got a `200` carrying orders, just not `peer`'s. A status oracle sees two
+  # identical `200`s here and on `/vuln/orders`; only the identity comparison separates them.
+  api GET /orders
+  expect status equals 200
+  expect response has no authorization violations
+
+# ── D311, the opt-in half: this env declares `probe mutating` ────────────────────────────────────
+
+@authz @vuln @mutating
+test "probe mutating puts a DELETE in the probe set, and a replay cannot judge it (V8)" as peer
+  api GET /products
+  expect status equals 200
+  capture body[0].id as productId
+
+  api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
+  expect status equals 201
+  capture body.id as orderId
+
+  # `DELETE` is not probed unless the `authorized target` for this host says `probe mutating`, and
+  # this env's does. The default half — the same request under `--env plaintext`, whose target makes
+  # no such declaration — is graded in `verify-security-acceptance.mjs`, because an assertion whose
+  # whole probe set was declined has no power to fail and therefore cannot be a passing test.
+  #
+  # **This assertion is `has no`, not `not has no`, and that is the milestone's own correction.**
+  # D319 predicted the opt-in "probes it and finds the leak". It does the first and not the second,
+  # and the measured reason is structural rather than a bug: this route really is exploitable —
+  # `verify-security-target.mjs` deletes an order as a non-owner and proves it — but a *replay*
+  # oracle cannot see it. The owner's own `DELETE` succeeds first and destroys the row, so every
+  # probe that follows asks about a resource that no longer exists. See `M130-05`.
+  #
+  # So what this test pins is the half that is real: `probe mutating` moved the request from
+  # `not probed` into the probe set, and the run says what each principal did there —
+  # `shopper` **inconclusive** (cookie-borne, refused `403` on a mutating verb: CSRF, not
+  # authorization — `M130-01`'s path, exercised) and `anonymous` **refused** (`401`). One judgeable
+  # outcome is enough for applicability, so this is a real verdict rather than a skipped one, and
+  # the verdict is honest about a probe set that had nobody left able to answer.
+  api DELETE /vuln/orders/{orderId}
+  expect status equals 200
+  expect response has no authorization violations
