@@ -1,0 +1,64 @@
+# authz-scan-public-target.tflw — CHECK-ONLY FIXTURE (M131b): an authorization scan pointed at a
+# host outside the private address ranges — demonstrates `tflw check`'s TF065 and TF066 (checker,
+# tflw M131a / D340–D345, the pentest arc's D21 safety completion).
+#
+# **The one control in this language that a `tflw.config` is deliberately unable to satisfy.**
+# `authorized target` (TF060) is the *declaration*, and it lives in config — a file somebody can
+# merge into `main`. D21 §3.2(3) says that must not be sufficient on its own: a committed config
+# must never be able to make CI scan the internet by itself. So an originating scan against a public
+# origin also wants `--allow-public-target <origin>` **on the command line**, where no file in the
+# repository can put it. There is no config key for it and there will not be one — a key granting it
+# would not be a feature, it would be the deletion of this control.
+#
+# **It gates the packet, not the matcher.** `authorization violations` re-issues the observed
+# request under every other declared principal, so it *sends*. `security violations` only inspects a
+# response the suite already asked for under `allow hosts`, so it needs no flag — which is why the
+# last test in this file stays silent, and why that silence is asserted rather than assumed. Gating
+# both uniformly would read simpler and would predictably end with the flag parked permanently in
+# CI, and a control everybody leaves on is not a control.
+#
+# **Address class is read from the URL as written. No DNS, ever.** A control that resolved a name
+# would be sending a packet to decide whether it may send a packet, and the answer would differ on a
+# VPN, differ between a laptop and CI, and could rebind between the check and the probe. The
+# exemptions are loopback, RFC1918, IPv6 unique-local, link-local, CGNAT and `localhost`; **every
+# other hostname is public**, including a genuinely private `api.internal.corp`. The control
+# over-asks rather than under-asks, on purpose.
+#
+# **Why the operand is a scratch config *and* a command line, and never this repo's own config**
+# (M130-08): TF060's fixture used to be a plain `FILE_FIXTURES` row and depended on the root config
+# never declaring an `authorized target`. M130c declared one, and the row went quietly green while
+# demonstrating nothing. Both codes here turn on what a config *does not* say **and** on what an
+# invocation *does*, so `scripts/verify-check-diagnostics.mjs` supplies both operands explicitly —
+# one scratch config, three invocations, three different outcomes from this same unmodified file.
+#
+# **This repo's own suite needs none of this**, and that is worth stating rather than leaving as an
+# absence: every origin `env local` scans is loopback, so it is exempt and the dogfood suite runs
+# with no flag at all. The refusal is demonstrated here; the permitted-but-affirmed direction lives
+# in `tflw-acceptance/security/public-target/`, where the run gets past the gate and then fails to
+# connect. Refusal here, permission there — the same split D291 uses for TF060.
+#
+# **Not covered here:** the runtime half of TF065. The probe engine re-judges the origin the request
+# is actually going to and reuses this same code, because the repair is the same one — but it needs
+# a run, not a check, so it is the acceptance corpus' job. That the two halves can disagree is not a
+# defect: the checker resolves the env's base URL against *this* machine, so its verdict is a
+# prediction and the runtime's is an observation.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/authz-scan-public-target.tflw
+
+test "an authorization scan against a public origin" as shopper
+  api GET /orders/1
+  expect response has no authorization violations
+
+test "a severity floor does not supply the affirmation" as shopper
+  api GET /orders/1
+  # The floor narrows which rules run. It has nothing to do with permission to originate the
+  # traffic that runs them.
+  check response has no critical authorization violations
+
+test "the neighbour the flag must not touch" as shopper
+  api GET /orders/1
+  # Tier 1. It reads a response this suite already asked for, so there is no extra packet to
+  # authorize and TF065 must stay quiet — asserted, because a gate that widened to cover this
+  # would be invisible until somebody's CI started failing.
+  expect response has no security violations

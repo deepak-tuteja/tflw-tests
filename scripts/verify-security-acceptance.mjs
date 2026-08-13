@@ -526,5 +526,68 @@ console.log('\nD319 — what the tier cost this run:\n');
   console.log('   `privileged` and excluded, and the owner is never in its own probe set.)');
 }
 
+// --- D347: the public-target gate, three invocations, zero packets ----------------------------
+//
+// **The only case in this file graded on a refusal rather than on a report**, and the only one that
+// needs no stack at all. `public-target/scan.tflw` is one unmodified file run three times against
+// one unmodified config; the only thing that changes is the command line, which is the whole of
+// D21 §3.2(3) — the affirmation this gate wants is precisely the one no file in the repository is
+// allowed to make.
+//
+// Nothing here reaches a host. The target is `.invalid` (RFC 2606, guaranteed never to resolve),
+// and it is usable as evidence only because tflw classifies an address **literally**: a DNS-based
+// classifier could not answer at all, while the literal one says `public` with no lookup. The
+// offline corpus and the no-DNS decision are one decision, not two.
+//
+// **The third case is what stops the first two being vacuous.** A control that refused everything
+// would score identically on cases 1 and 2. Case 3 has to reach a *different* failure — a
+// connection attempt — and the assertion is therefore two-sided: the gate's code must be absent,
+// and the run must have got far enough to try the socket.
+console.log('\nD347 — the public-target gate, three invocations of one file:\n');
+{
+  const scan = join('public-target', 'scan.tflw');
+  const cases = [
+    {
+      label: 'no affirmation',
+      flags: [],
+      wants: 'TF065',
+    },
+    {
+      label: 'an affirmation for an origin this run never scans',
+      flags: ['--allow-public-target', 'https://other.example.invalid'],
+      wants: 'TF066',
+    },
+    {
+      label: 'the affirmation this run needs',
+      flags: ['--allow-public-target', 'https://staging.example.invalid'],
+      wants: null,
+    },
+  ];
+  for (const { label, flags, wants } of cases) {
+    const args = [TFLW_BIN, 'run', '--env', 'publicTarget', '--no-color', ...flags, scan];
+    const r = spawnSync(process.execPath, args, { cwd: corpus, encoding: 'utf8', shell: false, env: CHILD_ENV });
+    const out = `${r.stdout ?? ''}${r.stderr ?? ''}`;
+    if (wants) {
+      if (out.includes(`[${wants}]`)) console.log(`  ✓ ${label} → refused, ${wants}`);
+      else fail(`[publicTarget] ${label} should have been refused with ${wants}; got: ${out.trim().split('\n').slice(-3).join(' / ')}`);
+      // Refused means refused *before* anything is attempted. A run that reported the code and then
+      // went on to try the host would satisfy a presence check and defeat the control.
+      if (/ECONNREFUSED|ENOTFOUND|EAI_AGAIN|getaddrinfo/i.test(out)) {
+        fail(`[publicTarget] ${label} reported ${wants} but still attempted a connection — the gate must refuse before the socket`);
+      }
+    } else {
+      if (out.includes('[TF065]') || out.includes('[TF066]')) {
+        fail(`[publicTarget] ${label} was still refused by the gate — the affirmation matches the origin this env scans`);
+      } else if (/ENOTFOUND|EAI_AGAIN|getaddrinfo|could not be established|fetch failed/i.test(out)) {
+        console.log('  ✓ the affirmation this run needs → gate passed, run failed at the connection (which is the evidence)');
+      } else {
+        fail(`[publicTarget] ${label} neither refused nor reached a connection attempt — the gate cannot be shown to have let anything through: ${out.trim().split('\n').slice(-3).join(' / ')}`);
+      }
+    }
+  }
+  console.log('\n  (zero packets: `.invalid` is RFC 2606-reserved, and the address class is read from');
+  console.log('   the URL as written — this corpus never resolves a name, let alone contacts a host.)');
+}
+
 console.log(failures === 0 ? '\n✓ security acceptance: every graded case matched the ledger' : `\n✗ security acceptance: ${failures} mismatch(es)`);
 process.exit(failures === 0 ? 0 : 1);
