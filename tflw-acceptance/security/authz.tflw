@@ -20,26 +20,47 @@
 # **What the third state is doing somewhere else.** "Not applicable" cannot be written as a passing
 # test: an assertion where nothing applied *fails*, by D285, and that is the whole point of it. So it
 # lives in `scripts/verify-security-acceptance.mjs` as an expected-to-fail probe, the same place and
-# for the same reason M128c put Tier 1's.
+# for the same reason M128c put Tier 1's. D311's *default* half lives there too, for the same reason.
 #
 # Run under `--env secureLocal` (default), with `VULN_MODE=1` — the `vuln/` routes below do not
 # exist without it, and their absence would read as a rule that stopped firing.
+
+# **Every test gets its own product, and that is a bug this file already paid for.** The first draft
+# ordered `GET /products` + `body[0].id`, which is whatever currently sorts first in a ~120-product
+# catalog — and after a few runs against a long-lived stack that product's stock ran out and every
+# test here failed on `409 insufficient stock`, nowhere near the authorization assertion they exist
+# to make. `tests/api/identity/authz.tflw` carries the same fix and the same comment (M15); the
+# lesson is that a corpus which accumulates state is a corpus that grades a different app each run.
+#
+# A bare `before` — not `before file` — because this shares each test's scope, including its
+# `as peer`, so the order below is genuinely owned by the principal the assertion names.
+before
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  # Its own stock, so nothing else in the catalog can starve it.
+  api POST /products body { name: unique("Authz Acceptance Widget"), price: 10, stock: 10, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  # Placed as `peer`, because a bare `before` runs inside the test's own scope.
+  api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
+  expect status equals 201
+  capture body.id as orderId
 
 # ── the two positives ────────────────────────────────────────────────────────────────────────────
 
 @authz @vuln
 test "sec/authz-object-leak fires on a route that serves any order by id (V6)" as peer
-  api GET /products
-  expect status equals 200
-  capture body[0].id as productId
-
-  api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
-  expect status equals 201
-  capture body.id as orderId
-
-  # The clean counterpart is `GET /orders/{orderId}`, three tests down. Both answer `200` with the
-  # same body to their owner; the only difference is who *else* gets it, which is exactly the
-  # difference a status-code oracle cannot see.
+  # The clean counterpart is `GET /orders/{orderId}`, two tests down. Both answer `200` with the same
+  # body to their owner; the only difference is who *else* gets it, which is exactly the difference a
+  # status-code oracle cannot see.
   api GET /vuln/orders/{orderId}
   expect status equals 200
   # `shopper` re-issues this and gets `peer`'s order back — same root `id`, so the identity the
@@ -49,13 +70,6 @@ test "sec/authz-object-leak fires on a route that serves any order by id (V6)" a
 
 @authz @vuln
 test "sec/authz-collection-leak fires on a route that returns every user's orders (V7)" as peer
-  api GET /products
-  expect status equals 200
-  capture body[0].id as productId
-
-  api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
-  expect status equals 201
-
   api GET /vuln/orders
   expect status equals 200
   # A `200` carrying a JSON array is what the clean `GET /orders` returns too. The rule compares the
@@ -67,14 +81,6 @@ test "sec/authz-collection-leak fires on a route that returns every user's order
 
 @authz
 test "sec/authz-object-leak stays silent on the real ownership-scoped route" as peer
-  api GET /products
-  expect status equals 200
-  capture body[0].id as productId
-
-  api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
-  expect status equals 201
-  capture body.id as orderId
-
   # Applicable, and correct. `findOneScoped` admits the owner, an admin, and an owner/admin of the
   # placing user's org, and throws `ForbiddenException('not your order')` for anyone else — so
   # `shopper` gets `403` and the boundary is *demonstrated*, not merely un-violated.
@@ -84,21 +90,14 @@ test "sec/authz-object-leak stays silent on the real ownership-scoped route" as 
 
 @authz
 test "sec/authz-collection-leak stays silent on the real order list" as peer
-  api GET /products
-  expect status equals 200
-  capture body[0].id as productId
-
-  api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
-  expect status equals 201
-
   # `findOwn(user.id)` scopes to the caller, so `shopper` gets her own list and none of `peer`'s ids
   # appear in it. The rule ran on a response that genuinely meets its precondition — an array of
   # objects with root ids — which is what separates "silent" from "never engaged".
   #
-  # Measured outcome: `1 served different content, 1 refused`. This is the only place in the corpus
-  # where D313's **served-different** state occurs live, and it is the state most easily mistaken
-  # for a leak — `shopper` got a `200` carrying orders, just not `peer`'s. A status oracle sees two
-  # identical `200`s here and on `/vuln/orders`; only the identity comparison separates them.
+  # Measured outcome: `1 served different content, 1 refused`. This is the only place in either
+  # corpus where D313's **served-different** state occurs live, and it is the state most easily
+  # mistaken for a leak — `shopper` got a `200` carrying orders, just not `peer`'s. A status oracle
+  # sees two identical `200`s here and on `/vuln/orders`; only the identity comparison separates them.
   api GET /orders
   expect status equals 200
   expect response has no authorization violations
@@ -107,14 +106,6 @@ test "sec/authz-collection-leak stays silent on the real order list" as peer
 
 @authz @vuln @mutating
 test "probe mutating puts a DELETE in the probe set, and a replay cannot judge it (V8)" as peer
-  api GET /products
-  expect status equals 200
-  capture body[0].id as productId
-
-  api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
-  expect status equals 201
-  capture body.id as orderId
-
   # `DELETE` is not probed unless the `authorized target` for this host says `probe mutating`, and
   # this env's does. The default half — the same request under `--env plaintext`, whose target makes
   # no such declaration — is graded in `verify-security-acceptance.mjs`, because an assertion whose
@@ -125,7 +116,8 @@ test "probe mutating puts a DELETE in the probe set, and a replay cannot judge i
   # and the measured reason is structural rather than a bug: this route really is exploitable —
   # `verify-security-target.mjs` deletes an order as a non-owner and proves it — but a *replay*
   # oracle cannot see it. The owner's own `DELETE` succeeds first and destroys the row, so every
-  # probe that follows asks about a resource that no longer exists. See `M130-05`.
+  # probe that follows asks about a resource that no longer exists. The bound is destruction, not
+  # mutation: an idempotent `PUT`/`PATCH` would leak normally. See `M130-05`.
   #
   # So what this test pins is the half that is real: `probe mutating` moved the request from
   # `not probed` into the probe set, and the run says what each principal did there —
