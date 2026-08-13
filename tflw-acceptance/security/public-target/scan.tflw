@@ -1,0 +1,28 @@
+# scan.tflw — the D21 §3.2(3) acceptance case (testFlow M131b,
+# `PLAN_M131_SAFETY_COMPLETION.md` D347).
+#
+# **One file, three invocations, three different outcomes, and zero packets to any host.**
+#
+#   | invocation                                                   | outcome              |
+#   | ------------------------------------------------------------ | -------------------- |
+#   | `tflw run --env publicTarget`                                  | refused, `TF065`     |
+#   | `… --allow-public-target https://other.example.invalid`        | refused, `TF066`     |
+#   | `… --allow-public-target https://staging.example.invalid`      | gate passes; fails connecting |
+#
+# `scripts/verify-security-acceptance.mjs` is the grader. The third row is the one that makes the
+# other two mean something: without it, a control that refused *everything* would score identically.
+# Its connection failure is not a weakness in the evidence — the control's job is the gate, and the
+# gate demonstrably let the run through to a place the other two never reached.
+#
+# **Why the target is `.invalid`.** RFC 2606 guarantees that name never resolves, so this corpus
+# cannot reach a host even by accident. It is only usable as evidence because tflw classifies an
+# address *literally*: a DNS-based classifier could not answer here at all, while the literal one
+# says `public` with no lookup. The offline corpus and the no-DNS decision are the same decision.
+#
+# **Excluded from discovery** by `../tflw.config`, because two of the three cases are supposed to
+# fail `tflw check` — `npm run check:acceptance` would otherwise report this corpus red for doing
+# exactly what it exists to do.
+
+test "an authorization scan against a public target" as shopper
+  api GET /orders/1
+  expect response has no authorization violations

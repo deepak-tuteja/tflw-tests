@@ -357,6 +357,85 @@ try {
   rmSync(targetDir, { recursive: true, force: true });
 }
 
+// --- TF065/TF066: one file, one config, and the operand is the COMMAND LINE ---------------------
+//
+// The same scratch-pair shape as `TF060` directly above, with the one difference that is the whole
+// point of the control: here the second operand is not a config at all. D21 §3.2(3) says a public
+// target's affirmation must live somewhere a committed `tflw.config` cannot reach, so the three
+// cases below share **one** config and differ only in the invocation — which is exactly the
+// property under test, stated as the shape of the test rather than as a comment.
+//
+// Three outcomes, and the middle one is the reason there are two codes rather than one. A missing
+// flag is repaired by adding it; a flag naming the wrong origin is repaired by fixing its value.
+// One code for both would have made a generated codes-reference row false, which is the defect
+// class `M92` spent a milestone on.
+//
+// `.invalid` is RFC 2606's never-resolves TLD, so nothing here can reach a host even by accident —
+// and under tflw's literal, no-DNS classification it is `public` with no lookup, which is what
+// makes an offline fixture able to exercise a control about the internet at all.
+const PUBLIC_TARGET_FIXTURE_FILE = 'authz-scan-public-target.tflw';
+const PUBLIC_TARGET_CONFIG = [
+  'env staging default',
+  '  api "https://staging.example.invalid/v1"',
+  '  allow hosts "staging.example.invalid"',
+  // Declared, so `TF060` is satisfied and cannot be what refuses the run. Without this line the
+  // third case below would go red for a reason that has nothing to do with the flag, and the
+  // evidence would be vacuous.
+  '  authorized target "https://staging.example.invalid" reason "fixture target, never resolved"',
+  '',
+  'session shopper',
+  '  api POST /auth/login body { email: "a@example.invalid", password: "x" }',
+  '  expect status equals 200',
+  '',
+].join('\n');
+const PUBLIC_TARGET_FIXTURES = [
+  {
+    label: 'no affirmation on the command line',
+    flags: [],
+    expect: 'TF065',
+    says: '--allow-public-target https://staging.example.invalid',
+  },
+  {
+    label: 'an affirmation naming an origin this run never scans',
+    flags: ['--allow-public-target', 'https://other.example.invalid'],
+    expect: 'TF066',
+    says: 'matches nothing this run would scan',
+  },
+  {
+    label: 'the affirmation this run actually needs',
+    flags: ['--allow-public-target', 'https://staging.example.invalid'],
+    expect: null,
+  },
+];
+
+const publicDir = mkdtempSync(path.join(tmpdir(), 'tflw-check-public-'));
+try {
+  copyFileSync(
+    path.join(ROOT, 'tests', '.checkonly', PUBLIC_TARGET_FIXTURE_FILE),
+    path.join(publicDir, PUBLIC_TARGET_FIXTURE_FILE),
+  );
+  writeFileSync(path.join(publicDir, 'tflw.config'), PUBLIC_TARGET_CONFIG);
+  for (const { label, flags, expect, says } of PUBLIC_TARGET_FIXTURES) {
+    const out = runCheck([...flags, PUBLIC_TARGET_FIXTURE_FILE], { cwd: publicDir });
+    if (expect) {
+      ok(`${expect}: ${PUBLIC_TARGET_FIXTURE_FILE} with ${label} reports ${expect}`, out.includes(`[${expect}]`), out.trim().split('\n')[0]);
+      ok(`${expect}: names the repair`, out.includes(says), `expected to see "${says}"`);
+    } else {
+      // The half a missing-flag-only proof cannot express: a suite that *has* affirmed the target
+      // must not be nagged. This is also the only case that would catch the gate widening to cover
+      // origins it should not.
+      ok(`TF065/TF066: ${PUBLIC_TARGET_FIXTURE_FILE} with ${label} is silent`, !out.includes('[TF065]') && !out.includes('[TF066]'), out.trim().split('\n')[0]);
+    }
+    // D341, asserted in every one of the three: the Tier 1 assertion in that file inspects a
+    // response the suite already asked for, so no invocation of this flag has anything to say
+    // about it. A gate that quietly widened to cover `security violations` would pass every other
+    // check in this script.
+    ok(`D341: ${label} leaves the security-violations test alone`, !out.includes('security scan against'), out.trim().split('\n')[0]);
+  }
+} finally {
+  rmSync(publicDir, { recursive: true, force: true });
+}
+
 // --- completeness: the expected list comes from tflw, not from this file ------------------------
 
 /**
@@ -392,6 +471,7 @@ const dogfooded = new Set([
   'TF051',
   ...ALLOWLIST_FIXTURES.map((f) => f.code),
   ...AUTHZ_TARGET_FIXTURES.map((f) => f.expect).filter(Boolean),
+  ...PUBLIC_TARGET_FIXTURES.map((f) => f.expect).filter(Boolean),
 ]);
 const assigned = assignedCodes();
 

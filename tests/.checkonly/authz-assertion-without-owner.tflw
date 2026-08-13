@@ -34,9 +34,14 @@
 # side of that pair lives in `tflw-acceptance/security/`. Refusal here, permission there, the same
 # split D291 uses for TF060.
 #
-# This project's `tflw.config` also declares no `authorized target`, so TF060 fires on these tests
-# too. That is correct and not incidental: permission to scan and having somebody to compare against
-# are independent requirements, and a suite that has neither should hear about both.
+# **This paragraph used to say the opposite, and correcting it is `M130-08` one layer up.** It read
+# "this project's `tflw.config` also declares no `authorized target`, so TF060 fires on these tests
+# too" — which stopped being true in the same milestone that wrote it, because M130c gave `env local`
+# a declaration so the dogfood suite could scan itself. The fixture kept passing (it is graded on
+# TF063), so nothing went red; only a comment quietly began describing a run that no longer happens.
+# The lesson is the row's own: a proof that depends on an *absence* in a shared config is invisible
+# at both ends, and so is prose that does. TF060 does **not** fire here now; TF063 is what this file
+# demonstrates, and permission to scan is a genuinely independent requirement demonstrated elsewhere.
 #
 # Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
 #   npx tflw check tests/.checkonly/authz-assertion-without-owner.tflw
