@@ -1,0 +1,62 @@
+# authz-assertion-without-owner.tflw — CHECK-ONLY FIXTURE (M130c): an authorization assertion in a
+# test that never says who made the request — demonstrates `tflw check`'s TF063 (checker, tflw
+# M130b2 / D329, the pentest arc's Tier 2).
+#
+# `expect response has no authorization violations` is a **differential** oracle: it takes the
+# request the last `api` step actually made, re-issues it under every *other* declared principal,
+# and asks whether the owner's resources came back to somebody else. "Every other" is a set
+# subtraction, and it needs a minuend. A test with no `as <session>` names no owner, so there is no
+# identity to subtract and nothing the comparison is *against* — the assertion cannot be wrong,
+# which is the one thing an authorization check must be able to be.
+#
+# **This is a lexical check, and that is the interesting part.** The owner is not discovered by
+# running anything: it is read off the `test` header at check time, so the failure lands in the
+# editor rather than after a suite has already sent cross-identity traffic. The interpreter carries
+# the same rule as a backstop (an `action` reached from a test whose owner the checker could not
+# see), but the backstop fires *before any probe is sent* — the two guards agree on the answer and
+# differ only in when they can know it.
+#
+# **The hook case is the same defect wearing different syntax, and it is why this file has a second
+# test.** A `before file` / `after file` hook runs in its own scope, isolated from every test in the
+# file (SPEC §3.3), so it can never inherit an owner — not because nobody wrote one, but because the
+# construct has nowhere to put one. The repair is different too: move the assertion into a test, or
+# into a **bare `before`/`after`**, which runs once per test and shares that test's scope. Note that
+# `before each` is not the spelling — a bare `before` *is* the per-test hook.
+#
+# **The neighbouring rule this must not be confused with**: an owner is required, and *every* session
+# a test names is an owner. `test "…" as admin, shopper` sends both identities on the request, so
+# both are owners and neither is probed. That is a smaller probe set, not a missing one, and it is
+# not this code.
+#
+# **Not covered here:** the all-sessions-`privileged` refusal, which is the *other* way the probe set
+# can come up empty and shares this code. It needs a config where every declared `session` carries
+# `privileged`, and this project's own `tflw.config` deliberately marks none of them — the declared
+# side of that pair lives in `tflw-acceptance/security/`. Refusal here, permission there, the same
+# split D291 uses for TF060.
+#
+# This project's `tflw.config` also declares no `authorized target`, so TF060 fires on these tests
+# too. That is correct and not incidental: permission to scan and having somebody to compare against
+# are independent requirements, and a suite that has neither should hear about both.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/authz-assertion-without-owner.tflw
+
+before file
+  # Isolated scope by construction — this one can never be repaired by adding `as`.
+  api GET /orders
+  expect response has no authorization violations
+
+test "an authorization assertion with nobody behind it"
+  api GET /orders
+  expect response has no authorization violations
+
+test "a severity floor does not supply the missing owner"
+  api GET /orders
+  # The floor narrows which rules run. It has nothing to do with whose resources are being compared.
+  check response has no critical authorization violations
+
+test "the neighbours the rule must not touch" as shopper
+  api GET /orders
+  # An owner is declared, so these are ordinary assertions and the authz rule stays silent.
+  expect status equals 200
+  expect header "content-type" contains "json"

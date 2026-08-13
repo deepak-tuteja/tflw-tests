@@ -58,6 +58,18 @@ const PACK = [
 const RANK = { minor: 0, moderate: 1, serious: 2, critical: 3 };
 const inPlay = (floor) => PACK.filter(([, sev]) => (floor ? RANK[sev] >= RANK[floor] : true)).map(([id]) => id);
 
+/** Tier 2's pack, mirrored from `authzRules.ts` for the same reason `PACK` mirrors
+ * `securityRules.ts`: a grader that imported the thing it grades would agree with it by
+ * construction. Separate from `PACK` and not merged into it — the two are *different packs* with
+ * different applicability rules and different `considered` counts, and a row graded against the
+ * wrong one produces a confident wrong answer rather than an error (M130c). */
+const AUTHZ_PACK = [
+  ['sec/authz-object-leak', 'critical'],
+  ['sec/authz-collection-leak', 'critical'],
+];
+const authzInPlay = (floor) =>
+  AUTHZ_PACK.filter(([, sev]) => (floor ? RANK[sev] >= RANK[floor] : true)).map(([id]) => id);
+
 /**
  * The known-answer ledger, keyed by the test name in the corpus. `fires` is the **exact** set for
  * that assertion's floor — a rule that fires and is not listed here is a precision failure, and one
@@ -98,6 +110,25 @@ const LEDGER = [
   { env: 'plaintext', test: 'sec/server-version-disclosure stays silent against the app itself', floor: 'minor', fires: ['sec/nosniff-missing'], silent: ['sec/server-version-disclosure'] },
   { env: 'plaintext', test: 'the cookie rules that fire over TLS are not-applicable over plaintext (V3)', floor: 'critical', fires: ['sec/cookie-not-httponly'], silent: [] },
   { env: 'plaintext', test: 'sec/hsts-missing is not-applicable over plaintext, where a browser ignores the header', floor: 'serious', fires: [], silent: [] },
+  // --- Tier 2, `authz.tflw` under secureLocal (M130c, PLAN_M130_PENTEST_TIER2.md D319) ---
+  //
+  // `kind: 'authz'` is not decoration. These rows are graded against `AUTHZ_PACK`, and a Tier 2 step
+  // additionally carries a **probe line** the hygiene steps have no equivalent of — the per-principal
+  // outcome breakdown. `probes` grades that exactly, because it is where this tier's honesty lives:
+  // "0 violations" means something completely different when every principal was refused than when
+  // every principal was inconclusive, and a boolean oracle cannot tell those apart (D324).
+  { env: 'secureLocal', kind: 'authz', test: 'sec/authz-object-leak fires on a route that serves any order by id (V6)', floor: 'critical', fires: ['sec/authz-object-leak'], probes: { total: 2, leaked: 1, refused: 1 } },
+  { env: 'secureLocal', kind: 'authz', test: "sec/authz-collection-leak fires on a route that returns every user's orders (V7)", floor: 'critical', fires: ['sec/authz-collection-leak'], probes: { total: 2, leaked: 1, refused: 1 } },
+  { env: 'secureLocal', kind: 'authz', test: 'sec/authz-object-leak stays silent on the real ownership-scoped route', floor: null, fires: [], silent: ['sec/authz-object-leak'], probes: { total: 2, refused: 2 } },
+  // The only live `served different content` in either corpus, and the state most easily mistaken for
+  // a leak: `shopper` got a 200 carrying orders, just not `peer`'s (D313).
+  { env: 'secureLocal', kind: 'authz', test: 'sec/authz-collection-leak stays silent on the real order list', floor: null, fires: [], silent: ['sec/authz-collection-leak'], probes: { total: 2, 'served different content': 1, refused: 1 } },
+  // `M130-05`. The opt-in half of D311 — and the row that records the plan being wrong. `probe
+  // mutating` really does move the DELETE into the probe set (that is what `total: 2` proves; the
+  // default half below has it at zero), and the oracle still cannot judge it, because the owner's own
+  // DELETE destroys the row before any probe replays it. `inconclusive: 1` is `M130-01`'s CSRF path,
+  // live. If a future milestone plants an idempotent mutating route, this row is what will change.
+  { env: 'secureLocal', kind: 'authz', test: 'probe mutating puts a DELETE in the probe set, and a replay cannot judge it (V8)', floor: null, fires: [], probes: { total: 2, inconclusive: 1, refused: 1 } },
 ];
 
 /** Assertions run purely to make D285's not-applicable listing print, which is the only place the
@@ -114,11 +145,98 @@ const APPLICABILITY_PROBES = [
     // Seven, not four: a floor is a minimum, so `serious` carries the three critical rules as well.
     expectNotApplicable: ['sec/cookie-not-httponly', 'sec/cookie-not-secure', 'sec/cors-wildcard-with-credentials', 'sec/hsts-missing', 'sec/csp-missing', 'sec/tls-version-old', 'sec/tls-weak-cipher'],
   },
+  // --- Tier 2's third state, and D311's default half (M130c) --------------------------------------
+  //
+  // Both are expected-to-fail for the same D285 reason the two above are, which is why they live
+  // here rather than in `authz.tflw`: an assertion where nothing applied *fails*, so it cannot be
+  // written as a passing corpus test. That is the property being demonstrated, not a limitation.
+  {
+    kind: 'authz',
+    env: 'secureLocal',
+    // The owning response is a `4xx`, so there is no resource identity to compare and neither rule
+    // can engage — D321's refusal, reached through the applicability path rather than asserted about.
+    source:
+      'test "an owning response that is a 4xx has no identity to compare" as peer\n' +
+      '  api GET /orders/00000000-0000-0000-0000-000000000000\n' +
+      '  expect status equals 404\n' +
+      '  expect response has no authorization violations\n',
+    expectNotApplicable: ['sec/authz-object-leak', 'sec/authz-collection-leak'],
+  },
+  {
+    kind: 'authz',
+    env: 'plaintext',
+    // **D311's default half.** Identical request to `authz.tflw`'s V8 test; the only difference is
+    // that this env's `authorized target` does not say `probe mutating`. The opt-in row records
+    // `total: 2`; this one must record a probe set that was declined outright — the run says so
+    // rather than passing quietly, which is the whole control.
+    // Its own product with its own stock, for the reason `authz.tflw` records at length: ordering
+    // whatever sorts first in the catalog makes this probe fail on `409 insufficient stock` after a
+    // few runs against a long-lived stack, nowhere near the assertion it exists to make.
+    source:
+      'test "a DELETE is not probed unless the target opts in" as peer\n' +
+      '  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }\n' +
+      '  expect status equals 200\n' +
+      '  capture body.accessToken as adminToken\n' +
+      '\n' +
+      '  api GET /categories\n' +
+      '  expect status equals 200\n' +
+      '  capture body[0].id as categoryId\n' +
+      '\n' +
+      '  api POST /products body { name: unique("Authz Probe Widget"), price: 10, stock: 10, categoryId: {categoryId} }\n' +
+      '    header "Authorization" is "Bearer {adminToken}"\n' +
+      '  expect status equals 201\n' +
+      '  capture body.id as productId\n' +
+      '\n' +
+      '  api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }\n' +
+      '  expect status equals 201\n' +
+      '  capture body.id as orderId\n' +
+      '\n' +
+      '  api DELETE /vuln/orders/{orderId}\n' +
+      '  expect status equals 200\n' +
+      '  expect response has no authorization violations\n',
+    expectNotApplicable: ['sec/authz-object-leak', 'sec/authz-collection-leak'],
+    // **The probe set was resolved and then declined in full** — `2 principals probed — 2 not
+    // probed`, against the opt-in row's `1 inconclusive, 1 refused` on the identical request. Same
+    // two principals, same DELETE, different target declaration, and the report distinguishes the
+    // two situations by name rather than both arriving as "0 violations". That contrast *is* D311's
+    // control, and it is why the default half had to be measured rather than assumed.
+    //
+    // (An earlier draft of this row expected `total: 0`, on the theory that a declined probe is an
+    // unsent one. The run disagreed: tflw counts the principals it considered and then says what it
+    // did with each, which is the more useful answer and the one that makes the two halves
+    // comparable.)
+    expectProbes: { total: 2, 'not probed': 2 },
+  },
 ];
 
 const COUNTS = /(\d+) rules? — (\d+) applicable, (\d+) not applicable, (\d+) violations?/;
 const VIOLATION = /^\s*- \[(critical|serious|moderate|minor)\] (sec\/[a-z0-9-]+):/gm;
 const STOOD_DOWN = /^\s*- (sec\/[a-z0-9-]+) applies when: (.+)$/gm;
+/** The discriminator between a Tier 1 step and a Tier 2 one, and the reason this script needed one
+ * at all: **the two tiers share the counts line and the `sec/` id prefix**, so `securitySteps()`
+ * ingests both and would have graded an authz assertion against the hygiene pack without
+ * complaining. Only the probe line is unique to Tier 2 — a hygiene scan judges one response and has
+ * no principals to count. */
+const PROBES = /(\d+) principals? probed — ([^\n:)]+)/;
+
+/**
+ * `2 principals probed — 1 leaked, 1 refused` → `{ total: 2, leaked: 1, refused: 1 }`.
+ *
+ * Returns `null` for a Tier 1 step, which is how the grader tells the two tiers apart. Outcome
+ * names are taken verbatim rather than mapped to an enum here: the point of duplicating tflw's
+ * vocabulary in this file is that a rename on that side shows up as a mismatch, and a mapping table
+ * would quietly absorb exactly that.
+ */
+function parseProbes(detail) {
+  const m = PROBES.exec(detail);
+  if (!m) return null;
+  const out = { total: Number(m[1]) };
+  for (const part of m[2].split(',')) {
+    const p = /^\s*(\d+) (.+?)\s*$/.exec(part);
+    if (p) out[p[2]] = Number(p[1]);
+  }
+  return out;
+}
 
 function securitySteps(report) {
   const out = [];
@@ -133,6 +251,7 @@ function securitySteps(report) {
         fired: [...detail.matchAll(VIOLATION)].map((m) => m[2]),
         stoodDown: [...detail.matchAll(STOOD_DOWN)].map((m) => m[1]),
         counts: COUNTS.exec(detail).slice(1).map(Number),
+        probes: parseProbes(detail),
       });
     }
   }
@@ -204,9 +323,12 @@ const fail = (msg) => {
 
 /** Which rules this run demonstrated in each state, accumulated across both envs. */
 const seen = { fires: new Set(), silent: new Set(), notApplicable: new Set() };
+/** The same three states for Tier 2, kept in its own accumulator so the coverage table can print two
+ * packs without either borrowing the other's evidence. */
+const seenAuthz = { fires: new Set(), silent: new Set(), notApplicable: new Set() };
 
 for (const env of ['secureLocal', 'plaintext']) {
-  const files = env === 'plaintext' ? ['plaintext.tflw'] : ['positives.tflw', 'negatives.tflw'];
+  const files = env === 'plaintext' ? ['plaintext.tflw'] : ['positives.tflw', 'negatives.tflw', 'authz.tflw'];
   const { report } = runCorpus(env, files);
   const steps = securitySteps(report);
   const rows = LEDGER.filter((l) => l.env === env);
@@ -224,13 +346,36 @@ for (const env of ['secureLocal', 'plaintext']) {
       continue;
     }
     const step = list.shift();
+    const isAuthz = row.kind === 'authz';
+    const pool = isAuthz ? seenAuthz : seen;
+    // **The tier the step actually is, versus the tier the ledger says it is.** Both tiers write the
+    // same counts line, so a row pointing at the wrong test would otherwise be graded happily
+    // against the wrong pack. The probe line is present on exactly one of them, so this is a total
+    // check rather than a heuristic.
+    if (isAuthz !== (step.probes !== null)) {
+      fail(`[${env}] "${row.test}" is graded as ${isAuthz ? 'Tier 2 (authz)' : 'Tier 1 (hygiene)'}, but the step ${step.probes ? 'has' : 'has no'} probe line — the ledger and the corpus disagree about which tier this assertion is`);
+      continue;
+    }
+    if (isAuthz && row.probes) {
+      const got = step.probes;
+      const want = row.probes;
+      const keys = [...new Set([...Object.keys(want), ...Object.keys(got)])].sort();
+      const diff = keys.filter((k) => (want[k] ?? 0) !== (got[k] ?? 0));
+      if (diff.length > 0) {
+        // Printed as the whole breakdown rather than just the differing key, because the outcome
+        // mix is the claim — "0 violations, 2 refused" and "0 violations, 2 inconclusive" are the
+        // same assertion result and completely different evidence (D324).
+        fail(`[${env}] "${row.test}" probe outcomes\n    expected: ${JSON.stringify(want)}\n    actual:   ${JSON.stringify(got)}`);
+        continue;
+      }
+    }
     const expected = [...row.fires].sort();
     const actual = [...new Set(step.fired)].sort();
     if (JSON.stringify(expected) !== JSON.stringify(actual)) {
       fail(`[${env}] "${row.test}" @${row.floor}\n    expected: ${expected.join(', ') || '(none)'}\n    actual:   ${actual.join(', ') || '(none)'}`);
       continue;
     }
-    for (const id of actual) seen.fires.add(id);
+    for (const id of actual) pool.fires.add(id);
     // **Silence, and exactly how strongly it is verified.**
     //
     // A rule is demonstrated silent only if it *ran* and found nothing. The report gives the number
@@ -245,7 +390,7 @@ for (const env of ['secureLocal', 'plaintext']) {
     // does not — see the note at the top.
     const [, applicable] = step.counts;
     const claimed = row.silent ?? [];
-    const notInPlay = claimed.filter((id) => !inPlay(row.floor).includes(id));
+    const notInPlay = claimed.filter((id) => !(isAuthz ? authzInPlay(row.floor) : inPlay(row.floor)).includes(id));
     if (notInPlay.length > 0) {
       fail(`[${env}] "${row.test}" @${row.floor} claims ${notInPlay.join(', ')} stayed silent, but a ${row.floor} floor does not even consider ${notInPlay.length === 1 ? 'it' : 'them'}`);
       continue;
@@ -254,8 +399,9 @@ for (const env of ['secureLocal', 'plaintext']) {
       fail(`[${env}] "${row.test}" @${row.floor} claims ${claimed.length} silent + ${actual.length} fired, but only ${applicable} rules were applicable`);
       continue;
     }
-    for (const id of claimed) seen.silent.add(id);
-    console.log(`✓ [${env}] ${row.test} @${row.floor} — ${actual.length} finding(s), exactly as the ledger says`);
+    for (const id of claimed) pool.silent.add(id);
+    const probeNote = isAuthz && step.probes ? `, ${step.probes.total} principal(s) probed` : '';
+    console.log(`✓ [${env}] ${row.test} @${row.floor ?? 'no floor'} — ${actual.length} finding(s)${probeNote}, exactly as the ledger says`);
   }
   for (const [test, leftover] of byTest) {
     if (leftover.length > 0) fail(`[${env}] "${test}" ran ${leftover.length} security assertion(s) the ledger does not grade — add rows, or the corpus is claiming coverage nothing checks`);
@@ -300,7 +446,16 @@ for (const probe of APPLICABILITY_PROBES) {
     fail(`[${probe.env}] not-applicable listing mismatch\n    missing: ${missing.join(', ') || '(none)'}\n    extra:   ${extra.join(', ') || '(none)'}`);
     continue;
   }
-  for (const id of step.stoodDown) seen.notApplicable.add(id);
+  if (probe.expectProbes) {
+    const got = step.probes ?? { total: 0 };
+    const keys = [...new Set([...Object.keys(probe.expectProbes), ...Object.keys(got)])].sort();
+    const diff = keys.filter((k) => (probe.expectProbes[k] ?? 0) !== (got[k] ?? 0));
+    if (diff.length > 0) {
+      fail(`[${probe.env}] declined-probe-set mismatch\n    expected: ${JSON.stringify(probe.expectProbes)}\n    actual:   ${JSON.stringify(got)}`);
+      continue;
+    }
+  }
+  for (const id of step.stoodDown) (probe.kind === 'authz' ? seenAuthz : seen).notApplicable.add(id);
   console.log(`✓ [${probe.env}] D285 fired and named ${step.stoodDown.length} rules that stood down, exactly as the ledger says`);
 }
 
@@ -331,6 +486,44 @@ if (gaps.length > 0) {
   console.log('\nSee VULNS.md — "Not planted, on purpose" — for the measured reason the two `sec/tls-*`');
   console.log('positives are not constructible on OpenSSL 3.x, and for which states are covered by');
   console.log('unit tests against synthetic handshake facts instead.');
+}
+
+// --- D319: the same table for Tier 2, plus the price of the tier ------------------------------
+
+console.log('\nD319 coverage — one row per authorization rule, three states:\n');
+const authzGaps = [];
+console.log(`  ${'rule'.padEnd(40)} fires  silent  n/a`);
+for (const [id] of AUTHZ_PACK) {
+  const f = seenAuthz.fires.has(id), s = seenAuthz.silent.has(id), n = seenAuthz.notApplicable.has(id);
+  if (!f || !s || !n) authzGaps.push([id, { fires: f, silent: s, notApplicable: n }]);
+  console.log(`  ${id.padEnd(40)} ${f ? '  ✓  ' : '  ·  '}  ${s ? '  ✓ ' : '  · '}   ${n ? ' ✓' : ' ·'}`);
+}
+if (authzGaps.length > 0) {
+  console.log('\nNot demonstrated live by this run:\n');
+  for (const [id, states] of authzGaps) {
+    console.log(`  ${id}: ${Object.entries(states).filter(([, v]) => !v).map(([k]) => k).join(', ')}`);
+  }
+}
+
+/**
+ * **The price, printed rather than discovered.** D319 asks this corpus to record what an
+ * authorization assertion costs, because "four extra requests per assertion site" is the kind of
+ * number that turns into a surprise in CI if it only ever lives in a plan.
+ *
+ * It is derived from the run rather than asserted, because the probe set is a property of the
+ * *config* — this corpus declares `shopper`, `peer` and a `privileged` `admin`, so a `peer`-owned
+ * assertion costs two; the root `tflw.config` also declares two `oauth2` sessions, so the same
+ * assertion in the dogfood suite costs four. Quoting one repo's number for the other would be wrong,
+ * which is exactly why this prints the one it measured instead of a constant.
+ */
+console.log('\nD319 — what the tier cost this run:\n');
+{
+  const rows = LEDGER.filter((l) => l.kind === 'authz' && l.probes);
+  const sites = rows.length;
+  const requests = rows.reduce((n, r) => n + (r.probes.total ?? 0), 0);
+  console.log(`  ${sites} authorization assertion site(s), ${requests} extra request(s) — ${(requests / sites).toFixed(1)} per site`);
+  console.log('  (probe set for a `peer`-owned test here is {shopper, anonymous}: `admin` is');
+  console.log('   `privileged` and excluded, and the owner is never in its own probe set.)');
 }
 
 console.log(failures === 0 ? '\n✓ security acceptance: every graded case matched the ledger' : `\n✗ security acceptance: ${failures} mismatch(es)`);

@@ -113,6 +113,20 @@ const FILE_FIXTURES = {
   TF056: 'data-table-extension.tflw',
   TF059: 'service-with-absolute-url.tflw',
   TF060: 'security-without-authorized-target.tflw',
+  // The pentest arc's Tier 2 (tflw `M130b2`). Three codes, not the two the plan budgeted, because a
+  // diagnostic code is one *repair* rather than one topic: TF062 says move the credential into a
+  // `session`, TF063 says give the assertion an identity to subtract, TF064 says poll first and
+  // assert after. The fourth constraint in that family — the same assertion inside a
+  // workload-bearing test — is `TF033`, filed with its neighbours for exactly the same reason, and
+  // is why `workload-without-threshold.tflw` above is still TF033's only fixture.
+  //
+  // These three were written a milestone before they could be wired: this script grades against the
+  // *installed* bundle in both directions, so a row here for an unshipped code fails as loudly as a
+  // missing one. Wiring them is what proves the tflw the vendored tarball resolves really does
+  // assign them (M130c).
+  TF062: 'authz-step-names-own-credential.tflw',
+  TF063: 'authz-assertion-without-owner.tflw',
+  TF064: 'authz-assertion-in-wait-until.tflw',
 };
 
 for (const [code, file] of Object.entries(FILE_FIXTURES)) {

@@ -1,0 +1,62 @@
+# authz-assertion-in-wait-until.tflw — CHECK-ONLY FIXTURE (M130c): an authorization assertion
+# inside a polling block — demonstrates `tflw check`'s TF064 (checker, tflw M130b2 / D315, the
+# pentest arc's Tier 2).
+#
+# `wait until api` re-issues its request until every `expect` in the block passes, or the wait
+# budget runs out. An authorization assertion inside that block therefore does not run once; it runs
+# once per poll, sending one probe per declared principal each time.
+#
+# **The wasted traffic is the boring half.** The sharp half is what a *real* finding turns into. A
+# genuine BOLA never stops being a BOLA, so the assertion never passes, so the block keeps polling
+# until the budget expires — and the run then reports a **wait timeout**. The loudest result this
+# tier can produce becomes the quietest: a timeout reads as a slow or flaky environment, and the one
+# outcome the milestone exists to surface is the one it would hide. That inversion, not the request
+# count, is why this is an error rather than a warning.
+#
+# **The repair is a sequencing change, not a rewrite:** poll for the state you are waiting on, then
+# assert authorization on a plain `api` step after the block. The probe rebuilds the request it
+# observed, so the assertion after the block judges the same address the polling settled on.
+#
+# **Its sibling constraint has a different code on purpose.** The same assertion inside a
+# workload-bearing `test` is refused too — a workload runs its body once per iteration per VU, so
+# the cross-identity traffic is multiplied by the load factor against a host authorized for a scan,
+# not for a scan times the VU count. That one is **TF033**, filed beside "browser steps aren't
+# supported inside a workload-bearing test", because it is the same repair as its neighbours: move
+# it to a functional test. A code here is one *repair*, not one topic — which is also why this file
+# does not try to demonstrate it. See workload-without-threshold.tflw for TF033's home.
+#
+# **Not covered:** the runtime. There is no runtime twin of this guard and there does not need to be
+# — the construct is refused before it can be executed, and unlike the owner rule (TF063) there is
+# no dynamic path that could reach a polling block the checker did not see.
+#
+# This project's `tflw.config` declares no `authorized target`, so TF060 fires here too.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/authz-assertion-in-wait-until.tflw
+
+test "an authorization assertion that re-probes on every poll" as shopper
+  api POST /orders body { productId: 1, quantity: 1 }
+  capture body.id as orderId
+
+  wait until api GET /orders/{orderId}
+    expect body.status equals "settled"
+    expect response has no authorization violations
+
+test "a severity floor still polls, so it is still refused" as shopper
+  api POST /orders body { productId: 1, quantity: 1 }
+  capture body.id as orderId
+
+  wait until api GET /orders/{orderId}
+    check response has no critical authorization violations
+
+test "the neighbours the rule must not touch" as shopper
+  api POST /orders body { productId: 1, quantity: 1 }
+  capture body.id as orderId
+
+  # Poll for the state, then assert authorization once, on the settled address. This is the repair
+  # the diagnostic asks for, and it is the shape the guide teaches.
+  wait until api GET /orders/{orderId}
+    expect body.status equals "settled"
+
+  api GET /orders/{orderId}
+  expect response has no authorization violations
