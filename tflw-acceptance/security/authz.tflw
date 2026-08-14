@@ -13,9 +13,17 @@
 # mutating case it is refused for CSRF and must be reported *inconclusive*, not as a boundary that
 # held. A corpus with the cookie session in the owner slot would never exercise that path.
 #
-# The probe set for every test in this file is therefore `{shopper, anonymous}` — `admin` is declared
-# `privileged` and excluded, and each assertion says so on its own line. Two probes per assertion
-# site, which is the number D319 asks this corpus to measure.
+# The probe set for every test in this file is therefore `{shopper, shopperBearer, anonymous}` —
+# `admin` is declared `privileged` and excluded, and each assertion says so on its own line. The
+# per-site cost is measured and printed by `verify-security-acceptance.mjs` rather than written down
+# here, which is what D319 asks this corpus to do.
+#
+# **`shopperBearer` is M132b's addition and it is what makes the mutating tests mean anything.**
+# Before it, every principal in the probe set was excluded from a mutating verb for a correct
+# reason — `shopper` cookie-borne and therefore inconclusive, `anonymous` refused `401`, `admin`
+# privileged — and the exclusions composed until the set had nobody left able to answer. Alice
+# declared a second time with a bearer token breaks that without inventing a new identity, and the
+# `V8`/`V9` pair below is only a controlled comparison because she is there.
 #
 # **What the third state is doing somewhere else.** "Not applicable" cannot be written as a passing
 # test: an assertion where nothing applied *fails*, by D285, and that is the whole point of it. So it
@@ -128,3 +136,35 @@ test "probe mutating puts a DELETE in the probe set, and a replay cannot judge i
   api DELETE /vuln/orders/{orderId}
   expect status equals 200
   expect response has no authorization violations
+
+@authz @vuln @mutating
+test "probe mutating finds the leak on an idempotent PUT, which a DELETE cannot show (V9)" as peer
+  # **The positive `probe mutating` shipped without, and the reason `M130-05` stayed open through
+  # two milestones.** The opt-in's only mutating plant was the `DELETE` above, whose verdict is out
+  # of reach of a replay oracle, so the control's evidence was "the request was probed" and never
+  # "the leak was found" — D291's vacuous shape wearing a new costume.
+  #
+  # **Read this test and the one above it as a pair; individually neither proves the point.** Same
+  # host, same `probe mutating` declaration, same probe set, same owner, orders placed the same way
+  # by the same `before`. The single variable is whether the verb destroys what it touches. The
+  # `DELETE` comes back with no verdict and the `PUT` comes back a critical, so "a replay cannot
+  # judge destruction" is now shown by contrast rather than argued — and, just as importantly, the
+  # competing explanation is ruled out: it is *not* that nobody in the probe set could answer,
+  # because on this request `shopperBearer` answers.
+  #
+  # A new order rather than `{orderId}`: the `DELETE` above already destroyed that one, and asking
+  # about a row that no longer exists would produce a `404` and an assertion with no power to fail
+  # — the failure mode this corpus exists to make visible, reached by accident.
+  api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
+  expect status equals 201
+  capture body.id as putOrderId
+
+  # Idempotent: `status` is written to the value it is given, so the probes' replays leave the row
+  # exactly where the owner's request left it and each probe asks the same question of the same
+  # state. `shopper` is refused for CSRF and reported **inconclusive** — cookie-borne, on a mutating
+  # verb, which is `M130-01`'s path and the reason the owner is not the interesting principal here.
+  # `shopperBearer` is the same human with a bearer token, is refused nothing, and gets `peer`'s
+  # order back by id: that is the leak. `anonymous` is `401` and refused.
+  api PUT /vuln/orders/{putOrderId} body { status: "processing" }
+  expect status equals 200
+  expect response not has no critical authorization violations

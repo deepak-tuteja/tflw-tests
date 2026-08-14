@@ -114,11 +114,13 @@ const attrValue = (cookie, attr) => {
 // ── M130a helpers: JSON over bearer auth ─────────────────────────────────────────────────────
 //
 // V1–V5 needed only headers, so `probe` above returns the body as text and nothing parses it.
-// V6–V8 are claims about *which resource* came back, so they need the body as data and they need
+// V6–V9 are claims about *which resource* came back, so they need the body as data and they need
 // to be made as a named principal. Bearer rather than cookie throughout, and not for convenience:
 // `AnyAuthGuard` demands an `X-CSRF-Token` matching the session token's own claim on every mutating
-// request made with a cookie, so a cookie-borne `DELETE` (V8) would be refused for CSRF *before*
-// the authorization check this section is about. See VULNS.md's CSRF caveat.
+// request made with a cookie, so a cookie-borne `DELETE` (V8) or `PUT` (V9) would be refused for
+// CSRF *before* the authorization check this section is about. See VULNS.md's CSRF caveat — and
+// note that this is the same fact the acceptance corpus turns into evidence, where the cookie
+// principal's refusal is reported `inconclusive` rather than skipped.
 let counter = 0;
 
 /** One JSON request as an optional bearer principal; body parsed when it parses. */
@@ -318,7 +320,7 @@ section('sec/authenticated-response-cacheable — the untouched-app positive');
   ok('not applicable unauthenticated: /health carries no credentials', anon.status === 200);
 }
 
-// ── V6/V7/V8 — broken object authorization (M130a, PLAN_M130_PENTEST_TIER2.md D317) ──────────
+// ── V6–V9 — broken object authorization (M130a D317; V9 added by M132b D356) ──────────────────
 //
 // A different kind of claim from everything above, and the assertions have to be built differently
 // because of it. V1–V5 are facts about one response's own headers, so one curl answers each. A BOLA
@@ -335,7 +337,7 @@ section('sec/authenticated-response-cacheable — the untouched-app positive');
 // the route leaks; what makes the pair a known-answer ledger entry is that the real route, asked
 // the identical question by the identical caller, refuses. Those are the negative cases tflw's
 // acceptance bar reads, and nothing else in this repo asserts them.
-section('V6/V7/V8 setup — a dedicated product, an order owned by user A, and a non-owner');
+section('V6–V9 setup — a dedicated product, an order owned by user A, and a non-owner');
 const authz = {};
 {
   const adminToken = await bearerLogin('admin', process.env.ADMIN_EMAIL, process.env.ADMIN_PW);
@@ -463,6 +465,86 @@ if (authz.orderId) {
   const stillThere = await json(HTTP_BASE, `/orders/${authz.orderId}`, { token: authz.owner });
   ok("…and user A's order survived the attempt", stillThere.status === 200,
     `status ${stillThere.status}`);
+}
+
+// ── V9 — the mutating plant a replay oracle can actually judge (M132b, D356) ──────────────────
+//
+// V8 proves `probe mutating` reaches the request. It cannot prove the tier reaches a *verdict*,
+// because destruction removes the thing a replay would compare. This route is the same defect on
+// an idempotent verb, and the claims below are chosen to pin the two properties the oracle needs
+// and V8's route cannot offer: the response identifies the owner's order, and the row is still
+// there afterwards for a probe to ask about.
+section('V9 — PUT /vuln/orders/:id  (positive: sec/authz-object-leak, mutating and idempotent)');
+{
+  const targetId = await placeOrder(authz.owner, authz.productId);
+  ok('a third order was placed, owned by user A', targetId !== undefined);
+  if (targetId) {
+    const write = { method: 'PUT', token: authz.peer, body: { status: 'processing' } };
+    const leak = await json(HTTP_BASE, `/vuln/orders/${targetId}`, write);
+    ok('a non-owner can write to it', leak.status === 200, `status ${leak.status}`);
+    ok("…and the body is user A's order, by id", leak.body?.id === targetId,
+      `got id ${leak.body?.id}`);
+    ok("…carrying the owner's user id, so the leak is identifiable as theirs",
+      typeof leak.body?.userId === 'string');
+    ok('…and the write was real, not a read wearing a PUT', leak.body?.status === 'processing',
+      `status field ${leak.body?.status}`);
+
+    // **The property V8 lacks, asserted rather than assumed.** A replay oracle compares the owner's
+    // response with each probe's; that only works if replaying leaves the resource where it was.
+    const again = await json(HTTP_BASE, `/vuln/orders/${targetId}`, write);
+    ok('replaying it is idempotent — same id, same resulting state',
+      again.status === 200 && again.body?.id === targetId && again.body?.status === 'processing',
+      `status ${again.status}, state ${again.body?.status}`);
+
+    const survived = await json(HTTP_BASE, `/orders/${targetId}`, { token: authz.owner });
+    ok('…and the owner can still read their own order — nothing was destroyed, which is exactly why a probe can judge this and not V8',
+      survived.status === 200, `status ${survived.status}`);
+
+    const anon = await json(HTTP_BASE, `/vuln/orders/${targetId}`, {
+      method: 'PUT',
+      body: { status: 'processing' },
+    });
+    ok('unauthenticated is still 401 — the plant is broken authz, not an open route',
+      anon.status === 401, `status ${anon.status}`);
+
+    const bad = await json(HTTP_BASE, `/vuln/orders/${targetId}`, {
+      method: 'PUT',
+      token: authz.peer,
+      body: { status: 'not-a-real-status' },
+    });
+    ok('an unknown status is 400, not a leak — exactly one defect is planted',
+      bad.status === 400, `status ${bad.status}`);
+  }
+}
+
+section('V9 clean counterpart — the real idempotent write refuses the same caller');
+if (authz.orderId) {
+  // `PATCH /orders/:id/items/:itemId` is the app's own owner-scoped mutation, and it is the exact
+  // counterpart rather than an approximate one: `updateItem` (`orders.service.ts:442`) calls the
+  // same `findOneScoped` that guards `GET /orders/:id`. One check refuses a non-owner on both the
+  // read and the write, and V9 is that check's absence.
+  const owned = await json(HTTP_BASE, `/orders/${authz.orderId}`, { token: authz.owner });
+  const itemId = owned.body?.items?.[0]?.id;
+  ok("the owner's order has an item to write to", typeof itemId === 'string');
+  if (itemId) {
+    const denied = await json(HTTP_BASE, `/orders/${authz.orderId}/items/${itemId}`, {
+      method: 'PATCH',
+      token: authz.peer,
+      body: { quantity: 2 },
+    });
+    ok('the real route answers 403 to a non-owner', denied.status === 403,
+      `status ${denied.status}`);
+    ok('…with the ownership message, so the refusal is authorization and not validation',
+      /not your order/i.test(JSON.stringify(denied.body)), JSON.stringify(denied.body));
+
+    const byOwner = await json(HTTP_BASE, `/orders/${authz.orderId}/items/${itemId}`, {
+      method: 'PATCH',
+      token: authz.owner,
+      body: { quantity: 2 },
+    });
+    ok('…and 200 for the owner, so the 403 above is about who asked, not about the request',
+      byOwner.status === 200, `status ${byOwner.status}`);
+  }
 }
 
 // ── ledger parity: no route without a row, no row without a route ────────────────────────────
