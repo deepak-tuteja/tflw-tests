@@ -39,10 +39,11 @@ differently on the two, and that difference is itself part of the ledger.
 | `V5` | `GET /v1/vuln/document-hardened` | **negative** | `sec/csp-missing` · `sec/x-frame-options` · `sec/hsts-missing` · `sec/nosniff-missing` · `sec/authenticated-response-cacheable` | — |
 | `V6` | `GET /v1/vuln/orders/:id` | **positive** | `sec/authz-object-leak` | critical |
 | `V7` | `GET /v1/vuln/orders` | **positive** | `sec/authz-collection-leak` | critical |
-| `V8` | `DELETE /v1/vuln/orders/:id` | **positive** | `sec/authz-object-leak` (under `probe mutating` only) | critical |
+| `V8` | `DELETE /v1/vuln/orders/:id` | **probed, never judged** | `sec/authz-object-leak` (under `probe mutating` only) — see the bound below | critical |
+| `V9` | `PUT /v1/vuln/orders/:id` | **positive** | `sec/authz-object-leak` (under `probe mutating` only) | critical |
 
 `V1`–`V5` are Tier 1's, and they are claims a response makes about *itself* — headers and cookie
-flags. `V6`–`V8` are Tier 2's, and they are claims about *who is allowed to see what*, which is a
+flags. `V6`–`V9` are Tier 2's, and they are claims about *who is allowed to see what*, which is a
 different kind of fixture: nothing in the response is malformed, and every one of them is a `200` a
 correct endpoint would also have returned to somebody.
 
@@ -67,7 +68,18 @@ What each one actually sends:
   counterpart `GET /v1/orders` answers the same `200` with a JSON array; only *which* orders are in
   it differs.
 - **`V8`** — deletes any order and answers `{ "deleted": true, "id": "<the id>" }`. Genuinely
-  destructive; `order_items`, `jobs` and `return_requests` all cascade on the order FK.
+  destructive; `order_items`, `jobs` and `return_requests` all cascade on the order FK. **Probed
+  under `probe mutating` and never judged** — the bound is recorded below, and `V9` is the route
+  that supplies what this one structurally cannot.
+- **`V9`** — writes `status` on any order and answers with the whole order, owner's `userId` and
+  all. The same missing check as `V6`, on a mutating verb. **Idempotent on purpose**: the row is
+  left where it was, so a probe replaying the owner's request receives the owner's order and the
+  identity comparison that judges `V6` is reachable through a `PUT`. An unknown status is a `400`;
+  a missing one re-writes the value already there, so a body-less replay is still idempotent rather
+  than failing in a way that would read as the boundary holding. The clean counterpart is the app's
+  own `PATCH /v1/orders/:id/items/:itemId`, which routes through the same `findOneScoped` as
+  `GET /v1/orders/:id` — one check refusing a non-owner on both the read and the write, and `V9`
+  is that check's absence.
 
 **Two of the first five are clean, and that is the part worth reading twice.** Clean apiV2 gives
 `csp-missing`, `x-frame-options` and `cors-wildcard-with-credentials` their *not-applicable* case —
@@ -237,21 +249,39 @@ Last run — **both rules demonstrated live in all three states, no gaps**:
   sec/authz-collection-leak                  ✓      ✓      ✓
 ```
 
-**What the tier costs, measured rather than estimated:** 5 assertion sites, 10 extra requests,
-**2.0 per site**. That number is a property of the *config*, not of the feature — this corpus
-declares `shopper`, `peer` and a `privileged` `admin`, so a `peer`-owned assertion probes two; the
-root `tflw.config` also declares two `oauth2` sessions, so the same assertion in the dogfood suite
-would probe four. The grader derives it from the run for exactly that reason.
+**What the tier costs, measured rather than estimated:** 6 assertion sites, 18 extra requests,
+**3.0 per site**. That number is a property of the *config*, not of the feature — this corpus
+declares `shopper`, `shopperBearer`, `peer` and a `privileged` `admin`, so a `peer`-owned assertion
+probes three; the root `tflw.config` also declares two `oauth2` sessions, so the same assertion in
+the dogfood suite would probe more again. The grader derives it from the run for exactly that
+reason — **M132b added a session and a site and the figure moved on its own**, with no constant
+anywhere to forget to update. It was 5 sites / 10 requests / 2.0 per site before that.
 
-**`V8` is a positive the oracle cannot reach, and that is now a recorded bound rather than a
-prediction.** The plan expected `probe mutating` to probe the `DELETE` *and find the leak*. It does
-the first only. The route is genuinely exploitable — `verify-security-target.mjs` deletes an order as
-a non-owner and proves it every run — but Tier 2 judges by re-issuing the request it observed, and
-the owner's own `DELETE` destroys the row before any probe replays it. Both doors are shut by
+**`V8` is a positive the oracle cannot reach, and `V9` is why that is now demonstrated rather than
+argued.** The plan expected `probe mutating` to probe the `DELETE` *and find the leak*. It does the
+first only. The route is genuinely exploitable — `verify-security-target.mjs` deletes an order as a
+non-owner and proves it every run — but Tier 2 judges by re-issuing the request it observed, and the
+owner's own `DELETE` destroys the row before any probe replays it. Both doors are shut by
 construction: a successful owning request leaves nothing to leak, and a failed one is a `4xx` the
-rules decline. **The bound is destruction, not mutation** — an idempotent `PUT`/`PATCH` would leak
-normally, and planting one is the cheap repair if `probe mutating` should have a reachable positive.
-Filed as `M130-05`.
+rules decline. **The bound is destruction, not mutation.**
+
+**M132b (D356) closed `M130-05` by planting the idempotent case and putting it next to this one.**
+Until then, `probe mutating`'s entire acceptance evidence was *"the request was probed"* — a control
+whose positive could not occur, which is the vacuous shape D291 has rejected repeatedly. `V9` is the
+same missing check on a `PUT`, and the corpus runs the two under one probe set against one host,
+with one variable between them: whether the verb destroys what it touches. `V8` returns no verdict;
+`V9` returns a critical.
+
+That pairing also **removed a confound that made the original finding weaker than it looked.** With
+the probe set this corpus had at the time — `{shopper, anonymous}` — no mutating request could have
+been judged by anybody: `shopper` is cookie-borne and refused for CSRF (`inconclusive`), `anonymous`
+is `401` (`refused`), `admin` is `privileged` and excluded. So "the `DELETE` could not be judged" was
+equally consistent with *a replay cannot judge destruction* and with *nobody was able to answer*, and
+the two explanations predicted the identical report. The corpus was silently exhibiting the
+**zero-judgeable-principals** case that tflw's guide now names as a limit. Declaring
+`shopperBearer` — alice again, with a bearer token instead of a cookie — supplies a principal who
+*can* answer, which is what makes the `V8`/`V9` contrast evidence instead of a story. A probe outcome
+is a fact about the credential, not about the person.
 
 What the opt-in *does* prove is still worth having, and the corpus pins it by contrast: the same
 `DELETE`, the same two principals, differing only in whether the target says `probe mutating` —

@@ -117,18 +117,40 @@ const LEDGER = [
   // outcome breakdown. `probes` grades that exactly, because it is where this tier's honesty lives:
   // "0 violations" means something completely different when every principal was refused than when
   // every principal was inconclusive, and a boolean oracle cannot tell those apart (D324).
-  { env: 'secureLocal', kind: 'authz', test: 'sec/authz-object-leak fires on a route that serves any order by id (V6)', floor: 'critical', fires: ['sec/authz-object-leak'], probes: { total: 2, leaked: 1, refused: 1 } },
-  { env: 'secureLocal', kind: 'authz', test: "sec/authz-collection-leak fires on a route that returns every user's orders (V7)", floor: 'critical', fires: ['sec/authz-collection-leak'], probes: { total: 2, leaked: 1, refused: 1 } },
-  { env: 'secureLocal', kind: 'authz', test: 'sec/authz-object-leak stays silent on the real ownership-scoped route', floor: null, fires: [], silent: ['sec/authz-object-leak'], probes: { total: 2, refused: 2 } },
+  //
+  // **Every `total` here went 2 → 3 in M132b**, when the corpus declared `shopperBearer` (D356).
+  // That was not a fixture-tuning detail: with the old probe set no mutating request could be
+  // judged by *anyone*, so the two rows at the bottom were measuring a corpus that had run out of
+  // principals rather than a property of the tier. Every number below was re-read from the run.
+  { env: 'secureLocal', kind: 'authz', test: 'sec/authz-object-leak fires on a route that serves any order by id (V6)', floor: 'critical', fires: ['sec/authz-object-leak'], probes: { total: 3, leaked: 2, refused: 1 } },
+  { env: 'secureLocal', kind: 'authz', test: "sec/authz-collection-leak fires on a route that returns every user's orders (V7)", floor: 'critical', fires: ['sec/authz-collection-leak'], probes: { total: 3, leaked: 2, refused: 1 } },
+  { env: 'secureLocal', kind: 'authz', test: 'sec/authz-object-leak stays silent on the real ownership-scoped route', floor: null, fires: [], silent: ['sec/authz-object-leak'], probes: { total: 3, refused: 3 } },
   // The only live `served different content` in either corpus, and the state most easily mistaken for
-  // a leak: `shopper` got a 200 carrying orders, just not `peer`'s (D313).
-  { env: 'secureLocal', kind: 'authz', test: 'sec/authz-collection-leak stays silent on the real order list', floor: null, fires: [], silent: ['sec/authz-collection-leak'], probes: { total: 2, 'served different content': 1, refused: 1 } },
+  // a leak: `shopper` got a 200 carrying orders, just not `peer`'s (D313). Two of them now — alice
+  // gets her own list under either credential, which is the same correct answer reached twice.
+  { env: 'secureLocal', kind: 'authz', test: 'sec/authz-collection-leak stays silent on the real order list', floor: null, fires: [], silent: ['sec/authz-collection-leak'], probes: { total: 3, 'served different content': 2, refused: 1 } },
   // `M130-05`. The opt-in half of D311 — and the row that records the plan being wrong. `probe
-  // mutating` really does move the DELETE into the probe set (that is what `total: 2` proves; the
-  // default half below has it at zero), and the oracle still cannot judge it, because the owner's own
-  // DELETE destroys the row before any probe replays it. `inconclusive: 1` is `M130-01`'s CSRF path,
-  // live. If a future milestone plants an idempotent mutating route, this row is what will change.
-  { env: 'secureLocal', kind: 'authz', test: 'probe mutating puts a DELETE in the probe set, and a replay cannot judge it (V8)', floor: null, fires: [], probes: { total: 2, inconclusive: 1, refused: 1 } },
+  // mutating` really does move the DELETE into the probe set (that is what `total: 3` proves; the
+  // default half below declines all three), and the oracle still cannot judge it, because the owner's
+  // own DELETE destroys the row before any probe replays it. `inconclusive: 1` is `M130-01`'s CSRF
+  // path, live.
+  //
+  // **`refused: 2` rather than `1` is the point of the M132b change.** The second refusal is
+  // `shopperBearer` — a principal who is refused *nothing* on the row below and leaks there. So this
+  // row can no longer be explained by "nobody could have answered": somebody could, and the DELETE
+  // still yields no verdict. Read it against the V9 row that follows, which is identical in every
+  // respect except the verb.
+  { env: 'secureLocal', kind: 'authz', test: 'probe mutating puts a DELETE in the probe set, and a replay cannot judge it (V8)', floor: null, fires: [], probes: { total: 3, inconclusive: 1, refused: 2 } },
+  // **M132b (D356) — the positive `probe mutating` shipped without.** Until this row existed the
+  // opt-in's acceptance evidence was "the request was probed" and never "the leak was found", which
+  // is a control whose positive cannot occur. `leaked: 1` is `shopperBearer` receiving `peer`'s order
+  // back from a `PUT`; `inconclusive: 1` is `shopper`, the same human on a cookie, refused for CSRF;
+  // `refused: 1` is `anonymous` at `401`.
+  //
+  // The falsifier D356 named, for anyone re-reading this: this row must be a **violation**. If it
+  // ever grades as `inconclusive`, `refused` or `0 violations`, the premise that an idempotent verb
+  // is judgeable is wrong and `M130-05` reopens rather than staying closed.
+  { env: 'secureLocal', kind: 'authz', test: 'probe mutating finds the leak on an idempotent PUT, which a DELETE cannot show (V9)', floor: 'critical', fires: ['sec/authz-object-leak'], probes: { total: 3, leaked: 1, inconclusive: 1, refused: 1 } },
 ];
 
 /** Assertions run purely to make D285's not-applicable listing print, which is the only place the
@@ -205,7 +227,7 @@ const APPLICABILITY_PROBES = [
     // unsent one. The run disagreed: tflw counts the principals it considered and then says what it
     // did with each, which is the more useful answer and the one that makes the two halves
     // comparable.)
-    expectProbes: { total: 2, 'not probed': 2 },
+    expectProbes: { total: 3, 'not probed': 3 },
   },
 ];
 
@@ -522,8 +544,10 @@ console.log('\nD319 — what the tier cost this run:\n');
   const sites = rows.length;
   const requests = rows.reduce((n, r) => n + (r.probes.total ?? 0), 0);
   console.log(`  ${sites} authorization assertion site(s), ${requests} extra request(s) — ${(requests / sites).toFixed(1)} per site`);
-  console.log('  (probe set for a `peer`-owned test here is {shopper, anonymous}: `admin` is');
-  console.log('   `privileged` and excluded, and the owner is never in its own probe set.)');
+  console.log('  (probe set for a `peer`-owned test here is {shopper, shopperBearer, anonymous}:');
+  console.log('   `admin` is `privileged` and excluded, and the owner is never in its own probe set.');
+  console.log('   `shopperBearer` is alice again on a bearer token — M132b, without which no');
+  console.log('   mutating probe in this corpus could be judged by anybody.)');
 }
 
 // --- D347: the public-target gate, three invocations, zero packets ----------------------------

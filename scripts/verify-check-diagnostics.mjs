@@ -21,6 +21,37 @@
 // bundle's* own §17 manifest, so adding a code to tflw and not dogfooding it here fails this
 // script. tflw's `packages/lang/test/diagnosticsCoverage.test.ts` (M86) is the other half — it
 // keeps that manifest in step with `Codes`, which is what makes it worth reading.
+//
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// IF YOU ARE READING THIS BECAUSE THIS SCRIPT WENT RED, RUN THIS FIRST (M132b, D351):
+//
+//     npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs
+//
+// `refresh-tflw` re-packs from the local tflw checkout, so this answers in seconds, on your own
+// machine, with no Docker, no 32-phase sweep, no PR and no merge. **This is the whole of the fix
+// for `M130-07`, and it is a discipline rather than machinery** — nothing forces anyone to run it,
+// and that is a decision (D350) rather than an omission.
+//
+// WHAT THE RED USUALLY MEANS. A tflw milestone that assigns a diagnostic code is a **breaking
+// change for this repository's `main`, with no additive path**: the moment it merges, CI here
+// re-packs tflw from its live `main` (`.github/workflows/ci.yml`, checkout deliberately unpinned —
+// pinning a `ref:` would kill the dogfooding exactly when it matters, and has been rejected twice)
+// and this script demands a fixture that does not exist yet. So the tflw PR and the companion PR
+// here are one unit of work: **a tflw milestone that adds a code is not done until both have
+// merged**, and they merge back-to-back to keep the red window as short as a human can make it.
+//
+// The window is **not bounded by anything automatic**, and that is deliberate. Nothing in this
+// repository re-runs when tflw merges; a cron would make the red *more* visible without making it
+// shorter, which is the opposite of the pain. Observed three times (`M129`, `M130b2`, and once on
+// `M131`'s PR in the reverse direction), each time correctly, each time with the repair already
+// known. When `main` goes red here the gate is **telling the truth** — a code really did ship and
+// the fixture really is missing — so an unbounded window means a true statement goes unobserved,
+// not that a bug goes unfixed.
+//
+// **Reopen `M130-07` if a code reaches tflw `main` with no fixture here and the red is found by
+// someone other than whoever caused it.** That is the condition under which discipline has
+// demonstrably stopped working and machinery becomes worth its cost.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -479,14 +510,24 @@ const uncovered = [...assigned].filter((code) => !dogfooded.has(code)).sort();
 ok(
   `completeness: every TF0xx code the installed tflw assigns has a fixture here`,
   uncovered.length === 0,
-  uncovered.length ? `no fixture for ${uncovered.join(', ')} — add one under tests/.checkonly/ (test dialect) or CONFIG_FIXTURES (config dialect)` : '',
+  uncovered.length
+    ? `no fixture for ${uncovered.join(', ')} — add one under tests/.checkonly/ (test dialect) or CONFIG_FIXTURES (config dialect).\n` +
+      `    A tflw milestone that assigns a code is not done until its companion PR here lands: adding the code is a breaking\n` +
+      `    change for this repo's main, and there is no additive path. Check before you open either PR with:\n` +
+      `        npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs`
+    : '',
 );
 
 const stale = [...dogfooded].filter((code) => !assigned.has(code)).sort();
 ok(
   `completeness: every fixture here names a code the installed tflw still assigns`,
   stale.length === 0,
-  stale.length ? `${stale.join(', ')} is dogfooded but no longer in tflw's manifest — the code was retired; delete the fixture` : '',
+  stale.length
+    ? `${stale.join(', ')} is dogfooded but is not in the installed tflw's manifest. Either its tflw-side PR has not merged\n` +
+      `    yet — merge it, then re-run — or the code was retired, in which case delete the fixture. The first has happened;\n` +
+      `    the second never has. To tell them apart locally:\n` +
+      `        npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs`
+    : '',
 );
 
 if (violations > 0) {

@@ -1,21 +1,26 @@
 import {
+  BadRequestException,
+  Body,
   Controller,
   Delete,
   Get,
   NotFoundException,
   Param,
   ParseUUIDPipe,
+  Put,
   UseGuards,
 } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Order } from '../entities/order.entity';
+import { Order, OrderStatus } from '../entities/order.entity';
 import { AnyAuthGuard } from '../auth/guards/any-auth.guard';
 
 // The broken-object-authorization fixture slice for tflw's pentest arc Tier 2 (testFlow
-// PLAN_M130_PENTEST_TIER2.md, D317). `VULNS.md` rows `V6`–`V8`; `scripts/verify-security-target.mjs`
-// keeps this file and that ledger from drifting apart.
+// PLAN_M130_PENTEST_TIER2.md, D317). `VULNS.md` rows `V6`–`V9`; `scripts/verify-security-target.mjs`
+// keeps this file and that ledger from drifting apart. `V9` arrived later, in M132b (D356), for a
+// reason worth reading at the `PUT` at the bottom: the tier's mutating opt-in had shipped with no
+// positive it could actually reach.
 //
 // WHY THIS EXISTS AT ALL, WHICH IS THE OPPOSITE OF TIER 1'S REASON. `M128a` planted headers and
 // cookie flags because the real app could not produce them. This slice is planted because the real
@@ -98,16 +103,29 @@ export class VulnOrdersController {
     return order;
   }
 
-  // POSITIVE — `sec/authz-object-leak` (critical), reachable only under `probe mutating`.
+  // PROBED-BUT-UNJUDGEABLE — the bound on `probe mutating`, planted deliberately.
   //
-  // This route is why tflw's D311 opt-in is not a vacuous control. `GET`/`HEAD`/`OPTIONS` are
-  // probed by default; a replayed `DELETE` that *succeeds* is simultaneously the proof of the
-  // vulnerability and the damage, so it is probed only when a `tflw.config` explicitly says
-  // `probe mutating` under the `authorized target` for this host. D291's argument, repeated:
-  // building a control with nothing to exercise it is the vacuous shape in a different costume.
-  // So the opt-in ships with something that exercises it, and the acceptance corpus asserts both
-  // halves — the default declines to probe this and says so; the opt-in probes it and finds the
-  // leak.
+  // **This route's comment used to end "…the opt-in probes it and finds the leak". It does the
+  // first and not the second, and M130-05 records why.** The correction is kept rather than
+  // quietly deleted because the wrong sentence is the more instructive one: a `DELETE` looks like
+  // the obvious way to exercise a mutating probe right up until you notice that a replay oracle
+  // cannot judge destruction. The owner's own `DELETE` succeeds first and removes the row, so
+  // every probe that replays it asks about a resource that no longer exists and is correctly
+  // `refused`; had it failed instead, the response is a `4xx` the rules decline. There is no third
+  // arrangement, and no probe set can rescue it — the obstacle is the verb, not the principals.
+  //
+  // So what this route actually proves is the *default* half of D311: `GET`/`HEAD`/`OPTIONS` are
+  // probed without asking, and anything else stays `not probed` until a `tflw.config` says
+  // `probe mutating` under the `authorized target` for this host. The acceptance corpus grades
+  // that contrast on the identical request across two envs.
+  //
+  // **The reachable positive is the `PUT` below** (`V9`, M132b/D356), which is where D291's
+  // argument — a control with nothing to exercise it is the vacuous shape in a different costume —
+  // is actually satisfied. The two sit side by side under one probe set on purpose: same host,
+  // same opt-in, same principals, and the only variable is whether the verb destroys what it
+  // touches. Without the `PUT` beside it, "the `DELETE` could not be judged" is confounded — it
+  // would be equally consistent with *no principal was able to answer*, which was true of this
+  // corpus until `shopperBearer` was declared.
   //
   // The response names the id it destroyed. That is what makes the finding detectable under an
   // oracle that compares resource identity, and it is also the honest answer: a caller who was
@@ -124,5 +142,68 @@ export class VulnOrdersController {
     const result = await this.orders.delete(id);
     if (!result.affected) throw new NotFoundException('order not found');
     return { deleted: true, id };
+  }
+
+  // POSITIVE — `sec/authz-object-leak` (critical), reachable only under `probe mutating`.
+  //
+  // **The plant that makes `probe mutating` a control with a reachable positive** (M132b, D356).
+  // The opt-in's only mutating route was the `DELETE` above, whose verdict is structurally out of
+  // reach, so its acceptance evidence was "the request was probed" and never "the leak was found"
+  // — a control whose positive cannot occur, which is the vacuous shape D291 has now rejected five
+  // times.
+  //
+  // **Idempotent, and that is the entire point rather than a style preference.** `PUT` leaves the
+  // row where it was, so a probe replaying the owner's request receives the owner's order back,
+  // by id, with the owner's `userId` on it — the same identity comparison that judges the `GET` at
+  // `V6`, now reached through a mutating verb. Re-issue it any number of times and the state and
+  // the response are unchanged, so the probe does no cumulative damage and the assertion means the
+  // same thing on the second run as on the first.
+  //
+  // The write is real, not cosmetic: it persists `status`. A route that returned the order without
+  // touching it would be a `GET` wearing a `PUT`'s method, and would prove nothing about mutating
+  // probes that `V6` does not already prove.
+  //
+  // Missing `status` re-writes the value already there, which keeps the route idempotent under a
+  // body-less replay instead of failing in a way that would read as the boundary holding. An
+  // unknown status is a `400` — this route plants exactly one defect, the missing ownership check,
+  // for the reason `V6`'s comment gives at length.
+  //
+  // The clean counterpart is `PATCH /v1/orders/:id/items/:itemId`, asserted beside this one in
+  // `verify-security-target.mjs`. It is the closest thing the real app has to this route and the
+  // comparison is exact: `updateItem` (`orders.service.ts:442`) routes through the *same*
+  // `findOneScoped` that guards `GET /orders/:id`, so an idempotent write and an ownership-scoped
+  // read are refused by one shared check — and this plant is precisely that check's absence, on a
+  // mutating verb.
+  //
+  // **One polarity, deliberately** (D356). A correctly-scoped `PUT` beside this would prove the
+  // oracle does not cry wolf on idempotent mutation, but that is currently justified by symmetry
+  // rather than by an observed false positive. Deferred on a condition: **if this plant ever
+  // reports something surprising, or a false positive is observed on an idempotent mutating
+  // route.**
+  @Put(':id')
+  async updateAnyOrder(
+    @Param('id', ParseUUIDPipe) id: string,
+    // Typed as a plain object on purpose: the global `ValidationPipe`
+    // (`whitelist`/`forbidNonWhitelisted`, `main.ts:24`) only engages for a DTO class, so this
+    // keeps the fixture's single defect from being joined by a validation difference the clean
+    // counterpart does not have. The status is checked by hand below.
+    @Body() body: { status?: string },
+  ): Promise<Order> {
+    const order = await this.orders.findOne({
+      where: { id },
+      relations: { items: { product: { category: true } } },
+    });
+    if (!order) throw new NotFoundException('order not found');
+
+    const next = body?.status ?? order.status;
+    if (!Object.values(OrderStatus).includes(next as OrderStatus)) {
+      throw new BadRequestException(
+        `status must be one of: ${Object.values(OrderStatus).join(', ')}`,
+      );
+    }
+
+    order.status = next as OrderStatus;
+    await this.orders.save(order);
+    return order;
   }
 }
