@@ -160,6 +160,20 @@ const FILE_FIXTURES = {
   TF062: 'authz-step-names-own-credential.tflw',
   TF063: 'authz-assertion-without-owner.tflw',
   TF064: 'authz-assertion-in-wait-until.tflw',
+  //
+  // The pentest arc's Tier 3 (tflw `M134a`). **One** code, where Tier 2 needed three, and the
+  // shortfall is the tier's defining property rather than an oversight: Tier 3 changes no identity,
+  // so there is no owner to require and no credential to be confused by — `TF062`/`TF063` have no
+  // analogue, and the fixture asserts those two silences deliberately. `TF064` is not re-listed
+  // because it was **widened**, not duplicated: the same code and the same repair now cover both
+  // scans inside `wait until api`, since what makes that construct wrong is a property of the
+  // polling loop that does not know which scan is asking.
+  //
+  // Coupled with its tflw half and red until that half merges (D350/D382) — a row for an unshipped
+  // code fails here exactly as loudly as a missing one, which is the whole reason this file is worth
+  // reading. The local pre-flight is `npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs`
+  // (D351), which trips the gate in seconds rather than in a CI cycle.
+  TF067: 'input-assertion-no-mutable-input.tflw',
 };
 
 for (const [code, file] of Object.entries(FILE_FIXTURES)) {

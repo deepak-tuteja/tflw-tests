@@ -1,0 +1,76 @@
+# input-assertion-no-mutable-input.tflw — CHECK-ONLY FIXTURE (M134a): an input-handling assertion on
+# a request that has nothing to mutate — demonstrates `tflw check`'s TF067 (checker, tflw M134a /
+# D382, the pentest arc's Tier 3).
+#
+# `expect response has no input handling violations` re-sends the request the last `api` step
+# actually made, once per (mutable input × payload), with exactly one input replaced each time. That
+# needs an input. `api GET /health` has no identifier path segment, no query parameter and no JSON
+# body — so no probe can be planned, no rule can apply, and the assertion cannot fail. An assertion
+# that cannot fail reports a green line over an empty test, which is the one outcome a scan must
+# never produce: D285's rule, arriving here under its own code because the repair is specific.
+#
+# **The keyword is two bare words.** `input handling`, with a space, never `input-handling`. tflw's
+# `isIdentCont` is `/[A-Za-z0-9_]/` and `-` lexes as `minus`, so a hyphen cannot appear in a keyword
+# at all — the language has no hyphenated bare keyword anywhere, and every multi-word construct in it
+# is space-separated. The plan for this tier specified the hyphenated spelling and it could not ship;
+# writing it here would be a parse error long before TF067 was reached.
+#
+# **The checker answers `false` on every uncertainty, and that is what the last test in this file is
+# for.** A `{var}` in the path may bind to something id-shaped; a `body from` file is not the
+# checker's to read; a raw text body may well be JSON. Each of those *might* offer a site, so the
+# checker stays silent and the interpreter decides at run time with the real request in hand. This
+# rule refuses a correct file in exactly zero cases, which is the direction a checker may not be
+# wrong in — and a fixture that only demonstrated the firing half would let the silent half widen
+# without anything going red.
+#
+# **The absences matter as much as the rule, and they are why this fixture looks unlike its Tier 2
+# neighbours.** Tier 2's scan replaces the identity, so it needs an owner (TF063) and refuses a step
+# carrying its own credential (TF062). Tier 3 changes **no** identity — only the payload moves — so
+# neither code has an analogue here: an unowned test is fine, and a step naming its own
+# `Authorization` header is fine. Nothing below declares `as <session>`, and that is deliberate
+# rather than an omission. If a future change makes an owner necessary, this file goes red.
+#
+# **Not covered here:** the run-time twin of this code. The checker catches the literal cases; the
+# interpreter catches every case, including the interpolated ones above, and fails the assertion with
+# the same repair. That door needs a live server and belongs to the acceptance corpus, not to a
+# check-only fixture. Also not covered: `probe oversized` / `probe traversal`, which are *config*
+# dialect and are demonstrated where the other `authorized target` sub-clauses are.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/input-assertion-no-mutable-input.tflw
+
+test "an input-handling assertion with nothing to mutate"
+  api GET /health
+  expect response has no input handling violations
+
+test "a severity floor does not supply the missing input"
+  api GET /health
+  # The floor narrows which rules run. It has nothing to do with whether there was anything to send.
+  check response has no input handling violations
+
+test "a form body provably yields no JSON leaf, so it is the same defect"
+  api POST /orders form a=1, b=2
+  expect response has no input handling violations
+
+test "the sites the rule must not touch"
+  # One of each kind: an identifier path segment, a query parameter, a JSON body leaf. Each of these
+  # is a real mutation site, so TF067 stays silent — this is the negative control that stops the rule
+  # widening into the case the feature exists for.
+  api GET /orders/7
+  expect response has no input handling violations
+
+  api GET /products?q=shoes
+  expect response has no input handling violations
+
+  api POST /orders body { note: "hi" }
+  expect response has no input handling violations
+
+test "every uncertainty answers maybe, and stays silent"
+  # Interpolation can produce an id segment or a whole query string; a file-backed body is not the
+  # checker's to read; raw text may well be JSON. None of these is decidable here, so none reports.
+  let id = "7"
+  api GET /orders/{id}
+  expect response has no input handling violations
+
+  api POST /orders body text "{a:1}"
+  expect response has no input handling violations
