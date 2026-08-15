@@ -41,11 +41,19 @@ differently on the two, and that difference is itself part of the ledger.
 | `V7` | `GET /v1/vuln/orders` | **positive** | `sec/authz-collection-leak` | critical |
 | `V8` | `DELETE /v1/vuln/orders/:id` | **probed, never judged** | `sec/authz-object-leak` (under `probe mutating` only) — see the bound below | critical |
 | `V9` | `PUT /v1/vuln/orders/:id` | **positive** | `sec/authz-object-leak` (under `probe mutating` only) | critical |
+| `V10` | `GET /v1/vuln/lookup?q=` | **positive** | `sec/reflected-input-unescaped` | moderate |
+| `V11` | `GET /v1/vuln/items/:id` | **positive** | `sec/path-traversal-read` (under `probe traversal` only) | critical |
+| `V12` | `POST /v1/vuln/notes` — `body.text` | **positive** | `sec/error-detail-disclosure` (under `probe mutating` only) | serious |
+| `V13` | `POST /v1/vuln/notes` — `body.title` | **positive** | `sec/oversized-input-accepted` (under `probe mutating` + `probe oversized`) | minor |
+| `V14` | `GET /v1/vuln/lookup-escaped?q=` | **negative** | `sec/reflected-input-unescaped` | — |
 
 `V1`–`V5` are Tier 1's, and they are claims a response makes about *itself* — headers and cookie
 flags. `V6`–`V9` are Tier 2's, and they are claims about *who is allowed to see what*, which is a
 different kind of fixture: nothing in the response is malformed, and every one of them is a `200` a
-correct endpoint would also have returned to somebody.
+correct endpoint would also have returned to somebody. `V10`–`V14` are Tier 3's, and they are claims
+about what the application does with an input it did not expect — so unlike either tier before them
+these fixtures are judged on a response to a request *tflw constructed*, not to the one the suite
+made.
 
 What each one actually sends:
 
@@ -136,6 +144,165 @@ was in question. Two consequences, both deliberate:
    `shopper` under `probe mutating` will hit CSRF rather than authorization. That is a limitation of
    the target's transport, not of the rule, and tflw should say so rather than count it as a
    refusal — filed for `M130b`.
+
+### The Tier 3 plants `V10`–`V14`, and why a whole new controller was needed
+
+`M134c` (testFlow [PLAN_M134_PENTEST_TIER3.md](../testFlow/PLAN_M134_PENTEST_TIER3.md), D379/D395)
+adds the arc's third tier — input handling — and it could not reuse a single existing route.
+Measured at scoping time rather than discovered at build time:
+
+| route | mutable input tflw can reach |
+| --- | --- |
+| `V1`,`V2`,`V4`,`V5`,`V7` | none — bare `@Get` |
+| `V3` | none — bare `@Post` |
+| `V6`,`V8`,`V9` | `:id` behind **`ParseUUIDPipe`** |
+| `V9` | `body.status` — added by `M132b` for an unrelated reason |
+
+There is **no `@Query()` anywhere** in the fixture slice and every `:id` is pipe-guarded, and
+`ParseUUIDPipe` rejects type confusion and traversal with a `422` before any application code runs.
+Tier 3 mutates the inputs of a request the suite already made; pointed at that, it grades a wall of
+rejections and reports clean. That is `M132b`'s D363 trap — *a positive nobody can answer passes on
+nothing* — one tier later and in its other form: not *who* can answer, but *what is there to mutate*.
+
+**Each plant answers a detector, not an invariant's name.** Every rule in the Tier 3 pack ships with
+a narrowing that exists to hold Tier 1's zero-false-positive bar, and a plant written to the name
+alone satisfies none of them:
+
+- **`V10`** serves **`text/html`**. `sec/reflected-input-unescaped` explicitly declines a JSON echo —
+  echoing `<tflw>` inside a JSON string is correct, since JSON has no markup semantics — so a
+  handler returning an object would leave the rule standing down. Only
+  `injection/html-metacharacters` fires; `{{7*7}}` reaches the route, comes back verbatim, and is
+  correctly not a reflection finding because it carries no angle brackets.
+- **`V11`** returns the **file's contents**. `sec/path-traversal-read` matches a filesystem
+  signature (`root:…:0:0:`), never a path echo, precisely so an app that reflects the attempted path
+  in an error cannot be scored as having read a file. Its id is `7` because tflw recognises only a
+  UUID, a run of digits or a long hex string as an identifier segment — a slug is not a mutation
+  site at all, and the plant would have been lost to a `TF067` complaint about the *test*.
+  Only `traversal/relative` escapes; the encoded, doubled-dot and absolute variants `404`, because
+  this handler does no `../` stripping and no second decode. One firing payload, not a class.
+- **`V12`** **catches and serializes** the driver error. `ProblemDetailsFilter` is global and
+  unconditional, so an uncaught error becomes `{"detail":"an unexpected error occurred"}` with the
+  stack sent to the logger — the cheap version of this plant produces a scrubbed `500` that matches
+  no detector. The evidence is the ORM class name `QueryFailedError`, deliberately not a Postgres
+  wording: `tflw'` produces *unterminated quoted string at or near…*, which is **not** the
+  `syntax error at or near` literal tflw carries, so a plant keyed on the phrasing would pass today
+  and break on an upgrade. Only `injection/sql-quote` fires — a double quote and a trailing
+  semicolon are valid inside a single-quoted SQL literal and produce no error at all.
+- **`V13`** is a DTO with `@IsString()` and **no** `@MaxLength()`. "No decorators" would not be a
+  permissive DTO: `whitelist: true` strips every undecorated property and the handler would receive
+  `{}`. The 64 KiB value is accepted with `201` at **both** body leaves, so one permissive DTO
+  yields two findings with two fingerprints — correct rather than duplicated, since two unbounded
+  fields are two repairs.
+
+- **`V14`** is `V10` with an escape and nothing else changed — same `text/html` body, same query
+  site, `&<>"'` replaced before interpolation so `<tflw>` comes back as `&lt;tflw&gt;`. It is the
+  only **negative** in this tier, and it exists because the tier's other negative cannot cover this
+  rule: `GET /v1/products?q=` answers JSON, and `sec/reflected-input-unescaped` declines a JSON echo
+  by design, so the rule stands down there as *not applicable* rather than quiet. A rule that never
+  engaged has not been shown to stay quiet — Tier 1 learned that as `V2`/`V5`, and this is the same
+  lesson one tier on. With `V14` the rule is applicable, probed, answered and silent.
+
+**`V12` and `V13` share one route on purpose**: a single observed request offering two
+independently-attributable mutation sites is what makes per-site attribution demonstrable at all.
+
+**`V10` and `V14` are a controlled pair**, and the ledger rows for them are identical but for the
+violation count: same `moderate` floor, same three rules in play, same one withheld, same six probes
+over one site. The only difference between the two runs is whether the application escapes. That is
+what makes the reflection rule's silence a measurement instead of an absence.
+
+**`V11`'s positive is reachable on the app's own listener and NOT through the sidecar, and that is a
+fact about the deployment rather than about the app.** nginx decodes and normalises the request URI,
+so `..%2f..%2f..%2f..%2fetc%2fpasswd` answers **`400`** at `https://localhost:8443` and never reaches
+the handler. This was measured, not predicted: the row was first written against `secureLocal`, where
+it sent nine probes, collected nine rejections, and reported `sec/path-traversal-read` as
+applicable-and-silent — a rule that looks tested and is not.
+
+So the acceptance corpus grants `probe traversal` on the **plaintext** env only, and `probe oversized`
+on the **secureLocal** env only. Each opt-in then has a granted env and a withheld env, which is how
+one corpus demonstrates the fires / silent / not-applicable states for both. **The app is vulnerable
+and its deployment is not**; those are different claims about different things, and a corpus running
+against a single base could not have separated them.
+
+**One measured limit, recorded so nobody reads it as untested.** The oversized payload also targets
+query parameters, and a 64 KiB query against `V10` returns **`431 Request Header Fields Too Large`**
+— Node's default `--max-http-header-size` is 16 KiB and the request line counts toward it. That is
+an ordinary non-finding on any Node server; body leaves are where the `oversized` class earns its
+opt-in.
+
+**The control for `V12` is a real endpoint, deliberately.** `GET /v1/products?q=` is a free-text
+string that reaches Postgres full-text search — the same journey `V12`'s `text` makes — differing
+only in being parameterised. `injection/sql-quote` lands in a real query there and returns `200`
+with results; the identical payload on `V12` returns a serialised `QueryFailedError`. That pairing
+is what makes the rule evidence rather than an assertion, and it is why the negative half of the
+Tier 3 corpus names a route with a *database* behind it rather than a paginator.
+
+### D380 — Tier 3 against the real suite, measured 2026-08-15
+
+`verify:input-acceptance` measures the tier against a corpus built to exercise it. D380 is the
+decision that this says nothing about what the tier costs or finds against a *real* suite, and that
+the ~50 real API test files are where both get answered. `npm run sweep:input-volume` is that run: it
+copies `tests/` to a gitignored `.sweep-input/`, attaches one input-handling assertion to every test
+whose final request has a mutable input, grants all three probe classes, and runs it. Nothing under
+`tests/` is modified, and nothing here touches `vuln/`.
+
+**Reach is the first result, and it was not the expected one.** `TF067` is raised by the **checker**,
+not at runtime — an assertion on a request with nothing to mutate refuses the whole run before it
+starts. So Tier 3 cannot simply be switched on over a suite:
+
+| | |
+|---|---|
+| tests in `tests/api/` | 236 |
+| whose final request has a mutable input | **182 (77%)** |
+| carrying nothing to mutate — path has no identifier segment, no query, no JSON body | 54 (23%) |
+
+**Volume, across three runs:**
+
+| | |
+|---|---|
+| assertions that probed | 174–175 |
+| mutation sites reached | 383 |
+| extra requests sent | **4,958–4,975** (4,862 answered) |
+| mean per observed request | **28.4–28.5** |
+| wall clock | 86s, strictly sequential (D21 layer 5) |
+
+The spread is the suite's own, not the oracle's: a handful of tests create fixtures whose shape
+depends on what a prior test left behind, so the number of mutation sites on their final request
+moves by one or two. Recorded as a range rather than rounded to a single figure, because a reader who
+re-runs this will not reproduce a point value and should not think something broke.
+
+`tests/api/` makes 834 observed requests in total, so an assertion on *every* one of them would cost
+roughly **23,700 extra requests** — an extrapolation from the 175 measured, not a second
+measurement. **That answers D377's open question: the gate is urgent rather than merely prudent.**
+A ~28× amplification is not something a suite absorbs by accident.
+
+**Findings: 45, and every one of them is `sec/oversized-input-accepted`.**
+
+The other three rules are **silent across 175 assertions against real endpoints** — no reflection, no
+traversal, no disclosure. That is the half of D380 that is about the pack rather than the cost, and
+it confirms D396's recorded prediction exactly: `ProblemDetailsFilter` is global and unconditional,
+so no real endpoint can disclose through an uncaught error, and the sweep reporting zero disclosures
+is that prediction measured rather than asserted.
+
+The 45 are **genuine, and they are one defect repeated**. apiV2 declares no `@MaxLength()` anywhere,
+so every free-text field accepts a 64 KiB value with a `2xx`. The breakdown below is the two runs
+that agreed exactly; a third substituted a `POST /v1/coupons` `code` finding for one of these, for
+the same fixture-ordering reason the volume moves. **The count and the class are stable; which
+routes supply them is not entirely.**
+
+| field | findings | routes |
+|---|---|---|
+| `name` (incl. `items[n].name`) | 26 | `POST /v1/products`, `POST /v1/products/batch`, `POST /v1/orgs`, `POST /v1/flaky-widget` |
+| `items[n].categoryId` | 13 | `POST /v1/products/batch` |
+| `key` | 5 | `POST /v1/flaky-widget`, `POST /v1/retry-demo` |
+| `scope` | 1 | `POST /v1/oauth/token` |
+
+**These are not planted and they get no `V` row**, because a `V` row is a fixture route and these are
+the real application answering. They are recorded here rather than fixed because the fix is a product
+decision about apiV2's DTOs, not about the pentest arc — and because `V13` predicted this class from
+reading the code (`whitelist: true` strips undecorated properties, so "no decorators" is not the same
+as "no bound"), and the sweep is what turned that reading into a measurement. `plan_v2.md` §4.2's
+rule that real endpoints stay clean is about *planted* flaws; a real bound that was never declared is
+exactly what a scanner is supposed to notice.
 
 ## What the real app answers, with nothing planted
 
@@ -323,10 +490,20 @@ scoring it clean.
   said "Tier 2; a passive header scan cannot see it, so planting it now would be cost with no
   coverage behind it", and Tier 2 is what arrived. Kept struck through rather than deleted because
   the reasoning is the arc's sequencing rule and still applies to what is below.
-- **Injection (SQLi, command, template).** Tier 3. Finding it needs request *mutation* against a
-  strict oracle, not a re-attributed replay of a request the suite already made, and a planted
-  injection point with no fuzzer behind it is the same cost-with-no-coverage this list keeps
-  refusing.
+- **~~Injection (SQLi, command, template).~~** **Planted in `M134c` as `V12`** — this row said
+  "Tier 3; finding it needs request *mutation* against a strict oracle, not a re-attributed replay
+  of a request the suite already made, and a planted injection point with no fuzzer behind it is the
+  same cost-with-no-coverage this list keeps refusing", and Tier 3 is what arrived. Kept struck
+  through rather than deleted because the reasoning is the arc's sequencing rule and still applies
+  to what is below.
+
+  Two qualifications the original row did not anticipate, both worth carrying. **What ships is not a
+  fuzzer**: tflw's corpus is fixed and enumerable — every payload against every mutable input, no
+  sampling, no RNG — because a gate whose verdict depends on a draw is not a gate. And **the oracle
+  reads disclosure, not execution**: `V12` is graded on the application leaking its own ORM
+  exception, not on any injected SQL running. Command and template injection therefore remain
+  unplanted, and now for a sharper reason than sequencing — tflw ships no rule that could name
+  either, so a plant for them would still be cost with no coverage behind it.
 - **Anything in a real endpoint.** The suite's ~45 other files run against the clean app, and
   `plan_v2.md` §4.2's rule — real endpoints stay clean — is what makes their results mean anything.
   Tier 2 does not weaken this: `V6`–`V8` are dedicated routes, never a `VULN_MODE` branch inside

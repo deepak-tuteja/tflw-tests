@@ -1,0 +1,52 @@
+# M134c (testFlow PLAN_M134_PENTEST_TIER3.md, D379/D398) — the Tier 3 row that can only run against
+# the app's own listener, and the reason is worth more than the row.
+#
+# **nginx answers `400` to a traversal payload before the app ever sees it.** A reverse proxy decodes
+# and normalises the request URI, so `..%2f..%2f..%2f..%2fetc%2fpasswd` does not arrive at `V11`
+# through the `secureLocal` sidecar at all — measured, after this test was first written there and
+# reported the rule as applicable-and-silent over nine probes. A rule that looks tested and is not is
+# the exact failure this corpus exists to prevent, so the row lives where its positive is reachable
+# and `../../VULNS.md` records why.
+#
+# That is also the one thing a corpus running against a single base could never learn: the app is
+# vulnerable and the deployment is not, and those are different facts about different things.
+#
+# `env plaintext` grants `probe traversal` and deliberately does **not** grant `probe oversized` —
+# the mirror image of `secureLocal`, so each opt-in has a granted env and a withheld env and one
+# corpus demonstrates all four states. See the config for both halves.
+#
+# Run: `npx tflw run --env plaintext input-plaintext.tflw`. Under `--env secureLocal` this file is
+# meaningless, which is why it is a file rather than a test in `input.tflw`.
+
+@security @vuln @input
+test "sec/path-traversal-read fires when a path segment reaches a file read (V11)"
+  # The id is `7` because tflw recognises a UUID, a run of digits or a long hex string as an
+  # identifier segment and nothing else. A slug here would offer **no mutation site at all**, the
+  # assertion would hit `TF067` — "this request has nothing to mutate" — and the tier's only
+  # critical rule would be demonstrated nowhere. The observed value is load-bearing.
+  api GET /vuln/items/7
+  expect status equals 200
+  # Fully isolated: `sec/path-traversal-read` is the only critical rule in the pack, so a green line
+  # here can only be that rule.
+  #
+  # The finding comes from `traversal/relative` alone, and the evidence is `/etc/passwd`'s own
+  # contents rather than an echo of the path — an application that reflects the attempted path back
+  # in an error message has not read anything, and the rule declines it. The encoded, doubled-dot
+  # and absolute variants `404` because this handler does no `../` stripping and no second decode:
+  # they exist to catch an app with a broken filter, and this one has no filter to break.
+  expect response not has no critical input handling violations
+
+# ── traversal's silence ──────────────────────────────────────────────────────────────────────────
+#
+# The state nothing else in either corpus provides. `sec/path-traversal-read` needs a route with an
+# identifier-shaped path segment that does *not* read files, and it has to be on this env because
+# this is the only one granting `probe traversal`. The id is captured rather than written down: the
+# fixtures re-seed and the UUID changes every run.
+@security @input
+test "sec/path-traversal-read stays silent on a real id route"
+  api GET /products
+  expect status equals 200
+  capture body[0].id as productId
+  api GET /products/{productId}
+  expect status equals 200
+  expect response has no critical input handling violations

@@ -27,3 +27,6 @@ PROGRESS.md
 TFLW-GAPS.md
 TFLW-FEATURE-GAPS.md
 HELPERS.md
+
+# D380's sweep builds a disposable annotated copy of tests/ here (scripts/sweep-input-volume.mjs).
+.sweep-input/

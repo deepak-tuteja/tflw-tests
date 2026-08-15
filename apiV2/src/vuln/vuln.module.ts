@@ -4,6 +4,7 @@ import { Order } from '../entities/order.entity';
 import { AuthModule } from '../auth/auth.module';
 import { VulnController } from './vuln.controller';
 import { VulnOrdersController } from './vuln-orders.controller';
+import { VulnInputController } from './vuln-input.controller';
 
 // Gated by `VULN_MODE=1` at the point of import (`app.module.ts`), not by a guard inside the
 // controller. The difference is what "off" means: the routes are genuinely absent from the running
@@ -14,20 +15,22 @@ import { VulnOrdersController } from './vuln-orders.controller';
 // `VULN_MODE=1 node cli.mjs start` (or `VULN_MODE=1 docker compose up`) turns it on;
 // `docker-compose.yml` passes the variable through and defaults it to empty.
 //
-// TWO CONTROLLERS, ONE MODULE, and the split is along what each one needs rather than along what
+// THREE CONTROLLERS, ONE MODULE, and the split is along what each one needs rather than along what
 // each one is for. `VulnController` (Tier 1) is headers and cookie flags: no database, no guards,
 // no dependencies at all. `VulnOrdersController` (Tier 2, testFlow PLAN_M130_PENTEST_TIER2.md
 // D317) plants broken *authorization*, which means it has to authenticate before it can fail to
 // authorize, and it has to return real rows or there is nothing whose ownership could be wrong.
-// Folding them into one file would give the header fixtures a Postgres dependency they have no use
-// for; `M128a`'s slice ran with neither import and should keep running that way.
+// `VulnInputController` (Tier 3, testFlow PLAN_M134_PENTEST_TIER3.md D379) plants broken *input
+// handling*, and needs a third set of things again — a raw query, a filesystem read and a markup
+// response. Folding any of them together would give one slice dependencies it has no use for;
+// `M128a`'s slice ran with no imports at all and should keep running that way.
 //
 // `AuthModule` is imported for `AnyAuthGuard` alone (the same reason `OrdersModule` imports it),
-// and `Order` is the only entity registered — the fixture reads and deletes orders and touches
-// nothing else.
+// and `Order` is the only entity registered — Tier 2 reads and deletes orders, Tier 3 borrows its
+// repository only as a way to reach `query()`, and nothing else is touched.
 @Module({
   imports: [TypeOrmModule.forFeature([Order]), AuthModule],
-  controllers: [VulnController, VulnOrdersController],
+  controllers: [VulnController, VulnOrdersController, VulnInputController],
 })
 export class VulnModule {}
 

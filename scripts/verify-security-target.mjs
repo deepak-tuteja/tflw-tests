@@ -547,6 +547,178 @@ if (authz.orderId) {
   }
 }
 
+// ── M134c: the Tier 3 input-handling plants (V10–V14) ────────────────────────────────────────
+//
+// These rows are graded by a *detector*, not by a rule name, so the assertions below check the
+// exact property each detector reads rather than "the route answered". A `V10` that served JSON,
+// a `V11` that echoed the path instead of the file, or a `V12` whose error reached the global
+// filter would each be a live route with a green smoke test and no coverage behind it.
+//
+// The negative halves matter as much: this section asserts which payloads *do not* fire, because
+// VULNS.md claims one firing payload per plant rather than a whole class, and a claim like that
+// decays silently the moment the target starts erroring on something else.
+section('V10–V14 — the Tier 3 input-handling plants');
+{
+  // -- V10: reflection, and the content type is the plant ------------------------------------
+  const control = await probe(HTTP_BASE, '/vuln/lookup?q=shoes');
+  ok('V10 answers 200', control.status === 200, `status ${control.status}`);
+  ok(
+    'V10 serves text/html — `sec/reflected-input-unescaped` declines a JSON echo, so this is the plant',
+    (control.header('content-type') ?? '').includes('text/html'),
+    control.header('content-type') ?? '(none)',
+  );
+
+  const reflected = await probe(HTTP_BASE, `/vuln/lookup?q=${encodeURIComponent('<tflw>')}`);
+  ok(
+    'V10 reflects `<tflw>` with its angle brackets intact',
+    reflected.body.includes('<tflw>'),
+    reflected.body.slice(0, 120),
+  );
+
+  // The 64 KiB query, measured rather than assumed (testFlow D400). Node's default
+  // `--max-http-header-size` is 16 KiB and the request line counts toward it, so the `oversized`
+  // payload cannot reach this handler at all. Asserted here so that if a future Node or a
+  // `--max-http-header-size` flag changes it, the ledger's "431" sentence goes red instead of
+  // quietly becoming false.
+  const oversizedQuery = await probe(HTTP_BASE, `/vuln/lookup?q=${'A'.repeat(64 * 1024)}`);
+  ok(
+    'a 64 KiB query is refused with 431 before reaching V10 — the oversized class cannot fire on a query site',
+    oversizedQuery.status === 431,
+    `status ${oversizedQuery.status}`,
+  );
+
+  // -- V14: the escaped twin, which is what makes the reflection rule's silence a measurement -----
+  //
+  // The pair is a controlled comparison and these assertions are what keep it one. If `V14` ever
+  // stopped serving markup it would go *not applicable* rather than quiet, and the coverage table
+  // would silently lose a cell while every test stayed green — so the content type is asserted
+  // exactly as `V10`'s is, and the escaping is asserted on both sides: the entity present, the raw
+  // metacharacters absent.
+  const escapedControl = await probe(HTTP_BASE, '/vuln/lookup-escaped?q=shoes');
+  ok('V14 answers 200', escapedControl.status === 200, `status ${escapedControl.status}`);
+  ok(
+    'V14 serves text/html too — otherwise the rule goes not-applicable and demonstrates the wrong state',
+    (escapedControl.header('content-type') ?? '').includes('text/html'),
+    escapedControl.header('content-type') ?? '(none)',
+  );
+
+  const escaped = await probe(
+    HTTP_BASE,
+    `/vuln/lookup-escaped?q=${encodeURIComponent('<tflw>')}`,
+  );
+  ok(
+    'V14 escapes `<tflw>` to `&lt;tflw&gt;`',
+    escaped.body.includes('&lt;tflw&gt;'),
+    escaped.body.slice(0, 120),
+  );
+  ok(
+    'V14 leaves no raw angle bracket from the payload — the half that makes the finding absent',
+    !escaped.body.includes('<tflw>'),
+    escaped.body.slice(0, 120),
+  );
+
+  // -- V11: traversal, and only the relative payload escapes ----------------------------------
+  const item = await probe(HTTP_BASE, '/vuln/items/7');
+  ok('V11 answers 200 for its own item', item.status === 200, `status ${item.status}`);
+  ok(
+    "V11's id is digit-shaped, so tflw recognises it as an identifier segment at all",
+    item.body.includes('seventh'),
+    item.body.slice(0, 80),
+  );
+
+  const traversed = await probe(
+    HTTP_BASE,
+    `/vuln/items/${encodeURIComponent('../../../../etc/passwd')}`,
+  );
+  ok(
+    'V11 reads /etc/passwd on the relative traversal payload',
+    traversed.status === 200 && /(^|\n)root:[^:\n]*:0:0:/.test(traversed.body),
+    `status ${traversed.status}, body ${traversed.body.slice(0, 60)}`,
+  );
+
+  // The three variants that must NOT escape. This handler does no `../` stripping and no second
+  // decode, so a filter-defeating payload has nothing to defeat — which is the honest answer and
+  // the reason VULNS.md claims one payload rather than the traversal class.
+  for (const [label, payload] of [
+    ['percent-encoded', '..%2f..%2f..%2f..%2fetc%2fpasswd'],
+    ['doubled-dot-slash', '....//....//....//....//etc/passwd'],
+    ['absolute', '/etc/passwd'],
+  ]) {
+    const res = await probe(HTTP_BASE, `/vuln/items/${encodeURIComponent(payload)}`);
+    ok(
+      `V11 404s on the ${label} traversal variant — it escapes nothing here`,
+      res.status === 404,
+      `status ${res.status}`,
+    );
+  }
+
+  // -- V12/V13: one route, two leaves, two rules ----------------------------------------------
+  const note = await json(HTTP_BASE, '/vuln/notes', {
+    method: 'POST',
+    body: { text: 'hello', title: 'a note' },
+  });
+  ok('V12/V13 answer 201 to an ordinary body', note.status === 201, `status ${note.status}`);
+  ok(
+    'the control body discloses nothing — the disclosure rule subtracts the control, so this must hold',
+    !note.raw.includes('QueryFailedError'),
+    note.raw.slice(0, 120),
+  );
+
+  const quoted = await json(HTTP_BASE, '/vuln/notes', {
+    method: 'POST',
+    body: { text: "tflw'", title: 'a note' },
+  });
+  ok(
+    'V12 leaks the ORM exception class name on an unbalanced single quote',
+    quoted.raw.includes('QueryFailedError'),
+    `status ${quoted.status}, body ${quoted.raw.slice(0, 120)}`,
+  );
+  // The wording check is deliberately inverted: it asserts that the Postgres phrasing is NOT the
+  // `syntax error at or near` literal tflw's SQL detector carries. That is why the plant is keyed
+  // on the class name, and if a future Postgres starts saying "syntax error" this line going red
+  // is the signal that the reasoning in VULNS.md needs revisiting — not that anything broke.
+  ok(
+    "…and it is the class name doing the work: Postgres says 'unterminated quoted string', not 'syntax error at or near'",
+    !quoted.raw.includes('syntax error at or near'),
+    quoted.raw.slice(0, 160),
+  );
+
+  for (const [label, text] of [
+    ['a double quote', 'tflw"'],
+    ['a trailing semicolon', 'tflw;'],
+  ]) {
+    const res = await json(HTTP_BASE, '/vuln/notes', {
+      method: 'POST',
+      body: { text, title: 'a note' },
+    });
+    ok(
+      `V12 does NOT fire on ${label} — it is valid inside a single-quoted SQL literal`,
+      res.status === 201 && !res.raw.includes('QueryFailedError'),
+      `status ${res.status}`,
+    );
+  }
+
+  const oversized = await json(HTTP_BASE, '/vuln/notes', {
+    method: 'POST',
+    body: { text: 'hello', title: 'A'.repeat(64 * 1024) },
+  });
+  ok(
+    'V13 accepts a 64 KiB title with 201 — no bound refused it, which is the whole finding',
+    oversized.status === 201 && oversized.body?.titleLength === 64 * 1024,
+    `status ${oversized.status}, titleLength ${oversized.body?.titleLength}`,
+  );
+
+  const confused = await json(HTTP_BASE, '/vuln/notes', {
+    method: 'POST',
+    body: { text: 1234567890, title: 'a note' },
+  });
+  ok(
+    'a type-confusion payload is refused 422 with no disclosure — the pipe works, so the class yields no positive',
+    confused.status === 422 && !confused.raw.includes('QueryFailedError'),
+    `status ${confused.status}`,
+  );
+}
+
 // ── ledger parity: no route without a row, no row without a route ────────────────────────────
 section('VULNS.md parity — every fixture route has a row, and every row has a route');
 {
@@ -560,7 +732,17 @@ section('VULNS.md parity — every fixture route has a row, and every row has a 
   //
   // The prefix comes from `@Controller('…')` rather than being assumed to be `vuln`, so a fixture
   // controller mounted somewhere else is still checked against the ledger under its real path.
-  const controllers = ['vuln/vuln.controller.ts', 'vuln/vuln-orders.controller.ts'];
+  //
+  // M134c adds the third. This list is hand-maintained and that is its known weakness — a fourth
+  // controller added without a line here is invisible to both halves of the parity check, which is
+  // exactly the fail-open shape the paragraph above describes. It stays a list rather than a
+  // directory scan only because `vuln/` also holds `vuln.module.ts` and `dto/`, and a scan that
+  // had to exclude those would encode the same assumption less visibly.
+  const controllers = [
+    'vuln/vuln.controller.ts',
+    'vuln/vuln-orders.controller.ts',
+    'vuln/vuln-input.controller.ts',
+  ];
   const routes = [];
   for (const file of controllers) {
     const src = readFileSync(path.join(ROOT, 'apiV2/src', file), 'utf8');
