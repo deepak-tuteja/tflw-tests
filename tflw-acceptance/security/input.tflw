@@ -1,0 +1,98 @@
+# M134c (testFlow PLAN_M134_PENTEST_TIER3.md, D379/D395–D400) — the pentest arc's **third** tier,
+# input handling, graded the same three ways as the two before it.
+#
+# `expect response has no input handling violations` re-sends the request the last `api` step
+# actually made, once per (mutable input × payload), with exactly one input replaced each time, and
+# judges what came back. So unlike Tier 1 this file's assertions **cost requests**, and unlike Tier 2
+# they change no identity at all — same principal, same credentials, same headers, only the payload
+# moves. Nothing below declares `as <session>`, and that is deliberate rather than omitted.
+#
+# Written with the **negated** matcher (`not has no …`) for the positives, exactly as
+# `positives.tflw` is and for the same reason: green precisely when the pack found something, so
+# every test here fails if a rule stops firing against a response VULNS.md says it must fire on.
+# What it does not pin is *which* rule fired — `../../scripts/verify-input-acceptance.mjs` reads the
+# same run's report and checks the exact rule ids, per rule, in all three states.
+#
+# **The severity floor is the only isolation the grammar offers, and here it happens to be good.**
+# The Tier 3 pack genuinely spans the scale — `sec/path-traversal-read` critical,
+# `sec/error-detail-disclosure` serious, `sec/reflected-input-unescaped` moderate,
+# `sec/oversized-input-accepted` minor — so unlike Tier 2's two-critical-rule pack, a floor really
+# does narrow it. `V11` below is fully isolated by `critical` alone.
+#
+# Run under `--env secureLocal` (default), which is the env granting `probe mutating` and
+# `probe oversized`. `probe traversal` is granted on the `plaintext` env instead, and `V11` lives in
+# `input-plaintext.tflw` for that reason. Under `--env plaintext` these same assertions go **red**
+# by design — no class is granted, no rule applies, and D285 fails an assertion that had no power to
+# fail. That red is a measurement and it belongs to the grader, not to this file.
+
+@security @vuln @input
+test "sec/reflected-input-unescaped fires on a query echoed into markup (V10)"
+  api GET /vuln/lookup?q=shoes
+  expect status equals 200
+  # `moderate` carries the two rules above it as well, but neither can engage here: nothing on this
+  # route reads a file, and its only error path is the router's. So a green line is the reflection
+  # rule, and the grader confirms the exact id.
+  #
+  # Only `injection/html-metacharacters` fires — the rule requires the payload to carry angle
+  # brackets *and* the response to be markup, so `{{7*7}}` reaches this route, comes back verbatim
+  # and is correctly not a finding. A JSON echo of the same payload would not be one either.
+  expect response not has no moderate input handling violations
+
+@security @vuln @input
+test "sec/error-detail-disclosure and sec/oversized-input-accepted fire on one body, at two leaves (V12, V13)"
+  # One observed request, two mutable leaves, two rules — which is what makes per-site attribution
+  # demonstrable at all. `text` is concatenated into a raw SQL string; `title` is stored with no
+  # bound of any kind.
+  api POST /vuln/notes body { text: "hello", title: "a note" }
+  expect status equals 201
+  # `serious` reaches the disclosure rule and the traversal rule above it; the latter cannot engage
+  # on a route that reads no files, so this line is `V12`. The evidence is the ORM exception class
+  # name `QueryFailedError`, which the handler serialises itself — the global `ProblemDetailsFilter`
+  # scrubs anything it catches, so an uncaught error here would disclose nothing.
+  expect response not has no serious input handling violations
+  # `minor` is the lowest rank, so this floor narrows nothing and puts the whole pack in play. It is
+  # the only floor that can reach `sec/oversized-input-accepted`, and the grader is what pins that
+  # the finding at this floor is the oversized one rather than the disclosure again.
+  expect response not has no minor input handling violations
+
+@security @input
+test "the pack stays silent against a correct endpoint that has inputs to mutate"
+  # The negative half, and the reason it names a **real** route: `plan_v2.md` §4.2's rule is that
+  # real endpoints stay clean, so this is the untouched app answering. Mutating it does not make it
+  # dirty — it probes it.
+  #
+  # **`q` is the sharpest possible control for `V12`.** It is a free-text string that reaches
+  # Postgres full-text search — the same journey `V12`'s `text` makes — and the only difference is
+  # that this one is parameterised. So `injection/sql-quote` lands in a real query here and produces
+  # a `200` with results, while the identical payload on `V12` produces a serialised
+  # `QueryFailedError`. That contrast is the whole rule in two tests.
+  #
+  # A query site rather than a body one on purpose. `probe mutating` is granted on this env, so a
+  # real `POST` here would re-send fifteen mutated writes per leaf against live data for no coverage
+  # this file does not already have. D380's sweep of the whole suite is where the volume question
+  # gets answered, under its own explicit run.
+  api GET /products?q=shoes
+  expect status equals 200
+  # Nothing is accepted that should not be (the 64 KiB value is refused `431` by Node before it
+  # reaches a handler at all), nothing is disclosed (no stack, no SQL grammar, no ORM class name),
+  # and nothing is reflected (the response is JSON, and a JSON echo is correctly not a reflection
+  # finding). Rules applied and found nothing, which is what a passing Tier 3 assertion means.
+  expect response has no input handling violations
+
+@security @vuln @input
+test "sec/reflected-input-unescaped stays silent when the same markup route escapes (V14)"
+  # **The controlled twin of `V10`, and the only place the reflection rule is quiet rather than
+  # absent.** The negative above proves nothing about this rule: it answers JSON, and
+  # `reflectedInputUnescaped` declines a JSON echo by design, so the rule stands down there as
+  # *not applicable* — a state already demonstrated. A rule that never engaged has not been shown to
+  # stay quiet, which is Tier 1's `V2`/`V5` precedent.
+  #
+  # `V14` differs from `V10` in exactly one thing: it HTML-escapes before interpolating. Same route
+  # shape, same `text/html` body, same payload sent and answered — `<tflw>` comes back as
+  # `&lt;tflw&gt;` and there is no finding. That is a measured silence, not an unexercised rule.
+  #
+  # The `moderate` floor keeps this row comparable to `V10`'s: three rules in play, traversal
+  # withheld on this env, reflection and disclosure applicable. `V10` fires one; this fires none.
+  api GET /vuln/lookup-escaped?q=shoes
+  expect status equals 200
+  expect response has no moderate input handling violations
