@@ -27,6 +27,12 @@
 //
 //     npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs
 //
+// **AND ITS SIBLING, SINCE `M137a`:** `node scripts/verify-artifact-contract.mjs`, off the same
+// re-pack. These two repositories are joined at *two* seams — code assignment, which this script
+// guards, and the shape of a consumed artifact, which that one does. `M136c-01` is what the second
+// one cost while it had no gate: `M136a` renamed a field in `findings.sarif`, no code moved, this
+// script was green and correct throughout, and eleven SARIF entries failed in an acceptance phase.
+//
 // `refresh-tflw` re-packs from the local tflw checkout, so this answers in seconds, on your own
 // machine, with no Docker, no 32-phase sweep, no PR and no merge. **This is the whole of the fix
 // for `M130-07`, and it is a discipline rather than machinery** — nothing forces anyone to run it,
