@@ -25,6 +25,7 @@
     "verify:security-target": "node scripts/verify-security-target.mjs",
     "verify:security-acceptance": "node scripts/verify-security-acceptance.mjs",
     "verify:input-acceptance": "node scripts/verify-input-acceptance.mjs",
+    "verify:sarif-acceptance": "node scripts/verify-sarif-acceptance.mjs",
     "sweep:input-volume": "node scripts/sweep-input-volume.mjs",
     "test:webv2-admin": "tflw run --env webv2Admin tests/.env-specific/webv2-admin.tflw tests/.env-specific/orgs-mixed.tflw",
     "test:ui-admin": "tflw run --env webv2Admin tests/.env-specific/ui-admin/*.tflw",

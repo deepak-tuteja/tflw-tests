@@ -5,7 +5,11 @@
 > `M128c`'s D295 bar for the pentest arc's rule pack — and is graded by
 > `scripts/verify-security-acceptance.mjs` (`npm run verify:security-acceptance`), not by whether it
 > is green. It needs `VULN_MODE=1 node cli.mjs start`. See `../VULNS.md` for the ledger and the
-> measured result.
+> measured result. Two more graders read the same corpus:
+> `verify-input-acceptance.mjs` for Tier 3's input pack, and
+> `verify-sarif-acceptance.mjs` for the `findings.sarif` document tflw hands to a code-scanning UI —
+> the last of those is the only one that runs in CI, because a wrong SARIF file uploads successfully
+> and produces no alerts, so it is the only one whose failure nobody would otherwise see.
 
 
 PLAN.md decision 41's publish gate: ~10 scenarios implemented twice — once as `.tflw` tests, once
