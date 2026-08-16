@@ -86,6 +86,13 @@ const PHASES = [
   // run per its own header comments, never wired into any automated check. Same "script it, don't
   // trust a one-time manual check forever" reasoning as every other *-check phase above.
   { name: 'check-diagnostics', cmd: 'node scripts/verify-check-diagnostics.mjs' },
+  // M137a (`M136c-01`): the sibling of `check-diagnostics`, for the *other* seam between these two
+  // repositories. That one guards `TF0xx` assignment; this one guards the shape of an artifact this
+  // repo reads. `M136a` renamed a field in `findings.sarif`, no code moved, `check-diagnostics`
+  // stayed green, and the break surfaced as eleven failed entries in `sarif-acceptance` — the
+  // slowest route available. Both are static and answer in milliseconds; both are in the `safety`
+  // group, beside each other, because they are one idea with two objects.
+  { name: 'artifact-contract', cmd: 'node scripts/verify-artifact-contract.mjs' },
   // M50 (PLAN_WEBV2_M45.md): `tflw pick` had only one manual, non-scripted verification pass
   // (PROGRESS.md's M42 checklist) — a real click still isn't automatable (no CDP endpoint exposed,
   // deliberately manual by design), but launching + a clean Ctrl+C exit now is, same "script it"
@@ -179,7 +186,7 @@ const PHASES = [
 const PHASE_GROUPS = {
   core: ['full suite', '--tag orderOps', '--tag smoke,catalogOps', 'demo-fail-check', '--tag orgOps', '--tag inventoryOps', 'migrate-check', 'secure-local-check'],
   tooling: ['--tag api', 'watch-check', 'pick-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check', 'security-target-check', 'sarif-acceptance'],
-  safety: ['--tag identityOps', '--tag mixed', '--tag smoke,orderOps', '--tag adminOps', '--tag catalogOps', 'safety-flags-check', 'check-diagnostics', 'safety-redaction-check'],
+  safety: ['--tag identityOps', '--tag mixed', '--tag smoke,orderOps', '--tag adminOps', '--tag catalogOps', 'safety-flags-check', 'check-diagnostics', 'artifact-contract', 'safety-redaction-check'],
   'security-ui': ['--tag smoke,identityOps', 'cli-flags-check', '--tag smoke,adminOps', '--tag ui', 'webv2-admin-check', '--tag smoke,inventoryOps', 'logging-check', 'mtls-rejection'],
 };
 
