@@ -139,6 +139,24 @@ const PHASES = [
     cmd: 'node scripts/verify-security-target.mjs',
     stackEnv: { VULN_MODE: '1' },
   },
+  // M135c (testFlow PLAN_M135_SARIF.md, D415): the SARIF document, graded against `VULNS.md`.
+  //
+  // The only acceptance script in this repo that runs in CI, and the reason is the one asymmetry
+  // that makes SARIF different from every other artifact here: a wrong document **uploads
+  // successfully and produces no alerts**, with nothing anywhere to read. `verify:security-
+  // acceptance` and `verify:input-acceptance` publish coverage numbers a human reads; this one
+  // guards a file a machine consumes silently, so nobody would ever notice it going wrong.
+  //
+  // `VULN_MODE=1` for the same reason `security-target-check` needs it — it grades the planted
+  // routes — and it is placed immediately after that phase because the two share the stack shape.
+  // The document itself is copied into `report/` by the script, so `archivePhaseReport` carries it
+  // into `report-by-phase/sarif-acceptance/` and CI's existing upload archives it (D415's artifact)
+  // with no workflow change.
+  {
+    name: 'sarif-acceptance',
+    cmd: 'node scripts/verify-sarif-acceptance.mjs',
+    stackEnv: { VULN_MODE: '1' },
+  },
 ];
 
 // PLAN_CI.md decision 16 (Round 3, 2026-08-03 grill-me): duration-balanced static groups for a
@@ -160,7 +178,7 @@ const PHASES = [
 // not treated as a considered placement.
 const PHASE_GROUPS = {
   core: ['full suite', '--tag orderOps', '--tag smoke,catalogOps', 'demo-fail-check', '--tag orgOps', '--tag inventoryOps', 'migrate-check', 'secure-local-check'],
-  tooling: ['--tag api', 'watch-check', 'pick-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check', 'security-target-check'],
+  tooling: ['--tag api', 'watch-check', 'pick-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check', 'security-target-check', 'sarif-acceptance'],
   safety: ['--tag identityOps', '--tag mixed', '--tag smoke,orderOps', '--tag adminOps', '--tag catalogOps', 'safety-flags-check', 'check-diagnostics', 'safety-redaction-check'],
   'security-ui': ['--tag smoke,identityOps', 'cli-flags-check', '--tag smoke,adminOps', '--tag ui', 'webv2-admin-check', '--tag smoke,inventoryOps', 'logging-check', 'mtls-rejection'],
 };

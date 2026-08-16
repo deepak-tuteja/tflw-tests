@@ -22,7 +22,18 @@ the other ~45 files' results mean anything.
 ```
 VULN_MODE=1 node cli.mjs start          # the stack, with the fixture slice present
 node scripts/verify-security-target.mjs # assert every claim below against it
+node scripts/verify-sarif-acceptance.mjs # assert the SARIF document says the same thing (M135c)
 ```
+
+Three graders read this table, and they read it for different reasons.
+`verify-security-target.mjs` asks whether the *target* still answers the way the rows claim — a
+failure there means apiV2, nginx or this file disagree, never that tflw regressed.
+`verify-security-acceptance.mjs` and `verify-input-acceptance.mjs` ask which rules fired, stayed
+silent, or stood down in the *run report*. `verify-sarif-acceptance.mjs` asks whether the
+**machine-readable document** tflw hands to a code-scanning UI carries the same answer — which
+matters because that is the one artifact whose mistakes are silent: an invalid or mis-anchored SARIF
+file uploads successfully and produces no alerts at all. A row edited here without editing that
+script is a row two graders check and one no longer does.
 
 The plaintext base is `env local` (`http://localhost:4001/v1`, straight to the app). The TLS base is
 `env secureLocal` (`https://localhost:8443/v1`, through M22's nginx sidecar). Several rules answer
