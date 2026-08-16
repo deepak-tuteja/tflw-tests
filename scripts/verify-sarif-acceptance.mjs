@@ -419,10 +419,22 @@ console.log('\nD412 — a rule that stood down is named, not merely missing:\n')
 
 {
   let sawNotApplicable = false;
+  let sawSubject = false;
   for (const { name, doc } of documents) {
     const stoodDown = notApplicableOf(doc);
+    // **`n.id`, not `n.rule` — and this is the whole reason `M136c` had to touch this file.**
+    // `M136a`/D421 put a second kind of thing in this bucket and renamed the key that identifies it,
+    // because a rule id and a principal name are different namespaces that can collide silently. The
+    // old field name still *read* fine here: `n.rule` came back `undefined`, `!n.rule` was true for
+    // every entry, and this loop reported all eleven of them as "carries no reason" while their
+    // `because` arrays were sitting right there in the failure message. That is worth recording
+    // because the wrong half was named — a check that conflates two conditions in one message sends
+    // whoever reads it to the wrong file.
     const applied = new Set(rulesOf(doc).map((r) => r.id));
-    const overlap = stoodDown.filter((n) => applied.has(n.rule));
+    // Only the rule half can overlap. A subject id is namespaced (`principal:shopper`) precisely so
+    // it can never match a rule id, so including subjects here would compare two things that are
+    // structurally incapable of colliding and quietly report a constant.
+    const overlap = stoodDown.filter((n) => n.kind === 'rule' && applied.has(n.id));
     if (overlap.length > 0) {
       // Both at once is not a contradiction — different assertions in one run can reach different
       // responses — so this is reported and not failed. It is here because a document where *every*
@@ -430,18 +442,77 @@ console.log('\nD412 — a rule that stood down is named, not merely missing:\n')
       console.log(`  (${name}: ${overlap.length} rule(s) both applied somewhere and stood down elsewhere — expected when one run makes several requests)`);
     }
     for (const n of stoodDown) {
-      if (!n.rule || !Array.isArray(n.because) || n.because.length === 0) {
+      // D421's discriminator, asserted rather than assumed. Both kinds are *did-not-look* and they
+      // are not the same fact: a rule declined to judge an observation it was given, a subject never
+      // got an observation at all. An entry that says neither is one a consumer has to guess at, and
+      // guessing wrong reads a principal as a rule that never fires.
+      if (n.kind !== 'rule' && n.kind !== 'subject') {
+        fail(`[${name}] a tflw/notApplicable entry does not say which kind it is: ${JSON.stringify(n)}. Without \`kind\` a consumer reads a principal nobody could ask as a rule that never fires`);
+        continue;
+      }
+      if (!n.id) {
+        fail(`[${name}] a tflw/notApplicable entry names nothing: ${JSON.stringify(n)}`);
+        continue;
+      }
+      if (!Array.isArray(n.because) || n.because.length === 0) {
         fail(`[${name}] a tflw/notApplicable entry carries no reason: ${JSON.stringify(n)}. "Not applicable" without why is the empty state this whole model exists to avoid`);
       }
     }
-    if (stoodDown.length > 0) {
+    const rules = stoodDown.filter((n) => n.kind === 'rule');
+    const subjects = stoodDown.filter((n) => n.kind === 'subject');
+    if (rules.length > 0) {
       sawNotApplicable = true;
-      pass(`[${name}] ${stoodDown.length} rule(s) stood down, each with its unmet precondition — e.g. ${stoodDown[0].rule}: ${stoodDown[0].because[0]}`);
+      pass(`[${name}] ${rules.length} rule(s) stood down, each with its unmet precondition — e.g. ${rules[0].id}: ${rules[0].because[0]}`);
+    }
+    if (subjects.length > 0) {
+      sawSubject = true;
+      pass(`[${name}] ${subjects.length} subject(s) nobody could ask, each namespaced and with its reason — e.g. ${subjects[0].id}: ${subjects[0].because[0]}`);
     }
   }
   if (!sawNotApplicable) {
     fail('no run reported a single stood-down rule, so D412\'s third state is not demonstrated anywhere in this corpus');
   }
+  // `M136c` — D421's own half of the same argument, and the reason it is a separate assertion rather
+  // than a widened one. The rule half was already demonstrated by this corpus; the subject half is
+  // new, reaches SARIF only through `scanBlindSpot.declines`, and is the *only* place the artifact a
+  // machine consumes says a principal existed that the tier could not ask about. A document carrying
+  // rules and no subjects is exactly what this file looked like before `M136a`, and it passed.
+  if (!sawSubject) {
+    fail('no run reported a single un-asked subject, so D421\'s second kind is not demonstrated anywhere in this corpus — `scanBlindSpot.declines` is not reaching SARIF');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// D421/`M136c` — the un-asked principal, in the artifact a machine reads
+// ---------------------------------------------------------------------------
+
+// The SARIF end of the same claim `verify:security-acceptance` grades on the console and in
+// `results.json`: apiV2's real `AnyAuthGuard` refuses a cookie-borne principal on a mutating request
+// before authorization is consulted (`apiV2/src/auth/guards/any-auth.guard.ts:70-75`), so `shopper`
+// is not *allowed* and not *denied* but un-askable. Asserted here as well because this is the only
+// one of the three channels a human never looks at — a wrong or missing entry uploads successfully
+// and produces no complaint from anything, which is this whole file's founding asymmetry.
+{
+  const doc = documents.find((d) => d.name.startsWith('security') && d.name.includes('secureLocal'))?.doc;
+  const subjects = notApplicableOf(doc).filter((n) => n.kind === 'subject');
+  const shopper = subjects.filter((n) => n.id === 'principal:shopper');
+  if (shopper.length === 0) {
+    fail(`D421: no un-asked subject named \`principal:shopper\` in the secureLocal security document. Subjects present: ${JSON.stringify(subjects.map((s) => s.id))}`);
+  } else if (!shopper.every((s) => s.because.some((b) => /this may be CSRF rather than authorization/.test(b)))) {
+    // The reason, not merely the presence. If D325's cookie-borne branch stopped matching, the probe
+    // would fall through to the generic "the host answered 403, which is not an authorization
+    // decision", still be un-askable, still appear here — and the repair a reader takes from the two
+    // sentences is completely different. Same argument as `verify:security-acceptance`'s, one
+    // artifact further out.
+    fail(`D421: \`principal:shopper\` is un-asked but not for CSRF: ${JSON.stringify(shopper.map((s) => s.because))}`);
+  } else {
+    pass(`D421: the SARIF document names \`principal:shopper\` un-asked ${shopper.length}× — refused by apiV2's real AnyAuthGuard for CSRF, in the artifact only a machine reads`);
+  }
+  // The namespace is the point of `id`, so it is asserted rather than trusted: a bare `shopper` here
+  // would collide with a rule id in a consumer that groups by this field, which is what D421's
+  // namespacing exists to prevent and what nothing else in this file would notice.
+  const bare = subjects.filter((n) => !/^[a-z]+:/.test(n.id));
+  if (bare.length > 0) fail(`D421: un-asked subject id(s) are not namespaced: ${JSON.stringify(bare.map((b) => b.id))}`);
 }
 
 // ---------------------------------------------------------------------------
