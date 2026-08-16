@@ -156,6 +156,30 @@ was in question. Two consequences, both deliberate:
    the target's transport, not of the rule, and tflw should say so rather than count it as a
    refusal — filed for `M130b`.
 
+**Closed, and graded here since `M136c`.** `M130b` gave the outcome its own kind (`inconclusive`,
+D325) so the tier stopped scoring the refusal as clean; `M136a` gave it a way *out of the run* —
+`scanBlindSpot.declines`, which reaches the console line, `results.json` and SARIF's
+`tflw/notApplicable`. `verify:security-acceptance` now asserts the whole path against this guard:
+
+```
+authorization declined 1×: `shopper` — a cookie-borne principal was refused on a DELETE (403);
+this may be CSRF rather than authorization, since a cookie session cannot supply the CSRF token
+a mutating request needs. Give it a bearer session to judge it
+```
+
+**Why it is graded here and not only in tflw.** tflw proves the same reporting against a `node:http`
+fixture that `403`s any mutating request without the header — fast, deterministic, and a defence
+tflw wrote in order to be caught by tflw, which is `M130-01`'s own failure mode wearing a test's
+clothes. The `403` above is issued by `apiV2/src/auth/guards/any-auth.guard.ts:70-75`, through nginx
+and NestJS, by a guard written for the app.
+
+**What the grader checks that the probe counts do not.** `V8` and `V9` already assert
+`inconclusive: 1`. If D325's cookie-borne branch stopped matching, the probe would fall through to
+the generic *"the host answered 403, which is not an authorization decision"*, still land in
+`inconclusive`, and every ledger row would still pass — so the assertion is on the **reason**, and
+its control is `shopperBearer`: the same human on a bearer token, who meets no CSRF pre-flight, is
+never declined, and leaks outright on `V9`.
+
 ### The Tier 3 plants `V10`–`V14`, and why a whole new controller was needed
 
 `M134c` (testFlow [PLAN_M134_PENTEST_TIER3.md](../testFlow/PLAN_M134_PENTEST_TIER3.md), D379/D395)
@@ -464,14 +488,25 @@ is a fact about the credential, not about the person.
 What the opt-in *does* prove is still worth having, and the corpus pins it by contrast: the same
 `DELETE`, the same two principals, differing only in whether the target says `probe mutating` —
 
-| target | probe line |
-| --- | --- |
-| opt-in (`secureLocal`) | `2 principals probed — 1 inconclusive, 1 refused` |
-| default (`plaintext`) | `2 principals probed — 2 not probed` |
+| target | probe line | who the blind spot names, and why |
+| --- | --- | --- |
+| opt-in (`secureLocal`) | `3 principals probed — 1 inconclusive, 2 refused` | `shopper` — refused for CSRF on the `DELETE` |
+| default (`plaintext`) | `3 principals probed — 3 not probed` | all three — no `probe mutating` covers the target |
 
-The `inconclusive` is the CSRF caveat below, live: a cookie-borne principal refused `403` on a
+**Both numbers were `2` here until `M136c`, and had been wrong since `M132b`** declared
+`shopperBearer` and took every probe set in this corpus from two principals to three. Nothing was
+red: the grader reads the run, this table is prose, and the two had no way to disagree out loud.
+Recorded rather than quietly corrected, because it is the same defect class the third column now
+guards against — a number that describes a run nobody re-measured.
+
+The `inconclusive` is the CSRF caveat above, live: a cookie-borne principal refused `403` on a
 mutating verb has not demonstrated an authorization boundary, and the report says so instead of
 scoring it clean.
+
+The third column is the part `M136c` added and the reason the contrast is now legible rather than
+merely true. Both rows mean *the tier could not ask*, and they are **different repairs** — give
+`shopper` a bearer session, versus write `probe mutating` on the target. A report that ran them
+together into one number would be back where `M130-01` started.
 
 ## Not planted, on purpose
 

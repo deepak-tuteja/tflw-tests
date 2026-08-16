@@ -228,8 +228,129 @@ const APPLICABILITY_PROBES = [
     // did with each, which is the more useful answer and the one that makes the two halves
     // comparable.)
     expectProbes: { total: 3, 'not probed': 3 },
+    // `M136c`. The counts line says *three were not probed*; this says **which three, and why**, in
+    // the channel `M136a` added — and it is the contrast that makes D311's control legible. The
+    // opt-in half declines exactly one principal, for CSRF; this half declines all three, for a
+    // reason about the target declaration rather than about any of them. Both are "the tier could
+    // not ask", and they are different repairs: give `shopper` a bearer session, versus write
+    // `probe mutating` on the target. A report that ran them together into one number would be back
+    // where `M130-01` started.
+    //
+    // The three are the probe set for a `peer`-owned test — `admin` is `privileged` and excluded,
+    // and an owner is never in its own probe set. `shopperBearer` is here and forbidden on the
+    // opt-in half, which is the same fact from both sides: it is declined when nobody was probed,
+    // and never declined when somebody was.
+    expectDeclines: ['shopper', 'shopperBearer', 'anonymous'].map((subject) => ({
+      scan: 'authorization',
+      subject,
+      reason: /^DELETE changes state, and no `probe mutating` covers /,
+      why: 'the target declares no `probe mutating`',
+      count: 1,
+    })),
   },
 ];
+
+/** `M136c` — D422's second proof, and the only one of the two made against a defence tflw did not
+ * write.
+ *
+ * `M130-01`: apiV2's `AnyAuthGuard` refuses a cookie-borne principal on a mutating request that
+ * carries no `X-CSRF-Token`, *before* authorization is consulted (`apiV2/src/auth/guards/
+ * any-auth.guard.ts:70-75`). A differential oracle scores that refusal clean, so the tier's answer
+ * for that principal is not "allowed" or "denied" but **un-askable** — D325 grades it `inconclusive`
+ * and `M136a`'s `scanBlindSpot.declines` is what carries it out of the run and into the report,
+ * `results.json` and SARIF.
+ *
+ * tflw proves the reporting against a `node:http` fixture that 403s any mutating request without the
+ * header. That fixture is fast, deterministic and mutation-killable, and it is also a defence tflw
+ * invented to be caught by tflw — `M130-01`'s own failure mode wearing a test's clothes. This is the
+ * half that cannot be: the 403 below is issued by NestJS through nginx, by a guard written for the
+ * app and not for the scanner.
+ *
+ * **Why the probe-outcome rows above are not already this check.** Every one of them asserts a
+ * count — `inconclusive: 1` on V8 and on V9. If D325's cookie-borne branch stopped matching
+ * tomorrow, the same probe would fall through to the generic `the host answered 403, which is not an
+ * authorization decision`, still land in `inconclusive`, and **every ledger row in this file would
+ * still pass**. The reason text is the only thing that separates *the tier knows why it could not
+ * ask* from *the tier gave up and said so vaguely*, which is the distinction the whole blind-spot
+ * channel exists to make.
+ *
+ * **Why the subject is the sharpest control available here.** `shopper` and `shopperBearer` are the
+ * same human — alice — on a cookie and on a bearer token. The app's authorization answer for the two
+ * is identical; only the transport differs, and only the cookie one meets the CSRF pre-flight. So
+ * one is un-askable and the other leaks outright (V9, `leaked: 1`). A decline keyed on the wrong
+ * principal of that pair changes no count in any row above and would read as correct everywhere else.
+ *
+ * **Two rows and not one.** `reportDeclines` groups by reason, and the verb is inside the reason, so
+ * V8's `DELETE` and V9's `PUT` arrive separately rather than as one `count: 2`. Asserted because the
+ * collapsed form would still be a true statement about a blind spot and would have lost which
+ * request it is about — and because it is the observable difference between grouping by reason and
+ * grouping by subject.
+ *
+ * **`coverage` is deliberately not graded.** `apiSteps`/`withOwner` counts `api` steps across the
+ * discovered suite, so it moves whenever anyone adds a test — a fact about the corpus, not about a
+ * rule, and grading it here would turn every corpus edit into a red run in the file that grades
+ * rules. `declines` is per-run and per-principal, which is why it can be exact. */
+/** The CSRF branch's own sentence, matched rather than compared whole: the tail after the semicolon
+ * is advice to a human and may be reworded, while the head is the claim. A generic fallback reason
+ * (`the host answered 403, which is not an authorization decision`) does not match this, which is
+ * the entire point — see above. */
+const csrfReason = (verb, status = 403) =>
+  new RegExp(`^a cookie-borne principal was refused on a ${verb} \\(${status}\\); this may be CSRF rather than authorization`);
+
+const DECLINES = {
+  secureLocal: [
+    { scan: 'authorization', subject: 'shopper', reason: csrfReason('DELETE'), why: "refused on a DELETE for CSRF by apiV2's real AnyAuthGuard — D422's second proof", count: 1 },
+    { scan: 'authorization', subject: 'shopper', reason: csrfReason('PUT'), why: "refused on a PUT for CSRF by apiV2's real AnyAuthGuard — D422's second proof", count: 1 },
+  ],
+};
+
+/** Principals that must appear in no decline on this env's corpus run — see the bottom of
+ * `gradeDeclines` for why this is per-run rather than a global rule. */
+const NEVER_DECLINED = { secureLocal: ['shopperBearer'] };
+
+/** Graded as a set, exactly, in both directions: a decline the ledger does not name is as much a
+ * finding as one it names and the run did not produce. A new blind spot appearing in this corpus is
+ * something somebody should have to write down. */
+function gradeDeclines(label, report, expected, forbidden = []) {
+  const got = report.scanBlindSpot?.declines ?? [];
+  if (got.length !== expected.length) {
+    fail(`[${label}] blind-spot declines: expected ${expected.length}, got ${got.length}\n    actual: ${JSON.stringify(got, null, 2)}`);
+    return;
+  }
+  for (const want of expected) {
+    const match = got.find((d) => d.scan === want.scan && d.subject === want.subject && want.reason.test(d.reason));
+    if (!match) {
+      fail(
+        `[${label}] no ${want.scan} decline naming \`${want.subject}\` ${want.why}.\n` +
+          `    This is the assertion that separates "the tier knows why it could not ask" from "the tier\n` +
+          `    could not judge it" — the probe-count rows pass either way. Declines actually reported:\n` +
+          `    ${JSON.stringify(got, null, 2)}`,
+      );
+      continue;
+    }
+    if (match.count !== want.count) {
+      fail(`[${label}] \`${want.subject}\` — ${want.why} — declined ${match.count}×, ledger says ${want.count}×`);
+      continue;
+    }
+    console.log(`✓ [${label}] the blind spot names \`${match.subject}\` — ${want.why}`);
+  }
+  // The control that keeps the above from being a happy accident of naming. Same human, different
+  // transport: `shopperBearer` supplies no cookie, so the guard's CSRF pre-flight never runs for it
+  // and it is never un-askable *on a target that opted in*. If it appears here, either the engine is
+  // keying declines on the wrong principal or the target's guard changed shape — and V9's
+  // `leaked: 1`, which is this same principal getting `peer`'s order back from a `PUT`, would be
+  // measuring something else.
+  //
+  // Passed in per caller rather than hard-coded, because it is only true where a probe was permitted
+  // to happen: D311's default half declines all three principals including this one, and for a
+  // reason that has nothing to do with CSRF.
+  for (const subject of forbidden) {
+    const rows = got.filter((d) => d.subject === subject);
+    if (rows.length > 0) {
+      fail(`[${label}] \`${subject}\` was declined, and on this run nothing should have declined it: ${JSON.stringify(rows)}`);
+    }
+  }
+}
 
 const COUNTS = /(\d+) rules? — (\d+) applicable, (\d+) not applicable, (\d+) violations?/;
 const VIOLATION = /^\s*- \[(critical|serious|moderate|minor)\] (sec\/[a-z0-9-]+):/gm;
@@ -428,6 +549,10 @@ for (const env of ['secureLocal', 'plaintext']) {
   for (const [test, leftover] of byTest) {
     if (leftover.length > 0) fail(`[${env}] "${test}" ran ${leftover.length} security assertion(s) the ledger does not grade — add rows, or the corpus is claiming coverage nothing checks`);
   }
+  // `M136c` — run-level, so it is graded once per env rather than per row. `plaintext` runs no
+  // authorization assertion at all and must therefore report no declines: an empty expectation is
+  // the control that stops the check passing on whatever happens to be in the report.
+  gradeDeclines(env, report, DECLINES[env] ?? [], NEVER_DECLINED[env] ?? []);
 }
 
 // --- the third state, from D285's listing ------------------------------------
@@ -477,6 +602,7 @@ for (const probe of APPLICABILITY_PROBES) {
       continue;
     }
   }
+  if (probe.expectDeclines) gradeDeclines(`${probe.env} probe`, report, probe.expectDeclines);
   for (const id of step.stoodDown) (probe.kind === 'authz' ? seenAuthz : seen).notApplicable.add(id);
   console.log(`✓ [${probe.env}] D285 fired and named ${step.stoodDown.length} rules that stood down, exactly as the ledger says`);
 }
