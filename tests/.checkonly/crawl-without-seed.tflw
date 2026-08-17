@@ -1,0 +1,69 @@
+# crawl-without-seed.tflw — CHECK-ONLY FIXTURE (M137c): a `crawl` that declares no `seed`, so its
+# surface is empty before the run starts — demonstrates `tflw check`'s TF068 (checker, tflw M137c /
+# D443, the pentest arc's Tier 4).
+#
+# A crawl does not name its routes, it **discovers** them, from the `seed` clauses in its header. With
+# none it issues no request at all — so every assertion in its body judges nothing and could not have
+# failed whatever the application did. That is D285's no-power-to-fail rule arriving on Tier 4's new
+# construct, and it earns its own code because the repair is specific: give the crawl something to
+# crawl.
+#
+# **The span is the header, not the first assertion.** The bodies below are correct. Sending a reader
+# to a line that is right is worse than saying nothing, so the diagnostic underlines `crawl "…"`.
+#
+# **The same code has a runtime door, and the split is the whole design.** Zero `seed` clauses is a
+# fact about the *file*, decidable here. An OpenAPI document that answers 404, a run whose own tests
+# captured no traffic, and an `exclude` list that happens to cover every route discovered are facts
+# about the *run* — the interpreter refuses those, **reusing** this code rather than minting a second
+# one, because the repair reads the same from either side. Only the static half is demonstrable in a
+# check-only fixture; the runtime half needs a live server and belongs to the acceptance corpus.
+#
+# **`exclude` is not a seed**, which is the second crawl below. It subtracts from a surface and cannot
+# supply one — and a crawl carrying only an `exclude` is the shape most likely to look seeded at a
+# glance, which is exactly why it is worth a case of its own.
+#
+# **What must NOT fire here, and every one of them is a recorded decision rather than a gap:**
+#   * `TF039` (assert before any request) — a crawl body has no preceding request **by construction**,
+#     because the crawl is what issues them. `checkResponseScopes` is deliberately not wired to crawl
+#     bodies (tflw D464); wiring it would have put TF039 on every correct crawl that will ever be
+#     written, which is a checker refusing the only shape the feature has.
+#   * `TF060` (a security assertion with no `authorized target`) — this **is** wired to crawl bodies
+#     via `forEachExpect`, and stays silent only because this project's own config declares a target.
+#     If the root config ever loses it, this file goes red, and that is correct: a crawl is the most
+#     traffic-originating construct in the language and must not be the one that skips a D21 gate.
+#   * `TF067` (an input-handling assertion with nothing to mutate) — a rule about an `api` step's own
+#     literal shape, and a crawl body has no `api` step to read. `TF070` is what refuses one there.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/crawl-without-seed.tflw
+
+crawl "a surface nobody described"
+  expect response has no critical security violations
+
+crawl "an exclude cannot supply a surface"
+  exclude "/internal/**"
+  expect response has no critical security violations
+
+# --- the negative controls: one seed clause each, and TF068 goes quiet ---------------------------
+#
+# Without these, a future widening of the rule — refusing `seed traffic` for having no document to
+# read, say — would pass unnoticed, because the firing half above would keep firing either way. A
+# fixture that only demonstrates the loud half cannot tell a rule from an over-reach.
+
+crawl "the documented surface"
+  seed openapi "/openapi.json"
+  expect response has no critical security violations
+
+crawl "the surface this run's own tests already touched" as shopper, peer
+  # Both seeds and an `exclude` together, which is the shape a real suite writes. Two principals
+  # rather than one because Tier 2's oracle is differential: `authorization violations` compares what
+  # one identity may reach against what another may, so a single-principal crawl has nothing to
+  # subtract. That is also why the two crawls above assert `security` only — they declare no `as`.
+  seed openapi "/openapi.json"
+  seed traffic
+  exclude "/internal/**"
+  expect response has no critical security violations
+  expect response has no critical authorization violations
+  # `check` is the soft form of the same matcher, so it is accepted here for the same reason
+  # `expect` is — the crawl-body rule turns on the *matcher*, not on whether the step is fatal.
+  check response has no input handling violations

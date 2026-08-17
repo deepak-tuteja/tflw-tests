@@ -1,0 +1,62 @@
+# crawl-body-not-an-assertion.tflw — CHECK-ONLY FIXTURE (M137c): a step in a `crawl` body that is not
+# one of the three `violations` assertions — demonstrates `tflw check`'s TF070 (checker, tflw M137c /
+# D443/D450/D463, the pentest arc's Tier 4).
+#
+# **What this rule protects is the claim that made Tier 4 a declaration instead of a sixth workload
+# kind**: a crawl is a *source of requests*, not a kind of judgement. It issues one request per
+# discovered route per declared principal, and each `expect` in its body judges every one of those
+# responses. So an `api` step there is a request nobody will send under a principal nobody chose, and
+# `expect status equals 200` names a response the construct does not have — because a crawl has many.
+# One repair covers the whole family, which is what earns one code: put the step in a `test`.
+#
+# **Enforced by the checker, not the grammar**, and `ast.ts`'s `CrawlDecl.body` says so. The parser
+# admits any step on purpose, so that a misplaced one gets this sentence rather than `expected an
+# expect` — the same layering `retry` (D96) and the browser-step rejection (D19) already use.
+#
+# **Deliberately not `TF033`.** That is what D19's sibling rule reuses, and it is the counter-example
+# rather than the pattern: `TF033` predates the one-code-one-repair rule this arc settled on and
+# already carries several unrelated repairs.
+#
+# **`TF069` does not exist and never will.** tflw's D456 withdrew it, and by the time this code was
+# minted six comments across three packages already used that number as a pointer to the withdrawal —
+# so it was spent without ever being allocated (D463). A gap in the sequence here is a decision.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/crawl-body-not-an-assertion.tflw
+
+crawl "a crawl that tries to write its own requests"
+  seed traffic
+  # The headline case, and the one D450 leads with. Under which principal would this be sent?
+  api GET /products
+  expect response has no critical security violations
+
+crawl "a crawl that asserts about one response"
+  seed traffic
+  # Both of these name `response` in the singular. A crawl has as many responses as it discovered
+  # routes times declared principals, so there is no one status to equal and no one header to read.
+  expect status equals 200
+  expect header "content-type" contains "json"
+
+crawl "a crawl that binds values"
+  seed traffic
+  # Nothing downstream in a crawl body could read either of these — there is no step order to carry a
+  # value along, only assertions applied to every response.
+  let wanted = "shoes"
+  capture body.id as firstProductId
+
+# --- the negative control: the three families the body does accept -------------------------------
+#
+# All three, in both the fatal and the soft form. The rule turns on the **matcher**, not on whether
+# the step is fatal, so `check` is accepted for the same reason `expect` is — and asserting that here
+# is what stops a future tightening from quietly refusing the soft half.
+
+crawl "everything a crawl body may contain" as shopper, peer
+  seed openapi "/openapi.json"
+  seed traffic
+  exclude "/internal/**"
+  expect response has no critical security violations
+  expect response has no critical authorization violations
+  expect response has no input handling violations
+  check response has no serious security violations
+  check response has no critical authorization violations
+  check response has no minor input handling violations
