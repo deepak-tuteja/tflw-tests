@@ -2,21 +2,30 @@
 # `expect response has no authorization violations`, demonstrated firing and staying silent against
 # the same app, one rule at a time.
 #
-# **The owner is `peer`, not `shopper`, and that is forced rather than chosen.** Tier 2 judges a
-# request that was actually made, so every test here needs a resource its owner really owns — and the
-# seed creates users but no orders, so each test places one. `POST /orders` is a mutating request,
-# and `shopper` is a cookie session: `AnyAuthGuard` would refuse it for a missing `X-CSRF-Token`
-# before any of this got started. `peer` is bearer, so it can place the order it then asks about.
+# **The owner is `peer`, not `shopper`, and until `M137b` that was forced rather than chosen.** Tier 2
+# judges a request that was actually made, so every test here needs a resource its owner really owns —
+# and the seed creates users but no orders, so each test places one. `POST /orders` is a mutating
+# request, and `shopper` is a cookie session: `AnyAuthGuard` refused it for a missing `X-CSRF-Token`
+# before any of this got started. `peer` is bearer, so it could place the order it then asks about.
 #
-# That inversion is a gift rather than a cost. It puts `shopper` in the **probe set** instead of the
-# owner slot, which is where a cookie-borne principal is actually interesting (`M130-01`): on the
-# mutating case it is refused for CSRF and must be reported *inconclusive*, not as a boundary that
-# held. A corpus with the cookie session in the owner slot would never exercise that path.
+# **`M137b` removes that constraint and the arrangement stays anyway**, which is worth stating so the
+# next reader does not take the paragraph above as still-binding. `shopper` now declares `csrf from`
+# and could own every test in this file. It does not, because the inversion turned out to be a gift
+# rather than a cost: it puts cookie-borne principals in the **probe set** instead of the owner slot,
+# which is where they are actually interesting (`M130-01`). `csrf.tflw` is where a clause-declaring
+# owner is exercised, because `sec/csrf-not-enforced` has nothing to derive from a bearer one.
 #
-# The probe set for every test in this file is therefore `{shopper, shopperBearer, anonymous}` —
-# `admin` is declared `privileged` and excluded, and each assertion says so on its own line. The
-# per-site cost is measured and printed by `verify-security-acceptance.mjs` rather than written down
-# here, which is what D319 asks this corpus to do.
+# The probe set for every test in this file is therefore
+# `{shopper, shopperBearer, shopperNoCsrf, anonymous}` — `admin` is declared `privileged` and
+# excluded, and each assertion says so on its own line. The per-site cost is measured and printed by
+# `verify-security-acceptance.mjs` rather than written down here, which is what D319 asks this corpus
+# to do.
+#
+# **`shopperNoCsrf` is `M137b`'s addition to that set and it inherits `shopper`'s old job** (`D455`).
+# The mutating rows below need a principal that *cannot* meet the CSRF pre-flight, so that a refusal
+# reported as *inconclusive* rather than as a boundary that held stays observable after the milestone
+# that removed the engine's reason for it. It is the same human on the same transport as `shopper`,
+# declared without the clause.
 #
 # **`shopperBearer` is M132b's addition and it is what makes the mutating tests mean anything.**
 # Before it, every principal in the probe set was excluded from a mutating verb for a correct
@@ -24,6 +33,13 @@
 # privileged — and the exclusions composed until the set had nobody left able to answer. Alice
 # declared a second time with a bearer token breaks that without inventing a new identity, and the
 # `V8`/`V9` pair below is only a controlled comparison because she is there.
+#
+# `M137b` gives `shopper` a second way to answer and does **not** retire that reasoning: `D356`'s
+# rejected alternative was to drop `shopperBearer` once `shopper` could answer, and it loses because
+# the pair is this corpus's sharpest demonstration that a probe outcome belongs to the *credential*.
+# With `shopperNoCsrf` also declared, the three alices now make that point in three states rather than
+# two, and the two that can answer agree for a reason instead of differing by an accident of
+# enforcement.
 #
 # **What the third state is doing somewhere else.** "Not applicable" cannot be written as a passing
 # test: an assertion where nothing applied *fails*, by D285, and that is the whole point of it. So it
@@ -72,7 +88,9 @@ test "sec/authz-object-leak fires on a route that serves any order by id (V6)" a
   api GET /vuln/orders/{orderId}
   expect status equals 200
   # `shopper` re-issues this and gets `peer`'s order back — same root `id`, so the identity the
-  # comparison is on is shared, and that is the finding. `anonymous` is refused `401` by
+  # comparison is on is shared, and that is the finding. So do her other two credentials: `GET` is a
+  # safe method, so nothing here turns on CSRF and all three alices leak identically, which is the
+  # correct answer three times rather than three findings. `anonymous` is refused `401` by
   # `AnyAuthGuard`, which is correct and counted rather than ignored.
   expect response not has no critical authorization violations
 
@@ -129,10 +147,14 @@ test "probe mutating puts a DELETE in the probe set, and a replay cannot judge i
   #
   # So what this test pins is the half that is real: `probe mutating` moved the request from
   # `not probed` into the probe set, and the run says what each principal did there —
-  # `shopper` **inconclusive** (cookie-borne, refused `403` on a mutating verb: CSRF, not
-  # authorization — `M130-01`'s path, exercised) and `anonymous` **refused** (`401`). One judgeable
-  # outcome is enough for applicability, so this is a real verdict rather than a skipped one, and
-  # the verdict is honest about a probe set that had nobody left able to answer.
+  # `shopperNoCsrf` **inconclusive** (cookie-borne with no `csrf from` clause, refused `403` on a
+  # mutating verb: CSRF, not authorization — `M130-01`'s path, exercised) and everyone else
+  # **refused**, because the row is already gone. One judgeable outcome is enough for applicability,
+  # so this is a real verdict rather than a skipped one, and the verdict is honest about a probe set
+  # that had nobody left able to answer.
+  #
+  # Before `M137b` the inconclusive principal here was `shopper` itself. It now supplies the token and
+  # joins the refusals; `shopperNoCsrf` was declared so that this line still has a subject (`D455`).
   api DELETE /vuln/orders/{orderId}
   expect status equals 200
   expect response has no authorization violations
@@ -161,10 +183,12 @@ test "probe mutating finds the leak on an idempotent PUT, which a DELETE cannot 
 
   # Idempotent: `status` is written to the value it is given, so the probes' replays leave the row
   # exactly where the owner's request left it and each probe asks the same question of the same
-  # state. `shopper` is refused for CSRF and reported **inconclusive** — cookie-borne, on a mutating
-  # verb, which is `M130-01`'s path and the reason the owner is not the interesting principal here.
-  # `shopperBearer` is the same human with a bearer token, is refused nothing, and gets `peer`'s
-  # order back by id: that is the leak. `anonymous` is `401` and refused.
+  # state. `shopperNoCsrf` is refused for CSRF and reported **inconclusive** — cookie-borne with no
+  # clause, on a mutating verb, which is `M130-01`'s path and the reason a cookie principal is not the
+  # interesting owner here. `shopperBearer` is the same human with a bearer token, is refused nothing,
+  # and gets `peer`'s order back by id: that is the leak. **After `M137b` so does `shopper`** — same
+  # human, cookie transport, token supplied by the clause — so this row carries two leaks and they are
+  # the same leak reached by two credentials. `anonymous` is `401` and refused.
   api PUT /vuln/orders/{putOrderId} body { status: "processing" }
   expect status equals 200
   expect response not has no critical authorization violations

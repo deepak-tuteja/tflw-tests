@@ -1,0 +1,90 @@
+# `csrf from … send as header` and `sec/csrf-not-enforced` (testFlow M137b, D433/D434/D454).
+#
+# Three tests, one subject: the clause, what it enables, and the rule it makes possible.
+#
+# **Why this file exists rather than an edit to `tests/api/identity/sessions.tflw`.** That file already
+# holds a matched 403/201 pair whose subject is apiV2's CSRF guard, and `D434` names that guard as
+# `sec/csrf-not-enforced`'s **negative control**. Its 201 case supplies the token by hand — `capture
+# body.csrfToken as csrf` plus a per-step `header` — and rewriting it to `as shopper` would have been
+# tidier and wrong: *"this app enforces CSRF"* has to stay provable independently of the engine feature
+# that supplies the token, or the control ends up validating the thing it controls for. So that file is
+# untouched (`D454`) and the clause is proved here instead, against the same app, keyed on the clause.
+#
+# **The first two tests differ in exactly one thing.** `shopper` and `shopperNoCsrf` are the same human
+# authenticating the same way against the same route with the same body; the only difference in the
+# whole system is whether their `session` block in `tflw.config` carries the clause. So a 200 and a 403
+# is evidence about the clause and about nothing else — not about cookie handling, not about the guard,
+# not about the route.
+#
+# **`PATCH /users/me` is chosen for having no setup at all.** It is `AnyAuthGuard`-protected, so the
+# CSRF pre-flight applies; its body is an RFC 7386 merge patch, so any key is legal; and it is
+# idempotent and self-scoped, so it can run any number of times against a long-lived stack without
+# drifting. `authz.tflw` records at length what the alternative costs — an order needs a product needs
+# stock, and a corpus test that orders whatever sorts first in the catalog starts failing on `409
+# insufficient stock` nowhere near the assertion it exists to make. It is also why this file has no
+# `before` block, which is what makes it a better home for the third test than `authz.tflw`.
+#
+# **The first two carry no security assertion, deliberately** — they are not measuring a rule, and the
+# rules are measured by the three files beside this one. That means
+# `verify-security-acceptance.mjs` grades them by an explicit block of their own rather than by the
+# ledger: the corpus's exit code is ignored there by construction (positives are *expected* to produce
+# findings), so a functional test dropped in here without one would be a control nobody reads.
+#
+# Run under `--env secureLocal` (default) — the third test needs that env's `probe mutating`.
+
+@security @sessions @csrf
+test "a cookie session that declares csrf from can make a mutating request" as shopper
+  # No `capture`, no per-step `header`, nothing about CSRF in this test at all. The token was captured
+  # once when the session was established and is attached to this request because `PATCH` is not a
+  # safe method — which is the entire feature, and is why this test's body is the same as it would be
+  # for a bearer principal.
+  api PATCH /users/me body { nickname: unique("csrf-clause") }
+  expect status equals 200
+
+@security @sessions @csrf
+test "the same cookie session without the clause is refused before authorization" as shopperNoCsrf
+  # Byte-identical request under a session declared without the clause. `403`, from
+  # `AnyAuthGuard`'s CSRF pre-flight (`apiV2/src/auth/guards/any-auth.guard.ts:71-74`) — and note the
+  # guard refuses *before* authorization is consulted, which is `M130-01` in one line: alice is
+  # perfectly entitled to patch her own profile, and no authorization decision was ever reached.
+  #
+  # This is also the assertion that keeps `shopperNoCsrf` honest. A session that was silently getting
+  # the token anyway — a clause leaking across sessions, a token cached per credential rather than per
+  # declaration — would return `200` here and every probe-count row in the grader would still pass.
+  api PATCH /users/me body { nickname: unique("csrf-clause") }
+  expect status equals 403
+
+# ── D434's rule, and the negative control it names ───────────────────────────────────────────────
+#
+# **`sec/csrf-not-enforced` is inert in a corpus where no owner declares the clause, and this is the
+# only assertion here whose owner does.** The rule works by deriving a *"same cookie session, token
+# withheld"* principal from the owner and probing with it (`D457`), so it has nothing to derive from a
+# bearer owner. Every other authorization assertion in this corpus is owned by `peer`, which is bearer
+# — so without this test the rule would report not-applicable everywhere, the coverage table would show
+# it demonstrated in one state out of three, and `D434`'s claim that *"apiV2 is a ready-made negative
+# control (its guard enforces correctly)"* would be true of the app and untested by the corpus.
+#
+# What the derived probe does here: it re-issues this `PATCH` with alice's cookie and **without** the
+# `X-CSRF-Token` header, and `AnyAuthGuard` answers `403`. That is the rule applicable and silent — the
+# app has a CSRF defence and it held. A `2xx` would be a critical finding, and the guard is the only
+# thing standing between those two outcomes.
+#
+# **`as shopper, shopperBearer` names two owners, and the second one is not decoration** (`D327`'s
+# multi-owner form). They are the same human. Name only `shopper` and alice's *other* credential stays
+# in the probe set, re-issues this request, and gets alice's profile back — which the object-leak rule
+# would correctly read as a non-owner receiving the owner's resource. The finding would be a critical
+# BOLA against her own profile, and it would be the fixture's fault rather than the app's.
+@authz @csrf @mutating
+test "sec/csrf-not-enforced stays silent because apiV2's guard enforces it" as shopper, shopperBearer
+  api PATCH /users/me body { nickname: unique("csrf-probe") }
+  expect status equals 200
+  # The probe set is `{peer, shopperNoCsrf, anonymous}` plus the derived token-withheld principal, and
+  # each of the four answers differently — which is the whole of `D324`'s taxonomy on one request.
+  # `peer` gets `200` and **served different content**: the route is self-scoped, so bob patches bob.
+  # `shopperNoCsrf` is **inconclusive**, refused for CSRF exactly as `M130-01` describes. `anonymous`
+  # is **refused** at `401`. The derived principal is **refused** at `403`, and that is the rule's
+  # negative control firing on nothing.
+  #
+  # `sec/authz-collection-leak` is not claimed silent because it is not applicable: the response is a
+  # single object, not an array, so the rule has no collection to compare.
+  expect response has no authorization violations

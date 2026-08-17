@@ -142,6 +142,14 @@ acceptance config (D307, landing in `M130c`).
 expose that token to the test (`tests/api/identity/sessions.tflw` captures `body.csrfToken` by hand
 for exactly this reason).
 
+> **`M137b` removed the engine half of this limit** (`csrf from … send as header`, tflw D433). A
+> session block can now capture the token once and attach it to mutating requests, so a cookie
+> principal *can* be judged — see "The Tier 4 CSRF measurement" below. Everything in this section
+> still describes what happens to a cookie session that does **not** declare the clause, which is now
+> a configuration choice and is deliberately still exercised: `shopperNoCsrf` exists so the blind-spot
+> path below keeps a live subject (tflw D455). The section is left standing rather than rewritten
+> because the caveat is what the corpus still measures; only its cause moved.
+
 So a cookie-borne probe of a mutating endpoint is refused with `403 missing or invalid CSRF token`
 **before the authorization check runs at all**. Under a differential oracle that reads a `403` as
 "correctly denied", that is a false negative — the probe never reached the code whose authorization
@@ -162,10 +170,15 @@ D325) so the tier stopped scoring the refusal as clean; `M136a` gave it a way *o
 `tflw/notApplicable`. `verify:security-acceptance` now asserts the whole path against this guard:
 
 ```
-authorization declined 1×: `shopper` — a cookie-borne principal was refused on a DELETE (403);
-this may be CSRF rather than authorization, since a cookie session cannot supply the CSRF token
-a mutating request needs. Give it a bearer session to judge it
+authorization declined 1×: `shopperNoCsrf` — a cookie-borne principal was refused on a DELETE
+(403); this may be CSRF rather than authorization, since a cookie session cannot supply the CSRF
+token a mutating request needs. Give it a bearer session to judge it, or a `csrf from` clause so
+it can supply one
 ```
+
+The subject was `shopper` until `M137b` and the reason's last clause is new in it — the repair tflw
+suggests is now the one the reader can actually take, and the principal it is suggested for is one
+declared without the clause on purpose.
 
 **Why it is graded here and not only in tflw.** tflw proves the same reporting against a `node:http`
 fixture that `403`s any mutating request without the header — fast, deterministic, and a defence
@@ -179,6 +192,12 @@ the generic *"the host answered 403, which is not an authorization decision"*, s
 `inconclusive`, and every ledger row would still pass — so the assertion is on the **reason**, and
 its control is `shopperBearer`: the same human on a bearer token, who meets no CSRF pre-flight, is
 never declined, and leaks outright on `V9`.
+
+Since `M137b` there are **three alices and two controls**, which is the same argument twice over: the
+grader's `NEVER_DECLINED` now lists `shopper` beside `shopperBearer`, so the same human is asserted
+un-declinable on a cookie *and* on a bearer token, while `shopperNoCsrf` — same human, same cookie
+transport, one clause fewer — is asserted declined on all three mutating verbs. A probe outcome is a
+fact about the credential, and now demonstrably about the *declaration* rather than the transport.
 
 ### The Tier 3 plants `V10`–`V14`, and why a whole new controller was needed
 
@@ -443,21 +462,31 @@ both authorization rules; the third state and D311's default half are expected-t
 the grader, because an assertion where nothing applied *fails* by D285 and therefore cannot be
 written as a passing test.
 
-Last run — **both rules demonstrated live in all three states, no gaps**:
+Last run — **all three rules demonstrated live in every state that exists for them**:
 
 ```
   rule                                     fires  silent  n/a
   sec/authz-object-leak                      ✓      ✓      ✓
   sec/authz-collection-leak                  ✓      ✓      ✓
+  sec/csrf-not-enforced                      ·      ✓      ✓
 ```
 
-**What the tier costs, measured rather than estimated:** 6 assertion sites, 18 extra requests,
-**3.0 per site**. That number is a property of the *config*, not of the feature — this corpus
-declares `shopper`, `shopperBearer`, `peer` and a `privileged` `admin`, so a `peer`-owned assertion
-probes three; the root `tflw.config` also declares two `oauth2` sessions, so the same assertion in
-the dogfood suite would probe more again. The grader derives it from the run for exactly that
-reason — **M132b added a session and a site and the figure moved on its own**, with no constant
-anywhere to forget to update. It was 5 sites / 10 requests / 2.0 per site before that.
+The third row is `M137b`'s, and its missing `fires` is a fact about the target rather than a gap in
+the corpus — see "Not planted, on purpose".
+
+**What the tier costs, measured rather than estimated:** 7 assertion sites, 27 extra requests,
+**3.9 per site**. That number is a property of the *config*, not of the feature — this corpus
+declares `shopper`, `shopperBearer`, `shopperNoCsrf`, `peer` and a `privileged` `admin`, so a
+`peer`-owned assertion probes four; the root `tflw.config` also declares two `oauth2` sessions, so
+the same assertion in the dogfood suite would probe more again. The grader derives it from the run
+for exactly that reason — **two milestones running have added a session and a site and the figure
+moved on its own**, with no constant anywhere to forget to update. It was 5 sites / 10 requests / 2.0
+per site before `M132b`, and 6 / 18 / 3.0 before `M137b`.
+
+The average is below four because `csrf.tflw`'s assertion names **two** owners (`as shopper,
+shopperBearer`) and an owner is never in its own probe set. It also sends one request this figure does
+not count: the derived token-withheld probe, which tflw keeps in its own channel (D457) precisely so
+it cannot be mistaken for a non-owner principal.
 
 **`V8` is a positive the oracle cannot reach, and `V9` is why that is now demonstrated rather than
 argued.** The plan expected `probe mutating` to probe the `DELETE` *and find the leak*. It does the
@@ -490,8 +519,8 @@ What the opt-in *does* prove is still worth having, and the corpus pins it by co
 
 | target | probe line | who the blind spot names, and why |
 | --- | --- | --- |
-| opt-in (`secureLocal`) | `3 principals probed — 1 inconclusive, 2 refused` | `shopper` — refused for CSRF on the `DELETE` |
-| default (`plaintext`) | `3 principals probed — 3 not probed` | all three — no `probe mutating` covers the target |
+| opt-in (`secureLocal`) | `4 principals probed — 1 inconclusive, 3 refused` | `shopperNoCsrf` — refused for CSRF on the `DELETE` |
+| default (`plaintext`) | `4 principals probed — 4 not probed` | all four — no `probe mutating` covers the target |
 
 **Both numbers were `2` here until `M136c`, and had been wrong since `M132b`** declared
 `shopperBearer` and took every probe set in this corpus from two principals to three. Nothing was
@@ -499,14 +528,83 @@ red: the grader reads the run, this table is prose, and the two had no way to di
 Recorded rather than quietly corrected, because it is the same defect class the third column now
 guards against — a number that describes a run nobody re-measured.
 
+**`M137b` moved them again, to `4`, and this time the grader did go red** — which is the difference the
+paragraph above was asking for. Declaring `shopperNoCsrf` for the opt-in half's benefit widened the
+*default* half's probe set too, and the expected-to-fail probe that measures it failed on a `3` that
+had been correct for two milestones and was never edited. Worth carrying: the two halves of a contrast
+are coupled through the config, so a session declared to fix one of them changes both.
+
 The `inconclusive` is the CSRF caveat above, live: a cookie-borne principal refused `403` on a
 mutating verb has not demonstrated an authorization boundary, and the report says so instead of
 scoring it clean.
 
 The third column is the part `M136c` added and the reason the contrast is now legible rather than
 merely true. Both rows mean *the tier could not ask*, and they are **different repairs** — give
-`shopper` a bearer session, versus write `probe mutating` on the target. A report that ran them
-together into one number would be back where `M130-01` started.
+`shopper` a bearer session or a `csrf from` clause, versus write `probe mutating` on the target. A
+report that ran them together into one number would be back where `M130-01` started.
+
+## The Tier 4 CSRF measurement (`M137b`, tflw D433/D434/D454/D455)
+
+Two features, one target: the `csrf from … send as header` session clause, and `sec/csrf-not-enforced`,
+which withholds the captured token from a derived principal and re-issues the observed mutating
+request with it missing. `tflw-acceptance/security/csrf.tflw` holds all three tests.
+
+**`tests/api/identity/sessions.tflw` was deliberately left alone.** tflw's D433 originally had the
+clause delete that file's hand-capture as a side effect; D454 reversed it. Those two tests are a
+matched `403`/`201` pair whose subject is `AnyAuthGuard` itself, and D434 names that guard as
+`sec/csrf-not-enforced`'s **negative control** — so *"this app enforces CSRF"* has to stay provable
+independently of the engine feature that supplies the token, or the control validates the thing it
+controls for. The clause's own proof therefore lives in the acceptance corpus, against the same app.
+
+**The clause, proved by a one-variable pair.** Both tests send a byte-identical `PATCH /users/me`; the
+only difference anywhere in the system is whether the owning `session` block carries the clause.
+
+| owner | declares `csrf from`? | answer |
+| --- | --- | --- |
+| `shopper` | yes | `200` — no `capture`, no per-step `header`, nothing about CSRF in the test at all |
+| `shopperNoCsrf` | no | `403`, from the guard's pre-flight, *before* authorization is consulted |
+
+The `403` half is the one that keeps the other honest: a token leaking across sessions, or cached per
+credential rather than per declaration, would return `200` there and every probe-count row in the
+grader would still pass. Both are graded by `verify-security-acceptance.mjs` in a block of their own,
+because that script ignores the corpus's exit code by construction — this corpus's positives are
+*meant* to produce findings — so a functional test dropped in without one is a control nobody reads.
+
+`PATCH /users/me` because it needs no setup at all: `AnyAuthGuard`-protected so the pre-flight applies,
+an RFC 7386 merge patch so any key is legal, idempotent and self-scoped so it can run any number of
+times against a long-lived stack. That also means `csrf.tflw` has no `before` block, which is why the
+third test lives there rather than in `authz.tflw`.
+
+**The rule, and the only place in either corpus where it is applicable.** It derives a *"same cookie
+session, token withheld"* principal from the owner, so a bearer owner gives it nothing to derive — and
+every other authorization assertion here is owned by `peer`, which is bearer. Without the third test
+the rule would report not-applicable everywhere, the coverage table would show it in two states out of
+three, and D434's claim that apiV2 is *"a ready-made negative control"* would be a statement about the
+app that the corpus never checks. Measured, on the one assertion whose owner declares the clause:
+
+```
+3 principals probed — 1 served different content, 1 inconclusive, 1 refused
+authorization declined 1×: `shopper (csrf token withheld)` — a cookie-borne principal was refused
+on a PATCH (403) …
+```
+
+Four principals answer and each answers differently, which is D324's whole taxonomy on one request:
+`peer` gets `200` with **different content** (the route is self-scoped, so bob patches bob),
+`shopperNoCsrf` is **inconclusive**, `anonymous` is **refused** at `401`, and the derived principal is
+**refused** at `403` — the negative control firing on nothing.
+
+Two things about that output are load-bearing rather than incidental:
+
+- **The derived probe is not in the count of three.** D457 gives it its own `csrfProbes` field, because
+  the derived principal *is* the owner: on a shared probe list, a token-less write that succeeded would
+  return the owner's own resource ids to a "non-owner" and `sec/authz-object-leak` would report a
+  critical BOLA against the owner's own resource — this rule's happy path firing the wrong finding. It
+  surfaces in the blind-spot channel instead, under a name that says what it is, and that decline is
+  the grader's proof that the rule was silent because a probe was refused rather than because nothing
+  was ever sent.
+- **The assertion names two owners** (`as shopper, shopperBearer`, tflw D327). They are the same human.
+  Name only `shopper` and alice's other credential stays in the probe set, fetches alice's own profile,
+  and earns a critical object-leak finding that is the fixture's fault rather than the app's.
 
 ## Not planted, on purpose
 
@@ -550,6 +648,18 @@ together into one number would be back where `M130-01` started.
   exception, not on any injected SQL running. Command and template injection therefore remain
   unplanted, and now for a sharper reason than sequencing — tflw ships no rule that could name
   either, so a plant for them would still be cost with no coverage behind it.
+- **A CSRF-unenforced mutating route (`sec/csrf-not-enforced`'s positive) — and the reason is that the
+  positive and the negative control cannot coexist on one target.** Every mutating route in apiV2 is
+  behind `AnyAuthGuard`, including the deliberately-broken ones
+  (`apiV2/src/vuln/vuln-orders.controller.ts:51`), so nothing here would accept a token-less
+  cookie-borne write. Planting one means either weakening that guard or writing a route that bypasses
+  it — and the guard *is* the rule's negative control (D434). Weaken it and the silent case stops being
+  a demonstration; bypass it and the plant no longer tells you anything about the guard the rest of the
+  corpus relies on. Unlike the `sec/tls-*` rows above, this is not a limit of the platform: the
+  positive is constructible and is built in tflw's own `node:http` fixture, where a defence written to
+  be caught costs nothing because nothing else depends on it. So the rule's live evidence here is its
+  **silent** and **not-applicable** states, and `verify:security-acceptance` prints the missing `fires`
+  by name every run rather than letting the coverage table imply three ticks.
 - **Anything in a real endpoint.** The suite's ~45 other files run against the clean app, and
   `plan_v2.md` §4.2's rule — real endpoints stay clean — is what makes their results mean anything.
   Tier 2 does not weaken this: `V6`–`V8` are dedicated routes, never a `VULN_MODE` branch inside
