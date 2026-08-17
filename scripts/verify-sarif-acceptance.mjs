@@ -488,25 +488,40 @@ console.log('\nD412 — a rule that stood down is named, not merely missing:\n')
 
 // The SARIF end of the same claim `verify:security-acceptance` grades on the console and in
 // `results.json`: apiV2's real `AnyAuthGuard` refuses a cookie-borne principal on a mutating request
-// before authorization is consulted (`apiV2/src/auth/guards/any-auth.guard.ts:70-75`), so `shopper`
-// is not *allowed* and not *denied* but un-askable. Asserted here as well because this is the only
-// one of the three channels a human never looks at — a wrong or missing entry uploads successfully
-// and produces no complaint from anything, which is this whole file's founding asymmetry.
+// before authorization is consulted (`apiV2/src/auth/guards/any-auth.guard.ts:70-75`), so the
+// principal is not *allowed* and not *denied* but un-askable. Asserted here as well because this is
+// the only one of the three channels a human never looks at — a wrong or missing entry uploads
+// successfully and produces no complaint from anything, which is this whole file's founding asymmetry.
+//
+// **The subject is `shopperNoCsrf` since `M137b`, and this file was the fifth broken assertion that
+// milestone's scoping did not enumerate.** tflw's D455 listed four, all in
+// `verify-security-acceptance.mjs`, on the reasoning that the change moves probe *outcomes* and that
+// script is what grades them. This one moved for the same reason one file further out, and it failed
+// loudly rather than vacuously only because it asserts a subject by name. Worth carrying: when a config
+// change renames who a fact is about, every grader that names the subject is in scope, and "which
+// script grades this tier" is the wrong way to enumerate them.
+//
+// The derived token-withheld principal (`principal:shopper (csrf token withheld)`) is **not** in this
+// document, because this grader's security corpus does not include `csrf.tflw` — see `CORPORA` above.
+// Deliberate: it reaches SARIF through the same `scanBlindSpot.declines` channel this block already
+// proves, and `verify:security-acceptance` asserts that entry by name in `results.json`. Widening the
+// corpus here to re-prove one channel would add a run to every SARIF check in the file for evidence
+// that is already held.
 {
   const doc = documents.find((d) => d.name.startsWith('security') && d.name.includes('secureLocal'))?.doc;
   const subjects = notApplicableOf(doc).filter((n) => n.kind === 'subject');
-  const shopper = subjects.filter((n) => n.id === 'principal:shopper');
+  const shopper = subjects.filter((n) => n.id === 'principal:shopperNoCsrf');
   if (shopper.length === 0) {
-    fail(`D421: no un-asked subject named \`principal:shopper\` in the secureLocal security document. Subjects present: ${JSON.stringify(subjects.map((s) => s.id))}`);
+    fail(`D421: no un-asked subject named \`principal:shopperNoCsrf\` in the secureLocal security document. Subjects present: ${JSON.stringify(subjects.map((s) => s.id))}`);
   } else if (!shopper.every((s) => s.because.some((b) => /this may be CSRF rather than authorization/.test(b)))) {
     // The reason, not merely the presence. If D325's cookie-borne branch stopped matching, the probe
     // would fall through to the generic "the host answered 403, which is not an authorization
     // decision", still be un-askable, still appear here — and the repair a reader takes from the two
     // sentences is completely different. Same argument as `verify:security-acceptance`'s, one
     // artifact further out.
-    fail(`D421: \`principal:shopper\` is un-asked but not for CSRF: ${JSON.stringify(shopper.map((s) => s.because))}`);
+    fail(`D421: \`principal:shopperNoCsrf\` is un-asked but not for CSRF: ${JSON.stringify(shopper.map((s) => s.because))}`);
   } else {
-    pass(`D421: the SARIF document names \`principal:shopper\` un-asked ${shopper.length}× — refused by apiV2's real AnyAuthGuard for CSRF, in the artifact only a machine reads`);
+    pass(`D421: the SARIF document names \`principal:shopperNoCsrf\` un-asked ${shopper.length}× — refused by apiV2's real AnyAuthGuard for CSRF, in the artifact only a machine reads`);
   }
   // The namespace is the point of `id`, so it is asserted rather than trusted: a bare `shopper` here
   // would collide with a rule id in a consumer that groups by this field, which is what D421's

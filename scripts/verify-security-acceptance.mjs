@@ -66,6 +66,13 @@ const inPlay = (floor) => PACK.filter(([, sev]) => (floor ? RANK[sev] >= RANK[fl
 const AUTHZ_PACK = [
   ['sec/authz-object-leak', 'critical'],
   ['sec/authz-collection-leak', 'critical'],
+  // M137b (D434). **The pack is 3 on every authorization assertion, not only where a `csrf from`
+  // clause exists.** Pack membership cannot vary with config — `SCAN_RULE_IDS` and
+  // `SCAN_RULE_SEVERITY` are projections of it (D406) — so the rule is always considered and reports
+  // not-applicable with its own reason when no owning session declares the clause, exactly as the two
+  // leak rules do on a response of the wrong shape. Every `applicable`/`not applicable` count in the
+  // authz rows below moved by one because of this, and each was re-read from the run.
+  ['sec/csrf-not-enforced', 'critical'],
 ];
 const authzInPlay = (floor) =>
   AUTHZ_PACK.filter(([, sev]) => (floor ? RANK[sev] >= RANK[floor] : true)).map(([id]) => id);
@@ -122,13 +129,20 @@ const LEDGER = [
   // That was not a fixture-tuning detail: with the old probe set no mutating request could be
   // judged by *anyone*, so the two rows at the bottom were measuring a corpus that had run out of
   // principals rather than a property of the tier. Every number below was re-read from the run.
-  { env: 'secureLocal', kind: 'authz', test: 'sec/authz-object-leak fires on a route that serves any order by id (V6)', floor: 'critical', fires: ['sec/authz-object-leak'], probes: { total: 3, leaked: 2, refused: 1 } },
-  { env: 'secureLocal', kind: 'authz', test: "sec/authz-collection-leak fires on a route that returns every user's orders (V7)", floor: 'critical', fires: ['sec/authz-collection-leak'], probes: { total: 3, leaked: 2, refused: 1 } },
-  { env: 'secureLocal', kind: 'authz', test: 'sec/authz-object-leak stays silent on the real ownership-scoped route', floor: null, fires: [], silent: ['sec/authz-object-leak'], probes: { total: 3, refused: 3 } },
+  //
+  // **And 3 → 4 in M137b**, when the corpus declared `shopperNoCsrf` (D455). Same mechanism, opposite
+  // motive: `shopperBearer` was added because nobody could answer a mutating probe, and this one is
+  // added because — once `shopper` carries a `csrf from` clause — nobody would be *unable* to, and the
+  // blind-spot control needs a principal that still cannot. The three alices in the probe set are one
+  // human on three credentials, which is this corpus's standing claim about what a probe outcome is a
+  // fact about. Every number below was re-read from the run, again.
+  { env: 'secureLocal', kind: 'authz', test: 'sec/authz-object-leak fires on a route that serves any order by id (V6)', floor: 'critical', fires: ['sec/authz-object-leak'], probes: { total: 4, leaked: 3, refused: 1 } },
+  { env: 'secureLocal', kind: 'authz', test: "sec/authz-collection-leak fires on a route that returns every user's orders (V7)", floor: 'critical', fires: ['sec/authz-collection-leak'], probes: { total: 4, leaked: 3, refused: 1 } },
+  { env: 'secureLocal', kind: 'authz', test: 'sec/authz-object-leak stays silent on the real ownership-scoped route', floor: null, fires: [], silent: ['sec/authz-object-leak'], probes: { total: 4, refused: 4 } },
   // The only live `served different content` in either corpus, and the state most easily mistaken for
   // a leak: `shopper` got a 200 carrying orders, just not `peer`'s (D313). Two of them now — alice
   // gets her own list under either credential, which is the same correct answer reached twice.
-  { env: 'secureLocal', kind: 'authz', test: 'sec/authz-collection-leak stays silent on the real order list', floor: null, fires: [], silent: ['sec/authz-collection-leak'], probes: { total: 3, 'served different content': 2, refused: 1 } },
+  { env: 'secureLocal', kind: 'authz', test: 'sec/authz-collection-leak stays silent on the real order list', floor: null, fires: [], silent: ['sec/authz-collection-leak'], probes: { total: 4, 'served different content': 3, refused: 1 } },
   // `M130-05`. The opt-in half of D311 — and the row that records the plan being wrong. `probe
   // mutating` really does move the DELETE into the probe set (that is what `total: 3` proves; the
   // default half below declines all three), and the oracle still cannot judge it, because the owner's
@@ -140,7 +154,12 @@ const LEDGER = [
   // row can no longer be explained by "nobody could have answered": somebody could, and the DELETE
   // still yields no verdict. Read it against the V9 row that follows, which is identical in every
   // respect except the verb.
-  { env: 'secureLocal', kind: 'authz', test: 'probe mutating puts a DELETE in the probe set, and a replay cannot judge it (V8)', floor: null, fires: [], probes: { total: 3, inconclusive: 1, refused: 2 } },
+  //
+  // **`refused: 3` after M137b, and the `inconclusive: 1` changed hands.** It is `shopperNoCsrf` now;
+  // `shopper` supplies the token and joins the refusals, which is the third alice arriving at the
+  // same answer `shopperBearer` already gave. The count that matters here is still `inconclusive: 1`
+  // being a *declaration's* consequence rather than the engine's.
+  { env: 'secureLocal', kind: 'authz', test: 'probe mutating puts a DELETE in the probe set, and a replay cannot judge it (V8)', floor: null, fires: [], probes: { total: 4, inconclusive: 1, refused: 3 } },
   // **M132b (D356) — the positive `probe mutating` shipped without.** Until this row existed the
   // opt-in's acceptance evidence was "the request was probed" and never "the leak was found", which
   // is a control whose positive cannot occur. `leaked: 1` is `shopperBearer` receiving `peer`'s order
@@ -150,8 +169,74 @@ const LEDGER = [
   // The falsifier D356 named, for anyone re-reading this: this row must be a **violation**. If it
   // ever grades as `inconclusive`, `refused` or `0 violations`, the premise that an idempotent verb
   // is judgeable is wrong and `M130-05` reopens rather than staying closed.
-  { env: 'secureLocal', kind: 'authz', test: 'probe mutating finds the leak on an idempotent PUT, which a DELETE cannot show (V9)', floor: 'critical', fires: ['sec/authz-object-leak'], probes: { total: 3, leaked: 1, inconclusive: 1, refused: 1 } },
+  //
+  // **`leaked: 2` after M137b, and the second one is the milestone's whole point on this row.** It is
+  // `shopper` — the same human as `shopperBearer`, on a cookie, now able to meet the CSRF pre-flight
+  // because her session declares `csrf from`. So the two credentials that can be asked *agree*, and
+  // the third (`shopperNoCsrf`) still cannot be. Before the milestone this row's `inconclusive: 1` and
+  // its `leaked: 1` were the same human differing by transport, which was a true observation about
+  // enforcement and a confusing one about authorization; the pair now differs by *declaration*.
+  { env: 'secureLocal', kind: 'authz', test: 'probe mutating finds the leak on an idempotent PUT, which a DELETE cannot show (V9)', floor: 'critical', fires: ['sec/authz-object-leak'], probes: { total: 4, leaked: 2, inconclusive: 1, refused: 1 } },
+
+  // --- Tier 4's CSRF half, `csrf.tflw` under secureLocal (M137b, D434/D457) ------------------------
+  //
+  // **The one assertion in either corpus whose owner declares `csrf from`, and therefore the only
+  // place `sec/csrf-not-enforced` is applicable at all.** The rule derives a *"same cookie session,
+  // token withheld"* principal from the owner and probes with it, so a bearer owner gives it nothing
+  // to derive — and every other authorization assertion here is owned by `peer`, which is bearer. Its
+  // absence would not fail anything: the rule would report not-applicable everywhere and D434's claim
+  // that apiV2 is *"a ready-made negative control"* would be a statement about the app that the corpus
+  // never checks. `silent` rather than `fires` is the assertion that the control is live.
+  //
+  // The derived probe is **not** in `total`. `probeCounts` builds the counts line from `probes` only,
+  // and D457 gave the derived one its own `csrfProbes` field — because the derived principal *is* the
+  // owner, so a shared list would make a token-less write that succeeds look like the owner's own ids
+  // leaking to a non-owner, i.e. this rule's happy path firing a critical BOLA against the owner. It
+  // surfaces in `declines` instead, which is where the row below picks it up.
+  //
+  // `total: 3` is the probe set for a two-owner test: `{peer, shopperNoCsrf, anonymous}`. Both names
+  // in `as shopper, shopperBearer` are owners and neither is probed (D327) — which is not tidiness,
+  // since leaving `shopperBearer` in the set would have it fetch alice's own profile and fire a
+  // critical object-leak that is the fixture's fault. `served different content: 1` is `peer` patching
+  // his own profile on a self-scoped route.
+  { env: 'secureLocal', kind: 'authz', test: "sec/csrf-not-enforced stays silent because apiV2's guard enforces it", floor: null, fires: [], silent: ['sec/authz-object-leak', 'sec/csrf-not-enforced'], probes: { total: 3, 'served different content': 1, inconclusive: 1, refused: 1 } },
 ];
+
+/** **`csrf.tflw`'s first two tests, which this file has to grade by hand because nothing else does.**
+ *
+ * `runCorpus` ignores the child's exit code by construction — this corpus's positives are *expected*
+ * to produce findings, so a red run is the normal outcome and the report is the oracle. Everything
+ * else here rides on that: `LEDGER` grades security assertions, `APPLICABILITY_PROBES` grades
+ * expected-to-fail ones. A test that carries no security assertion and is simply supposed to pass has
+ * no home in either, and dropping one into the corpus without this block would have added a control
+ * whose result nobody reads.
+ *
+ * The pair is the clause's own proof (`D454`, since `sessions.tflw` must stay independent of it):
+ * byte-identical `PATCH /users/me`, one owner declaring `csrf from` and one not, `200` against `403`.
+ * `expectFail` is the half that keeps it honest — if a token ever leaked across sessions, or were
+ * cached per credential rather than per declaration, `shopperNoCsrf` would get `200` here and every
+ * probe-count row in this file would still pass. */
+const FUNCTIONAL = {
+  secureLocal: [
+    { test: 'a cookie session that declares csrf from can make a mutating request', ok: true, why: 'the clause supplies the token on a mutating request with no per-step header' },
+    { test: 'the same cookie session without the clause is refused before authorization', ok: true, why: 'the same request without the clause is 403 — so the token belongs to the declaration, not the credential' },
+  ],
+};
+
+function gradeFunctional(label, report, expected) {
+  for (const want of expected) {
+    const t = (report.tests ?? []).find((x) => x.name === want.test);
+    if (!t) {
+      fail(`[${label}] no test named "${want.test}" ran — ${want.why}, and the proof is missing rather than failing`);
+      continue;
+    }
+    if (t.ok !== want.ok) {
+      fail(`[${label}] "${want.test}" ${t.ok ? 'passed' : 'failed'}, expected ${want.ok ? 'pass' : 'fail'}: ${want.why}${t.error ? `\n    ${t.error}` : ''}`);
+      continue;
+    }
+    console.log(`✓ [${label}] ${want.test} — ${want.why}`);
+  }
+}
 
 /** Assertions run purely to make D285's not-applicable listing print, which is the only place the
  * report names a rule that stood down. Each is *expected to fail* — that is the mechanism. */
@@ -182,7 +267,12 @@ const APPLICABILITY_PROBES = [
       '  api GET /orders/00000000-0000-0000-0000-000000000000\n' +
       '  expect status equals 404\n' +
       '  expect response has no authorization violations\n',
-    expectNotApplicable: ['sec/authz-object-leak', 'sec/authz-collection-leak'],
+    // Three after M137b. `sec/csrf-not-enforced` stands down here for a *different* reason than the
+    // other two — not "the owning response has no identity to compare" but "no owning session declares
+    // a `csrf from` clause", since `peer` is bearer. Both reasons print, which is the point of D285's
+    // listing: two rules declined on the response and one on the configuration, and the assertion is
+    // no more powerful for either.
+    expectNotApplicable: ['sec/authz-object-leak', 'sec/authz-collection-leak', 'sec/csrf-not-enforced'],
   },
   {
     kind: 'authz',
@@ -216,7 +306,11 @@ const APPLICABILITY_PROBES = [
       '  api DELETE /vuln/orders/{orderId}\n' +
       '  expect status equals 200\n' +
       '  expect response has no authorization violations\n',
-    expectNotApplicable: ['sec/authz-object-leak', 'sec/authz-collection-leak'],
+    // `sec/csrf-not-enforced` joins the list after M137b, for the configuration reason rather than the
+    // target-declaration one: `peer` is bearer, so there is no clause to withhold a token from. Worth
+    // reading beside `expectProbes` below — the two leak rules stood down because *nothing was
+    // probed*, and this one would have stood down even if everything had been.
+    expectNotApplicable: ['sec/authz-object-leak', 'sec/authz-collection-leak', 'sec/csrf-not-enforced'],
     // **The probe set was resolved and then declined in full** — `2 principals probed — 2 not
     // probed`, against the opt-in row's `1 inconclusive, 1 refused` on the identical request. Same
     // two principals, same DELETE, different target declaration, and the report distinguishes the
@@ -227,7 +321,12 @@ const APPLICABILITY_PROBES = [
     // unsent one. The run disagreed: tflw counts the principals it considered and then says what it
     // did with each, which is the more useful answer and the one that makes the two halves
     // comparable.)
-    expectProbes: { total: 3, 'not probed': 3 },
+    // Four after M137b, and this row is the one the milestone broke that nothing predicted: the
+    // opt-in/default contrast is *symmetric*, so declaring a session for the opt-in half's benefit
+    // moved the default half's numbers too. Worth recording because the failure was a `3` that had
+    // been correct for two milestones and became wrong without being edited — exactly the shape the
+    // paragraph below warns about, arriving from the other direction.
+    expectProbes: { total: 4, 'not probed': 4 },
     // `M136c`. The counts line says *three were not probed*; this says **which three, and why**, in
     // the channel `M136a` added — and it is the contrast that makes D311's control legible. The
     // opt-in half declines exactly one principal, for CSRF; this half declines all three, for a
@@ -236,11 +335,13 @@ const APPLICABILITY_PROBES = [
     // `probe mutating` on the target. A report that ran them together into one number would be back
     // where `M130-01` started.
     //
-    // The three are the probe set for a `peer`-owned test — `admin` is `privileged` and excluded,
-    // and an owner is never in its own probe set. `shopperBearer` is here and forbidden on the
-    // opt-in half, which is the same fact from both sides: it is declined when nobody was probed,
-    // and never declined when somebody was.
-    expectDeclines: ['shopper', 'shopperBearer', 'anonymous'].map((subject) => ({
+    // The four are the probe set for a `peer`-owned test — `admin` is `privileged` and excluded,
+    // and an owner is never in its own probe set. `shopperBearer` **and now `shopper`** are here and
+    // forbidden on the opt-in half, which is the same fact from both sides: they are declined when
+    // nobody was probed, and never declined when somebody was. That both alices who *can* answer
+    // appear here is the sharpest form of the contrast — the reason is about the target's declaration,
+    // so it applies to principals a CSRF reason could never have named.
+    expectDeclines: ['shopper', 'shopperBearer', 'shopperNoCsrf', 'anonymous'].map((subject) => ({
       scan: 'authorization',
       subject,
       reason: /^DELETE changes state, and no `probe mutating` covers /,
@@ -299,14 +400,48 @@ const csrfReason = (verb, status = 403) =>
 
 const DECLINES = {
   secureLocal: [
-    { scan: 'authorization', subject: 'shopper', reason: csrfReason('DELETE'), why: "refused on a DELETE for CSRF by apiV2's real AnyAuthGuard — D422's second proof", count: 1 },
-    { scan: 'authorization', subject: 'shopper', reason: csrfReason('PUT'), why: "refused on a PUT for CSRF by apiV2's real AnyAuthGuard — D422's second proof", count: 1 },
+    // **The subject moved from `shopper` to `shopperNoCsrf` in M137b, and the two rows are otherwise
+    // untouched.** The proof they carry is unchanged — apiV2's own guard refusing a cookie-borne
+    // mutating request before authorization — but the principal it is made against is now cookie-borne
+    // *by declaration* rather than because tflw could not do otherwise. That is D455's whole repair:
+    // before it, these rows would have gone silently empty and `NEVER_DECLINED` below would have
+    // passed vacuously.
+    { scan: 'authorization', subject: 'shopperNoCsrf', reason: csrfReason('DELETE'), why: "refused on a DELETE for CSRF by apiV2's real AnyAuthGuard — D422's second proof", count: 1 },
+    { scan: 'authorization', subject: 'shopperNoCsrf', reason: csrfReason('PUT'), why: "refused on a PUT for CSRF by apiV2's real AnyAuthGuard — D422's second proof", count: 1 },
+    // `csrf.tflw`'s third test. Same principal, third verb — and `PATCH` is the verb because that test
+    // needed a mutating route with no setup at all.
+    { scan: 'authorization', subject: 'shopperNoCsrf', reason: csrfReason('PATCH'), why: "refused on a PATCH for CSRF, on the one assertion whose owner declares the clause", count: 1 },
+    // **The derived principal, and the only place in either corpus where it is observable at all.**
+    // D457 keeps it out of `probes`, so it contributes to no `total` and to no outcome count; the
+    // blind-spot channel is where it surfaces, under a name that says what it is. The row asserts two
+    // things at once that are the same fact from opposite sides: `sec/csrf-not-enforced` was silent on
+    // this assertion *because* this probe was refused, and the refusal means authorization was never
+    // consulted for it. A run where the rule stays silent and this row is absent would mean the rule
+    // was silent for the boring reason — nothing derived, nothing sent.
+    //
+    // The aggregation key is `scan + subject + reason` (`cli.ts:2786`), so this and the `PATCH` row
+    // above stay separate despite sharing a reason string. Asserted rather than assumed, because a key
+    // that collapsed them would report one fact where there are two principals.
+    { scan: 'authorization', subject: 'shopper (csrf token withheld)', reason: csrfReason('PATCH'), why: "the derived token-withheld principal was refused, which is D434's negative control firing on nothing", count: 1 },
   ],
 };
 
 /** Principals that must appear in no decline on this env's corpus run — see the bottom of
- * `gradeDeclines` for why this is per-run rather than a global rule. */
-const NEVER_DECLINED = { secureLocal: ['shopperBearer'] };
+ * `gradeDeclines` for why this is per-run rather than a global rule.
+ *
+ * **`shopper` joins `shopperBearer` here in M137b, and that addition is the milestone's acceptance
+ * evidence rather than a bookkeeping consequence.** She is the *only* principal in this corpus that
+ * moved from one list to the other: two rows above named her before, and now nothing declines her,
+ * because her session supplies the token. The two lists together are the before-and-after, and the
+ * pair `shopper`/`shopperNoCsrf` is what stops either from being vacuous — same human, same transport,
+ * one clause apart, one in each list.
+ *
+ * The derived principal does not trip this despite being derived *from* her: the forbid compares
+ * subjects with `===`, and its subject is the distinct string `shopper (csrf token withheld)`. Which is
+ * correct rather than lucky — the fact being asserted is that alice's own credential is never
+ * un-askable, and a probe deliberately stripped of her token is a different subject making a different
+ * claim. A prefix or substring match here would have made the two lists contradict each other. */
+const NEVER_DECLINED = { secureLocal: ['shopperBearer', 'shopper'] };
 
 /** Graded as a set, exactly, in both directions: a decline the ledger does not name is as much a
  * finding as one it names and the run did not produce. A new blind spot appearing in this corpus is
@@ -471,7 +606,10 @@ const seen = { fires: new Set(), silent: new Set(), notApplicable: new Set() };
 const seenAuthz = { fires: new Set(), silent: new Set(), notApplicable: new Set() };
 
 for (const env of ['secureLocal', 'plaintext']) {
-  const files = env === 'plaintext' ? ['plaintext.tflw'] : ['positives.tflw', 'negatives.tflw', 'authz.tflw'];
+  // `csrf.tflw` is secureLocal-only because its third test needs that env's `probe mutating` — the
+  // derived token-withheld probe is a mutating request like any other and is gated by the same D21
+  // opt-in (M137b, D457).
+  const files = env === 'plaintext' ? ['plaintext.tflw'] : ['positives.tflw', 'negatives.tflw', 'authz.tflw', 'csrf.tflw'];
   const { report } = runCorpus(env, files);
   const steps = securitySteps(report);
   const rows = LEDGER.filter((l) => l.env === env);
@@ -553,6 +691,8 @@ for (const env of ['secureLocal', 'plaintext']) {
   // authorization assertion at all and must therefore report no declines: an empty expectation is
   // the control that stops the check passing on whatever happens to be in the report.
   gradeDeclines(env, report, DECLINES[env] ?? [], NEVER_DECLINED[env] ?? []);
+  // The two tests in this corpus that are graded by their own verdict rather than by a rule.
+  gradeFunctional(env, report, FUNCTIONAL[env] ?? []);
 }
 
 // --- the third state, from D285's listing ------------------------------------
@@ -651,6 +791,16 @@ if (authzGaps.length > 0) {
   for (const [id, states] of authzGaps) {
     console.log(`  ${id}: ${Object.entries(states).filter(([, v]) => !v).map(([k]) => k).join(', ')}`);
   }
+  // **`sec/csrf-not-enforced` has no `fires` here and cannot have one**, which is a fact about the
+  // target and is recorded rather than left to look like an oversight. Every mutating route in apiV2
+  // — including the deliberately-broken `vuln/` ones (`vuln-orders.controller.ts:51`) — is behind
+  // `AnyAuthGuard`, so there is no endpoint that would accept a token-less cookie-borne write. The
+  // positive lives in tflw's own `node:http` fixture instead; VULNS.md carries the row under
+  // "Not planted, on purpose", with the reason planting one would mean weakening the app's real guard
+  // and thereby destroying `D434`'s negative control — the two cannot coexist on one target.
+  console.log('\nSee VULNS.md — "Not planted, on purpose" — for why `sec/csrf-not-enforced` has no live');
+  console.log('positive: apiV2 guards every mutating route, and weakening one to plant it would destroy');
+  console.log("the negative control that is this rule's whole acceptance story (D434).");
 }
 
 /**
@@ -670,10 +820,15 @@ console.log('\nD319 — what the tier cost this run:\n');
   const sites = rows.length;
   const requests = rows.reduce((n, r) => n + (r.probes.total ?? 0), 0);
   console.log(`  ${sites} authorization assertion site(s), ${requests} extra request(s) — ${(requests / sites).toFixed(1)} per site`);
-  console.log('  (probe set for a `peer`-owned test here is {shopper, shopperBearer, anonymous}:');
-  console.log('   `admin` is `privileged` and excluded, and the owner is never in its own probe set.');
-  console.log('   `shopperBearer` is alice again on a bearer token — M132b, without which no');
-  console.log('   mutating probe in this corpus could be judged by anybody.)');
+  console.log('  (probe set for a `peer`-owned test here is');
+  console.log('   {shopper, shopperBearer, shopperNoCsrf, anonymous}: `admin` is `privileged` and');
+  console.log('   excluded, and the owner is never in its own probe set. The three alices are one human');
+  console.log('   on three credentials — `shopperBearer` is M132b, without which no mutating probe in');
+  console.log('   this corpus could be judged by anybody, and `shopperNoCsrf` is M137b, without which');
+  console.log('   every mutating probe could be, leaving the blind-spot control with no subject.');
+  console.log('   The average is below the per-site figure because `csrf.tflw`\'s assertion names two');
+  console.log('   owners, and an owner is not probed — plus its derived token-withheld probe, which is');
+  console.log('   a real request this line does not count because D457 keeps it out of `probes`.)');
 }
 
 // --- D347: the public-target gate, three invocations, zero packets ----------------------------
