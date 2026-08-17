@@ -180,6 +180,26 @@ const FILE_FIXTURES = {
   // reading. The local pre-flight is `npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs`
   // (D351), which trips the gate in seconds rather than in a CI cycle.
   TF067: 'input-assertion-no-mutable-input.tflw',
+  //
+  // The pentest arc's Tier 4 (tflw `M137c`). **Two** codes for one construct, and the pair is worth
+  // reading together: `TF068` is *this crawl has no surface* and `TF070` is *this step does not belong
+  // in a crawl* — one repair each, which is the bar a code has to clear.
+  //
+  // Neither is a scan rule. They are the first two codes in this arc about a **declaration** rather
+  // than about an assertion's setting, because Tier 4 added a top-level construct where the three
+  // tiers before it added only matchers. That is also why the two fixtures spend most of their prose
+  // on what must stay *silent*: a new construct reaches none of the checker's existing passes by
+  // default, so every pass wired to it and every pass deliberately left unwired is a decision, and
+  // `TF039`'s silence inside a crawl body is the one that would look like an oversight.
+  //
+  // **`TF069` is skipped permanently** (tflw D456/D463) — a withdrawn code, not a missing one, and the
+  // completeness check below is what would otherwise read the gap as a hole.
+  //
+  // Coupled with its tflw half and red until that half merges (D350/D382), exactly as Tier 3's row
+  // above was. The local pre-flight is `npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs`
+  // (D351) — which is how this row's absence was caught before tflw's PR merged rather than after.
+  TF068: 'crawl-without-seed.tflw',
+  TF070: 'crawl-body-not-an-assertion.tflw',
 };
 
 for (const [code, file] of Object.entries(FILE_FIXTURES)) {
