@@ -686,6 +686,92 @@ Two things about that output are load-bearing rather than incidental:
   Name only `shopper` and alice's other credential stays in the probe set, fetches alice's own profile,
   and earns a critical object-leak finding that is the fixture's fault rather than the app's.
 
+## The Tier 4 crawl measurement (`M137e`, tflw D437/D438/D465/D480/D482)
+
+The tier's addition is not a new rule but a new *surface*: `tflw-acceptance/security/crawl.tflw` finds
+its own requests instead of judging ones somebody wrote down. So what is measured here is one thing no
+other file in this repo can show — **that a finding was reached by a seed, and by which one.**
+
+**The surface, and why it is stated as an identity rather than a total.**
+
+```
+87 discovered = 54 withheld + 33 sent   (14 reached)
+  seeds:  openapi 82 route(s)   traffic 5 route(s)
+```
+
+The grader asserts the arithmetic, not the magnitude. A crawler that quietly narrowed its own surface
+would report a smaller denominator and *look like better coverage*, so the number that must hold is
+that everything discovered is accounted for as either withheld or sent. `reached > sent` is separately
+rejected as impossible. The route-count itself is deliberately unpinned — it is a property of apiV2's
+surface and moves whenever anyone adds an endpoint.
+
+**`D437`'s matched pair, which is the point of running two seeds.** Each seed has a plant the other
+cannot see, so dropping either one makes a *named ledger row* go missing rather than making recall fall
+by an amount nobody has a number for:
+
+| plant | route | documented? | exercised? | reachable by | findings |
+| --- | --- | --- | --- | --- | --- |
+| `V15` | `GET /v1/vuln/reports/orders` | **yes** — the only fixture route that is | never | `openapi` only | 3, all `via: openapi` |
+| `V7` | `GET /v1/vuln/orders` | no — `@ApiExcludeController()` | yes, by the corpus | `traffic` only | 3, all `via: traffic` |
+
+**Precision is exact on this corpus: 6 findings, all on the 2 plants, none anywhere else.** That is the
+`D445` property, and it is the measurement `M137c2` exists to have made true — see below.
+
+**`D482`, and the reason this section reports a *before* number.** Before the fix the same crawl
+produced **23** findings: the 6 above plus **20 false criticals** across three public collections, four
+apiece. A route that hands the built-in `anonymous` principal the same collection it hands everyone
+else has no owner and therefore no boundary to cross, so neither leak rule has anything to say about
+it. Three collections are graded, and graded as **reached first**:
+
+```
+✓ GET /v1/products        reached, reported nothing
+✓ GET /v1/categories      reached, reported nothing
+✓ GET /v1/categories/tree reached, reported nothing
+✓ 4 crawl step(s) say why a leaked probe set was not a violation
+```
+
+*Reached* first is what stops the row being vacuous — a route the crawl never dialled also produces no
+findings and would satisfy the same expectation while measuring nothing. That is this repo's oldest
+recurring failure shape (`D363`). The fourth line matters for the opposite reason: the suppression has
+to be **stated**, not silent, or a rule that stopped running entirely would pass this block.
+
+Note what the fix is *not*: the guard returns `applicable: true` with no findings, never
+`applicable: false`. A crawl judges every response it reaches, so `D285` requires at least one
+applicable rule of the family on each one; on a public collection the pack's other two rules already
+stand down, so standing this one down too would convert 20 spurious findings into 4 spurious
+**failures** and redden any crawl of a public API. Same evidence, opposite sign.
+
+**What the crawl declined to do, all four kinds, none of them pinned to a count.**
+
+```
+50  synthesized write(s) enumerated, disclosed and not sent      (D465)
+12  synthesized request(s) refused by the validator (400)
+ 7  route(s) refused before authorization was consulted          (M130-01)
+ 1  route withheld by `exclude`                                  (pinned to its subject)
+```
+
+The 50 are `D465` made a number instead of a sentence: `probe mutating` is withheld on this env, so
+every write the crawl found is enumerated, disclosed and **not sent** — affirming a scan is not
+affirming writes. The 12 are honest about a limit: a validator's refusal is indistinguishable from a
+hardened endpoint, so the crawl declines to call them clean rather than counting them as passes.
+
+**The 7 are the first number `M130-01` has ever had, and they belong in the ledger rather than in a
+footnote.** That open row says apiV2 refuses a cookie-borne mutating request *before* authorization is
+consulted, and that the differential oracle reads the refusal as clean. It was filed as incidental at
+Tier 2. The Tier 4 scoping predicted it would be **systematic** under a crawler, because a 403 before
+the route's code runs is the default outcome across the whole mutating surface — and here it is, on 7
+routes, reported on every run. Graded non-zero rather than exact, like the other three, because all
+four move with apiV2's route surface; but graded, and printed with its count.
+
+`exclude` is the one that *is* pinned to its subject, because `/v1/contract-demo/*` is a choice this
+corpus made rather than a property of the surface: a pattern that silently stopped matching would
+otherwise show up as one more route quietly crawled.
+
+**Run as `--env plaintext`, with `VULN_MODE=1`.** One origin serves the document, the
+`authorized target` and the crawled base, so nothing has to be reconciled by a reader — and the
+document declares no `servers`, which is what makes `M137c1`/`D480` (resolve OpenAPI paths against the
+document's own `servers`, not the `api` base) a live regression guard here rather than a note.
+
 ## Not planted, on purpose
 
 - **TLS version and cipher — measured, and the answer is that neither positive is constructible.**

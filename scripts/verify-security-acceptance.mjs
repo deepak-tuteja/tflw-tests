@@ -447,7 +447,14 @@ const NEVER_DECLINED = { secureLocal: ['shopperBearer', 'shopper'] };
  * finding as one it names and the run did not produce. A new blind spot appearing in this corpus is
  * something somebody should have to write down. */
 function gradeDeclines(label, report, expected, forbidden = []) {
-  const got = report.scanBlindSpot?.declines ?? [];
+  // The crawl's route-surface declines are graded by `gradeCrawl` against `CRAWL_DECLINE_SHAPES` —
+  // see that table's header for why they cannot be part of an exact set. Everything they do not
+  // claim still arrives here and is still graded exactly, in both directions, so the partition
+  // narrows what this function is responsible for without narrowing what is checked.
+  const { crawlDeclines, rest: got } = partitionDeclines(report.scanBlindSpot?.declines ?? []);
+  if (crawlDeclines.length > 0) {
+    console.log(`  (${crawlDeclines.length} crawl decline(s) on this env are graded by shape — see \`CRAWL_DECLINE_SHAPES\`)`);
+  }
   if (got.length !== expected.length) {
     fail(`[${label}] blind-spot declines: expected ${expected.length}, got ${got.length}\n    actual: ${JSON.stringify(got, null, 2)}`);
     return;
@@ -487,6 +494,221 @@ function gradeDeclines(label, report, expected, forbidden = []) {
   }
 }
 
+// --- M137e: the Tier 4 crawl, graded by finding provenance rather than by assertion ----------------
+//
+// `crawl.tflw`'s unit of evidence is not "this assertion fired"; it is **"this finding was reached by
+// this seed"**. So this grader reads `report.findings` and the crawl's own surface line, and the
+// ledger it checks against is D437's matched pair:
+//
+//   V15  GET /v1/vuln/reports/orders   documented, never exercised  ->  reachable by `openapi` only
+//   V7   GET /v1/vuln/orders           undocumented, exercised      ->  reachable by `traffic` only
+//
+// Drop either seed and a **named row** goes missing, which is the property D437 asked for and the one
+// an aggregate recall number cannot express.
+const CRAWL_PLANTS = [
+  { endpoint: 'GET /v1/vuln/reports/orders', via: 'openapi', rule: 'sec/authz-collection-leak', findings: 3, why: 'V15 — documented and never exercised, so only enumeration can reach it' },
+  { endpoint: 'GET /v1/vuln/orders', via: 'traffic', rule: 'sec/authz-collection-leak', findings: 3, why: 'V7 — @ApiExcludeController(), so only the traffic seed can reach it' },
+];
+
+// D482 (`M137c2`). Public collections the crawl **reaches and must not report**. Every principal
+// including `anonymous` receives these, so there is no owner and no boundary — before the fix each of
+// them produced four critical findings, twenty in total, beside the one true positive above.
+//
+// Asserted as *reached* first, which is what stops it being vacuous: a route the crawl never dialled
+// also produces no findings, and would satisfy the same expectation while measuring nothing. That is
+// this repo's oldest recurring failure shape (D363: check who can actually answer before planting).
+const CRAWL_PUBLIC = ['GET /v1/products', 'GET /v1/categories', 'GET /v1/categories/tree'];
+
+/** **Every decline a crawl contributes, and the reason they are graded here by shape rather than in
+ * `gradeDeclines` by exact set.**
+ *
+ * `scanBlindSpot.declines` is report-global, so adding `crawl.tflw` to the plaintext corpus put 70
+ * declines into a run whose ledger said 0 — and the naive repair, writing 70 into `DECLINES`, is the
+ * one this file already argues against. See `DECLINES`' own header on `coverage`: a number that
+ * "moves whenever anyone adds a test" is a fact about the corpus rather than about a rule, and
+ * grading it here "would turn every corpus edit into a red run in the file that grades rules". A
+ * crawl's declines are that same shape one level up — they move whenever anyone adds an *endpoint* —
+ * which is exactly why `gradeCrawl` already refuses to pin the synthesized-write count. The
+ * per-principal declines `gradeDeclines` exists for stay exact; these do not.
+ *
+ * **The partition is asserted exhaustive**, which is the part that keeps this from being a hole: any
+ * decline matching none of these shapes still reaches `gradeDeclines`' exact set and still fails
+ * there if the ledger does not name it. Nothing leaves one grader without landing in another.
+ *
+ * `pin` is the subject a shape is additionally pinned to, where one exists — `exclude` names a route
+ * this corpus chose, so it can be exact even though the others cannot. */
+const CRAWL_DECLINE_SHAPES = [
+  {
+    match: /does not declare `probe mutating`/,
+    why: 'synthesized write(s) enumerated, disclosed and not sent — affirming a scan is not affirming writes (D465)',
+  },
+  {
+    match: /rejected as invalid \(400\)/,
+    why: "synthesized request(s) refused by the validator before the route ran — a validator's refusal is indistinguishable from a hardened endpoint, so the crawl declines to call it clean",
+  },
+  {
+    // **`M130-01`, and this is the first time that row has a number.** The Tier 4 scoping predicted
+    // it: incidental at Tier 2, *systematic* under a crawler, because a 403 before authorization is
+    // consulted is the default outcome across the whole mutating surface. Graded as non-zero rather
+    // than pinned for the same route-surface reason as the rest — but graded, and reported with its
+    // count, so the row stops being a sentence in a ledger and starts being a measurement.
+    match: /before the route's code ran/,
+    why: 'route(s) where the crawl principal was refused before authorization was consulted — the open `M130-01` blind spot, now counted',
+  },
+  {
+    match: /excluded by this crawl's `exclude/,
+    why: 'route(s) withheld by `exclude`, disclosed rather than dropped',
+    pin: /contract-demo/,
+  },
+];
+
+/** Split a run's declines into the crawl's route-surface ones and everything else. Used by both
+ * graders so the two cannot disagree about which is which. */
+const partitionDeclines = (declines) => {
+  const crawlDeclines = [];
+  const rest = [];
+  for (const d of declines) {
+    (CRAWL_DECLINE_SHAPES.some((s) => s.match.test(d.reason ?? '')) ? crawlDeclines : rest).push(d);
+  }
+  return { crawlDeclines, rest };
+};
+
+function gradeCrawl(report) {
+  const crawl = (report.tests ?? []).find((t) => t.kind === 'crawl');
+  if (!crawl) {
+    fail('[plaintext] no crawl in the report — `crawl.tflw` did not run, and everything below would pass vacuously');
+    return;
+  }
+  const surface = crawl.surface ?? {};
+  const { discovered = 0, withheld = 0, sent = 0, reached = 0, seeds = [] } = surface;
+
+  // The identity D435's disclosure rests on. A crawler that quietly dropped what it could not build
+  // would report a smaller denominator and look like better coverage.
+  if (discovered !== withheld + sent) {
+    fail(`[plaintext] crawl surface: ${discovered} discovered != ${withheld} withheld + ${sent} sent — the disclosure identity is broken`);
+  } else if (reached > sent) {
+    fail(`[plaintext] crawl surface: ${reached} reached > ${sent} sent, which is impossible`);
+  } else {
+    console.log(`✓ [plaintext] crawl surface accounts for everything — ${discovered} discovered = ${withheld} withheld + ${sent} sent, ${reached} reached`);
+  }
+
+  // **Both seeds must have found something.** A crawl whose `traffic` seed came back empty still
+  // reports a surface and still finds V15, so without this the run reads identically whether the
+  // traffic seed works or has silently stopped resolving.
+  for (const name of ['openapi', 'traffic']) {
+    const seed = seeds.find((x) => x.seed === name);
+    if (!seed || !(seed.discovered > 0)) {
+      fail(`[plaintext] the \`${name}\` seed discovered nothing — half of D437's pair cannot be reached, so its plant's absence would prove nothing`);
+    } else {
+      console.log(`✓ [plaintext] \`${name}\` seed discovered ${seed.discovered} route(s)`);
+    }
+  }
+
+  // `reached` has to be non-zero for any of the plant rows to mean anything, and it is worth its own
+  // assertion because `M137c1` shipped a crawl that sent 31 requests, reached 0, and reported green.
+  // `TF068`'s fourth cause makes that red now; this says so from the outside as well.
+  if (reached === 0) {
+    fail('[plaintext] the crawl reached nothing — every plant row below would be measuring an unreached route (M137c1, D480/D481)');
+    return;
+  }
+
+  const findings = (report.findings ?? []).filter((f) => f.scan === 'authorization' && f.via !== undefined);
+  for (const plant of CRAWL_PLANTS) {
+    const mine = findings.filter((f) => f.endpoint === plant.endpoint);
+    if (mine.length !== plant.findings) {
+      fail(`[plaintext] ${plant.endpoint} — expected ${plant.findings} crawl finding(s), got ${mine.length} (${plant.why})`);
+      continue;
+    }
+    const rules = [...new Set(mine.map((f) => f.rule))];
+    if (rules.length !== 1 || rules[0] !== plant.rule) {
+      fail(`[plaintext] ${plant.endpoint} — expected only ${plant.rule}, got ${rules.join(', ')}`);
+      continue;
+    }
+    // **The assertion this whole file exists for.** A plant found by the *wrong* seed is a plant that
+    // has stopped being exclusive: if V15 ever reports `via: traffic`, some test in this repo has
+    // started sending it a request and the enumeration proof is gone — silently, with the finding
+    // count unchanged.
+    const vias = [...new Set(mine.map((f) => f.via))];
+    if (vias.length !== 1 || vias[0] !== plant.via) {
+      fail(
+        `[plaintext] ${plant.endpoint} — expected every finding via \`${plant.via}\`, got ${vias.join(', ')}.\n` +
+          `    ${plant.why}. A plant reachable by both seeds proves neither.`,
+      );
+      continue;
+    }
+    console.log(`✓ [plaintext] ${plant.endpoint} — ${mine.length} finding(s), all via \`${plant.via}\` (${plant.why})`);
+  }
+
+  // Precision, stated as a set rather than as a count (D445): nothing outside the two plants. On this
+  // corpus that is checkable outright, which is stronger than a baseline — a baseline records what was
+  // once true, and this records what must stay true.
+  const strayEndpoints = [...new Set(findings.map((f) => f.endpoint))].filter(
+    (e) => !CRAWL_PLANTS.some((p) => p.endpoint === e),
+  );
+  if (strayEndpoints.length > 0) {
+    fail(
+      `[plaintext] the crawl reported findings on ${strayEndpoints.length} endpoint(s) that are not plants:\n` +
+        `    ${strayEndpoints.join('\n    ')}\n` +
+        `    Precision on this corpus is exact (D445). If one of these is a public collection, D482 has regressed.`,
+    );
+  } else {
+    console.log(`✓ [plaintext] no crawl finding outside the ${CRAWL_PLANTS.length} plants — precision is exact on this corpus`);
+  }
+
+  // D482 from the other direction, and *reached* before *silent*.
+  const declinedSubjects = new Set((report.scanBlindSpot?.declines ?? []).map((d) => d.subject));
+  for (const endpoint of CRAWL_PUBLIC) {
+    const template = endpoint.replace(/^\w+ /, '');
+    const wasDeclined = [...declinedSubjects].some((sub) => sub === endpoint || sub === template);
+    if (wasDeclined) {
+      fail(`[plaintext] ${endpoint} was declined rather than reached, so "no finding here" measures nothing (D363)`);
+      continue;
+    }
+    if (findings.some((f) => f.endpoint === endpoint)) {
+      fail(`[plaintext] ${endpoint} is public — every principal including \`anonymous\` receives it — and must not be an authorization finding (D482)`);
+      continue;
+    }
+    console.log(`✓ [plaintext] ${endpoint} was reached and reported nothing — public data has no owner (D482)`);
+  }
+
+  // The engine's own explanation of the line above, asserted on the text a reader sees. `n leaked`
+  // beside `0 violations` is two true statements that contradict each other without it, and a
+  // suppression nobody can see is indistinguishable from a rule that quietly stopped working.
+  const noteSteps = (crawl.steps ?? []).filter((s) => /public data with no owner/.test(s.detail ?? ''));
+  if (noteSteps.length === 0) {
+    fail('[plaintext] no crawl step explained a public-data suppression — D482 either did not engage or engaged silently');
+  } else {
+    console.log(`✓ [plaintext] ${noteSteps.length} crawl step(s) say why a leaked probe set was not a violation (D482)`);
+  }
+
+  // D465, and the reason this crawl runs on the env that withholds the opt-in: a synthesized write is
+  // enumerated, disclosed and not sent. The count is not pinned — it is a property of apiV2's route
+  // surface and would churn on every new endpoint — but zero would mean the gate stopped engaging.
+  // **All four decline shapes a crawl produces, each graded non-zero, and none of them pinned to a
+  // count.** D465's synthesized writes were the only one graded before; the other three arrived with
+  // this corpus file and were silently ungraded, which is the same hole in miniature that
+  // `CRAWL_DECLINE_SHAPES` exists to close on the other side. Non-zero rather than exact because
+  // every one of them is a function of apiV2's route surface — a new endpoint moves them and that is
+  // not a regression — but zero would mean the channel stopped engaging, which is.
+  //
+  // `exclude` is additionally pinned to its subject, because that one route is a choice this corpus
+  // made rather than a property of the surface: a pattern that silently stopped matching shows up
+  // here rather than as one more route quietly crawled.
+  const { crawlDeclines } = partitionDeclines(report.scanBlindSpot?.declines ?? []);
+  for (const shape of CRAWL_DECLINE_SHAPES) {
+    const hits = crawlDeclines.filter((d) => shape.match.test(d.reason ?? ''));
+    if (hits.length === 0) {
+      fail(`[plaintext] the crawl disclosed no ${shape.why} — that channel stopped engaging, or the reason was reworded out from under this grader`);
+      continue;
+    }
+    if (shape.pin && !hits.some((d) => shape.pin.test(d.subject ?? ''))) {
+      fail(`[plaintext] ${hits.length} decline(s) matched \`${shape.match}\` but none names the subject this corpus pinned (${shape.pin}) — the pattern is dead, or the route left the document`);
+      continue;
+    }
+    console.log(`✓ [plaintext] ${hits.length} ${shape.why}`);
+  }
+}
+
 const COUNTS = /(\d+) rules? — (\d+) applicable, (\d+) not applicable, (\d+) violations?/;
 const VIOLATION = /^\s*- \[(critical|serious|moderate|minor)\] (sec\/[a-z0-9-]+):/gm;
 const STOOD_DOWN = /^\s*- (sec\/[a-z0-9-]+) applies when: (.+)$/gm;
@@ -519,6 +741,14 @@ function parseProbes(detail) {
 function securitySteps(report) {
   const out = [];
   for (const t of report.tests ?? []) {
+    // **Crawls are excluded, and not as a convenience** (M137e, testFlow D437). This function feeds
+    // `LEDGER`, whose unit is *one assertion in one named test* — the corpus writes them in a fixed
+    // order and a count mismatch is itself a finding. A crawl breaks both halves of that: it applies
+    // one written assertion to every route it reaches, so the number of steps under its name is a
+    // property of the target's OpenAPI document rather than of anything an author wrote down, and the
+    // `leftover` check at the bottom of the ledger loop would report every one of them as ungraded
+    // coverage. It is graded by `gradeCrawl` instead, whose unit is the *finding* and its `via`.
+    if (t.kind === 'crawl') continue;
     for (const s of t.steps ?? []) {
       const detail = s.detail ?? '';
       if (!COUNTS.test(detail)) continue;
@@ -609,7 +839,10 @@ for (const env of ['secureLocal', 'plaintext']) {
   // `csrf.tflw` is secureLocal-only because its third test needs that env's `probe mutating` — the
   // derived token-withheld probe is a mutating request like any other and is gated by the same D21
   // opt-in (M137b, D457).
-  const files = env === 'plaintext' ? ['plaintext.tflw'] : ['positives.tflw', 'negatives.tflw', 'authz.tflw', 'csrf.tflw'];
+  // `crawl.tflw` is plaintext-only (M137e): its `seed openapi` source is that env's own origin, so
+  // the document, the `authorized target` and the crawled base are one host — and `probe mutating` is
+  // withheld there, which is the state worth crawling in (D465).
+  const files = env === 'plaintext' ? ['plaintext.tflw', 'crawl.tflw'] : ['positives.tflw', 'negatives.tflw', 'authz.tflw', 'csrf.tflw'];
   const { report } = runCorpus(env, files);
   const steps = securitySteps(report);
   const rows = LEDGER.filter((l) => l.env === env);
@@ -693,6 +926,7 @@ for (const env of ['secureLocal', 'plaintext']) {
   gradeDeclines(env, report, DECLINES[env] ?? [], NEVER_DECLINED[env] ?? []);
   // The two tests in this corpus that are graded by their own verdict rather than by a rule.
   gradeFunctional(env, report, FUNCTIONAL[env] ?? []);
+  if (env === 'plaintext') gradeCrawl(report);
 }
 
 // --- the third state, from D285's listing ------------------------------------
