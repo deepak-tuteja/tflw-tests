@@ -547,13 +547,19 @@ const CRAWL_DECLINE_SHAPES = [
     why: "synthesized request(s) refused by the validator before the route ran — a validator's refusal is indistinguishable from a hardened endpoint, so the crawl declines to call it clean",
   },
   {
-    // **`M130-01`, and this is the first time that row has a number.** The Tier 4 scoping predicted
-    // it: incidental at Tier 2, *systematic* under a crawler, because a 403 before authorization is
-    // consulted is the default outcome across the whole mutating surface. Graded as non-zero rather
-    // than pinned for the same route-surface reason as the rest — but graded, and reported with its
-    // count, so the row stops being a sentence in a ledger and starts being a measurement.
+    // **The `M130-01` shape, and what these 7 declines actually are: the fix working.** That row is
+    // **closed** (`M136a`, 2026-08-16) — `authzProbe.ts` classifies a cookie-borne principal refused
+    // `4xx` on a non-safe method as `inconclusive`, which cannot reach `clean` and is declined into
+    // the blind-spot channel rather than counted as a pass. So a decline here is the correct outcome,
+    // not an open hole: the engine is refusing to call an unanswerable probe clean.
+    //
+    // Worth grading anyway, and this is the reason. The closure rests on **six unit tests** against
+    // hand-built cases; a crawl is the first thing that exercises the classifier across a whole
+    // mutating surface, where a 403 before the route's code runs is the *default* outcome. Zero here
+    // would mean the classifier stopped engaging — which is exactly how the row's defect looked when
+    // it was real, and it would once again read as good news (nothing declined ⇒ nothing wrong).
     match: /before the route's code ran/,
-    why: 'route(s) where the crawl principal was refused before authorization was consulted — the open `M130-01` blind spot, now counted',
+    why: 'route(s) where the crawl principal was refused before its code ran, declined rather than read as clean — the `M130-01` classifier holding on a real surface',
   },
   {
     match: /excluded by this crawl's `exclude/,

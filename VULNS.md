@@ -755,13 +755,21 @@ every write the crawl found is enumerated, disclosed and **not sent** — affirm
 affirming writes. The 12 are honest about a limit: a validator's refusal is indistinguishable from a
 hardened endpoint, so the crawl declines to call them clean rather than counting them as passes.
 
-**The 7 are the first number `M130-01` has ever had, and they belong in the ledger rather than in a
-footnote.** That open row says apiV2 refuses a cookie-borne mutating request *before* authorization is
-consulted, and that the differential oracle reads the refusal as clean. It was filed as incidental at
-Tier 2. The Tier 4 scoping predicted it would be **systematic** under a crawler, because a 403 before
-the route's code runs is the default outcome across the whole mutating surface — and here it is, on 7
-routes, reported on every run. Graded non-zero rather than exact, like the other three, because all
-four move with apiV2's route surface; but graded, and printed with its count.
+**The 7 are the `M130-01` classifier holding on a real surface, and that is worth stating precisely
+because the obvious reading of them is wrong.** `M130-01` described a real defect — apiV2 refuses a
+cookie-borne mutating request *before* authorization is consulted, and a differential oracle reads the
+refusal as **clean** — but that row is **closed** (`M136a`, 2026-08-16, closed as *fixed* rather than
+withdrawn). tflw's `authzProbe.ts` classifies such a refusal as `inconclusive`, `inconclusive` cannot
+reach `clean`, and the probe is declined into the blind-spot channel instead. So each of these 7 is the
+engine **correctly refusing to call an unanswerable probe clean**, not a hole.
+
+It is graded anyway, and the reason is the interesting part: that closure rests on **six unit tests**
+against hand-built cases, and a crawl is the first thing to exercise the classifier across a whole
+mutating surface — where a 403 before the route's code runs is the *default* outcome, not an edge case.
+Zero declines here would mean the classifier had stopped engaging, which is precisely how the original
+defect presented, and which would once again read as good news: nothing declined, so nothing wrong.
+Graded non-zero rather than exact, like the other three, because all four move with apiV2's route
+surface.
 
 `exclude` is the one that *is* pinned to its subject, because `/v1/contract-demo/*` is a choice this
 corpus made rather than a property of the surface: a pattern that silently stopped matching would
