@@ -772,6 +772,89 @@ otherwise show up as one more route quietly crawled.
 document declares no `servers`, which is what makes `M137c1`/`D480` (resolve OpenAPI paths against the
 document's own `servers`, not the `api` base) a live regression guard here rather than a note.
 
+## The committed baseline (`D445`)
+
+`tflw-acceptance/security/security-baseline.json` — **8 accepted fingerprints**, and the definition of
+this arc's precision gate:
+
+```
+precision  ==  no finding outside  (baseline ∪ plants)
+```
+
+`plan_v2.md` §4.2 originally defined scanner acceptance as *"find every planted flaw, **zero findings
+elsewhere**"*. There have not been zero findings elsewhere for two milestones, and there should not be:
+apiV2 sets no `X-Content-Type-Options`, sends `Server`, and returns a cacheable authenticated profile.
+Those are true positives on real routes — a scanner noticing them is the scanner working. So the bar
+became a set difference rather than a zero.
+
+**What is in it, and why every entry is a real defect in the target:**
+
+| rule | endpoints |
+| --- | --- |
+| `sec/nosniff-missing` | `GET /v1/health`, `GET /v1/auth/profile`, `POST /v1/auth/session-login` |
+| `sec/hsts-missing` | `GET /v1/health`, `GET /v1/auth/profile`, `POST /v1/auth/session-login` |
+| `sec/server-version-disclosure` | `GET /v1/health` |
+| `sec/authenticated-response-cacheable` | `GET /v1/auth/profile` |
+
+One file covers both envs because **a fingerprint does not depend on the env**: it is computed from the
+scan, rule, endpoint, location and violation, so `sec/nosniff-missing` on `GET /v1/health` is
+`b32982bffae63fa3` under `plaintext` and under `secureLocal` alike. The seven `hsts`/`cacheable`/
+`server` entries are secureLocal's alone, because `sec/hsts-missing` is not-applicable over plaintext
+where a browser ignores the header — which is why the staleness check below is accumulated across both
+envs rather than asserted per-env.
+
+**Plants are not in the baseline, and are not listed anywhere in it.** They are discriminated
+structurally: every planted route is served at `/v1/vuln/…`, so the prefix *is* the plant set and a new
+plant needs no edit to the grader. Keeping them out is what stops the gate being circular — a baseline
+containing the plants would satisfy `baseline ∪ plants` by construction and measure nothing.
+
+### Regenerating it — a reviewed diff, never a command run to make CI green
+
+This is the one instruction that matters, and it lives here rather than in the plan because this is
+where somebody staring at a red gate will look.
+
+```sh
+# generates a candidate — it does NOT produce the committed file
+VULN_MODE=1 node cli.mjs start
+node ../testFlow/packages/cli/dist/cli.cjs run --env secureLocal --baseline-write /tmp/candidate.json \
+  positives.tflw negatives.tflw authz.tflw csrf.tflw      # from tflw-acceptance/security/
+```
+
+A `--baseline-write` run writes **every** finding it saw, plants included. Turning that into this file
+is a manual step: drop every `/v1/vuln/…` entry, then **diff what remains against the committed file
+and justify each line that moved.** A new entry is a claim that the target gained a real defect; a
+removed one is a claim that somebody fixed it.
+
+**The failure mode this discipline exists to prevent** is a baseline regenerated to clear a red gate,
+which silently accepts a regression as the new normal. It is the reason `verify-security-acceptance.mjs`
+does two things rather than one:
+
+- **Findings outside `baseline ∪ plants` fail**, naming each one with its fingerprint and source line.
+  Either the target changed and the finding is real, or a rule regressed and is firing where it should
+  not — and the message says so, because those two have opposite fixes.
+- **Baseline entries no run produced also fail.** A stale acceptance is a fixed defect nobody deleted,
+  or a run that quietly stopped happening. If staleness were only ever a warning, a baseline could rot
+  into a list of fingerprints that guard nothing while every gate stayed green.
+
+### What is deliberately NOT baselined: the 45 `sec/oversized-input-accepted` findings
+
+`D445`'s text asks for them ("the 45 oversized ones"). The target does not permit it, and this is
+recorded rather than quietly skipped. Three independent reasons, any one of them sufficient:
+
+1. **No gated run produces them.** They come only from `npm run sweep:input-volume`, which is not a
+   `regression.mjs` phase and is not in CI. Every entry would sit permanently in the "stale, reported,
+   never pruned" state — and under the staleness check above, would fail the gate forever.
+2. **There is nothing committed to anchor to.** That sweep copies `tests/` to a *gitignored*
+   `.sweep-input/` and synthesizes the input-handling assertions at run time.
+3. **Their fingerprints are not stable, by this file's own measurement.** See `D380` above: *"the count
+   and the class are stable; which routes supply them is not entirely"* — a third run substituted a
+   `POST /v1/coupons` `code` finding. A fingerprint is computed from the endpoint and the field, so a
+   substitution is a **new** fingerprint, which is exactly what a baseline fails on. The file would
+   churn between runs *and* redden in the direction that matters.
+
+They remain documented under `D380`, where a count and a class are the right instrument, and where
+being a measurement rather than a gate is the honest description.
+
 ## Not planted, on purpose
 
 - **TLS version and cipher — measured, and the answer is that neither positive is constructible.**

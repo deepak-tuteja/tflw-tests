@@ -709,6 +709,68 @@ function gradeCrawl(report) {
   }
 }
 
+/** **`D445` — the arc's precision gate, and what replaced a bar the target already failed.**
+ *
+ * §4.2 of `plan_v2.md` defined scanner acceptance as *"find every planted flaw, **zero findings
+ * elsewhere**"*. That second half has been false for two milestones and is false on purpose: apiV2
+ * declares no `@MaxLength()` anywhere and sets no `nosniff`, so the real app yields genuine findings
+ * on real routes. `D445` replaces the impossible bar with a checkable one:
+ *
+ *     precision  ==  no finding outside  (baseline ∪ plants)
+ *
+ * **Plants are discriminated structurally, not by a list.** Every planted route lives under
+ * `apiV2/src/vuln/` and is served at `/v1/vuln/…`, so the prefix *is* the plant set — a new plant
+ * needs no edit here, and a finding that wanders off the fixture slice cannot be mistaken for one.
+ * `VULNS.md`'s `V` rows stay the human-readable ledger; this is the machine-checkable half.
+ *
+ * **What is deliberately NOT in the baseline: the 45 `sec/oversized-input-accepted` findings.** They
+ * are real and they are documented (`VULNS.md`, `D380`), and they still cannot be baselined — three
+ * independent reasons, any one sufficient. They come only from `npm run sweep:input-volume`, which is
+ * not a `regression.mjs` phase and not in CI, so no gated run produces them and every entry would be
+ * permanently stale. That sweep runs against a *gitignored* `.sweep-input/` copy of `tests/` with
+ * assertions synthesized at run time, so there is no committed artifact to anchor to. And `VULNS.md`
+ * records that *"the count and the class are stable; which routes supply them is not entirely"* —
+ * while a fingerprint is computed **from the endpoint and the field**, so a run that substitutes a
+ * `POST /v1/coupons` finding produces a *new* fingerprint, which is precisely what a baseline fails
+ * on. Baselining them would guard nothing and churn anyway. `D445`'s text asks for them; the target
+ * does not permit it, and that is recorded rather than quietly skipped. */
+const BASELINE = JSON.parse(readFileSync(join(corpus, 'security-baseline.json'), 'utf8'));
+/** Fingerprints the corpus actually produced, accumulated across envs — see the staleness check. */
+const baselineSeen = new Set();
+const PLANT_PREFIX = /^[A-Z]+ \/v1\/vuln\//;
+
+function gradePrecision(label, report) {
+  const findings = report.findings ?? [];
+  const stray = [];
+  let plants = 0;
+  let accepted = 0;
+  for (const f of findings) {
+    if (PLANT_PREFIX.test(f.endpoint ?? '')) {
+      plants += 1;
+      continue;
+    }
+    const hit = BASELINE.accepted.find((e) => e.fingerprint === f.fingerprint);
+    if (hit) {
+      baselineSeen.add(f.fingerprint);
+      accepted += 1;
+      continue;
+    }
+    stray.push(f);
+  }
+  if (stray.length > 0) {
+    fail(
+      `[${label}] ${stray.length} finding(s) outside \`baseline ∪ plants\` — D445's precision property:\n` +
+        stray.map((f) => `      ${f.severity} ${f.rule}  ${f.endpoint}  ${f.fingerprint}  (${f.file}:${f.line})`).join('\n') +
+        `\n    Either the target changed and the finding is real — accept it by adding the fingerprint to\n` +
+        `    tflw-acceptance/security/security-baseline.json as a REVIEWED diff — or a rule regressed and\n` +
+        `    is firing where it should not. Regenerating the baseline to make this green destroys the\n` +
+        `    distinction. See VULNS.md — "The committed baseline".`,
+    );
+    return;
+  }
+  console.log(`✓ [${label}] precision: ${findings.length} finding(s) — ${plants} on planted routes, ${accepted} accepted by the baseline, 0 elsewhere (D445)`);
+}
+
 const COUNTS = /(\d+) rules? — (\d+) applicable, (\d+) not applicable, (\d+) violations?/;
 const VIOLATION = /^\s*- \[(critical|serious|moderate|minor)\] (sec\/[a-z0-9-]+):/gm;
 const STOOD_DOWN = /^\s*- (sec\/[a-z0-9-]+) applies when: (.+)$/gm;
@@ -927,6 +989,28 @@ for (const env of ['secureLocal', 'plaintext']) {
   // The two tests in this corpus that are graded by their own verdict rather than by a rule.
   gradeFunctional(env, report, FUNCTIONAL[env] ?? []);
   if (env === 'plaintext') gradeCrawl(report);
+  gradePrecision(env, report);
+}
+
+// D445's other half, and the reason the baseline is committed rather than merely generated: an entry
+// no run produces is either a defect somebody fixed — in which case deleting the line is the act that
+// makes the gate protect the fix — or a run that quietly stopped happening. Both are things a human
+// should have to look at, and neither is visible if staleness is only ever a warning.
+//
+// Accumulated across both envs and asserted once, because the two envs legitimately produce different
+// subsets: `sec/hsts-missing` cannot fire over plaintext at all, so seven of the eight are
+// secureLocal's to supply. Per-env exactness here would fail on a truth about the transport.
+{
+  const unused = BASELINE.accepted.filter((e) => !baselineSeen.has(e.fingerprint));
+  if (unused.length > 0) {
+    fail(
+      `${unused.length} baseline entr(ies) were not produced by either env — a stale acceptance is a fixed defect nobody deleted, or a run that stopped happening:\n` +
+        unused.map((e) => `      ${e.fingerprint}  ${e.rule}  ${e.endpoint}`).join('\n') +
+        `\n    Do not regenerate to make this green. See VULNS.md — "The committed baseline".`,
+    );
+  } else {
+    console.log(`✓ every one of the ${BASELINE.accepted.length} baseline entries was produced by a run — no stale acceptances`);
+  }
 }
 
 // --- the third state, from D285's listing ------------------------------------
