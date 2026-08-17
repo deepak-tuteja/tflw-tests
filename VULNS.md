@@ -23,17 +23,28 @@ the other ~45 files' results mean anything.
 VULN_MODE=1 node cli.mjs start          # the stack, with the fixture slice present
 node scripts/verify-security-target.mjs # assert every claim below against it
 node scripts/verify-sarif-acceptance.mjs # assert the SARIF document says the same thing (M135c)
+
+node cli.mjs stop && node cli.mjs start   # …and then the ORDINARY stack, no flag
+node scripts/verify-vuln-slice-hidden.mjs # assert none of it is reachable or documented (M137e)
 ```
 
-Three graders read this table, and they read it for different reasons.
+That second stack is not a footnote. Since `M137e` one fixture route (`V15`) is deliberately
+**documented** in `/openapi.json`, and the entire argument for that being safe is that it exists only
+under `VULN_MODE=1` — so "absent without the flag" stopped being a free consequence of the exclusion
+and became a claim that needs checking. It needs the other stack, which is why it is its own script and
+its own `regression.mjs` phase.
+
+Five scripts read this table, asking **four** different questions of it.
 `verify-security-target.mjs` asks whether the *target* still answers the way the rows claim — a
 failure there means apiV2, nginx or this file disagree, never that tflw regressed.
 `verify-security-acceptance.mjs` and `verify-input-acceptance.mjs` ask which rules fired, stayed
 silent, or stood down in the *run report*. `verify-sarif-acceptance.mjs` asks whether the
 **machine-readable document** tflw hands to a code-scanning UI carries the same answer — which
 matters because that is the one artifact whose mistakes are silent: an invalid or mis-anchored SARIF
-file uploads successfully and produces no alerts at all. A row edited here without editing that
-script is a row two graders check and one no longer does.
+file uploads successfully and produces no alerts at all. And since `M137e`,
+`verify-vuln-slice-hidden.mjs` asks the one question none of the others can, because it needs the
+other stack: whether any of this is reachable **without** `VULN_MODE=1`. A row edited here without
+editing those scripts is a row some graders check and others no longer do.
 
 The plaintext base is `env local` (`http://localhost:4001/v1`, straight to the app). The TLS base is
 `env secureLocal` (`https://localhost:8443/v1`, through M22's nginx sidecar). Several rules answer
@@ -57,6 +68,7 @@ differently on the two, and that difference is itself part of the ledger.
 | `V12` | `POST /v1/vuln/notes` — `body.text` | **positive** | `sec/error-detail-disclosure` (under `probe mutating` only) | serious |
 | `V13` | `POST /v1/vuln/notes` — `body.title` | **positive** | `sec/oversized-input-accepted` (under `probe mutating` + `probe oversized`) | minor |
 | `V14` | `GET /v1/vuln/lookup-escaped?q=` | **negative** | `sec/reflected-input-unescaped` | — |
+| `V15` | `GET /v1/vuln/reports/orders` — **the only documented fixture route** | **positive** | `sec/authz-collection-leak` (reachable by a crawl's `openapi` seed alone) | critical |
 
 `V1`–`V5` are Tier 1's, and they are claims a response makes about *itself* — headers and cookie
 flags. `V6`–`V9` are Tier 2's, and they are claims about *who is allowed to see what*, which is a
@@ -64,7 +76,9 @@ different kind of fixture: nothing in the response is malformed, and every one o
 correct endpoint would also have returned to somebody. `V10`–`V14` are Tier 3's, and they are claims
 about what the application does with an input it did not expect — so unlike either tier before them
 these fixtures are judged on a response to a request *tflw constructed*, not to the one the suite
-made.
+made. `V15` is Tier 4's, and it is the first row in this file whose distinguishing property is not in
+its response at all: it breaks the same rule `V7` does, in the same way, and what separates them is
+**who can find it**.
 
 What each one actually sends:
 
@@ -99,6 +113,13 @@ What each one actually sends:
   own `PATCH /v1/orders/:id/items/:itemId`, which routes through the same `findOneScoped` as
   `GET /v1/orders/:id` — one check refusing a non-owner on both the read and the write, and `V9`
   is that check's absence.
+
+- **`V15`** — every user's orders, unfiltered, to any authenticated caller. Byte-for-byte the same
+  handler as `V7`, on a different route, and the clean counterpart is a different one too:
+  `GET /v1/orders/all` (`orders.controller.ts:60`) serves the same unscoped collection and is
+  `@Roles(UserRole.ADMIN)`, so the plant is exactly one missing decorator. No path parameter and no
+  required query, deliberately — see the section below for why that is load-bearing rather than
+  incidental.
 
 **Two of the first five are clean, and that is the part worth reading twice.** Clean apiV2 gives
 `csp-missing`, `x-frame-options` and `cors-wildcard-with-credentials` their *not-applicable* case —
@@ -357,6 +378,65 @@ reading the code (`whitelist: true` strips undecorated properties, so "no decora
 as "no bound"), and the sweep is what turned that reading into a measurement. `plan_v2.md` §4.2's
 rule that real endpoints stay clean is about *planted* flaws; a real bound that was never declared is
 exactly what a scanner is supposed to notice.
+
+### The Tier 4 enumeration plant `V15`, and why it is the one documented fixture route
+
+`M137e` (testFlow [PLAN_M137_PENTEST_TIER4.md](../testFlow/PLAN_M137_PENTEST_TIER4.md), D437/D438)
+adds the arc's fourth tier — a **crawl**, which finds its own requests instead of judging the ones the
+suite made. It has two seeds, and they find different things:
+
+| seed | finds | can it find `V1`–`V14`? | can it find `V15`? |
+|---|---|---|---|
+| `seed openapi` | every operation `/openapi.json` describes | **no** — all three controllers are `@ApiExcludeController()` | **yes** |
+| `seed traffic` | every distinct route this run's own tests touched | yes, the acceptance corpus sends them | **no** — nothing in this repo ever sends it |
+
+D437's rule is that **each seed source gets at least one plant only it can reach**, and the reason is
+about how a regression would look rather than about coverage arithmetic: with a shared plant set,
+dropping the enumerator makes recall fall by an amount nobody has a number for. With `V15`, it makes a
+*named row* go missing.
+
+**So `V15` had to be documented, and every other fixture route must not be.** That is the tension this
+row exists inside, and both halves are enforced:
+
+- `scripts/verify-security-target.mjs` asserts `/v1/vuln/reports/orders` **is** in the `VULN_MODE`
+  document, as a `GET`, **and that it is the only `/v1/vuln/*` path in it**. A second documented
+  fixture route would make a missing `via: openapi` finding ambiguous about which plant went unfound.
+- `scripts/verify-vuln-slice-hidden.mjs` asserts it is **absent** from the default stack — no route,
+  no documented path, no leaked tag. That is a separate script and a separate `regression.mjs` phase
+  because the two claims need opposite stacks: `security-target-check` runs under
+  `stackEnv: { VULN_MODE: '1' }`, and this claim is only meaningful without it.
+
+**Why documenting it does not violate the exclusion it appears to violate (D438).** `VULNS.md`'s
+standing rule at the top of this file plus `@ApiExcludeController()` on all three controllers added up
+to *no plant can ever be documented*, which would have left Tier 4's enumeration plant unbuildable.
+But read the exclusion's stated reason — `vuln.controller.ts:24-27` — it is that documenting the slice
+*"would make `/openapi.json` vary by environment and every contract assertion in this suite vary with
+it."* That reason is narrower than its effect. The contract assertions it protects
+(`tests/api/catalog/contract-and-retry.tflw:21`, `tests/examples/matchers-explained.tflw:62`,
+`tests/api/admin/versioning.tflw:9`) all run against a stack started **without** `VULN_MODE=1`. A route
+documented **and** absent without the flag leaves every one of them looking at the document it has
+always looked at.
+
+**No path parameter and no required query, and that is the design rather than the shape it happened to
+take.** A crawl's OpenAPI seed must invent the values a documented request cannot be made without, and
+an invented id does not exist — so a synthesized `GET /vuln/reports/orders/{id}` would answer `404`
+and be recorded as *not reached* rather than judged. `V15` needs nothing invented, so it reaches real
+code on the first attempt. That matters for what a **missing** finding would mean: with a parameter,
+"the crawl found nothing" is ambiguous between *it cannot enumerate* and *it invented a bad value*, and
+those have different repairs. Without one, it can only mean the first.
+
+**Fourth controller, and the split is along visibility rather than dependencies.**
+`VulnReportsController` needs nothing `VulnOrdersController` does not already have — same repository,
+same guard, same unscoped `find`. It is its own class because `@ApiExcludeController()` is a *class*
+decorator, so the single property that defines this plant cannot be expressed per-route on a controller
+that carries the exclusion.
+
+**The requirement that nothing ever sends it a request is a property of the whole suite, not of one
+file.** If any `.tflw` test ever calls `/v1/vuln/reports/orders`, the captured-traffic seed finds it
+too, the two seeds stop being distinguishable here, and D437's per-seed attribution loses its only
+enumeration-exclusive positive — a coverage claim that reads exactly the same after it has stopped
+being true. `verify:security-acceptance` grades this finding's `via` as `openapi`, which is what makes
+that requirement something a run can fail rather than a note in a comment.
 
 ## What the real app answers, with nothing planted
 
