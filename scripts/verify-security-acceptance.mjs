@@ -84,6 +84,34 @@ const authzInPlay = (floor) =>
  * that is the point: a row here with no row there is how the two drift.
  */
 const LEDGER = [
+  // --- offeringTls (https://localhost:8445) — M137g -------------------------------------------
+  //
+  // **`sec/tls-weak-cipher`'s first live positive in this corpus's history.** Everything else in
+  // this ledger grades a rule against a response; this row grades one against the *transport*, and
+  // the target is `V18`, nginx's 8445 listener (`nginx/offering.conf`). It offers `NULL-SHA256`
+  // alongside a modern suite and negotiates the modern one, so `tls-version-old` and the negotiated
+  // half of `tls-weak-cipher` both read clean — which is precisely why the row is worth having.
+  // Without `probe ciphers` this assertion is green with one finding; with it, two.
+  //
+  // `hsts-missing` is here because nginx sets no HSTS header on any of its three listeners, not
+  // because of anything M137g did. Listing it is what makes the row exact rather than a claim about
+  // the rule under test with a wildcard beside it.
+  {
+    env: 'offeringTls',
+    test: 'sec/tls-weak-cipher fires on a host that OFFERS a broken suite while negotiating a modern one',
+    floor: 'serious',
+    fires: ['sec/hsts-missing', 'sec/tls-weak-cipher'],
+    // The other TLS rule, in play at this floor and silent: the negotiated protocol is TLSv1.3.
+    // A listener that offers a broken *suite* is not a listener that speaks a dead *version*, and
+    // a corpus that could not tell those apart would grade half of `M128c` by accident.
+    silent: ['sec/tls-version-old'],
+    // D486's ceiling, asserted rather than assumed. tflw's own OpenSSL refuses to put RC4, 3DES and
+    // the EXPORT suites into a ClientHello at all, so those candidates are `unaskable` — neither
+    // offered nor refused — and the rule says so. The day this stack's OpenSSL changes, this
+    // expectation is what notices.
+    note: ['could not offer'],
+  },
+
   // --- secureLocal (https://localhost:8443) ---
   { env: 'secureLocal', test: 'sec/cors-wildcard-with-credentials fires on `*` plus credentials (V1)', floor: 'critical', fires: ['sec/cors-wildcard-with-credentials'] },
   { env: 'secureLocal', test: 'the cookie-flag rules fire on a cookie with no HttpOnly, no Secure and SameSite=None (V3)', floor: 'critical', fires: ['sec/cookie-not-httponly', 'sec/cookie-not-secure'] },
@@ -91,7 +119,12 @@ const LEDGER = [
   // cookie rules from the row above appear here again. Two drafts of this ledger read `moderate` as a
   // band; it is not one, and the grader is what said so.
   { env: 'secureLocal', test: 'the cookie-flag rules fire on a cookie with no HttpOnly, no Secure and SameSite=None (V3)', floor: 'moderate', fires: ['sec/cookie-not-httponly', 'sec/cookie-not-secure', 'sec/hsts-missing', 'sec/cookie-samesite-none', 'sec/nosniff-missing'] },
-  { env: 'secureLocal', test: 'sec/csp-missing and sec/x-frame-options fire on a bare document (V4)', floor: 'serious', fires: ['sec/hsts-missing', 'sec/csp-missing'], silent: ['sec/tls-version-old', 'sec/tls-weak-cipher'] },
+  // **The withheld half of `probe ciphers` (M137g), and the only place this corpus can show it.**
+  // `secureLocal` deliberately does not grant the clause, so `sec/tls-weak-cipher` here judges the
+  // negotiated suite and nothing else — and says so in a note on a line that passes. That sentence is
+  // the difference between "the cipher rule ran and this host is clean" and "the cipher rule ran and
+  // asked half its question", and it is graded here because the assertion is green either way.
+  { env: 'secureLocal', test: 'sec/csp-missing and sec/x-frame-options fire on a bare document (V4)', floor: 'serious', fires: ['sec/hsts-missing', 'sec/csp-missing'], silent: ['sec/tls-version-old', 'sec/tls-weak-cipher'], note: ['judged only the suite this host gave'] },
   { env: 'secureLocal', test: 'sec/csp-missing and sec/x-frame-options fire on a bare document (V4)', floor: 'moderate', fires: ['sec/hsts-missing', 'sec/csp-missing', 'sec/x-frame-options', 'sec/nosniff-missing'] },
   { env: 'secureLocal', test: 'sec/hsts-missing fires on every TLS response the sidecar serves', floor: 'serious', fires: ['sec/hsts-missing'] },
   // `minor` is the *lowest* rank, so a `minor` floor narrows nothing — the whole pack is in play and
@@ -932,13 +965,30 @@ const PLANT_PREFIX = /^[A-Z]+ \/v1\/vuln\//;
  * not accounted for goes red in that grader instead of this one. What moves is which file says so. */
 const isSpiderPlant = (f) => f.via === 'spider';
 
+/** **`M137g` — the second plant whose subject is not a route, and the third discriminator.**
+ *
+ * `V18` is nginx's 8445 listener. Like `V16` it is an entire origin rather than a path, so
+ * `PLANT_PREFIX` cannot see it; unlike `V16` it is not reached by a crawl, so `via` cannot either.
+ * Its findings arrive on ordinary endpoints — `GET /v1/health` is the plainest response the app has
+ * — because the weakness is underneath the response rather than in it.
+ *
+ * So the discriminator is the **env**, which is the honest one here: `offeringTls` exists for no
+ * other purpose, runs one file, and is the only place in this repo where a transport is deliberately
+ * broken. The rule set is named rather than left open for the same reason `SPIDER_RULES` is — a rule
+ * firing on this listener that nobody wrote down should go red, and `sec/tls-version-old` firing here
+ * would mean the listener had silently lost TLS 1.2/1.3 and is exactly the regression this must not
+ * absorb. `hsts-missing` is deliberately absent: it is not a property of the plant, it is nginx being
+ * nginx on all three listeners, and the committed baseline already accounts for it by fingerprint. */
+const OFFERING_PLANT_RULES = new Set(['sec/tls-weak-cipher']);
+const isOfferingPlant = (label, f) => label === 'offeringTls' && OFFERING_PLANT_RULES.has(f.rule);
+
 function gradePrecision(label, report) {
   const findings = report.findings ?? [];
   const stray = [];
   let plants = 0;
   let accepted = 0;
   for (const f of findings) {
-    if (PLANT_PREFIX.test(f.endpoint ?? '') || isSpiderPlant(f)) {
+    if (PLANT_PREFIX.test(f.endpoint ?? '') || isSpiderPlant(f) || isOfferingPlant(label, f)) {
       plants += 1;
       continue;
     }
@@ -1090,7 +1140,16 @@ const seen = { fires: new Set(), silent: new Set(), notApplicable: new Set() };
  * packs without either borrowing the other's evidence. */
 const seenAuthz = { fires: new Set(), silent: new Set(), notApplicable: new Set() };
 
-for (const env of ['secureLocal', 'plaintext']) {
+/** Which corpus files each env runs. Not "everything under this root" — three of the six files here
+ * are only meaningful under one env, and running them everywhere would grade a rule against a base
+ * whose configuration was never designed to answer it. */
+const FILES = {
+  plaintext: ['plaintext.tflw', 'crawl.tflw', 'spider.tflw'],
+  secureLocal: ['positives.tflw', 'negatives.tflw', 'authz.tflw', 'csrf.tflw'],
+  offeringTls: ['ciphers.tflw'],
+};
+
+for (const env of ['secureLocal', 'plaintext', 'offeringTls']) {
   // `csrf.tflw` is secureLocal-only because its third test needs that env's `probe mutating` — the
   // derived token-withheld probe is a mutating request like any other and is gated by the same D21
   // opt-in (M137b, D457).
@@ -1100,7 +1159,18 @@ for (const env of ['secureLocal', 'plaintext']) {
   // `spider.tflw` is plaintext-only for the same reason `crawl.tflw` is, plus one of its own: both
   // webV2 `authorized target` declarations live on that env, and a spider that cannot affirm its
   // origin is refused by `TF060` before it can demonstrate anything (M137f).
-  const files = env === 'plaintext' ? ['plaintext.tflw', 'crawl.tflw', 'spider.tflw'] : ['positives.tflw', 'negatives.tflw', 'authz.tflw', 'csrf.tflw'];
+  // `ciphers.tflw` is offeringTls-only and offeringTls runs nothing else (M137g): that env points at
+  // a listener whose transport is deliberately broken, and running the rest of the corpus there would
+  // re-grade twenty-odd rows against a third base for no new evidence — while quietly making every
+  // one of them depend on a plant.
+  const files = FILES[env];
+  // An env in the loop with no entry here would spread `undefined` into the argv and throw something
+  // unrelated. Named instead, because the two lists above are edited by different people at different
+  // times and the pairing between them is the thing that goes stale.
+  if (!files) {
+    fail(`[${env}] no file list — add one to FILES, or this env grades nothing and says nothing about it`);
+    continue;
+  }
   const { report } = runCorpus(env, files);
   const steps = securitySteps(report);
   const rows = LEDGER.filter((l) => l.env === env);
@@ -1172,6 +1242,26 @@ for (const env of ['secureLocal', 'plaintext']) {
       continue;
     }
     for (const id of claimed) pool.silent.add(id);
+    // **M137g — the sentences a green assertion prints about what it did NOT ask.**
+    //
+    // `probe ciphers` produces two of them: withheld, the rule says it judged only the negotiated
+    // suite and names the clause that would widen it; granted, it says how many candidate suites
+    // this stack's OpenSSL refused to put in a ClientHello. Both are notes on a *passing* line, and
+    // that is exactly why they need a grader — nothing goes red if they stop being printed, so the
+    // corpus would keep demonstrating a rule whose stated limits had silently disappeared.
+    //
+    // Substring rather than the whole sentence, deliberately: the wording is prose that will be
+    // reworded, and a grader that pinned it would fail on an improvement. The clause each one turns
+    // on is not prose.
+    const missingNotes = (row.note ?? []).filter((n) => !step.detail.includes(n));
+    if (missingNotes.length > 0) {
+      fail(
+        `[${env}] "${row.test}" @${row.floor} was expected to carry ${missingNotes.length} note(s) it does not: ${missingNotes.map((n) => JSON.stringify(n)).join(', ')}\n` +
+          `    A note is the only place a rule says which half of its question went unasked. Its absence is\n` +
+          `    not a cosmetic regression — the assertion passes either way, which is the whole problem.`,
+      );
+      continue;
+    }
     const probeNote = isAuthz && step.probes ? `, ${step.probes.total} principal(s) probed` : '';
     console.log(`✓ [${env}] ${row.test} @${row.floor ?? 'no floor'} — ${actual.length} finding(s)${probeNote}, exactly as the ledger says`);
   }
@@ -1286,9 +1376,13 @@ if (gaps.length > 0) {
     const missing = Object.entries(states).filter(([, v]) => !v).map(([k]) => k);
     console.log(`  ${id}: ${missing.join(', ')}`);
   }
-  console.log('\nSee VULNS.md — "Not planted, on purpose" — for the measured reason the two `sec/tls-*`');
-  console.log('positives are not constructible on OpenSSL 3.x, and for which states are covered by');
-  console.log('unit tests against synthetic handshake facts instead.');
+  console.log('\nSee VULNS.md — "Not planted, on purpose" — for what each remaining gap is. `sec/tls-');
+  console.log("version-old`'s positive is not constructible on this platform at all: OpenSSL 3.x compiles");
+  console.log('TLS 1.0/1.1 out, so no listener can be built to negotiate one and that state is covered by');
+  console.log('unit tests against synthetic handshake facts instead. `sec/tls-weak-cipher` was recorded');
+  console.log('the same way until M137g, and is now demonstrated live on `V18` — the two were never');
+  console.log('unconstructible for the same reason, and reading them as a pair is what hid that for two');
+  console.log('milestones.');
 }
 
 // --- D319: the same table for Tier 2, plus the price of the tier ------------------------------

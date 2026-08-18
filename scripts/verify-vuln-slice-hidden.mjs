@@ -38,6 +38,7 @@
 // wrong" are different problems with different fixes, and here the first one would fail *every*
 // assertion below and say nothing about which.
 import { readdirSync, readFileSync } from 'node:fs';
+import { connect as tlsConnect } from 'node:tls';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -189,6 +190,64 @@ section('/openapi.json — the documented surface mentions no fixture route');
   // the concrete thing this catches.
   const tags = (doc?.tags ?? []).map((t) => t?.name).filter((n) => typeof n === 'string');
   ok('no documented tag is the fixture slice\'s', !tags.includes('reports'), tags.join(', '));
+}
+
+// ── M137g: the plant that is not a route ─────────────────────────────────────────────────────
+//
+// `V18` is nginx's 8445 listener, which offers `NULL-SHA256`. It is `VULN_MODE`-gated like every
+// other plant, but by a completely different mechanism — `nginx/docker-entrypoint.sh` copies
+// `offering.conf` into an included directory under the flag and removes it otherwise — and a
+// mechanism nothing checks is one that stops working quietly.
+//
+// **The failure mode is worse here than for a leaked route.** A leaked `/v1/vuln/…` endpoint is at
+// least discoverable by anyone who looks at the surface; a listener that stayed up would sit under
+// every https suite in this repo offering a suite with no encryption, and no assertion anywhere
+// would mention it — `sec/tls-weak-cipher` cannot see an offer without `probe ciphers`, which is
+// the entire reason M137g exists.
+//
+// A raw TLS connect rather than `fetch`, and `ECONNREFUSED` is the expected result rather than an
+// error: `send()` above turns a connection failure into `die()`, which is right for a claim about a
+// route on a listener that must be up and exactly wrong for a claim about a listener that must not.
+section('the 8445 offering listener (V18) is not running');
+{
+  const refusal = await new Promise((resolve) => {
+    let socket;
+    const done = (v) => {
+      try {
+        socket?.destroy();
+      } catch {
+        /* already gone */
+      }
+      resolve(v);
+    };
+    try {
+      socket = tlsConnect({ host: '127.0.0.1', port: 8445, rejectUnauthorized: false, timeout: 4000 }, () => done('connected'));
+    } catch (err) {
+      return done(err.code ?? 'threw');
+    }
+    socket.on('error', (err) => done(err.code ?? 'error'));
+    // A listener that accepts the TCP connection and then says nothing is neither refused nor
+    // handshaking; without this the script would hang rather than fail, which reads as a slow
+    // machine and gets ignored.
+    socket.on('timeout', () => done('timeout'));
+  });
+  // **The claim is "no TLS session is established", not a particular errno**, and the difference was
+  // measured rather than guessed. `docker-compose.yml` publishes 8445 unconditionally — a compose
+  // file cannot publish a port only sometimes — so the host port accepts the TCP connection and the
+  // proxy resets it when nothing inside the container answers. That is `ECONNRESET` on this box and
+  // would be `ECONNREFUSED` on a stack run without Docker's port proxy. Pinning either one would make
+  // this assertion fail on a correct stack for a reason that has nothing to do with the plant.
+  //
+  // What cannot happen either way is a completed handshake, and that is the whole claim: `V18` is a
+  // *listener*, so it is either speaking TLS or it is not there.
+  ok(
+    'no TLS session can be established on https://localhost:8445',
+    refusal !== 'connected' && refusal !== 'timeout',
+    refusal === 'connected'
+      ? 'the offering listener IS up on a stack started without VULN_MODE=1 — check nginx/docker-entrypoint.sh and the nginx service\'s environment block'
+      : `something accepted the connection and then said nothing (${refusal}) — neither a refusal nor a handshake, so this claim cannot be made either way`,
+  );
+  console.log(`    (the connection ended as ${refusal} — published port, nothing behind it)`);
 }
 
 // ── verdict ──────────────────────────────────────────────────────────────────────────────────

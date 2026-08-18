@@ -129,15 +129,28 @@ services:
   # HTTPS listener (8443) and a client-cert-requiring listener (8444), both proxying to `api`
   # unchanged. Certs generated fresh at container start (nginx/docker-entrypoint.sh), written to
   # a host bind mount so a host-side `tflw run` can reference the CA/client cert directly.
+  #
+  # M137g adds a third listener (8445) to the same container: same cert, same upstream, but it
+  # OFFERS `NULL-SHA256` alongside a modern suite while negotiating the modern one. It is a plant —
+  # the only host in this repo on which `sec/tls-weak-cipher` can fire — and it lives here rather
+  # than in its own service because it is the same nginx doing the same job with one line of cipher
+  # configuration changed, which is exactly how the weakness occurs in the field.
+  #
+  # It is therefore `VULN_MODE`-gated like every other plant (D293), which is why this service now
+  # takes the variable too. Without the flag the port is still published and nothing listens on it:
+  # a refused connection, not a clean handshake, so nobody can mistake absence for hardening.
   nginx:
     build:
       context: ./nginx
     depends_on:
       api:
         condition: service_healthy
+    environment:
+      VULN_MODE: ${VULN_MODE:-}
     ports:
       - "8443:8443"
       - "8444:8444"
+      - "8445:8445"
     volumes:
       - ./nginx/certs:/certs
     healthcheck:
