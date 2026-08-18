@@ -39,7 +39,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PLANTS, isPlantFinding, plantsFor } from './lib/plants.mjs';
+import { GRADERS, PLANTS, PLANT_IDS, isPlantFinding, plantsFor } from './lib/plants.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const corpus = join(repoRoot, 'tflw-acceptance', 'security');
@@ -607,6 +607,8 @@ const SPIDER_CRAWLS = {
  *  places, and the drift between them would have been invisible — a rule dropped from one list is a
  *  rule this file stops requiring while still claiming to account for the whole surface. */
 const V16 = PLANTS.find((p) => p.id === 'V16');
+/** `V17`'s row — the hardened page, whose path both halves of its assertion below are matched on. */
+const V17 = PLANTS.find((p) => p.id === 'V17');
 
 /** The rules whose precondition is "the response is a document" — the three the plant was built for.
  *  Before `M137f` every one of them was graded against `vuln.controller.ts`'s fabricated `text/html`
@@ -691,7 +693,7 @@ function gradeSpider(report) {
   }
 
   // V17 — silence, and the reachability that makes the silence mean something.
-  const hardened = spiderFindings.filter((f) => /\/hardened/.test(f.endpoint ?? ''));
+  const hardened = spiderFindings.filter((f) => (f.endpoint ?? '').includes(V17.page));
   if (hardened.length > 0) {
     fail(`[plaintext] V17 — the hardened page produced ${hardened.length} finding(s) via the spider; a negative that fails measures nothing`);
   } else {
@@ -1151,6 +1153,8 @@ function runCorpus(env, files) {
 }
 
 let failures = 0;
+/** Every finding the three envs produced, env-tagged. See the end of the env loop. */
+const RUN_FINDINGS = [];
 const fail = (msg) => {
   failures += 1;
   console.log(`✗ ${msg}`);
@@ -1301,6 +1305,11 @@ for (const env of ['secureLocal', 'plaintext', 'offeringTls']) {
   if (env === 'plaintext') gradeCrawl(report);
   if (env === 'plaintext') gradeSpider(report);
   gradePrecision(env, report);
+  // Kept for per-plant recall below (`M139-4`). Tagged with the env because two of the eighteen plants
+  // are discriminated by nothing else: `V18` is a listener that only `offeringTls` dials, and `V3`'s
+  // `sec/cookie-not-secure` is not-applicable over plaintext, so recall accumulated per-env would
+  // demand evidence from a transport that cannot produce it.
+  for (const f of report.findings ?? []) RUN_FINDINGS.push({ ...f, env });
 }
 
 // D445's other half, and the reason the baseline is committed rather than merely generated: an entry
@@ -1322,6 +1331,216 @@ for (const env of ['secureLocal', 'plaintext', 'offeringTls']) {
   } else {
     console.log(`✓ every one of the ${BASELINE.accepted.length} baseline entries was produced by a run — no stale acceptances`);
   }
+}
+
+// --- M139-3: the ledger and the manifest, against each other -----------------
+//
+// **The direction is the design** (D489). `scripts/lib/plants.mjs` is hand-authored and
+// authoritative; `VULNS.md`'s ledger table is checked against it. Not the reverse: parsing prose to
+// build the oracle would let a typo in a markdown cell silently retune what every grader expects, and
+// deriving the manifest from tflw's own output would make the oracle agree with the thing it grades.
+//
+// So `VULNS.md` stays prose a human reads, and gains exactly one machine-checked invariant — its id
+// set. Ids only, deliberately: the table writes routes as `:id` where the manifest writes `{id}`,
+// because one is NestJS's spelling and the other is the fingerprint tflw computes, and forcing them to
+// agree would be asserting a coincidence rather than a fact.
+const LEDGER_HEADING = '## The fixture routes (`VULN_MODE=1` only)';
+
+/** The ids in `VULNS.md`'s ledger table, in order, or `null` if the table cannot be found.
+ *
+ *  Scoped to the first table under the heading rather than grepped file-wide, because three other
+ *  tables in that file also open a row with a V-number — the decorator table (`V1`,`V2`,…` in one
+ *  cell), the seed-reachability table, and the crawl provenance pair. A file-wide grep would read
+ *  those as ledger rows and then be "corrected" by adding duplicates to the manifest. */
+function ledgerIds() {
+  const lines = readFileSync(join(repoRoot, 'VULNS.md'), 'utf8').split('\n');
+  const start = lines.indexOf(LEDGER_HEADING);
+  if (start === -1) return null;
+  const ids = [];
+  let inTable = false;
+  for (const line of lines.slice(start + 1)) {
+    if (line.startsWith('|')) {
+      inTable = true;
+      const id = /^\|\s*`(V\d+)`\s*\|/.exec(line)?.[1];
+      if (id) ids.push(id);
+      continue;
+    }
+    // The blank line after the table ends it. Anything else after that is prose, and a second table
+    // further down the file is not this one.
+    if (inTable && line.trim() === '') break;
+  }
+  return ids;
+}
+
+{
+  const ids = ledgerIds();
+  if (ids === null) {
+    fail(
+      `VULNS.md has no "${LEDGER_HEADING}" heading — the ledger table this manifest is checked against cannot be found.\n` +
+        `    Renaming the heading is fine; this constant has to move with it, or the check goes quiet rather than red.`,
+    );
+  } else if (ids.length === 0) {
+    // M127's rule, and this file has paid for it twice: a derivation that quietly produces nothing
+    // prints a pass and means "nothing was checked".
+    fail('VULNS.md\'s ledger table parsed to zero ids — the table\'s shape changed and this check is now vacuous');
+  } else {
+    const missing = PLANT_IDS.filter((id) => !ids.includes(id));
+    const extra = ids.filter((id) => !PLANT_IDS.includes(id));
+    if (missing.length > 0) {
+      fail(
+        `${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} in scripts/lib/plants.mjs but not in VULNS.md's ledger table —\n` +
+          `    the manifest is what the graders read, so a plant missing from the ledger is a plant nobody documented.`,
+      );
+    }
+    if (extra.length > 0) {
+      fail(
+        `${extra.join(', ')} ${extra.length === 1 ? 'is' : 'are'} in VULNS.md's ledger table but not in scripts/lib/plants.mjs —\n` +
+          `    which is the direction that used to be silent: a nineteenth plant needed no grader edit to be\n` +
+          `    ungraded, because the V-numbers lived only inside free-text test titles. Add the row, or if the\n` +
+          `    plant is gone give it \`retired: '<reason>'\` rather than deleting it (D492).`,
+      );
+    }
+    if (missing.length === 0 && extra.length === 0) {
+      console.log(`✓ VULNS.md's ledger and the plant manifest list the same ${ids.length} plants — ${ids.join(', ')}`);
+    }
+  }
+}
+
+// --- M139-4: who grades each plant, and whether anything automated does ------
+//
+// The `graders` field is §2.1's table as data. Checked here rather than trusted, and the `gated` half
+// is the one with teeth: a plant graded **only** by a script nobody runs is `M137e-01` recurring, and
+// that row's whole cost was that nothing anywhere said so.
+{
+  const problems = [];
+  for (const plant of PLANTS) {
+    const claims = plant.graders ?? [];
+    if (claims.length === 0) {
+      problems.push(`${plant.id} names no grader at all — it is in the ledger and nothing is asserted to check it`);
+      continue;
+    }
+    const unknown = claims.filter((g) => !GRADERS[g]);
+    if (unknown.length > 0) {
+      problems.push(`${plant.id} names grader(s) that do not exist: ${unknown.join(', ')}`);
+      continue;
+    }
+    if (!claims.some((g) => GRADERS[g].gated)) {
+      problems.push(
+        `${plant.id} is graded only by ungated script(s) (${claims.join(', ')}) — graded by nobody on any day nobody was looking, which is M137e-01's exact shape`,
+      );
+    }
+  }
+  if (problems.length > 0) {
+    fail(`the plant manifest's grader claims do not hold:\n${problems.map((x) => `      ${x}`).join('\n')}`);
+  } else {
+    const gatedPhases = [...new Set(Object.values(GRADERS).filter((g) => g.gated).map((g) => g.phase))];
+    console.log(`✓ all ${PLANTS.length} plants name a grader, and every one of them names at least one gated grader (${gatedPhases.join(', ')})`);
+  }
+}
+
+// --- M139-4: per-plant recall, over the full manifest ------------------------
+//
+// **What was missing, exactly.** Recall was asserted per *rule* — the twelve-row coverage table below
+// — and per plant only inside `verify-sarif-acceptance.mjs`'s fourteen. The rows this corpus is the
+// sole grader of (`V15`–`V18`) were graded by name in free text, so their evidence was checked but
+// their *existence in the ledger* was not: a plant could be dropped from the corpus and only its own
+// prose would notice.
+//
+// This is deliberately **independent of the specialised graders** rather than layered on them.
+// `gradeSpider` asserts the spider's rule set exactly, `gradeCrawl` asserts provenance per plant, and
+// each is the right instrument for its own claim; what none of them does is start from the ledger and
+// ask, of every row in it, whether this run produced its evidence. Two checks that agree by different
+// routes is the point — the specialised ones would keep passing if a row vanished from the manifest.
+//
+// Only rows claiming `security` are asserted here, because only they are visible to this corpus:
+// `V10`–`V14`'s evidence is a response to a request **tflw constructed**, and no file in
+// `tflw-acceptance/security/` sends one. Their gate is `sarif-acceptance`, which the claim check above
+// is what guarantees.
+//
+// The reverse direction — a plant whose evidence appears here without claiming this grader — is
+// deliberately **not** a failure. Which files each env runs is a choice this corpus makes (see
+// `FILES`), so a plant becoming visible here is a corpus edit rather than a defect, and reddening on it
+// would punish the edit that improves coverage.
+
+/** Findings attributable to a plant, by its declared subject. Not `isPlantFinding` — that is the
+ *  precision bar's deliberately coarse *exemption*, and reusing it here would make every plant's
+ *  recall pass on any other plant's finding. */
+function evidenceFor(plant) {
+  const surface = plant.surface ?? {};
+  if (plant.subject === 'listener') {
+    return RUN_FINDINGS.filter((f) => f.env === surface.env && (surface.rules ?? []).includes(f.rule));
+  }
+  if (plant.subject === 'page') {
+    const onSurface = RUN_FINDINGS.filter((f) => f.via === surface.via);
+    // A page plant with a path names one document; `V16` is the whole origin and names none.
+    return plant.page ? onSurface.filter((f) => (f.endpoint ?? '').includes(plant.page)) : onSurface;
+  }
+  // `endpoint` and `via` are both matched on the endpoint fingerprint, exactly — `templateEndpoint`
+  // in tflw computes `METHOD /path` with identifier segments as `{id}`, which is the form the manifest
+  // writes. `via` additionally pins provenance, which is the entire distinguishing property of `V15`.
+  const byEndpoint = RUN_FINDINGS.filter((f) => f.endpoint === plant.endpoint);
+  return plant.subject === 'via' ? byEndpoint.filter((f) => f.via === plant.reach.via) : byEndpoint;
+}
+
+console.log('\nM139-4 — per-plant recall, one row per plant this corpus grades:\n');
+for (const plant of plantsFor('security')) {
+  const found = evidenceFor(plant);
+  const rules = [...new Set(found.map((f) => f.rule))].sort();
+
+  // **Retirement is the direction that fails silently** (D492), so it is the one with an assertion.
+  // A manifest row whose plant no longer exists in the target produces "expected finding not found",
+  // which is indistinguishable from a recall regression in tflw — a false red pointing at the wrong
+  // repo, which is `M131-05`'s class. So a retired plant keeps its row, states its reason, and is
+  // asserted **absent**. Deleting the row outright is the one edit this check rejects, because the
+  // deletion is exactly what makes the id check above go quiet.
+  if (plant.retired) {
+    if (found.length > 0) {
+      fail(`${plant.id} is marked retired (${plant.retired}) but still produced ${found.length} finding(s): ${rules.join(', ')} — the row and the target disagree about whether the plant exists`);
+    } else {
+      console.log(`  ✓ ${plant.id} retired (${plant.retired}) — absent, as its row says`);
+    }
+    continue;
+  }
+
+  if (plant.kind === 'negative') {
+    if (found.length > 0) {
+      fail(`${plant.id} is planted to produce nothing and produced ${found.length} finding(s): ${rules.join(', ')} — a negative that fires measures nothing`);
+    } else {
+      console.log(`  ✓ ${plant.id} negative — no finding on its ${plant.subject}, as planted`);
+    }
+    continue;
+  }
+
+  const wanted = Object.entries(plant.rules ?? {});
+  if (wanted.length === 0) {
+    fail(`${plant.id} is a positive plant with no rules in the manifest — there is nothing for recall to demand`);
+    continue;
+  }
+  const missing = wanted.filter(([rule]) => !rules.includes(rule)).map(([rule]) => rule);
+  if (missing.length > 0) {
+    fail(
+      `${plant.id} — no finding for ${missing.join(', ')} on its ${plant.subject} (${plant.endpoint ?? plant.origin ?? `${plant.listener.host}:${plant.listener.port}`}).\n` +
+        `    Either the plant stopped being reachable, the rule stopped firing, or the manifest row and the\n` +
+        `    target have drifted — and those have three different fixes, so the run's ${found.length} finding(s) here\n` +
+        `    are listed rather than summarised: ${rules.join(', ') || '(none)'}`,
+    );
+    continue;
+  }
+  // The severity the ledger claims, against the severity the run gave it. Worth asserting separately
+  // from the rule id: a rule firing at the wrong band is a real regression that every check above
+  // would pass — the floor tests grade "at least this severe", and `gradePrecision` does not look at
+  // severity at all.
+  const wrongBand = wanted
+    .map(([rule, severity]) => ({ rule, severity, got: [...new Set(found.filter((f) => f.rule === rule).map((f) => f.severity))] }))
+    .filter((x) => !(x.got.length === 1 && x.got[0] === x.severity));
+  if (wrongBand.length > 0) {
+    fail(
+      `${plant.id} — severity mismatch against the ledger:\n` +
+        wrongBand.map((x) => `      ${x.rule}: ledger says ${x.severity}, run gave ${x.got.join('/') || '(none)'}`).join('\n'),
+    );
+    continue;
+  }
+  console.log(`  ✓ ${plant.id} positive — ${found.length} finding(s) on its ${plant.subject}, every ledger rule present at its stated severity (${wanted.map(([r, sev]) => `${r} ${sev}`).join(', ')})`);
 }
 
 // --- the gate stops here (M139-5, D493) --------------------------------------

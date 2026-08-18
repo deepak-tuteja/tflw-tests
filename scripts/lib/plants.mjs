@@ -365,16 +365,17 @@ export function assertClaims(grader, structural, fail) {
   const unclaimed = structuralIds.filter((id) => !claimed.includes(id));
   const overclaimed = claimed.filter((id) => !structuralIds.includes(id));
   if (unclaimed.length === 0 && overclaimed.length === 0) return true;
+  const plural = (ids) => (ids.length === 1 ? `plant ${ids[0]} is` : `plants ${ids.join(', ')} are`);
   if (unclaimed.length > 0) {
     fail(
-      `plants ${unclaimed.join(', ')} are gradeable by \`${grader}\` but do not list it in \`graders\` — ` +
+      `${plural(unclaimed)} gradeable by \`${grader}\` but do not list it in \`graders\` — ` +
         `scripts/lib/plants.mjs is the only place that says who grades a plant, so an unclaimed row is one nobody is asserted to check`,
     );
   }
   if (overclaimed.length > 0) {
     fail(
-      `plants ${overclaimed.join(', ')} list \`${grader}\` in \`graders\` but this grader cannot see them — ` +
-        `either the claim is wrong or the grader stopped selecting them, and the second one is how coverage disappears quietly`,
+      `${plural(overclaimed)} listed under \`${grader}\` in \`graders\`, but this grader cannot see ${overclaimed.length === 1 ? 'it' : 'them'} — ` +
+        `either the claim is wrong or the grader stopped selecting the row, and the second one is how coverage disappears quietly`,
     );
   }
   return false;
