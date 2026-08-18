@@ -19,6 +19,12 @@ function start() {
     'tls sidecar: https://localhost:8443 (self-signed) · https://localhost:8444 (mTLS — client ' +
       'cert required, see nginx/certs/ after start)',
   );
+  // M137g's plant listener, announced only when it is actually there. Printing it unconditionally
+  // would tell somebody running a clean stack that a broken-cipher host is up when 8445 is refusing
+  // connections, and a banner nobody can trust is worse than one line shorter.
+  if (process.env.VULN_MODE === '1') {
+    console.log('tls sidecar (VULN_MODE): https://localhost:8445 — V18, offers NULL-SHA256 alongside a modern suite');
+  }
   console.log('webV2 storefront: http://localhost:8090 (browser-arc dogfood target)');
   console.log('webV2 admin console: http://localhost:8091 (SSR, full-page-nav dogfood target)');
 }

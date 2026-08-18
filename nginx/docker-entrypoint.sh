@@ -36,4 +36,17 @@ openssl x509 -req -in "$CERT_DIR/client.csr" -CA "$CERT_DIR/ca.pem" -CAkey "$CER
 
 chmod 644 "$CERT_DIR"/*.pem "$CERT_DIR"/*.key
 
+# M137g — the offering listener (8445, `offering.conf`), installed only under `VULN_MODE=1`.
+#
+# Both branches are unconditional writes rather than "add it if asked": a container restarted with
+# the flag cleared must lose the plant, and a `cp` with no matching `rm` would leave it running on a
+# stack whose operator believes it is clean. That is the same failure `verify-vuln-slice-hidden.mjs`
+# exists to catch one layer up, and it is cheap to make impossible here.
+if [ "$VULN_MODE" = "1" ]; then
+  cp /etc/nginx/offering-available/offering.conf /etc/nginx/offering/offering.conf
+  echo "nginx: VULN_MODE=1 — offering listener enabled on 8445 (M137g plant: offers NULL-SHA256)"
+else
+  rm -f /etc/nginx/offering/offering.conf
+fi
+
 exec nginx -g "daemon off;"

@@ -24,9 +24,13 @@ docker-compose.yml   postgres (ephemeral per-run volume) + api + nginx (TLS side
                      webv2-admin + postgres-inventory + inventory-service (E4), healthchecked
 nginx/               TLS sidecar (M22) — self-signed :8443 + mTLS-requiring :8444, proxying
                      unchanged to api:4001; certs generated fresh at every container start.
-                     :8443 is the pentest arc's target as of M128a (`env secureLocal`); both
-                     listeners now forward X-Forwarded-Proto, which is how apiV2 knows to mark
-                     the session cookie `Secure`
+                     :8443 is the pentest arc's target as of M128a (`env secureLocal`); all
+                     listeners forward X-Forwarded-Proto, which is how apiV2 knows to mark
+                     the session cookie `Secure`. M137g adds a third listener, :8445
+                     (`offering.conf`, VULN_MODE=1 only) — the V18 plant: it offers
+                     NULL-SHA256 alongside a modern suite and negotiates the modern one, so
+                     it is the one host here that `sec/tls-weak-cipher` can fire on and it is
+                     invisible to every per-response assertion tflw ships
 apiV2/src/vuln/      M128a — the pentest arc's hygiene fixture slice: five routes with deliberately
                      wrong (or deliberately correct) headers and cookie flags, absent from the app
                      entirely unless `VULN_MODE=1`. Headers only, no logic flaws. See VULNS.md
