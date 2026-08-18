@@ -69,7 +69,7 @@ differently on the two, and that difference is itself part of the ledger.
 | `V13` | `POST /v1/vuln/notes` — `body.title` | **positive** | `sec/oversized-input-accepted` (under `probe mutating` + `probe oversized`) | minor |
 | `V14` | `GET /v1/vuln/lookup-escaped?q=` | **negative** | `sec/reflected-input-unescaped` | — |
 | `V15` | `GET /v1/vuln/reports/orders` — **the only documented fixture route** | **positive** | `sec/authz-collection-leak` (reachable by a crawl's `openapi` seed alone) | critical |
-| `V16` | **`webV2/admin` on `:8091` — every page it serves** | **positive** | `sec/csp-missing` (serious), `sec/x-frame-options` (moderate), `sec/nosniff-missing` (moderate) — reachable by a crawl's `spider` seed alone | serious |
+| `V16` | **`webV2/admin` on `:8091` — every page it serves** | **positive** | `sec/csp-missing` (serious), `sec/x-frame-options` (moderate), `sec/nosniff-missing` (moderate), `sec/authenticated-response-cacheable` (moderate) — reachable by a crawl's `spider` seed alone | serious |
 | `V17` | `GET /hardened` on `:8091` | **negative** | the same three rules, all silent | — |
 
 `V1`–`V5` are Tier 1's, and they are claims a response makes about *itself* — headers and cookie
@@ -702,10 +702,11 @@ anywhere, so the rules fire on pages written for people rather than for a test.
 |---|---|
 | target | `webV2/admin` on `:8091` (SSR, EJS, `express-session` cookie auth, its own CSRF middleware) |
 | corpus | `tflw-acceptance/security/spider.tflw`, `--env plaintext` |
-| reached | `GET /` → `302 /login`, `GET /login`, `GET /hardened` |
-| rules fired on `V16` | `sec/csp-missing` · `sec/x-frame-options` · `sec/nosniff-missing` |
+| surface | `18 discovered · 9 withheld · 9 sent · 9 reached · 26 walked`, truncated at `max depth 2` |
+| reached | the dashboard, categories, products, tickets, coupons, orders, orgs and the org membership pages |
+| rules fired on `V16` | `sec/csp-missing` (19) · `sec/x-frame-options` (19) · `sec/nosniff-missing` (20) · `sec/authenticated-response-cacheable` (9) |
 | rules fired on `V17` | none — the pair's whole point |
-| withheld | `POST /login` — a synthesized write with no `probe mutating` on this origin (`D465`) |
+| withheld | eight synthesized writes (`POST /logout`, `/coupons`, `/orgs`, `/orgs/{id}`, `/orgs/{id}/memberships`, `/orgs/{id}/memberships/{id}/role`, `/orgs/{id}/memberships/{id}/remove`, `/products/{id}/delete`) with no `probe mutating` on this origin (`D465`), plus `GET /hardened` by `exclude` |
 | blind spot | `http://localhost:8090/` — *needs rendering to crawl* (`D442`) |
 
 **`V17` is what makes `V16` a measurement.** A rule that fired on every page would be
@@ -729,11 +730,49 @@ rendering for safety reasons — every existing gate lives on the request path �
 a class of site this tool cannot walk. An unmentioned gap is what this arc keeps filing rows about, so
 it is a graded decline rather than a silent zero.
 
-**What this measurement does NOT yet cover, and it is most of the target.** The crawl is declared
-`as console` and nevertheless walks anonymously — tflw `M137f-01`. The console's dashboard, its four
-resource sections and the forms on most of them all sit behind `requireAuth`, and none of it is
-reached. `V16` is graded on the logged-out surface: the login page and the hardened fixture. The row
-is open and the corpus is titled for what actually happens.
+**This corpus found a tflw defect that had nothing to do with crawling, and the numbers on either
+side of it are the clearest thing in this file.** The crawl's first live run walked **anonymously**
+despite being declared `as console`: `3 discovered · 1 sent · 1 reached · 2 walked`, green, and
+reported as the console's surface. Filed as tflw `M137f-01`, and the cause was in the transport rather
+than the crawl — a followed redirect chain reported every hop's `Set-Cookie` and forwarded none of
+them, so the authenticated cookie from `POST /login`'s `302` never reached the next hop, and this
+console's session middleware (it touches `req.session` on every request) then issued a *newer*
+anonymous cookie that won last-wins in the jar. The session established, reported `200` — the chain
+lands on the login page, which is a `200` — and was not logged in.
+
+Fixed, the same crawl reaches `18 discovered · 9 withheld · 9 sent · 9 reached · 26 walked`. Three
+things are worth carrying out of it:
+
+- **The status code of a form post that redirects tells you almost nothing.** Only a second request
+  can distinguish a login that worked from one that did not, which is why nothing caught this for nine
+  milestones of green sweeps.
+- **`V17`'s negative silently stopped being reachable.** It was linked only from the login page, which
+  an authenticated walk never sees, so `exclude "/hardened"` matched nothing and the surface line
+  simply had one fewer route in it. Nothing went red. The dashboard now links it too, and the
+  `exclude` is load-bearing again — an exclusion that excludes nothing is a coverage claim nobody
+  checks.
+- **The walk is genuinely truncated and says so.** At `max depth 3` the console yields 42 pages and
+  *not one additional operation*, so `discovered` saturates at depth 2 while `walked` keeps climbing.
+  The page cap is set generously (60 against a walk of 26) so that depth is the binding bound and the
+  numbers above are deterministic rather than frontier-order-dependent.
+
+**`sec/authenticated-response-cacheable` is the fourth rule, and it is the cleanest evidence the fix
+did what it claims.** Its precondition is *"the request carried session or bearer credentials"*, so a
+walk that was not logged in could not reach it at any depth. It now fires on nine of the console's
+authenticated pages — including `GET /orders/export`, which is a CSV of other people's orders served
+with no `Cache-Control` at all.
+
+**Two things this file's own grader had to change, both recorded because the first draft of each was
+wrong.** `gradePrecision` discriminated plants by the path prefix `/v1/vuln/`, on the stated premise
+that *"every planted route is served at `/v1/vuln/…`, so the prefix IS the plant set"* — and `V16` is
+the first plant whose subject is an **origin** rather than a route, so the premise no longer holds.
+The discriminator for it is provenance (`via: 'spider'`), which is exactly the plant set because only
+the spider reaches that origin. That would have cost the precision gate its power over 67 findings, so
+`gradeSpider` asserts the spider's rule set **exactly** instead: a rule firing there that this file has
+not accounted for goes red. And `verify-security-acceptance.mjs` itself was **red before any of this
+work started** — `session console` is top-level while `api adminConsole` was declared on `plaintext`
+only, so every other env failed at `TF026` before a single assertion ran. Nobody saw it because that
+script runs in no automated gate, which is `M137e-01` in one sentence.
 
 ## The Tier 4 crawl measurement (`M137e`, tflw D437/D438/D465/D480/D482)
 

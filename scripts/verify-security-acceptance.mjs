@@ -117,6 +117,12 @@ const LEDGER = [
   { env: 'plaintext', test: 'sec/server-version-disclosure stays silent against the app itself', floor: 'minor', fires: ['sec/nosniff-missing'], silent: ['sec/server-version-disclosure'] },
   { env: 'plaintext', test: 'the cookie rules that fire over TLS are not-applicable over plaintext (V3)', floor: 'critical', fires: ['sec/cookie-not-httponly'], silent: [] },
   { env: 'plaintext', test: 'sec/hsts-missing is not-applicable over plaintext, where a browser ignores the header', floor: 'serious', fires: [], silent: [] },
+  // `M137f` — `V17`, the negative half of the spider pair, and the only ledger row in this file whose
+  // subject is a page a browser was meant to render. Its `fires: []` is the assertion; the three
+  // `silent` entries are what makes the assertion mean something, since a rule that never ran is also
+  // a rule that produced no finding. `gradeSpider` separately asserts the walk actually *reached*
+  // this route, which is the half a ledger row cannot express.
+  { env: 'plaintext', test: 'V17 — the one console page that sets the document headers produces no finding', floor: 'moderate', fires: [], silent: ['sec/csp-missing', 'sec/x-frame-options', 'sec/nosniff-missing'] },
   // --- Tier 2, `authz.tflw` under secureLocal (M130c, PLAN_M130_PENTEST_TIER2.md D319) ---
   //
   // `kind: 'authz'` is not decoration. These rows are graded against `AUTHZ_PACK`, and a Tier 2 step
@@ -399,6 +405,19 @@ const csrfReason = (verb, status = 403) =>
   new RegExp(`^a cookie-borne principal was refused on a ${verb} \\(${status}\\); this may be CSRF rather than authorization`);
 
 const DECLINES = {
+  plaintext: [
+    // **`M137f`'s blind spot, and the one decline in either corpus that is about the tool rather than
+    // the app.** `D442` chose a fetching spider over a rendering one because every safety gate this
+    // arc built lives on the request path; the honest price is that a client-rendered origin cannot
+    // be walked at all. The storefront on `:8090` is exactly that — `<div id="root"></div>` and one
+    // module script — so the walk fetches the shell, finds no link and no form, and declares the gap.
+    //
+    // Graded exactly rather than by shape, unlike every other crawl decline, and that asymmetry is
+    // the point: the others move whenever somebody adds an endpoint, while this one is a statement
+    // about what tflw can and cannot see. The day somebody teaches the spider to render, this row
+    // fails and the claim has to be revisited on purpose rather than quietly stopping being true.
+    { scan: 'security', subject: 'http://localhost:8090/', reason: /needs rendering|client-rendered/, why: 'the SPA the fetching spider cannot walk — a graded gap, never a silent zero (D442)', count: 1 },
+  ],
   secureLocal: [
     // **The subject moved from `shopper` to `shopperNoCsrf` in M137b, and the two rows are otherwise
     // untouched.** The proof they carry is unchanged — apiV2's own guard refusing a cookie-borne
@@ -494,6 +513,144 @@ function gradeDeclines(label, report, expected, forbidden = []) {
   }
 }
 
+// --- M137f: the Tier 4 spider, graded on what the walk could and could not see -------------------
+//
+// `spider.tflw`'s unit of evidence is different again. `crawl.tflw` grades **provenance** — which seed
+// reached a plant. This grades **reach**: whether a walk that fetches and parses arrives at the pages
+// an application actually serves, and whether it says so honestly when it cannot.
+//
+// Three things are asserted, and the third is the one that took a defect to learn:
+//
+//   V16   the three document rules fire on a real server-rendered app, `via: spider`
+//   V17   they are silent on the one route that sets all three headers — AND that route was
+//         genuinely discovered and withheld, not merely absent from a walk that never got there
+//   gap   `:8090` is declared a blind spot rather than reported as an empty site (graded in
+//         `DECLINES.plaintext`, exactly, for the reason written there)
+//
+// **`V17`'s second clause exists because its first clause went vacuous once already.** The hardened
+// page was linked only from the login form, so when tflw `M137f-01` was fixed and the walk became
+// authenticated, the walk stopped seeing it: `exclude "/hardened"` matched nothing, no finding was
+// produced, and the negative "passed" while measuring an unreached route. Nothing was red. So the
+// exclusion decline is asserted alongside the silence — a negative has to be reachable by the
+// instrument that grades it, which is `D363` in its newest place.
+
+const SPIDER_CRAWLS = {
+  console: 'the admin console, walked as an admin',
+  spa: 'the storefront shell, which a fetching spider cannot read',
+};
+
+/** The three rules whose precondition is "the response is a document". Before `M137f` every one of
+ *  them was graded against `vuln.controller.ts`'s fabricated `text/html` response, whose own comment
+ *  says no real apiV2 route satisfies it. */
+const V16_RULES = ['sec/csp-missing', 'sec/x-frame-options', 'sec/nosniff-missing'];
+
+/** Every rule the spider is accounted for reporting. `V16_RULES` are the three document rules the
+ *  plant was built for; the fourth arrived **because of the `M137f-01` fix** and is the cleanest
+ *  evidence that the fix did what it claims — `sec/authenticated-response-cacheable`'s precondition is
+ *  *"the request carried credentials"*, so it was unreachable by a walk that was not logged in, and it
+ *  now fires on nine of the console's authenticated pages.
+ *
+ *  Asserted as an exact set because `gradePrecision` exempts the whole spider surface as `V16`'s
+ *  plant (see `isSpiderPlant`). This is where that exemption gets its power back: a rule appearing
+ *  here that nobody wrote down is a finding this corpus has not accounted for, and it goes red. */
+const SPIDER_RULES = [...V16_RULES, 'sec/authenticated-response-cacheable'];
+
+function gradeSpider(report) {
+  const tests = report.tests ?? [];
+  const consoleCrawl = tests.find((t) => t.kind === 'crawl' && t.name === SPIDER_CRAWLS.console);
+  const spaCrawl = tests.find((t) => t.kind === 'crawl' && t.name === SPIDER_CRAWLS.spa);
+  if (!consoleCrawl || !spaCrawl) {
+    fail('[plaintext] `spider.tflw` did not contribute both of its crawls — every assertion below would pass vacuously');
+    return;
+  }
+
+  const surface = consoleCrawl.surface ?? {};
+  const { discovered = 0, withheld = 0, sent = 0, reached = 0, walked = 0, walkCapped = false, seeds = [] } = surface;
+
+  if (discovered !== withheld + sent) {
+    fail(`[plaintext] spider surface: ${discovered} discovered != ${withheld} withheld + ${sent} sent — the disclosure identity is broken`);
+  } else if (reached === 0) {
+    fail('[plaintext] the spider reached nothing — `V16` below would be graded on an unwalked surface (M137c1, D481)');
+    return;
+  } else {
+    console.log(`✓ [plaintext] spider surface accounts for everything — ${discovered} discovered = ${withheld} withheld + ${sent} sent, ${reached} reached`);
+  }
+
+  // **The walk is its own phase and its own total (`D483`), so it is asserted separately.** `walked`
+  // sits beside the identity above rather than inside it; a spider that discovered routes without
+  // fetching anything would satisfy the identity and be impossible.
+  if (!(walked > 0)) {
+    fail('[plaintext] the spider discovered a surface without fetching a page — `walked` is 0, which cannot be true of a walk');
+  } else if (!walkCapped) {
+    // Not a defect — a statement about this corpus. `spider.tflw` declares `max depth 2` knowing the
+    // console has more pages than that, and measured that depth 3 walks 42 pages while discovering
+    // zero additional operations. If this ever stops being truncated, either the console shrank or a
+    // bound moved, and the file's numbers need re-reading either way.
+    fail(`[plaintext] the spider walked ${walked} page(s) and reported no truncation — \`spider.tflw\` declares a depth that is expected to bind`);
+  } else {
+    console.log(`✓ [plaintext] the walk is a phase of its own and says where it stopped — ${walked} walked, truncated at its declared cap`);
+  }
+
+  const spiderSeed = seeds.find((x) => x.seed === 'spider');
+  if (!spiderSeed || !(spiderSeed.discovered > 0)) {
+    fail('[plaintext] no `spider` seed discovered anything on the console — the seed discriminator has stopped resolving');
+  }
+
+  // V16 — the rules, on a document a real application served, reached by the walk.
+  const spiderFindings = (report.findings ?? []).filter((f) => f.scan === 'security' && f.via === 'spider');
+  for (const rule of V16_RULES) {
+    const mine = spiderFindings.filter((f) => f.rule === rule);
+    if (mine.length === 0) {
+      fail(`[plaintext] V16 — \`${rule}\` produced no finding via the spider, and this is the only corpus in the repo where it judges a page written for people rather than a fixture built to trip it`);
+    } else {
+      console.log(`✓ [plaintext] V16 — \`${rule}\` fires on ${mine.length} response(s) the admin console really serves, via \`spider\``);
+    }
+  }
+
+  const reported = [...new Set(spiderFindings.map((f) => f.rule))].sort();
+  const unaccounted = reported.filter((r) => !SPIDER_RULES.includes(r));
+  if (unaccounted.length > 0) {
+    fail(
+      `[plaintext] the spider reported rule(s) this corpus has not accounted for: ${unaccounted.join(', ')}.\n` +
+        `    \`gradePrecision\` exempts the spider's whole surface as V16's plant, so this is the assertion that\n` +
+        `    keeps the exemption honest. Either the console gained a real defect worth a VULNS.md row, or a rule\n` +
+        `    regressed onto a surface it should not judge — those have opposite fixes.`,
+    );
+  } else {
+    console.log(`✓ [plaintext] the spider reports only accounted-for rules (${reported.length}: ${reported.join(', ')})`);
+  }
+
+  // V17 — silence, and the reachability that makes the silence mean something.
+  const hardened = spiderFindings.filter((f) => /\/hardened/.test(f.endpoint ?? ''));
+  if (hardened.length > 0) {
+    fail(`[plaintext] V17 — the hardened page produced ${hardened.length} finding(s) via the spider; a negative that fails measures nothing`);
+  } else {
+    console.log('✓ [plaintext] V17 — the one console route that sets all three headers produces no spider finding');
+  }
+  const excluded = (report.scanBlindSpot?.declines ?? []).filter(
+    (d) => /excluded by this crawl's `exclude/.test(d.reason ?? '') && /hardened/.test(d.subject ?? ''),
+  );
+  if (excluded.length === 0) {
+    fail(
+      "[plaintext] V17 — nothing was declined for `exclude \"/hardened\"`, so the walk never reached the hardened page.\n" +
+        '    The silence asserted just above is therefore about a route nobody visited. This exact hole opened\n' +
+        '    once already: the page was linked only from the login form, and fixing `M137f-01` made the walk\n' +
+        '    authenticated, at which point the negative stopped being reachable and kept passing.',
+    );
+  } else {
+    console.log('✓ [plaintext] V17 — the hardened page was discovered and withheld by `exclude`, so its silence is about a route the walk actually found');
+  }
+
+  // The SPA control. Its decline is graded exactly in `DECLINES.plaintext`; what is asserted here is
+  // the precondition for that decline meaning anything — the walk did fetch the shell.
+  const spa = spaCrawl.surface ?? {};
+  if (!(spa.walked > 0)) {
+    fail('[plaintext] the storefront crawl fetched no page at all, so its blind-spot decline is about a failed request rather than about an unreadable document');
+  } else {
+    console.log(`✓ [plaintext] the storefront shell was fetched (${spa.walked} page) and found unreadable — a gap, not an empty site`);
+  }
+}
+
 // --- M137e: the Tier 4 crawl, graded by finding provenance rather than by assertion ----------------
 //
 // `crawl.tflw`'s unit of evidence is not "this assertion fired"; it is **"this finding was reached by
@@ -564,7 +721,12 @@ const CRAWL_DECLINE_SHAPES = [
   {
     match: /excluded by this crawl's `exclude/,
     why: 'route(s) withheld by `exclude`, disclosed rather than dropped',
-    pin: /contract-demo/,
+    // Two subjects now, and the second one is load-bearing: `spider.tflw` excludes `/hardened` so a
+    // crawl body asserting that every response carries a violation does not also have to grade the
+    // one response that must not (`V17`). Pinning it here is what makes that exclusion *checkable* —
+    // it went inert once already, when the `M137f-01` fix made the walk authenticated and the
+    // hardened page stopped being linked from anywhere the walk could see.
+    pin: /contract-demo|hardened/,
   },
 ];
 
@@ -579,10 +741,17 @@ const partitionDeclines = (declines) => {
   return { crawlDeclines, rest };
 };
 
+/** `crawl.tflw`'s one crawl, by name. **Named rather than taken as "the first crawl in the report",
+ *  which is what this used to be.** That worked while the corpus had exactly one crawl and would have
+ *  silently re-pointed this whole grader at a different subject the moment a second file added one —
+ *  `spider.tflw` did, in the very next milestone. A grader that quietly changes what it grades is the
+ *  failure this arc keeps filing rows about, so the subject is written down. */
+const API_CRAWL = 'the documented surface, walked as a non-owner';
+
 function gradeCrawl(report) {
-  const crawl = (report.tests ?? []).find((t) => t.kind === 'crawl');
+  const crawl = (report.tests ?? []).find((t) => t.kind === 'crawl' && t.name === API_CRAWL);
   if (!crawl) {
-    fail('[plaintext] no crawl in the report — `crawl.tflw` did not run, and everything below would pass vacuously');
+    fail(`[plaintext] no crawl named "${API_CRAWL}" in the report — \`crawl.tflw\` did not run, and everything below would pass vacuously`);
     return;
   }
   const surface = crawl.surface ?? {};
@@ -745,13 +914,31 @@ const BASELINE = JSON.parse(readFileSync(join(corpus, 'security-baseline.json'),
 const baselineSeen = new Set();
 const PLANT_PREFIX = /^[A-Z]+ \/v1\/vuln\//;
 
+/** **`M137f` breaks the premise that every plant lives under `/v1/vuln/`, and this is the repair.**
+ *
+ * That prefix rule was the whole reason plants needed no list — *"every planted route is served at
+ * `/v1/vuln/…`, so the prefix IS the plant set"*. `V16` is a plant whose subject is not a route at
+ * all: it is **an entire origin**, `webV2/admin` on `:8091`, every page of which is served without
+ * security headers on purpose so that three document rules and one authenticated-cacheability rule
+ * finally have a real document to judge. Its endpoints are `GET /`, `GET /orgs/{id}` and so on, which
+ * no path prefix can distinguish from apiV2's own.
+ *
+ * So the discriminator for this plant is its **provenance**: only the spider seed reaches that origin
+ * in this corpus, so `via: 'spider'` is exactly the plant set and nothing else. The property the old
+ * prefix gave — a new plant needs no grader edit — survives unchanged.
+ *
+ * The precision gate does not lose power over it, which was the objection to doing this at all.
+ * `gradeSpider` asserts the spider's rule set **exactly**, so a rule firing there that this corpus has
+ * not accounted for goes red in that grader instead of this one. What moves is which file says so. */
+const isSpiderPlant = (f) => f.via === 'spider';
+
 function gradePrecision(label, report) {
   const findings = report.findings ?? [];
   const stray = [];
   let plants = 0;
   let accepted = 0;
   for (const f of findings) {
-    if (PLANT_PREFIX.test(f.endpoint ?? '')) {
+    if (PLANT_PREFIX.test(f.endpoint ?? '') || isSpiderPlant(f)) {
       plants += 1;
       continue;
     }
@@ -910,7 +1097,10 @@ for (const env of ['secureLocal', 'plaintext']) {
   // `crawl.tflw` is plaintext-only (M137e): its `seed openapi` source is that env's own origin, so
   // the document, the `authorized target` and the crawled base are one host — and `probe mutating` is
   // withheld there, which is the state worth crawling in (D465).
-  const files = env === 'plaintext' ? ['plaintext.tflw', 'crawl.tflw'] : ['positives.tflw', 'negatives.tflw', 'authz.tflw', 'csrf.tflw'];
+  // `spider.tflw` is plaintext-only for the same reason `crawl.tflw` is, plus one of its own: both
+  // webV2 `authorized target` declarations live on that env, and a spider that cannot affirm its
+  // origin is refused by `TF060` before it can demonstrate anything (M137f).
+  const files = env === 'plaintext' ? ['plaintext.tflw', 'crawl.tflw', 'spider.tflw'] : ['positives.tflw', 'negatives.tflw', 'authz.tflw', 'csrf.tflw'];
   const { report } = runCorpus(env, files);
   const steps = securitySteps(report);
   const rows = LEDGER.filter((l) => l.env === env);
@@ -995,6 +1185,7 @@ for (const env of ['secureLocal', 'plaintext']) {
   // The two tests in this corpus that are graded by their own verdict rather than by a rule.
   gradeFunctional(env, report, FUNCTIONAL[env] ?? []);
   if (env === 'plaintext') gradeCrawl(report);
+  if (env === 'plaintext') gradeSpider(report);
   gradePrecision(env, report);
 }
 

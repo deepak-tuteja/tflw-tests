@@ -12,4 +12,13 @@
     <li><a href="/orgs">Organizations</a> — manage orgs and their members' roles.</li>
   <% } %>
 </ul>
+<p class="fixture-note">
+  <!-- V17's negative has to be reachable from the walk that grades V16, and since the M137f-01 fix
+       that walk is AUTHENTICATED — it enters at `/`, and `/login` redirects a logged-in session
+       straight back here, so the login page's copy of this link is no longer on the walk's path.
+       Linked from both places rather than moved, because the two walks are different instruments:
+       the anonymous one reaches it from `/login`, the authenticated one from here. See VULNS.md
+       V16/V17. -->
+  <a href="/hardened">Hardened fixture page</a>
+</p>
 <%- include('partials/foot') %>
