@@ -8,6 +8,11 @@
 // each response produced against the ledger below — precision (nothing fired that should not have)
 // and recall (everything that should have, did), per rule, not per severity band.
 //
+// Two entry points since `M139-5`: `npm run verify:security-acceptance` is the full report, and
+// `npm run verify:security-acceptance:gate` (`--gate`) is the asserting half of it, which CI runs as
+// the `security-acceptance-gate` regression phase. The note on `GATE` below says what the split is
+// and what deliberately stays out of the gate.
+//
 // ## Why a script and not just assertions
 //
 // The DSL can assert "this response has at least one critical violation" and "this response has
@@ -22,21 +27,54 @@
 // | --- | --- | --- |
 // | **fires** | the rule id appears in the failure listing | yes |
 // | **silent** | the rule was in play at that floor and did not appear | yes |
-// | **not applicable** | only when D285's no-power-to-fail listing prints, which names every rule and its unmet precondition | for the cases where a floor isolates them |
+// | **not applicable** | D285's no-power-to-fail listing, **and** `RunReport.scanCoverage`, which names each rule with its unmet precondition on every assertion | yes, since `M139-6` |
 //
-// The third row is a genuine limit of the run report, not of this script: on a *passing* assertion
-// the report carries the counts (`12 rules — 5 applicable, 7 not applicable, 0 violations`) but not
-// which seven. This script therefore prints, at the end, exactly which rules' not-applicable case it
-// verified by name and which it did not — a coverage claim with a silent gap in it is the thing
-// this whole milestone is about.
+// **The third row used to be a genuine limit of the run report and no longer is, and the correction
+// matters more than the row.** It read: *"on a passing assertion the report carries the counts
+// (`12 rules — 5 applicable, 7 not applicable, 0 violations`) but not which seven."* That was true
+// when written and was falsified by `M134b`/tflw `D389`, which publishes a rule census on **every**
+// scan assertion — its own doc comment gives the reason: a rule that stands down produces nothing, so
+// the only run in which the information exists to be captured is the one where nobody is looking at a
+// failure message. The field existed for two milestones before any grader in this repo read it.
+//
+// So the table below distinguishes two strengths of evidence rather than one, and `silent` is no
+// longer uniformly a necessary-condition-only claim: `✓` is the census saying the rule applied in a
+// run where it produced nothing, `~` is the older inference from a floor and a count. This script
+// still prints, at the end, exactly which rules' cases it verified and which it did not — a coverage
+// claim with a silent gap in it is the thing this whole milestone is about.
 
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { GRADERS, PLANTS, PLANT_IDS, isPlantFinding, plantsFor } from './lib/plants.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const corpus = join(repoRoot, 'tflw-acceptance', 'security');
+
+/** **The two halves, and the flag that runs only one of them** (`M139-5`, testFlow
+ * `PLAN_M139_LEDGER_ACCEPTANCE.md` D493).
+ *
+ * `--gate` stops this script after the half that *asserts* and skips the half that *reports*. A bare
+ * `npm run verify:security-acceptance` is unchanged: it still runs everything and still prints the
+ * coverage tables, which is the form a human runs by hand.
+ *
+ * There are two halves because they fail differently. The graded half has a verdict — a ledger row
+ * that stopped matching, a baseline entry no run produces, a finding outside (baseline u plants) — and
+ * every one of those is a regression with a name. Until this milestone none of it was asserted by any
+ * automated pass (`M137e-01`). The reporting half has no verdict: its output is a coverage table whose
+ * gaps are recorded and accepted (D295's four, D495's one), so gating it would add either a red that
+ * no fix closes or a green nobody reads.
+ *
+ * What `--gate` skips, and why none of it is a hole:
+ *   - `APPLICABILITY_PROBES` — D285's third state, which exists to feed the coverage table.
+ *   - the D295 and D319 tables, their named-gap prose, and D319's per-site cost line.
+ *   - D347's public-target gate, which needs no stack and **is already gated elsewhere**: its TF065
+ *     and TF066 refusals are asserted by `scripts/verify-check-diagnostics.mjs` (:431), itself a
+ *     `regression.mjs` phase. What this block adds over that is the third invocation — the control
+ *     that stops the first two being vacuous — and that is evidence a human reads, not a signal.
+ */
+const GATE = process.argv.includes('--gate');
 
 /** The pack, mirrored from `securityRules.ts`. Duplicated on purpose: if tflw reorders or re-grades
  * a rule, this file disagreeing is the signal. A grader that imported the thing it grades would
@@ -290,6 +328,38 @@ const APPLICABILITY_PROBES = [
     source: 'test "serious rules over plaintext"\n  api GET /health\n  expect response has no serious security violations\n',
     // Seven, not four: a floor is a minimum, so `serious` carries the three critical rules as well.
     expectNotApplicable: ['sec/cookie-not-httponly', 'sec/cookie-not-secure', 'sec/cors-wildcard-with-credentials', 'sec/hsts-missing', 'sec/csp-missing', 'sec/tls-version-old', 'sec/tls-weak-cipher'],
+  },
+  // --- M139-6: the three rules D285's message structurally cannot name --------------------------
+  //
+  // **This probe is graded on the rule census, not on the "no power to fail" listing, and that is the
+  // whole reason it exists** (testFlow `PLAN_M139_LEDGER_ACCEPTANCE.md` D494).
+  //
+  // `sec/x-frame-options`, `sec/cookie-samesite-none` and `sec/authenticated-response-cacheable` are
+  // the three rows `VULNS.md` has carried as not-applicable gaps since `M128c`, and the reason it gave
+  // was right: D285's listing prints only when **zero** rules applied, and `nosniff` and
+  // `server-version-disclosure` apply unconditionally, so any floor at `moderate` or below always has
+  // an applicable rule and that message can never appear. All three rules are `moderate`, so no floor
+  // exists at which they are in play *and* the listing prints. That is not a target limit and never
+  // was — it is a property of the message.
+  //
+  // `M134b`/tflw `D389` published a census on **every** scan assertion, passing or failing, and it
+  // names each not-applicable rule with its unmet precondition. So the evidence exists; it is simply
+  // not in the message this file was reading. What it needs is a run in which these three apply
+  // *nowhere* — the census is run-level and `applied` wins — and no corpus run is that run: measured
+  // 2026-08-18, all three apply somewhere in every one of the three envs, which is exactly why reading
+  // the census off the corpus alone closed none of the three gaps.
+  //
+  // One assertion at a `moderate` floor against `/health` is that run: a JSON response with no cookie,
+  // no credentials and no `Content-Type: text/html`. The assertion **fails** — `nosniff` and
+  // `server-version-disclosure` really do fire there, and both are in the committed baseline — which is
+  // fine and is the point of D389: the census is published either way.
+  {
+    env: 'plaintext',
+    source: 'test "moderate rules over plaintext"\n  api GET /health\n  expect response has no moderate security violations\n',
+    // Graded by the census rather than by D285's listing. The three are named explicitly rather than
+    // "whatever stood down", because a probe that asserted the whole not-applicable set would go red
+    // every time the pack gained a rule — and this probe's job is three specific rows.
+    expectCensusNotApplicable: ['sec/x-frame-options', 'sec/cookie-samesite-none', 'sec/authenticated-response-cacheable'],
   },
   // --- Tier 2's third state, and D311's default half (M130c) --------------------------------------
   //
@@ -572,10 +642,18 @@ const SPIDER_CRAWLS = {
   spa: 'the storefront shell, which a fetching spider cannot read',
 };
 
-/** The three rules whose precondition is "the response is a document". Before `M137f` every one of
- *  them was graded against `vuln.controller.ts`'s fabricated `text/html` response, whose own comment
- *  says no real apiV2 route satisfies it. */
-const V16_RULES = ['sec/csp-missing', 'sec/x-frame-options', 'sec/nosniff-missing'];
+/** `V16`'s row, and the two rule lists it supplies. Read from the manifest rather than written twice
+ *  (`M139-2`): the plant's rule set and the grader's expectation of it were the same fact in two
+ *  places, and the drift between them would have been invisible — a rule dropped from one list is a
+ *  rule this file stops requiring while still claiming to account for the whole surface. */
+const V16 = PLANTS.find((p) => p.id === 'V16');
+/** `V17`'s row — the hardened page, whose path both halves of its assertion below are matched on. */
+const V17 = PLANTS.find((p) => p.id === 'V17');
+
+/** The rules whose precondition is "the response is a document" — the three the plant was built for.
+ *  Before `M137f` every one of them was graded against `vuln.controller.ts`'s fabricated `text/html`
+ *  response, whose own comment says no real apiV2 route satisfies it. */
+const V16_RULES = Object.keys(V16.rules).filter((r) => !V16.arrivedWith.includes(r));
 
 /** Every rule the spider is accounted for reporting. `V16_RULES` are the three document rules the
  *  plant was built for; the fourth arrived **because of the `M137f-01` fix** and is the cleanest
@@ -584,9 +662,10 @@ const V16_RULES = ['sec/csp-missing', 'sec/x-frame-options', 'sec/nosniff-missin
  *  now fires on nine of the console's authenticated pages.
  *
  *  Asserted as an exact set because `gradePrecision` exempts the whole spider surface as `V16`'s
- *  plant (see `isSpiderPlant`). This is where that exemption gets its power back: a rule appearing
+ *  plant (its declared surface in `scripts/lib/plants.mjs` is `via: 'spider'`, and it is exempted
+ *  whole). This is where that exemption gets its power back: a rule appearing
  *  here that nobody wrote down is a finding this corpus has not accounted for, and it goes red. */
-const SPIDER_RULES = [...V16_RULES, 'sec/authenticated-response-cacheable'];
+const SPIDER_RULES = Object.keys(V16.rules);
 
 function gradeSpider(report) {
   const tests = report.tests ?? [];
@@ -654,7 +733,7 @@ function gradeSpider(report) {
   }
 
   // V17 — silence, and the reachability that makes the silence mean something.
-  const hardened = spiderFindings.filter((f) => /\/hardened/.test(f.endpoint ?? ''));
+  const hardened = spiderFindings.filter((f) => (f.endpoint ?? '').includes(V17.page));
   if (hardened.length > 0) {
     fail(`[plaintext] V17 — the hardened page produced ${hardened.length} finding(s) via the spider; a negative that fails measures nothing`);
   } else {
@@ -695,10 +774,14 @@ function gradeSpider(report) {
 //
 // Drop either seed and a **named row** goes missing, which is the property D437 asked for and the one
 // an aggregate recall number cannot express.
-const CRAWL_PLANTS = [
-  { endpoint: 'GET /v1/vuln/reports/orders', via: 'openapi', rule: 'sec/authz-collection-leak', findings: 3, why: 'V15 — documented and never exercised, so only enumeration can reach it' },
-  { endpoint: 'GET /v1/vuln/orders', via: 'traffic', rule: 'sec/authz-collection-leak', findings: 3, why: 'V7 — @ApiExcludeController(), so only the traffic seed can reach it' },
-];
+/** The two plants a crawl reaches, **derived from the manifest's `reach` facets** (`M139-2`) rather
+ *  than listed here. The pair is the measurement: one route is documented and never exercised, the
+ *  other is `@ApiExcludeController()` and only ever exercised — so each is reachable by exactly one
+ *  seed, and provenance is the only thing that distinguishes two findings of the same rule on
+ *  byte-identical handlers. Derived rather than duplicated because a third seed-restricted plant should
+ *  arrive here by being written in the ledger, which was the property the `/v1/vuln/` prefix used to
+ *  give and the reason nobody noticed it had been lost. */
+const CRAWL_PLANTS = PLANTS.filter((p) => p.reach).map((p) => ({ endpoint: p.endpoint, ...p.reach }));
 
 // D482 (`M137c2`). Public collections the crawl **reaches and must not report**. Every principal
 // including `anonymous` receives these, so there is no owner and no boundary — before the fix each of
@@ -945,42 +1028,25 @@ function gradeCrawl(report) {
 const BASELINE = JSON.parse(readFileSync(join(corpus, 'security-baseline.json'), 'utf8'));
 /** Fingerprints the corpus actually produced, accumulated across envs — see the staleness check. */
 const baselineSeen = new Set();
-const PLANT_PREFIX = /^[A-Z]+ \/v1\/vuln\//;
-
-/** **`M137f` breaks the premise that every plant lives under `/v1/vuln/`, and this is the repair.**
+/**
+ * **The plant set, read from the manifest — one mechanism where there were three** (`M139-2`, testFlow
+ * `PLAN_M139_LEDGER_ACCEPTANCE.md` D491).
  *
- * That prefix rule was the whole reason plants needed no list — *"every planted route is served at
- * `/v1/vuln/…`, so the prefix IS the plant set"*. `V16` is a plant whose subject is not a route at
- * all: it is **an entire origin**, `webV2/admin` on `:8091`, every page of which is served without
- * security headers on purpose so that three document rules and one authenticated-cacheability rule
- * finally have a real document to judge. Its endpoints are `GET /`, `GET /orgs/{id}` and so on, which
- * no path prefix can distinguish from apiV2's own.
+ * What stood here was `PLANT_PREFIX` (`/^[A-Z]+ \/v1\/vuln\//`), `isSpiderPlant` (`f.via === 'spider'`)
+ * and `isOfferingPlant` (`label === 'offeringTls'` and a named rule), OR'd together at the top of
+ * `gradePrecision`. Each one was correct and each arrived the same way: the endpoint-keyed premise —
+ * *"every planted route is served at `/v1/vuln/…`, so the prefix IS the plant set"* — broke for a page
+ * (`V16`, an entire origin) and then for a listener (`V18`, a transport under an ordinary response),
+ * and each break got its own special case. A third special case would have been a design.
  *
- * So the discriminator for this plant is its **provenance**: only the spider seed reaches that origin
- * in this corpus, so `via: 'spider'` is exactly the plant set and nothing else. The property the old
- * prefix gave — a new plant needs no grader edit — survives unchanged.
- *
- * The precision gate does not lose power over it, which was the objection to doing this at all.
- * `gradeSpider` asserts the spider's rule set **exactly**, so a rule firing there that this corpus has
- * not accounted for goes red in that grader instead of this one. What moves is which file says so. */
-const isSpiderPlant = (f) => f.via === 'spider';
-
-/** **`M137g` — the second plant whose subject is not a route, and the third discriminator.**
- *
- * `V18` is nginx's 8445 listener. Like `V16` it is an entire origin rather than a path, so
- * `PLANT_PREFIX` cannot see it; unlike `V16` it is not reached by a crawl, so `via` cannot either.
- * Its findings arrive on ordinary endpoints — `GET /v1/health` is the plainest response the app has
- * — because the weakness is underneath the response rather than in it.
- *
- * So the discriminator is the **env**, which is the honest one here: `offeringTls` exists for no
- * other purpose, runs one file, and is the only place in this repo where a transport is deliberately
- * broken. The rule set is named rather than left open for the same reason `SPIDER_RULES` is — a rule
- * firing on this listener that nobody wrote down should go red, and `sec/tls-version-old` firing here
- * would mean the listener had silently lost TLS 1.2/1.3 and is exactly the regression this must not
- * absorb. `hsts-missing` is deliberately absent: it is not a property of the plant, it is nginx being
- * nginx on all three listeners, and the committed baseline already accounts for it by fingerprint. */
-const OFFERING_PLANT_RULES = new Set(['sec/tls-weak-cipher']);
-const isOfferingPlant = (label, f) => label === 'offeringTls' && OFFERING_PLANT_RULES.has(f.rule);
+ * So each plant declares its own surface in `scripts/lib/plants.mjs` and `isPlantFinding` reads them.
+ * **The breadth is inherited verbatim, deliberately**: the prefix still exempts any finding under
+ * `/v1/vuln/`, and the spider surface is still exempted whole. Narrowing it to the eighteen ids would
+ * start failing precision on findings this corpus is built to produce, and D491 explicitly does not.
+ * The power that breadth costs is bought back by the graders that attribute rather than exempt —
+ * `gradeSpider`'s exact rule set, `gradeCrawl`'s per-plant provenance, and per-plant recall.
+ */
+const PLANT_ROWS = plantsFor('security');
 
 function gradePrecision(label, report) {
   const findings = report.findings ?? [];
@@ -988,7 +1054,7 @@ function gradePrecision(label, report) {
   let plants = 0;
   let accepted = 0;
   for (const f of findings) {
-    if (PLANT_PREFIX.test(f.endpoint ?? '') || isSpiderPlant(f) || isOfferingPlant(label, f)) {
+    if (isPlantFinding(label, f)) {
       plants += 1;
       continue;
     }
@@ -1012,6 +1078,62 @@ function gradePrecision(label, report) {
     return;
   }
   console.log(`✓ [${label}] precision: ${findings.length} finding(s) — ${plants} on planted routes, ${accepted} accepted by the baseline, 0 elsewhere (D445)`);
+}
+
+/**
+ * **`RunReport.scanCoverage`, which was built two milestones ago to answer this file's own open
+ * question and had never been read** (`M139-6`, testFlow `PLAN_M139_LEDGER_ACCEPTANCE.md` D494).
+ *
+ * `VULNS.md` attributed three of the four gaps in the coverage table to a *reporting* limit: tflw
+ * names its not-applicable rules only in D285's "no power to fail" message, which prints when **zero**
+ * rules applied, so a rule that stood down beside a rule that fired could not be named. That was true
+ * when it was written and stopped being true with `M134b`/tflw `D389`, which added a census carried on
+ * **every** scan assertion, passing or failing — its own doc comment gives the reason: *"a rule that
+ * stands down produces nothing, so the only run in which the information exists to be captured is the
+ * one where nobody is looking at a failure message."*
+ *
+ * Two things come out of reading it, and they are different in kind:
+ *
+ *   - `notApplicable` names a rule **and its unmet precondition**, which is the third state
+ *     demonstrated by name rather than inferred from a count. Three gaps close here, with no engine
+ *     change and no new plant.
+ *   - `applied` turns silence from a necessary condition into a sufficient one. A rule the census says
+ *     applied, which produced no finding in that same run, *ran and found nothing* — which is the
+ *     claim `silent` has always made and could not previously back.
+ *
+ * **The census is run-level and `applied` wins** (tflw's `buildScanCoverage`): a rule that judged one
+ * response and stood down on another is `applied`, not not-applicable. So silence is computed
+ * per-run — applied here, fired nowhere here — rather than by mixing one env's `applied` with
+ * another's findings, which would claim evidence no single run produced.
+ *
+ * `input-handling` censuses are skipped rather than folded in: Tier 3's pack is
+ * `verify-input-acceptance.mjs`'s subject, and borrowing its rows would make this table say something
+ * two graders each half-checked.
+ */
+function gradeCoverage(env, report) {
+  const coverage = report.scanCoverage ?? [];
+  if (coverage.length === 0) {
+    // A gated assertion, not a report line. The field is optional in the type and present whenever a
+    // scan assertion ran, so an empty census on a corpus whose every test asserts a scan means tflw
+    // stopped publishing it — and everything below would then silently fall back to the weaker
+    // evidence this milestone exists to replace.
+    fail(`[${env}] the run report carries no \`scanCoverage\` at all, though every test in this corpus asserts a scan — D389's census has stopped being published, and the coverage table would quietly revert to inferring the third state from a count`);
+    return;
+  }
+  for (const c of coverage) {
+    const pool = c.scan === 'authorization' ? seenAuthz : c.scan === 'security' ? seen : null;
+    if (!pool) continue;
+    const firedHere = new Set((report.findings ?? []).filter((f) => f.scan === c.scan).map((f) => f.rule));
+    for (const rule of c.applied ?? []) if (!firedHere.has(rule)) pool.silentByCoverage.add(rule);
+    for (const { rule, because } of c.notApplicable ?? []) {
+      pool.notApplicable.add(rule);
+      const reasons = pool.naReasons.get(rule) ?? new Set();
+      for (const why of because ?? []) reasons.add(why);
+      pool.naReasons.set(rule, reasons);
+    }
+  }
+  const named = [...seen.notApplicable, ...seenAuthz.notApplicable].length;
+  console.log(`✓ [${env}] the run's rule census is published — ${coverage.length} scan(s), ${named} rule(s) named not-applicable with their unmet precondition so far (D389)`);
 }
 
 const COUNTS = /(\d+) rules? — (\d+) applicable, (\d+) not applicable, (\d+) violations?/;
@@ -1127,6 +1249,8 @@ function runCorpus(env, files) {
 }
 
 let failures = 0;
+/** Every finding the three envs produced, env-tagged. See the end of the env loop. */
+const RUN_FINDINGS = [];
 const fail = (msg) => {
   failures += 1;
   console.log(`✗ ${msg}`);
@@ -1134,11 +1258,17 @@ const fail = (msg) => {
 
 // --- the fired set, per case, exact ------------------------------------------
 
-/** Which rules this run demonstrated in each state, accumulated across both envs. */
-const seen = { fires: new Set(), silent: new Set(), notApplicable: new Set() };
-/** The same three states for Tier 2, kept in its own accumulator so the coverage table can print two
- * packs without either borrowing the other's evidence. */
-const seenAuthz = { fires: new Set(), silent: new Set(), notApplicable: new Set() };
+/** Which rules this run demonstrated in each state, accumulated across both envs.
+ *
+ * `silentByCoverage` and the reasons behind `notApplicable` are `M139-6` (testFlow
+ * `PLAN_M139_LEDGER_ACCEPTANCE.md` D494) — see `gradeCoverage`. `silent` stays what it was: the
+ * ledger's own claim, verified as far as a failure message allows. The two are kept apart rather than
+ * merged because the difference between them is the difference between a necessary condition and a
+ * sufficient one, and the coverage table prints which is which. */
+const seen = { fires: new Set(), silent: new Set(), silentByCoverage: new Set(), notApplicable: new Set(), naReasons: new Map() };
+/** The same states for Tier 2, kept in its own accumulator so the coverage table can print two packs
+ * without either borrowing the other's evidence. */
+const seenAuthz = { fires: new Set(), silent: new Set(), silentByCoverage: new Set(), notApplicable: new Set(), naReasons: new Map() };
 
 /** Which corpus files each env runs. Not "everything under this root" — three of the six files here
  * are only meaningful under one env, and running them everywhere would grade a rule against a base
@@ -1277,6 +1407,12 @@ for (const env of ['secureLocal', 'plaintext', 'offeringTls']) {
   if (env === 'plaintext') gradeCrawl(report);
   if (env === 'plaintext') gradeSpider(report);
   gradePrecision(env, report);
+  gradeCoverage(env, report);
+  // Kept for per-plant recall below (`M139-4`). Tagged with the env because two of the eighteen plants
+  // are discriminated by nothing else: `V18` is a listener that only `offeringTls` dials, and `V3`'s
+  // `sec/cookie-not-secure` is not-applicable over plaintext, so recall accumulated per-env would
+  // demand evidence from a transport that cannot produce it.
+  for (const f of report.findings ?? []) RUN_FINDINGS.push({ ...f, env });
 }
 
 // D445's other half, and the reason the baseline is committed rather than merely generated: an entry
@@ -1298,6 +1434,231 @@ for (const env of ['secureLocal', 'plaintext', 'offeringTls']) {
   } else {
     console.log(`✓ every one of the ${BASELINE.accepted.length} baseline entries was produced by a run — no stale acceptances`);
   }
+}
+
+// --- M139-3: the ledger and the manifest, against each other -----------------
+//
+// **The direction is the design** (D489). `scripts/lib/plants.mjs` is hand-authored and
+// authoritative; `VULNS.md`'s ledger table is checked against it. Not the reverse: parsing prose to
+// build the oracle would let a typo in a markdown cell silently retune what every grader expects, and
+// deriving the manifest from tflw's own output would make the oracle agree with the thing it grades.
+//
+// So `VULNS.md` stays prose a human reads, and gains exactly one machine-checked invariant — its id
+// set. Ids only, deliberately: the table writes routes as `:id` where the manifest writes `{id}`,
+// because one is NestJS's spelling and the other is the fingerprint tflw computes, and forcing them to
+// agree would be asserting a coincidence rather than a fact.
+const LEDGER_HEADING = '## The fixture routes (`VULN_MODE=1` only)';
+
+/** The ids in `VULNS.md`'s ledger table, in order, or `null` if the table cannot be found.
+ *
+ *  Scoped to the first table under the heading rather than grepped file-wide, because three other
+ *  tables in that file also open a row with a V-number — the decorator table (`V1`,`V2`,…` in one
+ *  cell), the seed-reachability table, and the crawl provenance pair. A file-wide grep would read
+ *  those as ledger rows and then be "corrected" by adding duplicates to the manifest. */
+function ledgerIds() {
+  const lines = readFileSync(join(repoRoot, 'VULNS.md'), 'utf8').split('\n');
+  const start = lines.indexOf(LEDGER_HEADING);
+  if (start === -1) return null;
+  const ids = [];
+  let inTable = false;
+  for (const line of lines.slice(start + 1)) {
+    if (line.startsWith('|')) {
+      inTable = true;
+      const id = /^\|\s*`(V\d+)`\s*\|/.exec(line)?.[1];
+      if (id) ids.push(id);
+      continue;
+    }
+    // The blank line after the table ends it. Anything else after that is prose, and a second table
+    // further down the file is not this one.
+    if (inTable && line.trim() === '') break;
+  }
+  return ids;
+}
+
+{
+  const ids = ledgerIds();
+  if (ids === null) {
+    fail(
+      `VULNS.md has no "${LEDGER_HEADING}" heading — the ledger table this manifest is checked against cannot be found.\n` +
+        `    Renaming the heading is fine; this constant has to move with it, or the check goes quiet rather than red.`,
+    );
+  } else if (ids.length === 0) {
+    // M127's rule, and this file has paid for it twice: a derivation that quietly produces nothing
+    // prints a pass and means "nothing was checked".
+    fail('VULNS.md\'s ledger table parsed to zero ids — the table\'s shape changed and this check is now vacuous');
+  } else {
+    const missing = PLANT_IDS.filter((id) => !ids.includes(id));
+    const extra = ids.filter((id) => !PLANT_IDS.includes(id));
+    if (missing.length > 0) {
+      fail(
+        `${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} in scripts/lib/plants.mjs but not in VULNS.md's ledger table —\n` +
+          `    the manifest is what the graders read, so a plant missing from the ledger is a plant nobody documented.`,
+      );
+    }
+    if (extra.length > 0) {
+      fail(
+        `${extra.join(', ')} ${extra.length === 1 ? 'is' : 'are'} in VULNS.md's ledger table but not in scripts/lib/plants.mjs —\n` +
+          `    which is the direction that used to be silent: a nineteenth plant needed no grader edit to be\n` +
+          `    ungraded, because the V-numbers lived only inside free-text test titles. Add the row, or if the\n` +
+          `    plant is gone give it \`retired: '<reason>'\` rather than deleting it (D492).`,
+      );
+    }
+    if (missing.length === 0 && extra.length === 0) {
+      console.log(`✓ VULNS.md's ledger and the plant manifest list the same ${ids.length} plants — ${ids.join(', ')}`);
+    }
+  }
+}
+
+// --- M139-4: who grades each plant, and whether anything automated does ------
+//
+// The `graders` field is §2.1's table as data. Checked here rather than trusted, and the `gated` half
+// is the one with teeth: a plant graded **only** by a script nobody runs is `M137e-01` recurring, and
+// that row's whole cost was that nothing anywhere said so.
+{
+  const problems = [];
+  for (const plant of PLANTS) {
+    const claims = plant.graders ?? [];
+    if (claims.length === 0) {
+      problems.push(`${plant.id} names no grader at all — it is in the ledger and nothing is asserted to check it`);
+      continue;
+    }
+    const unknown = claims.filter((g) => !GRADERS[g]);
+    if (unknown.length > 0) {
+      problems.push(`${plant.id} names grader(s) that do not exist: ${unknown.join(', ')}`);
+      continue;
+    }
+    if (!claims.some((g) => GRADERS[g].gated)) {
+      problems.push(
+        `${plant.id} is graded only by ungated script(s) (${claims.join(', ')}) — graded by nobody on any day nobody was looking, which is M137e-01's exact shape`,
+      );
+    }
+  }
+  if (problems.length > 0) {
+    fail(`the plant manifest's grader claims do not hold:\n${problems.map((x) => `      ${x}`).join('\n')}`);
+  } else {
+    const gatedPhases = [...new Set(Object.values(GRADERS).filter((g) => g.gated).map((g) => g.phase))];
+    console.log(`✓ all ${PLANTS.length} plants name a grader, and every one of them names at least one gated grader (${gatedPhases.join(', ')})`);
+  }
+}
+
+// --- M139-4: per-plant recall, over the full manifest ------------------------
+//
+// **What was missing, exactly.** Recall was asserted per *rule* — the twelve-row coverage table below
+// — and per plant only inside `verify-sarif-acceptance.mjs`'s fourteen. The rows this corpus is the
+// sole grader of (`V15`–`V18`) were graded by name in free text, so their evidence was checked but
+// their *existence in the ledger* was not: a plant could be dropped from the corpus and only its own
+// prose would notice.
+//
+// This is deliberately **independent of the specialised graders** rather than layered on them.
+// `gradeSpider` asserts the spider's rule set exactly, `gradeCrawl` asserts provenance per plant, and
+// each is the right instrument for its own claim; what none of them does is start from the ledger and
+// ask, of every row in it, whether this run produced its evidence. Two checks that agree by different
+// routes is the point — the specialised ones would keep passing if a row vanished from the manifest.
+//
+// Only rows claiming `security` are asserted here, because only they are visible to this corpus:
+// `V10`–`V14`'s evidence is a response to a request **tflw constructed**, and no file in
+// `tflw-acceptance/security/` sends one. Their gate is `sarif-acceptance`, which the claim check above
+// is what guarantees.
+//
+// The reverse direction — a plant whose evidence appears here without claiming this grader — is
+// deliberately **not** a failure. Which files each env runs is a choice this corpus makes (see
+// `FILES`), so a plant becoming visible here is a corpus edit rather than a defect, and reddening on it
+// would punish the edit that improves coverage.
+
+/** Findings attributable to a plant, by its declared subject. Not `isPlantFinding` — that is the
+ *  precision bar's deliberately coarse *exemption*, and reusing it here would make every plant's
+ *  recall pass on any other plant's finding. */
+function evidenceFor(plant) {
+  const surface = plant.surface ?? {};
+  if (plant.subject === 'listener') {
+    return RUN_FINDINGS.filter((f) => f.env === surface.env && (surface.rules ?? []).includes(f.rule));
+  }
+  if (plant.subject === 'page') {
+    const onSurface = RUN_FINDINGS.filter((f) => f.via === surface.via);
+    // A page plant with a path names one document; `V16` is the whole origin and names none.
+    return plant.page ? onSurface.filter((f) => (f.endpoint ?? '').includes(plant.page)) : onSurface;
+  }
+  // `endpoint` and `via` are both matched on the endpoint fingerprint, exactly — `templateEndpoint`
+  // in tflw computes `METHOD /path` with identifier segments as `{id}`, which is the form the manifest
+  // writes. `via` additionally pins provenance, which is the entire distinguishing property of `V15`.
+  const byEndpoint = RUN_FINDINGS.filter((f) => f.endpoint === plant.endpoint);
+  return plant.subject === 'via' ? byEndpoint.filter((f) => f.via === plant.reach.via) : byEndpoint;
+}
+
+console.log('\nM139-4 — per-plant recall, one row per plant this corpus grades:\n');
+for (const plant of plantsFor('security')) {
+  const found = evidenceFor(plant);
+  const rules = [...new Set(found.map((f) => f.rule))].sort();
+
+  // **Retirement is the direction that fails silently** (D492), so it is the one with an assertion.
+  // A manifest row whose plant no longer exists in the target produces "expected finding not found",
+  // which is indistinguishable from a recall regression in tflw — a false red pointing at the wrong
+  // repo, which is `M131-05`'s class. So a retired plant keeps its row, states its reason, and is
+  // asserted **absent**. Deleting the row outright is the one edit this check rejects, because the
+  // deletion is exactly what makes the id check above go quiet.
+  if (plant.retired) {
+    if (found.length > 0) {
+      fail(`${plant.id} is marked retired (${plant.retired}) but still produced ${found.length} finding(s): ${rules.join(', ')} — the row and the target disagree about whether the plant exists`);
+    } else {
+      console.log(`  ✓ ${plant.id} retired (${plant.retired}) — absent, as its row says`);
+    }
+    continue;
+  }
+
+  if (plant.kind === 'negative') {
+    if (found.length > 0) {
+      fail(`${plant.id} is planted to produce nothing and produced ${found.length} finding(s): ${rules.join(', ')} — a negative that fires measures nothing`);
+    } else {
+      console.log(`  ✓ ${plant.id} negative — no finding on its ${plant.subject}, as planted`);
+    }
+    continue;
+  }
+
+  const wanted = Object.entries(plant.rules ?? {});
+  if (wanted.length === 0) {
+    fail(`${plant.id} is a positive plant with no rules in the manifest — there is nothing for recall to demand`);
+    continue;
+  }
+  const missing = wanted.filter(([rule]) => !rules.includes(rule)).map(([rule]) => rule);
+  if (missing.length > 0) {
+    fail(
+      `${plant.id} — no finding for ${missing.join(', ')} on its ${plant.subject} (${plant.endpoint ?? plant.origin ?? `${plant.listener.host}:${plant.listener.port}`}).\n` +
+        `    Either the plant stopped being reachable, the rule stopped firing, or the manifest row and the\n` +
+        `    target have drifted — and those have three different fixes, so the run's ${found.length} finding(s) here\n` +
+        `    are listed rather than summarised: ${rules.join(', ') || '(none)'}`,
+    );
+    continue;
+  }
+  // The severity the ledger claims, against the severity the run gave it. Worth asserting separately
+  // from the rule id: a rule firing at the wrong band is a real regression that every check above
+  // would pass — the floor tests grade "at least this severe", and `gradePrecision` does not look at
+  // severity at all.
+  const wrongBand = wanted
+    .map(([rule, severity]) => ({ rule, severity, got: [...new Set(found.filter((f) => f.rule === rule).map((f) => f.severity))] }))
+    .filter((x) => !(x.got.length === 1 && x.got[0] === x.severity));
+  if (wrongBand.length > 0) {
+    fail(
+      `${plant.id} — severity mismatch against the ledger:\n` +
+        wrongBand.map((x) => `      ${x.rule}: ledger says ${x.severity}, run gave ${x.got.join('/') || '(none)'}`).join('\n'),
+    );
+    continue;
+  }
+  console.log(`  ✓ ${plant.id} positive — ${found.length} finding(s) on its ${plant.subject}, every ledger rule present at its stated severity (${wanted.map(([r, sev]) => `${r} ${sev}`).join(', ')})`);
+}
+
+// --- the gate stops here (M139-5, D493) --------------------------------------
+//
+// Everything above this line asserts; everything below it reports. Under `--gate` this is the end of
+// the run, and this exit status is the whole of what `regression.mjs`'s `security-acceptance-gate`
+// phase means.
+if (GATE) {
+  console.log(
+    failures === 0
+      ? '\n\u2713 security acceptance (gated half): every graded case matched the ledger, and nothing fired outside (baseline \u222a plants)'
+      : `\n\u2717 security acceptance (gated half): ${failures} mismatch(es)`,
+  );
+  console.log('  (the coverage tables are the other half \u2014 run without `--gate` to print them.)');
+  process.exit(failures === 0 ? 0 : 1);
 }
 
 // --- the third state, from D285's listing ------------------------------------
@@ -1326,6 +1687,36 @@ for (const probe of APPLICABILITY_PROBES) {
   const step = steps[0];
   if (!step) {
     fail(`[${probe.env}] the applicability probe produced no security assertion`);
+    continue;
+  }
+  // `M139-6` — the census-graded probe. Deliberately not folded into the D285 path below: that path
+  // requires the assertion to fail *because nothing applied*, and this one fails because two rules
+  // applied and fired. Sharing a loop body would have meant one of the two checks silently accepting
+  // the other's evidence.
+  if (probe.expectCensusNotApplicable) {
+    const census = (report.scanCoverage ?? []).filter((c) => c.scan === 'security');
+    if (census.length === 0) {
+      fail(`[${probe.env}] the census-graded probe produced no \`scanCoverage\` — D389's field is what this probe reads, and without it the three rows it exists for cannot be demonstrated at all`);
+      continue;
+    }
+    const namedHere = new Map();
+    for (const c of census) for (const { rule, because } of c.notApplicable ?? []) namedHere.set(rule, because ?? []);
+    const missing = probe.expectCensusNotApplicable.filter((id) => !namedHere.has(id));
+    if (missing.length > 0) {
+      fail(
+        `[${probe.env}] the census did not name ${missing.join(', ')} as not-applicable on a moderate floor against a plain JSON response.\n` +
+          `    These are the three rows VULNS.md has carried as coverage gaps since M128c, and this probe is the\n` +
+          `    only evidence in the repo that closes them. Named by the census: ${[...namedHere.keys()].sort().join(', ') || '(none)'}`,
+      );
+      continue;
+    }
+    for (const [rule, because] of namedHere) {
+      seen.notApplicable.add(rule);
+      const reasons = seen.naReasons.get(rule) ?? new Set();
+      for (const why of because) reasons.add(why);
+      seen.naReasons.set(rule, reasons);
+    }
+    console.log(`✓ [${probe.env}] the census names ${namedHere.size} rule(s) not-applicable by name on a passing-or-failing assertion, including the three D285's listing structurally cannot reach: ${probe.expectCensusNotApplicable.join(', ')}`);
     continue;
   }
   if (step.ok) {
@@ -1363,10 +1754,27 @@ console.log('\nD295 coverage — one row per rule, three states:\n');
 const gaps = [];
 console.log(`  ${'rule'.padEnd(40)} fires  silent  n/a`);
 for (const [id] of PACK) {
-  const f = seen.fires.has(id), s = seen.silent.has(id);
+  const f = seen.fires.has(id);
+  // **`✓` and `~` are different evidence, and the table now says which** (`M139-6`, D494). `~` is what
+  // this column has always meant: the rule was in play at that floor, did not fire, and the applicable
+  // count left room for it — a necessary condition. `✓` is the census saying the rule *applied* in a
+  // run where it produced nothing, which is the sufficient version. A table that printed one glyph for
+  // both would be claiming the stronger thing on the weaker evidence.
+  const sufficient = seen.silentByCoverage.has(id);
+  const s = sufficient || seen.silent.has(id);
   const n = NO_NOT_APPLICABLE.has(id) ? 'n/a' : seen.notApplicable.has(id);
   if (!f || !s || n === false) gaps.push([id, { fires: f, silent: s, notApplicable: n !== false }]);
-  console.log(`  ${id.padEnd(40)} ${f ? '  ✓  ' : '  ·  '}  ${s ? '  ✓ ' : '  · '}   ${n === 'n/a' ? '—' : n ? ' ✓' : ' ·'}`);
+  console.log(`  ${id.padEnd(40)} ${f ? '  ✓  ' : '  ·  '}  ${sufficient ? '  ✓ ' : s ? '  ~ ' : '  · '}   ${n === 'n/a' ? '—' : n ? ' ✓' : ' ·'}`);
+}
+{
+  const weak = PACK.map(([id]) => id).filter((id) => !seen.silentByCoverage.has(id) && seen.silent.has(id));
+  console.log(`\n  silent: ✓ = the rule census says it applied and it produced nothing (sufficient, D389/D494)`);
+  console.log(`          ~ = in play at the floor, did not fire, count leaves room (necessary only)${weak.length > 0 ? ` — ${weak.length} row(s): ${weak.join(', ')}` : ''}`);
+  const named = [...seen.notApplicable].filter((id) => seen.naReasons.has(id));
+  if (named.length > 0) {
+    console.log(`     n/a: ${named.length} of these are named by the census with their unmet precondition, not inferred from a count:`);
+    for (const id of named.sort()) console.log(`          ${id} — ${[...seen.naReasons.get(id)].join(' / ')}`);
+  }
 }
 
 if (gaps.length > 0) {
@@ -1391,9 +1799,12 @@ console.log('\nD319 coverage — one row per authorization rule, three states:\n
 const authzGaps = [];
 console.log(`  ${'rule'.padEnd(40)} fires  silent  n/a`);
 for (const [id] of AUTHZ_PACK) {
-  const f = seenAuthz.fires.has(id), s = seenAuthz.silent.has(id), n = seenAuthz.notApplicable.has(id);
+  const f = seenAuthz.fires.has(id);
+  const sufficient = seenAuthz.silentByCoverage.has(id);
+  const s = sufficient || seenAuthz.silent.has(id);
+  const n = seenAuthz.notApplicable.has(id);
   if (!f || !s || !n) authzGaps.push([id, { fires: f, silent: s, notApplicable: n }]);
-  console.log(`  ${id.padEnd(40)} ${f ? '  ✓  ' : '  ·  '}  ${s ? '  ✓ ' : '  · '}   ${n ? ' ✓' : ' ·'}`);
+  console.log(`  ${id.padEnd(40)} ${f ? '  ✓  ' : '  ·  '}  ${sufficient ? '  ✓ ' : s ? '  ~ ' : '  · '}   ${n ? ' ✓' : ' ·'}`);
 }
 if (authzGaps.length > 0) {
   console.log('\nNot demonstrated live by this run:\n');
