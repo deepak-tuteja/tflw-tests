@@ -109,6 +109,24 @@ jobs:
         run: npm run verify:external-targets
         working-directory: testFlow-tests
 
+      # M138b (`M136a-02`). Static, seconds, and here for two reasons rather than one. The cheap
+      # reason is that it is the same shape as the step above — no Docker, no .env, no Playwright.
+      # The load-bearing one is that this is **the only job that checks out both repositories**, so
+      # it is the one place in either repo where a claim about the sibling can be verified: tflw's
+      # CONTRIBUTING.md points here for the cross-repo diagnostic-code pair, and this asserts the
+      # pointer resolves.
+      #
+      # It does NOT skip when the sibling is missing. That is why the two PRs merge chained with
+      # tflw first — between the two merges this repo's main is red, the same accepted window a new
+      # TF0xx code opens.
+      #
+      # And note what this step is to itself: it is in the set it guards. Adding it meant
+      # classifying it and naming it in CONTRIBUTING.md, which is the mechanism working on its
+      # first day.
+      - name: The gate set and CONTRIBUTING.md agree
+        run: npm run verify:contributing
+        working-directory: testFlow-tests
+
   # Round 3 decision 16 (PLAN_CI.md, 2026-08-03 grill-me): the 30-phase sweep used to run
   # sequentially in one job (~34min). Split into a 4-leg GH Actions job matrix — real per-phase
   # timings pulled from run 30802717073 (2026-08-03) were greedy-LPT bin-packed into
