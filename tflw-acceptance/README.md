@@ -108,6 +108,14 @@ request/response capture without the author building it by hand. This is a clear
 
 # External dogfood: restful-booker
 
+> **Functional API tests only — no load runs, no security scans, not on CI** (ruling 2026-08-18).
+> This is the one host in this repo we do not own. It has no `authorized target`, which is what
+> makes a scan against it impossible rather than merely unlikely (`TF060`), and it is named in no
+> workflow and no npm script, so it runs only when a human runs it. All three are enforced by
+> `npm run verify:external-targets`, which also refuses any *new* external target that arrives
+> without a written reason. Everything else this repo dials is our own stack or an RFC 2606
+> reserved name that cannot resolve.
+
 PLAN.md decision 41's second acceptance leg: a suite against
 [restful-booker](https://restful-booker.herokuapp.com), a public QA-practice API we don't control
 — a more honest test of the language than our own automationTestPOC sample app, which we can (and

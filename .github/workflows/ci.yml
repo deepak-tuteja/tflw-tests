@@ -96,6 +96,19 @@ jobs:
         run: npm run check:acceptance
         working-directory: testFlow-tests
 
+      # Static, sends no request, and deliberately in the job that already walks every corpus. It
+      # asserts the ruling on the one host this repo does not own — functional API tests only: no
+      # load runs, no security scans, not on CI — and fails on any NEW external target that arrives
+      # without a written reason. All three fences held before this existed, by omission rather
+      # than by design.
+      #
+      # The target is named in scripts/verify-external-targets.mjs and deliberately NOT here: one of
+      # the things that script checks is whether this file mentions it, so naming it in a comment
+      # would be a hair away from tripping the guard on the step that runs it.
+      - name: Every external target is declared and fenced
+        run: npm run verify:external-targets
+        working-directory: testFlow-tests
+
   # Round 3 decision 16 (PLAN_CI.md, 2026-08-03 grill-me): the 30-phase sweep used to run
   # sequentially in one job (~34min). Split into a 4-leg GH Actions job matrix — real per-phase
   # timings pulled from run 30802717073 (2026-08-03) were greedy-LPT bin-packed into
