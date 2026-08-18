@@ -25,6 +25,7 @@
     "verify:security-target": "node scripts/verify-security-target.mjs",
     "verify:vuln-slice-hidden": "node scripts/verify-vuln-slice-hidden.mjs",
     "verify:security-acceptance": "node scripts/verify-security-acceptance.mjs",
+    "verify:security-acceptance:gate": "node scripts/verify-security-acceptance.mjs --gate",
     "verify:input-acceptance": "node scripts/verify-input-acceptance.mjs",
     "verify:sarif-acceptance": "node scripts/verify-sarif-acceptance.mjs",
     "verify:artifact-contract": "node scripts/verify-artifact-contract.mjs",

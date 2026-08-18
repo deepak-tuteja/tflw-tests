@@ -779,7 +779,11 @@ the spider reaches that origin. That would have cost the precision gate its powe
 not accounted for goes red. And `verify-security-acceptance.mjs` itself was **red before any of this
 work started** — `session console` is top-level while `api adminConsole` was declared on `plaintext`
 only, so every other env failed at `TF026` before a single assertion ran. Nobody saw it because that
-script runs in no automated gate, which is `M137e-01` in one sentence.
+script ran in no automated gate, which was `M137e-01` in one sentence. `M139-5` closed that row: the
+script's asserting half — the ledger rows, the crawl/spider/declines graders, `D445`'s precision bar
+and its staleness check — is now the `security-acceptance-gate` phase of `scripts/regression.mjs`, and
+therefore of CI. The coverage tables below stay a report run by hand, deliberately; the split and its
+reasoning are D493.
 
 ## The Tier 4 crawl measurement (`M137e`, tflw D437/D438/D465/D480/D482)
 

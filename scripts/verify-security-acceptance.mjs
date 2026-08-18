@@ -8,6 +8,11 @@
 // each response produced against the ledger below — precision (nothing fired that should not have)
 // and recall (everything that should have, did), per rule, not per severity band.
 //
+// Two entry points since `M139-5`: `npm run verify:security-acceptance` is the full report, and
+// `npm run verify:security-acceptance:gate` (`--gate`) is the asserting half of it, which CI runs as
+// the `security-acceptance-gate` regression phase. The note on `GATE` below says what the split is
+// and what deliberately stays out of the gate.
+//
 // ## Why a script and not just assertions
 //
 // The DSL can assert "this response has at least one critical violation" and "this response has
@@ -37,6 +42,30 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const corpus = join(repoRoot, 'tflw-acceptance', 'security');
+
+/** **The two halves, and the flag that runs only one of them** (`M139-5`, testFlow
+ * `PLAN_M139_LEDGER_ACCEPTANCE.md` D493).
+ *
+ * `--gate` stops this script after the half that *asserts* and skips the half that *reports*. A bare
+ * `npm run verify:security-acceptance` is unchanged: it still runs everything and still prints the
+ * coverage tables, which is the form a human runs by hand.
+ *
+ * There are two halves because they fail differently. The graded half has a verdict — a ledger row
+ * that stopped matching, a baseline entry no run produces, a finding outside (baseline u plants) — and
+ * every one of those is a regression with a name. Until this milestone none of it was asserted by any
+ * automated pass (`M137e-01`). The reporting half has no verdict: its output is a coverage table whose
+ * gaps are recorded and accepted (D295's four, D495's one), so gating it would add either a red that
+ * no fix closes or a green nobody reads.
+ *
+ * What `--gate` skips, and why none of it is a hole:
+ *   - `APPLICABILITY_PROBES` — D285's third state, which exists to feed the coverage table.
+ *   - the D295 and D319 tables, their named-gap prose, and D319's per-site cost line.
+ *   - D347's public-target gate, which needs no stack and **is already gated elsewhere**: its TF065
+ *     and TF066 refusals are asserted by `scripts/verify-check-diagnostics.mjs` (:431), itself a
+ *     `regression.mjs` phase. What this block adds over that is the third invocation — the control
+ *     that stops the first two being vacuous — and that is evidence a human reads, not a signal.
+ */
+const GATE = process.argv.includes('--gate');
 
 /** The pack, mirrored from `securityRules.ts`. Duplicated on purpose: if tflw reorders or re-grades
  * a rule, this file disagreeing is the signal. A grader that imported the thing it grades would
@@ -1298,6 +1327,21 @@ for (const env of ['secureLocal', 'plaintext', 'offeringTls']) {
   } else {
     console.log(`✓ every one of the ${BASELINE.accepted.length} baseline entries was produced by a run — no stale acceptances`);
   }
+}
+
+// --- the gate stops here (M139-5, D493) --------------------------------------
+//
+// Everything above this line asserts; everything below it reports. Under `--gate` this is the end of
+// the run, and this exit status is the whole of what `regression.mjs`'s `security-acceptance-gate`
+// phase means.
+if (GATE) {
+  console.log(
+    failures === 0
+      ? '\n\u2713 security acceptance (gated half): every graded case matched the ledger, and nothing fired outside (baseline \u222a plants)'
+      : `\n\u2717 security acceptance (gated half): ${failures} mismatch(es)`,
+  );
+  console.log('  (the coverage tables are the other half \u2014 run without `--gate` to print them.)');
+  process.exit(failures === 0 ? 0 : 1);
 }
 
 // --- the third state, from D285's listing ------------------------------------

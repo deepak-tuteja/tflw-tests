@@ -167,11 +167,17 @@ const PHASES = [
   },
   // M135c (testFlow PLAN_M135_SARIF.md, D415): the SARIF document, graded against `VULNS.md`.
   //
-  // The only acceptance script in this repo that runs in CI, and the reason is the one asymmetry
-  // that makes SARIF different from every other artifact here: a wrong document **uploads
-  // successfully and produces no alerts**, with nothing anywhere to read. `verify:security-
-  // acceptance` and `verify:input-acceptance` publish coverage numbers a human reads; this one
-  // guards a file a machine consumes silently, so nobody would ever notice it going wrong.
+  // The **first** acceptance script in this repo to run in CI, and what earned it that place is the
+  // one asymmetry that makes SARIF different from every other artifact here: a wrong document
+  // **uploads successfully and produces no alerts**, with nothing anywhere to read.
+  // `verify:input-acceptance` publishes coverage numbers a human reads; this one guards a file a
+  // machine consumes silently, so nobody would ever notice it going wrong.
+  //
+  // It is no longer the *only* one. What stood here until M139-5 — "the only acceptance script in this
+  // repo that runs in CI" — was true when written, and `M137e-01` is the row that said the sentence
+  // had to be corrected by whatever change made it false: D493 splits `verify:security-acceptance` and
+  // gates its asserting half as `security-acceptance-gate` below. SARIF's silent-when-wrong asymmetry
+  // was always a reason to gate SARIF and never a reason to leave precision ungated.
   //
   // `VULN_MODE=1` for the same reason `security-target-check` needs it — it grades the planted
   // routes — and it is placed immediately after that phase because the two share the stack shape.
@@ -181,6 +187,25 @@ const PHASES = [
   {
     name: 'sarif-acceptance',
     cmd: 'node scripts/verify-sarif-acceptance.mjs',
+    stackEnv: { VULN_MODE: '1' },
+  },
+  // M139-5 (testFlow PLAN_M139_LEDGER_ACCEPTANCE.md, D493): `verify:security-acceptance`'s asserting
+  // half, and only that half. `--gate` runs the three envs' corpus runs, the per-row ledger grading,
+  // the declines/functional/crawl/spider graders, D445's precision bar and its staleness check, and
+  // then exits. The coverage tables stay a report run by hand, because their gaps are recorded and
+  // accepted (D295's four, D495's one) and a phase whose red no fix closes only teaches people to
+  // ignore a red.
+  //
+  // This is what closes `M137e-01`: the one thing asserting that this repo's security scan is
+  // *precise* — that nothing fires outside (baseline u plants) — ran in no automated pass at all,
+  // neither here nor in CI. `M137g` raised the stakes by making that same ungated script the sole
+  // grader of `V18` and of both `probe ciphers` notes.
+  //
+  // `VULN_MODE=1` for the same reason its two neighbours above need it: the corpus grades the planted
+  // routes, so the fixture slice has to be there.
+  {
+    name: 'security-acceptance-gate',
+    cmd: 'node scripts/verify-security-acceptance.mjs --gate',
     stackEnv: { VULN_MODE: '1' },
   },
 ];
@@ -207,8 +232,14 @@ const PHASES = [
 // tied for smallest by count. It is the third phase now placed by hand rather than by measurement,
 // which is enough of them that the re-pack above should stop being deferred; it is not done here
 // because the timings it needs come from CI and this milestone has no reason to have pulled them.
+//
+// M139-5 adds `security-acceptance-gate` to `core`, the fourth such placement and on the same terms
+// with one measurement behind it: its graded work is ~2s on the box, so what it actually costs a leg
+// is the stack restart every phase pays regardless. That makes bin *count* the only proxy worth
+// using here, and `core` — 8 phases, the unique smallest — the placement. Four hand-placed phases is
+// past the point where the re-pack above should still be deferred.
 const PHASE_GROUPS = {
-  core: ['full suite', '--tag orderOps', '--tag smoke,catalogOps', 'demo-fail-check', '--tag orgOps', '--tag inventoryOps', 'migrate-check', 'secure-local-check'],
+  core: ['full suite', '--tag orderOps', '--tag smoke,catalogOps', 'demo-fail-check', '--tag orgOps', '--tag inventoryOps', 'migrate-check', 'secure-local-check', 'security-acceptance-gate'],
   tooling: ['--tag api', 'watch-check', 'pick-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check', 'security-target-check', 'sarif-acceptance'],
   safety: ['--tag identityOps', '--tag mixed', '--tag smoke,orderOps', '--tag adminOps', '--tag catalogOps', 'safety-flags-check', 'check-diagnostics', 'artifact-contract', 'safety-redaction-check'],
   'security-ui': ['--tag smoke,identityOps', 'cli-flags-check', '--tag smoke,adminOps', '--tag ui', 'webv2-admin-check', '--tag smoke,inventoryOps', 'logging-check', 'mtls-rejection', 'vuln-slice-hidden-check'],
