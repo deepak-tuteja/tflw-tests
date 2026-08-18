@@ -69,6 +69,8 @@ differently on the two, and that difference is itself part of the ledger.
 | `V13` | `POST /v1/vuln/notes` — `body.title` | **positive** | `sec/oversized-input-accepted` (under `probe mutating` + `probe oversized`) | minor |
 | `V14` | `GET /v1/vuln/lookup-escaped?q=` | **negative** | `sec/reflected-input-unescaped` | — |
 | `V15` | `GET /v1/vuln/reports/orders` — **the only documented fixture route** | **positive** | `sec/authz-collection-leak` (reachable by a crawl's `openapi` seed alone) | critical |
+| `V16` | **`webV2/admin` on `:8091` — every page it serves** | **positive** | `sec/csp-missing` (serious), `sec/x-frame-options` (moderate), `sec/nosniff-missing` (moderate) — reachable by a crawl's `spider` seed alone | serious |
+| `V17` | `GET /hardened` on `:8091` | **negative** | the same three rules, all silent | — |
 
 `V1`–`V5` are Tier 1's, and they are claims a response makes about *itself* — headers and cookie
 flags. `V6`–`V9` are Tier 2's, and they are claims about *who is allowed to see what*, which is a
@@ -685,6 +687,53 @@ Two things about that output are load-bearing rather than incidental:
 - **The assertion names two owners** (`as shopper, shopperBearer`, tflw D327). They are the same human.
   Name only `shopper` and alice's other credential stays in the probe set, fetches alice's own profile,
   and earns a critical object-leak finding that is the fixture's fault rather than the app's.
+
+## The Tier 4 spider measurement (`M137f`, tflw D442/D483)
+
+**`V16` is the first time any Tier 1 document rule has judged a document a real application served.**
+apiV2 serves no HTML at all — `apiV2/src/vuln/vuln.controller.ts` says so in its own comment, *"Both
+rules' precondition is 'the response is a document', which no real apiV2 route satisfies"*, and
+fabricates a `text/html` response so `V4`/`V5` have a subject. Four milestones of grading
+`sec/csp-missing` and `sec/x-frame-options` therefore graded them against a fixture built to satisfy
+them. The admin console is a genuine server-rendered Express/EJS app and it sets no security headers
+anywhere, so the rules fire on pages written for people rather than for a test.
+
+| | value |
+|---|---|
+| target | `webV2/admin` on `:8091` (SSR, EJS, `express-session` cookie auth, its own CSRF middleware) |
+| corpus | `tflw-acceptance/security/spider.tflw`, `--env plaintext` |
+| reached | `GET /` → `302 /login`, `GET /login`, `GET /hardened` |
+| rules fired on `V16` | `sec/csp-missing` · `sec/x-frame-options` · `sec/nosniff-missing` |
+| rules fired on `V17` | none — the pair's whole point |
+| withheld | `POST /login` — a synthesized write with no `probe mutating` on this origin (`D465`) |
+| blind spot | `http://localhost:8090/` — *needs rendering to crawl* (`D442`) |
+
+**`V17` is what makes `V16` a measurement.** A rule that fired on every page would be
+indistinguishable from a rule that fires unconditionally, so exactly one route sets all three headers
+and is expected to produce nothing. It is `exclude`d from the crawl and graded by an ordinary `test`,
+because a crawl applies one assertion to every response it reaches and this response has to be the
+exception. That is `V4`/`V5`'s pairing (`/vuln/document` against `/vuln/document-hardened`) moved onto
+a real app rather than a fixture controller.
+
+**Two things the first live run corrected, both recorded because reasoning had produced the opposite
+answer.** The pair was first built with only CSP and `X-Frame-Options` set on the hardened page, which
+left it tripping `sec/nosniff-missing` — a negative that fails measures nothing. And the assertion was
+first written at a `critical` floor, copying every other file here; at that floor the only three
+critical rules are cookie- and CORS-shaped, none applies to a plain HTML page, and D285 failed the
+assertion for having no power to fail. `moderate` is the floor at which both named rules are graded.
+
+**The `:8090` blind spot is graded as a gap, on purpose.** The storefront is a Vite SPA whose document
+is `<div id="root"></div>` and one script, with no anchors at all. A fetching spider finds the shell,
+finds nothing to follow, and declares the origin *needs rendering to crawl*. `D442` chose parsing over
+rendering for safety reasons — every existing gate lives on the request path — and the honest price is
+a class of site this tool cannot walk. An unmentioned gap is what this arc keeps filing rows about, so
+it is a graded decline rather than a silent zero.
+
+**What this measurement does NOT yet cover, and it is most of the target.** The crawl is declared
+`as console` and nevertheless walks anonymously — tflw `M137f-01`. The console's dashboard, its four
+resource sections and the forms on most of them all sit behind `requireAuth`, and none of it is
+reached. `V16` is graded on the logged-out surface: the login page and the hardened fixture. The row
+is open and the corpus is titled for what actually happens.
 
 ## The Tier 4 crawl measurement (`M137e`, tflw D437/D438/D465/D480/D482)
 
