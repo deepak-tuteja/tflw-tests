@@ -1,0 +1,157 @@
+# `seed spider` — the browser half of Tier 4 (testFlow `M137f`, tflw `D442`/`D483`).
+#
+# **What this file measures that no other file in this repo can: a security rule firing against a
+# document a real application actually served.** apiV2 serves no HTML at all — that is why
+# `apiV2/src/vuln/vuln.controller.ts` has to *fabricate* a `text/html` response for `V4`/`V5`, and its
+# own comment says so: *"Both rules' precondition is 'the response is a document', which no real apiV2
+# route satisfies."* So `sec/csp-missing` and `sec/x-frame-options` have been graded for four
+# milestones against a response written to satisfy them. The admin console on 8091 is a genuine
+# server-rendered app — EJS, full-page navigations, real forms, `express-session` cookie auth — and it
+# sets no security headers anywhere. `V16` is that, and it is the first time either rule has had a real
+# subject.
+#
+# **`V17` is why `V16` means anything.** A rule that fired on every page would be indistinguishable
+# from a rule that fires unconditionally, so exactly one route on the console — `GET /hardened` — sets
+# all three headers, and the walk is expected to reach it and produce nothing. That is `V4`/`V5`'s
+# pairing (`/vuln/document` against `/vuln/document-hardened`) moved onto a real app. Both halves sit
+# above `requireAuth`, and the negative is linked from **both** the login page and the dashboard,
+# because an unreachable negative measures nothing and the two walks enter from different places —
+# the anonymous one from `/login`, the authenticated one from `/`. It was linked from the login page
+# alone until the `M137f-01` fix made the walk authenticated, at which point the `exclude` below
+# quietly stopped matching anything: the surface line said `17 discovered` with no `/hardened` among
+# them, and nothing was red. An `exclude` that excludes nothing is a coverage claim nobody checks,
+# which is why the second link exists rather than the `exclude` being deleted.
+#
+# **Run under `--env plaintext`**, which is where the two webV2 `authorized target` declarations live.
+# Neither grants `probe mutating`, and that is the second thing this file demonstrates: a spider
+# enumerates every form it finds, and on this console that includes `POST /login` and `POST /logout`.
+# All of them are discovered, disclosed and **not sent**. `D465`'s "affirming a scan is not affirming
+# writes" has been a number on an API surface since `M137e`; here it is a number on a browser one.
+#
+# It would also be wrong to send them. The console's own CSRF middleware rejects any form post whose
+# `_csrf` does not match the session's, so a synthesized write would come back `403` and read as a
+# hardened endpoint — `M130-01`'s shape, on a browser surface. Withholding the opt-in means the corpus
+# never has to distinguish those two, rather than distinguishing them wrongly.
+#
+# **The negated-positive form, and `V17` is `exclude`d from the crawl rather than asserted inside it.**
+# This corpus's own `crawl.tflw` says the soft `check` form *"leaves the run green, so the grader judges
+# the report"*, and **that claim is false** — SPEC §6.4 is explicit that `check` records a failure and
+# continues but *"any failed check fails the test at the end"*. `crawl.tflw` gets away with it only
+# because its assertion passes; the distinction has never been exercised by a failing check. Written
+# here first and copied from there, it made this file red on its first run for a reason that had
+# nothing to do with the spider.
+#
+# So this file does what the rest of the corpus does: asserts the violation is **present**, which for a
+# crawl means every reached response must carry one. That is true of every page the console serves and
+# untrue of exactly one — `V17` — so the hardened page is `exclude`d from the probe set and graded by
+# an ordinary test below. A crawl and a per-response negative are different instruments, and trying to
+# make one do both is what forced the wrong assertion in the first place.
+
+@spider @vuln
+crawl "the admin console, walked as an admin" as console
+  # **This crawl found tflw `M137f-01`, and the numbers on either side of the fix are the measurement.**
+  # Its first live run walked *anonymously* despite `as console`: `GET /` came back `302 → /login`, and
+  # the surface was `3 discovered · 1 sent · 1 reached · 2 walked` — the logged-out shell, reported as
+  # though it were the console. Nothing was red. The cause was not the crawl at all but the transport:
+  # a redirect chain reported every hop's `Set-Cookie` and sent none of them onward, so `POST /login`'s
+  # `302` handed over an authenticated cookie that the very next hop did not carry, and the console's
+  # session middleware — which touches `req.session` on every request — then set a *newer* anonymous
+  # cookie that won last-wins in the jar. The session established, reported `200`, and was not logged
+  # in. See `cookie-events.test.ts` in tflw for the five tests that now hold it.
+  #
+  # Fixed, this same crawl reaches `18 discovered · 9 withheld · 9 sent · 9 reached · 26 walked`: the
+  # dashboard, the four resource sections, the org membership pages, and nine synthesized writes.
+  # That is the surface `D442` chose this target for.
+  # Absolute, because the console is not this env's `api` base — the same reason `crawl.tflw` names an
+  # absolute `seed openapi` source. `allow hosts "localhost"` covers it and the `authorized target` in
+  # `tflw.config` is what permits scanning it at all.
+  #
+  # **Both bounds are declared rather than defaulted, and the depth is argued from a measurement.**
+  # `D483` left the defaults to be settled by a real target rather than guessed in a plan, and this is
+  # that target. Walked at depth 3 the console yields **42 pages and not one additional operation** —
+  # the extra level is list pages linking to per-item pages that normalize onto templates depth 2
+  # already found. So `discovered` saturates at 2 while `walked` keeps climbing, and paying for pages
+  # that discover nothing is the wrong trade for an acceptance corpus that runs on every sweep.
+  #
+  # **This walk is therefore genuinely truncated, and says so.** `max depth 2` leaves pages queued, the
+  # surface line carries `TRUNCATED at its cap`, and that is `D435`'s property working rather than a
+  # defect to be tuned away. The page cap is deliberately generous — 60 against a walk that fetches 26
+  # — so that **depth** is the binding bound. That matters for stability, not tidiness: a page cap
+  # binding mid-level would truncate at whatever the frontier order happened to be that run, and this
+  # file's numbers are read by a grader.
+  seed spider "http://localhost:8091/"
+    max pages 60
+    max depth 2
+
+  # `V17` is walked but not probed. The walk has to reach it — via the dashboard's link, since the
+  # authenticated walk never sees the login page — but a crawl body asserting that *every* response
+  # carries a violation cannot also grade the one response that must not. Reported as a withheld
+  # decline naming this line, never silently dropped, which is what makes the exclusion checkable.
+  exclude "/hardened"
+
+  # **`moderate`, and the floor is measured rather than chosen for emphasis.** `sec/csp-missing` is
+  # `serious` and `sec/x-frame-options` is `moderate`, so a `critical` floor — which is what every
+  # other assertion in this corpus uses — leaves the only three critical rules (`cookie-not-httponly`,
+  # `cookie-not-secure`, `cors-wildcard-with-credentials`) inapplicable to a plain HTML page, and D285
+  # fails the assertion for having no power to fail. That is not a hypothetical: it is what the first
+  # live run of this file did, and the diagnostic named the repair. `moderate` is the floor at which
+  # *both* document rules are graded rather than only the first.
+  #
+  # Every page this console serves lacks both headers, so both rules apply to every reached response
+  # and D285 has an applicable rule everywhere — which is exactly the condition `crawl.tflw` could not
+  # meet on an API surface, and the reason that file makes no security assertion at all. The difference
+  # between the two files is the whole argument for a browser seed.
+  check response not has no moderate security violations
+
+@spider @vuln
+crawl "the storefront shell, which a fetching spider cannot read" as console
+  # **A control for the tool, not for the app.** The storefront on 8090 is a Vite SPA: its document is
+  # `<div id="root"></div>` and one module script, with not a single anchor in it. A fetching spider
+  # finds the shell, finds nothing to follow, and says so — `scanBlindSpot.declines` gets the origin
+  # with *needs rendering to crawl*.
+  #
+  # That entry is the point of this crawl. `D442` chose parsing over rendering for reasons that are
+  # about safety rather than capability, and the honest price of that choice is a class of site this
+  # tool cannot walk. An unmentioned gap is what this arc keeps filing rows about, so the gap is
+  # graded: `verify-security-acceptance.mjs` asserts the decline is present, which means the day
+  # somebody teaches the spider to render, this assertion fails and has to be revisited on purpose.
+  #
+  # The origin is authorized for exactly this reason — an unauthorized one would be refused by `TF060`
+  # before it could demonstrate anything, and a blind spot has to be reached to be reported.
+  seed spider "http://localhost:8090/"
+    max pages 5
+    max depth 2
+
+  # The shell is still a document and still sets no CSP, so this assertion has an applicable rule on
+  # the one response the walk gets — at the same `moderate` floor and for the same measured reason as
+  # above. It is here to satisfy D285 honestly rather than to prove anything new: what this crawl is
+  # graded on is the decline, not the finding.
+  check response not has no moderate security violations
+
+@spider @vuln
+test "V17 — the one console page that sets the document headers produces no finding"
+  # **The negative that makes `V16` a measurement rather than an observation.** Every other page this
+  # console serves lacks all three headers, so a rule firing everywhere would be indistinguishable from
+  # a rule that fires unconditionally. This route sets `Content-Security-Policy`, `X-Frame-Options` and
+  # `X-Content-Type-Options`, and the assertion is that all three rules go quiet on it.
+  #
+  # An ordinary `test` rather than a second crawl, deliberately: a crawl judges every response it
+  # reaches against one assertion, and *this response must be the exception*. `negatives.tflw` grades
+  # `V5` the same way against `/vuln/document-hardened`, and this is that pattern on a real app.
+  #
+  # `nosniff` is in the list because the first live run found the pair half-built without it: a
+  # hardened page that still tripped `sec/nosniff-missing` is a negative that fails, which measures
+  # nothing at all.
+  #
+  # **No `as` clause, and that is measured rather than tidy.** Run `as console` this test failed on
+  # four findings, and only one of them was about this page: three came from the *session
+  # establishment response* — the console's own login page, which of course sets no headers — and the
+  # fourth was `sec/authenticated-response-cacheable`, which is applicable only because the request
+  # carried a credential. `/hardened` sits above `requireAuth`, so an unauthenticated fetch is the
+  # honest subject. Note this is now the one place the pair is graded by a *different* instrument than
+  # the one that reaches it: since `M137f-01`, the walk arrives here authenticated and this test does
+  # not. Same rules, same route, two credentials — and the rules are silent under both, which is a
+  # slightly stronger negative than the original design asked for.
+  api adminConsole GET /hardened
+  expect status equals 200
+  expect response has no moderate security violations

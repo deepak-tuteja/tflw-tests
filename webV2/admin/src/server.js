@@ -36,6 +36,36 @@ app.use((req, res, next) => {
   next();
 });
 
+// --- V17: the hardened counterpart, and the only page in this console that sets either header ---
+//
+// `M137f`/tflw `D442` gave Tier 1's document rules their first real subject: apiV2 serves no HTML at
+// all, so `sec/csp-missing` and `sec/x-frame-options` had never once fired against a document a real
+// app served — `apiV2/src/vuln/vuln.controller.ts` has to *fabricate* a `text/html` response for
+// `V4`/`V5`. This console serves genuine documents, and it sets no security headers anywhere, which
+// makes every page a live positive (`V16`).
+//
+// A positive with no matched negative measures nothing, though: a rule that fired everywhere would be
+// indistinguishable from a rule that fires unconditionally. So exactly one route sets both headers,
+// and the spider is expected to reach it and produce no finding there. That is `V4`/`V5`'s pairing
+// (`/vuln/document` against `/vuln/document-hardened`), applied to a real app instead of a fixture.
+//
+// Deliberately **above** `requireAuth` and linked from the login page: the walk that grades this pair
+// is unauthenticated, so both halves have to be reachable without a session or the negative is
+// unmeasurable. See ../../../VULNS.md `V16`/`V17`.
+app.get('/hardened', (req, res) => {
+  // All three of the document rules that fire at a `moderate` floor, not just the two the pair is
+  // named for. A "hardened" page that still tripped `sec/nosniff-missing` would be a negative that
+  // fails, which measures nothing — the first live run of `spider.tflw` did exactly that and is why
+  // this line exists.
+  res.setHeader('Content-Security-Policy', "default-src 'self'; frame-ancestors 'none'");
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.render('error', {
+    title: 'Hardened page',
+    message: 'A fixture page that sets Content-Security-Policy and X-Frame-Options. Its whole job is to produce no finding, so the rules that fire on every other page here are shown to be firing on evidence rather than unconditionally.',
+  });
+});
+
 app.use('/', authRouter);
 app.use('/', requireAuth, dashboardRouter);
 app.use('/categories', requireAuth, categoriesRouter);

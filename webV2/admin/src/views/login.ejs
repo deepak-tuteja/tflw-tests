@@ -9,4 +9,10 @@
   <input id="password" name="password" type="password" required />
   <p><button type="submit">Log in</button></p>
 </form>
+<p class="fixture-note">
+  <!-- V17's negative has to be reachable from the walk that grades it, and that walk is
+       unauthenticated — so the link lives here, on the one page a spider sees without a session.
+       See VULNS.md V16/V17. -->
+  <a href="/hardened">Hardened fixture page</a>
+</p>
 <%- include('partials/foot') %>
