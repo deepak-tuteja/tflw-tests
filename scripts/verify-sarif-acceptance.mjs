@@ -42,6 +42,7 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertClaims, plantsFor, plantsWithSubject } from './lib/plants.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const corpus = join(repoRoot, 'tflw-acceptance', 'security');
@@ -62,9 +63,17 @@ const SEVERITY = {
 };
 
 /**
- * The plants, mirrored from `VULNS.md` by hand.
+ * The plants, **imported** from `scripts/lib/plants.mjs` since `M139-1` (testFlow
+ * `PLAN_M139_LEDGER_ACCEPTANCE.md` D488). This table used to live here, and it was the mechanism the
+ * whole ledger needed — per-plant, id-keyed — stopping at `V14` only because D415 scoped it to
+ * `V1`–`V14` and the four plants added afterwards have subjects its schema could not express.
  *
- * **`kind` is the whole point of the table.** D415 says "every planted `V1`–`V14` present", and
+ * **Imported, not mirrored, and the distinction is not the one this file makes about D406's table
+ * above.** That table is tflw's; a grader that read it would agree with it by construction. This
+ * ledger is the corpus's own specification, authored in this repo by the same hand as the graders.
+ * Grader-vs-gradee is the axis, not duplication-vs-sharing.
+ *
+ * **`kind` is still the whole point of the table.** D415 says "every planted `V1`–`V14` present", and
  * three of the fourteen are *negatives* — the hardened twins whose entire job is to produce no
  * finding — while `V8` is planted, probed, and deliberately never judged (`M130-05`). Asserting all
  * fourteen "present" would demand exactly the alerts this corpus is built to prove do not appear.
@@ -74,28 +83,15 @@ const SEVERITY = {
  * `endpoint` is the templated form tflw computes for the fingerprint and reports as
  * `properties["tflw/endpoint"]`, so it is matched exactly. A wrong string here fails as "not found"
  * rather than passing quietly, which is why the ids are not matched loosely.
+ *
+ * **The selection is structural and then cross-checked.** This grader's four runs can see exactly the
+ * rows whose subject is an `endpoint`; a page, a listener and a reachability restriction produce no
+ * result in any of them. So it selects by subject and asserts that set equals the set of rows claiming
+ * it (`assertClaims`, D488) — filtering by the claim alone would agree with the claim by construction,
+ * and a nineteenth endpoint plant that forgot to name this grader would be silently ungraded, which is
+ * the exact failure the manifest exists to make impossible.
  */
-const PLANTS = [
-  { id: 'V1', kind: 'positive', endpoint: 'GET /v1/vuln/cors-wildcard', rules: { 'sec/cors-wildcard-with-credentials': 'critical' } },
-  { id: 'V2', kind: 'negative', endpoint: 'GET /v1/vuln/cors-scoped' },
-  { id: 'V3', kind: 'positive', endpoint: 'POST /v1/vuln/weak-cookie', rules: { 'sec/cookie-not-httponly': 'critical', 'sec/cookie-not-secure': 'critical', 'sec/cookie-samesite-none': 'moderate' } },
-  { id: 'V4', kind: 'positive', endpoint: 'GET /v1/vuln/document', rules: { 'sec/csp-missing': 'serious', 'sec/x-frame-options': 'moderate' } },
-  { id: 'V5', kind: 'negative', endpoint: 'GET /v1/vuln/document-hardened' },
-  { id: 'V6', kind: 'positive', endpoint: 'GET /v1/vuln/orders/{id}', rules: { 'sec/authz-object-leak': 'critical' } },
-  { id: 'V7', kind: 'positive', endpoint: 'GET /v1/vuln/orders', rules: { 'sec/authz-collection-leak': 'critical' } },
-  // Probed under `probe mutating`, and no principal can judge it: the owner's own DELETE destroys
-  // the row before any probe replays it. `M130-05` records the measurement; the row below (`V9`) is
-  // the same request on an idempotent verb, and it *does* produce a finding. Absent here is the
-  // corpus being right, so it is asserted absent rather than skipped — an unexplained absence and a
-  // measured one look identical in a list of things nobody checked.
-  { id: 'V8', kind: 'negative', endpoint: 'DELETE /v1/vuln/orders/{id}' },
-  { id: 'V9', kind: 'positive', endpoint: 'PUT /v1/vuln/orders/{id}', rules: { 'sec/authz-object-leak': 'critical' } },
-  { id: 'V10', kind: 'positive', endpoint: 'GET /v1/vuln/lookup', rules: { 'sec/reflected-input-unescaped': 'moderate' } },
-  { id: 'V11', kind: 'positive', endpoint: 'GET /v1/vuln/items/{id}', rules: { 'sec/path-traversal-read': 'critical' } },
-  { id: 'V12', kind: 'positive', endpoint: 'POST /v1/vuln/notes', rules: { 'sec/error-detail-disclosure': 'serious', 'sec/oversized-input-accepted': 'minor' } },
-  { id: 'V13', kind: 'positive', endpoint: 'POST /v1/vuln/notes', rules: { 'sec/oversized-input-accepted': 'minor' } },
-  { id: 'V14', kind: 'negative', endpoint: 'GET /v1/vuln/lookup-escaped' },
-];
+const PLANTS = plantsWithSubject('endpoint');
 
 /**
  * The runs whose documents are graded, together.
@@ -218,6 +214,11 @@ const allResults = documents.flatMap(({ name, doc }) => resultsOf(doc).map((res)
 // ---------------------------------------------------------------------------
 
 console.log('\nD415 — the planted weaknesses, in the document:\n');
+
+// D488 — the manifest's claim about who grades these rows, checked against what this grader selected.
+if (assertClaims('sarif', PLANTS, fail)) {
+  pass(`the manifest's \`sarif\` claims match this grader's ${PLANTS.length} selected row(s): ${PLANTS.map((pl) => pl.id).join(', ')}`);
+}
 
 for (const plant of PLANTS.filter((p) => p.kind === 'positive')) {
   for (const [rule, severity] of Object.entries(plant.rules)) {

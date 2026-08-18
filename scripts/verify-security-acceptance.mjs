@@ -39,6 +39,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PLANTS, isPlantFinding, plantsFor } from './lib/plants.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const corpus = join(repoRoot, 'tflw-acceptance', 'security');
@@ -601,10 +602,16 @@ const SPIDER_CRAWLS = {
   spa: 'the storefront shell, which a fetching spider cannot read',
 };
 
-/** The three rules whose precondition is "the response is a document". Before `M137f` every one of
- *  them was graded against `vuln.controller.ts`'s fabricated `text/html` response, whose own comment
- *  says no real apiV2 route satisfies it. */
-const V16_RULES = ['sec/csp-missing', 'sec/x-frame-options', 'sec/nosniff-missing'];
+/** `V16`'s row, and the two rule lists it supplies. Read from the manifest rather than written twice
+ *  (`M139-2`): the plant's rule set and the grader's expectation of it were the same fact in two
+ *  places, and the drift between them would have been invisible — a rule dropped from one list is a
+ *  rule this file stops requiring while still claiming to account for the whole surface. */
+const V16 = PLANTS.find((p) => p.id === 'V16');
+
+/** The rules whose precondition is "the response is a document" — the three the plant was built for.
+ *  Before `M137f` every one of them was graded against `vuln.controller.ts`'s fabricated `text/html`
+ *  response, whose own comment says no real apiV2 route satisfies it. */
+const V16_RULES = Object.keys(V16.rules).filter((r) => !V16.arrivedWith.includes(r));
 
 /** Every rule the spider is accounted for reporting. `V16_RULES` are the three document rules the
  *  plant was built for; the fourth arrived **because of the `M137f-01` fix** and is the cleanest
@@ -613,9 +620,10 @@ const V16_RULES = ['sec/csp-missing', 'sec/x-frame-options', 'sec/nosniff-missin
  *  now fires on nine of the console's authenticated pages.
  *
  *  Asserted as an exact set because `gradePrecision` exempts the whole spider surface as `V16`'s
- *  plant (see `isSpiderPlant`). This is where that exemption gets its power back: a rule appearing
+ *  plant (its declared surface in `scripts/lib/plants.mjs` is `via: 'spider'`, and it is exempted
+ *  whole). This is where that exemption gets its power back: a rule appearing
  *  here that nobody wrote down is a finding this corpus has not accounted for, and it goes red. */
-const SPIDER_RULES = [...V16_RULES, 'sec/authenticated-response-cacheable'];
+const SPIDER_RULES = Object.keys(V16.rules);
 
 function gradeSpider(report) {
   const tests = report.tests ?? [];
@@ -724,10 +732,14 @@ function gradeSpider(report) {
 //
 // Drop either seed and a **named row** goes missing, which is the property D437 asked for and the one
 // an aggregate recall number cannot express.
-const CRAWL_PLANTS = [
-  { endpoint: 'GET /v1/vuln/reports/orders', via: 'openapi', rule: 'sec/authz-collection-leak', findings: 3, why: 'V15 — documented and never exercised, so only enumeration can reach it' },
-  { endpoint: 'GET /v1/vuln/orders', via: 'traffic', rule: 'sec/authz-collection-leak', findings: 3, why: 'V7 — @ApiExcludeController(), so only the traffic seed can reach it' },
-];
+/** The two plants a crawl reaches, **derived from the manifest's `reach` facets** (`M139-2`) rather
+ *  than listed here. The pair is the measurement: one route is documented and never exercised, the
+ *  other is `@ApiExcludeController()` and only ever exercised — so each is reachable by exactly one
+ *  seed, and provenance is the only thing that distinguishes two findings of the same rule on
+ *  byte-identical handlers. Derived rather than duplicated because a third seed-restricted plant should
+ *  arrive here by being written in the ledger, which was the property the `/v1/vuln/` prefix used to
+ *  give and the reason nobody noticed it had been lost. */
+const CRAWL_PLANTS = PLANTS.filter((p) => p.reach).map((p) => ({ endpoint: p.endpoint, ...p.reach }));
 
 // D482 (`M137c2`). Public collections the crawl **reaches and must not report**. Every principal
 // including `anonymous` receives these, so there is no owner and no boundary — before the fix each of
@@ -974,42 +986,25 @@ function gradeCrawl(report) {
 const BASELINE = JSON.parse(readFileSync(join(corpus, 'security-baseline.json'), 'utf8'));
 /** Fingerprints the corpus actually produced, accumulated across envs — see the staleness check. */
 const baselineSeen = new Set();
-const PLANT_PREFIX = /^[A-Z]+ \/v1\/vuln\//;
-
-/** **`M137f` breaks the premise that every plant lives under `/v1/vuln/`, and this is the repair.**
+/**
+ * **The plant set, read from the manifest — one mechanism where there were three** (`M139-2`, testFlow
+ * `PLAN_M139_LEDGER_ACCEPTANCE.md` D491).
  *
- * That prefix rule was the whole reason plants needed no list — *"every planted route is served at
- * `/v1/vuln/…`, so the prefix IS the plant set"*. `V16` is a plant whose subject is not a route at
- * all: it is **an entire origin**, `webV2/admin` on `:8091`, every page of which is served without
- * security headers on purpose so that three document rules and one authenticated-cacheability rule
- * finally have a real document to judge. Its endpoints are `GET /`, `GET /orgs/{id}` and so on, which
- * no path prefix can distinguish from apiV2's own.
+ * What stood here was `PLANT_PREFIX` (`/^[A-Z]+ \/v1\/vuln\//`), `isSpiderPlant` (`f.via === 'spider'`)
+ * and `isOfferingPlant` (`label === 'offeringTls'` and a named rule), OR'd together at the top of
+ * `gradePrecision`. Each one was correct and each arrived the same way: the endpoint-keyed premise —
+ * *"every planted route is served at `/v1/vuln/…`, so the prefix IS the plant set"* — broke for a page
+ * (`V16`, an entire origin) and then for a listener (`V18`, a transport under an ordinary response),
+ * and each break got its own special case. A third special case would have been a design.
  *
- * So the discriminator for this plant is its **provenance**: only the spider seed reaches that origin
- * in this corpus, so `via: 'spider'` is exactly the plant set and nothing else. The property the old
- * prefix gave — a new plant needs no grader edit — survives unchanged.
- *
- * The precision gate does not lose power over it, which was the objection to doing this at all.
- * `gradeSpider` asserts the spider's rule set **exactly**, so a rule firing there that this corpus has
- * not accounted for goes red in that grader instead of this one. What moves is which file says so. */
-const isSpiderPlant = (f) => f.via === 'spider';
-
-/** **`M137g` — the second plant whose subject is not a route, and the third discriminator.**
- *
- * `V18` is nginx's 8445 listener. Like `V16` it is an entire origin rather than a path, so
- * `PLANT_PREFIX` cannot see it; unlike `V16` it is not reached by a crawl, so `via` cannot either.
- * Its findings arrive on ordinary endpoints — `GET /v1/health` is the plainest response the app has
- * — because the weakness is underneath the response rather than in it.
- *
- * So the discriminator is the **env**, which is the honest one here: `offeringTls` exists for no
- * other purpose, runs one file, and is the only place in this repo where a transport is deliberately
- * broken. The rule set is named rather than left open for the same reason `SPIDER_RULES` is — a rule
- * firing on this listener that nobody wrote down should go red, and `sec/tls-version-old` firing here
- * would mean the listener had silently lost TLS 1.2/1.3 and is exactly the regression this must not
- * absorb. `hsts-missing` is deliberately absent: it is not a property of the plant, it is nginx being
- * nginx on all three listeners, and the committed baseline already accounts for it by fingerprint. */
-const OFFERING_PLANT_RULES = new Set(['sec/tls-weak-cipher']);
-const isOfferingPlant = (label, f) => label === 'offeringTls' && OFFERING_PLANT_RULES.has(f.rule);
+ * So each plant declares its own surface in `scripts/lib/plants.mjs` and `isPlantFinding` reads them.
+ * **The breadth is inherited verbatim, deliberately**: the prefix still exempts any finding under
+ * `/v1/vuln/`, and the spider surface is still exempted whole. Narrowing it to the eighteen ids would
+ * start failing precision on findings this corpus is built to produce, and D491 explicitly does not.
+ * The power that breadth costs is bought back by the graders that attribute rather than exempt —
+ * `gradeSpider`'s exact rule set, `gradeCrawl`'s per-plant provenance, and per-plant recall.
+ */
+const PLANT_ROWS = plantsFor('security');
 
 function gradePrecision(label, report) {
   const findings = report.findings ?? [];
@@ -1017,7 +1012,7 @@ function gradePrecision(label, report) {
   let plants = 0;
   let accepted = 0;
   for (const f of findings) {
-    if (PLANT_PREFIX.test(f.endpoint ?? '') || isSpiderPlant(f) || isOfferingPlant(label, f)) {
+    if (isPlantFinding(label, f)) {
       plants += 1;
       continue;
     }

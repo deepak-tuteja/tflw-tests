@@ -41,6 +41,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { connect as tlsConnect } from 'node:tls';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PLANTS, assertClaims, plantsFor } from './lib/plants.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -115,6 +116,28 @@ async function send(method, route) {
   }
 }
 
+// ── the two plants whose ABSENCE this script owns, read from the manifest ─────────────────────
+//
+// `M139-2` (testFlow `PLAN_M139_LEDGER_ACCEPTANCE.md` D488). Both subjects used to be string literals
+// here — `/v1/vuln/reports/orders` and port 8445 — written a second time in a script whose whole job
+// is to assert they are missing. That is the one duplication direction that fails **quietly**: a
+// renamed route or a moved port makes the absence assertion pass on a subject that no longer exists,
+// and an absence check with the wrong subject cannot go red.
+//
+// Selected structurally — every manifest row carrying an `absence` facet — and cross-checked against
+// the rows claiming this grader, so a nineteenth plant with an absence to assert cannot be added
+// without either being graded here or being noticed.
+const ABSENT = PLANTS.filter((p) => p.absence);
+assertClaims('hidden', ABSENT, (msg) => {
+  failures += 1;
+  console.error(`\x1b[31m  ✗ ${msg}\x1b[0m`);
+});
+const V15_ABSENCE = ABSENT.find((p) => p.absence.documentedPath);
+const V18_ABSENCE = ABSENT.find((p) => p.absence.listener);
+if (!V15_ABSENCE || !V18_ABSENCE) {
+  die('the manifest no longer carries both absence facets this script asserts (a documented path and a listener) — scripts/lib/plants.mjs and this grader have drifted');
+}
+
 // ── setup: the premise ───────────────────────────────────────────────────────────────────────
 //
 // Asked of the running stack rather than of `process.env`, because the flag that matters is the one
@@ -122,10 +145,14 @@ async function send(method, route) {
 // happens to export it says nothing about that.
 section('setup — the fixture slice must be absent from this stack');
 {
-  const probe = await send('GET', '/vuln/reports/orders');
+  // `API_BASE` already carries `/v1`, which the manifest's path states in full — stripped here rather
+  // than stored twice, so the route this dials and the path asserted absent from `/openapi.json` below
+  // cannot come to disagree about which plant they are talking about.
+  const route = V15_ABSENCE.absence.documentedPath.replace(/^\/v1/, '');
+  const probe = await send('GET', route);
   if (probe.status !== 404) {
     die(
-      `GET /v1/vuln/reports/orders answered ${probe.status}, not 404 — the fixture slice is PRESENT.\n` +
+      `GET ${V15_ABSENCE.absence.documentedPath} answered ${probe.status}, not 404 — the fixture slice is PRESENT.\n` +
         '  This script asserts it is absent, so every assertion below would fail for one reason.\n' +
         '  Restart without the flag: `node cli.mjs stop && node cli.mjs start`.',
     );
@@ -181,8 +208,8 @@ section('/openapi.json — the documented surface mentions no fixture route');
   // check rather than folded into the filter above so the failure names the route the exclusion
   // argument rests on, instead of naming whichever fixture path happened to leak first.
   ok(
-    "…including V15's, the one route that IS documented under VULN_MODE=1",
-    !Object.prototype.hasOwnProperty.call(doc?.paths ?? {}, '/v1/vuln/reports/orders'),
+    `…including ${V15_ABSENCE.id}'s \`${V15_ABSENCE.absence.documentedPath}\`, the one route that IS documented under VULN_MODE=1`,
+    !Object.prototype.hasOwnProperty.call(doc?.paths ?? {}, V15_ABSENCE.absence.documentedPath),
   );
 
   // Not a path check: a leaked tag or schema would be a slice half-described, which is the same
@@ -208,7 +235,7 @@ section('/openapi.json — the documented surface mentions no fixture route');
 // A raw TLS connect rather than `fetch`, and `ECONNREFUSED` is the expected result rather than an
 // error: `send()` above turns a connection failure into `die()`, which is right for a claim about a
 // route on a listener that must be up and exactly wrong for a claim about a listener that must not.
-section('the 8445 offering listener (V18) is not running');
+section(`the ${V18_ABSENCE.absence.listener.port} offering listener (${V18_ABSENCE.id}) is not running`);
 {
   const refusal = await new Promise((resolve) => {
     let socket;
@@ -221,7 +248,7 @@ section('the 8445 offering listener (V18) is not running');
       resolve(v);
     };
     try {
-      socket = tlsConnect({ host: '127.0.0.1', port: 8445, rejectUnauthorized: false, timeout: 4000 }, () => done('connected'));
+      socket = tlsConnect({ ...V18_ABSENCE.absence.listener, rejectUnauthorized: false, timeout: 4000 }, () => done('connected'));
     } catch (err) {
       return done(err.code ?? 'threw');
     }
@@ -241,7 +268,7 @@ section('the 8445 offering listener (V18) is not running');
   // What cannot happen either way is a completed handshake, and that is the whole claim: `V18` is a
   // *listener*, so it is either speaking TLS or it is not there.
   ok(
-    'no TLS session can be established on https://localhost:8445',
+    `no TLS session can be established on https://${V18_ABSENCE.absence.listener.host}:${V18_ABSENCE.absence.listener.port}`,
     refusal !== 'connected' && refusal !== 'timeout',
     refusal === 'connected'
       ? 'the offering listener IS up on a stack started without VULN_MODE=1 — check nginx/docker-entrypoint.sh and the nginx service\'s environment block'
