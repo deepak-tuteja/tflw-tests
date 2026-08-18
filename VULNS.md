@@ -496,34 +496,56 @@ slice exists at all: the positives moved to `V3`, where a deliberate flaw belong
 ## The acceptance measurement (`M128c`, D295)
 
 `tflw-acceptance/security/` is the corpus and `scripts/verify-security-acceptance.mjs` is the grader:
-it runs the corpus against this stack under both bases and compares the **exact set of rule ids**
-each response produced against its own copy of the ledger below. Precision and recall, per rule.
+it runs the corpus against this stack under all three of its envs and compares the **exact set of rule
+ids** each response produced against the ledger. Precision and recall, per rule — and, since `M139-4`,
+per plant: every row in the table above is asked for its own evidence, at the severity the ledger
+claims for it.
+
+The ledger the grader reads is `scripts/lib/plants.mjs`, not this file. **That direction is
+deliberate** (`M139-1`, D489): the manifest is hand-authored and authoritative, and the table above is
+checked against it — ids only, since the table writes `:id` where the fingerprint tflw computes writes
+`{id}`. Parsing this prose to build the oracle would let a typo in a markdown cell silently retune what
+every grader expects.
 
 ```
 VULN_MODE=1 node cli.mjs start
-npm run verify:security-acceptance
+npm run verify:security-acceptance        # the full report, including the tables below
+npm run verify:security-acceptance:gate   # the asserting half only — what CI runs
 ```
 
-Last run — 11 of the 12 rules demonstrated live in all three states:
+**The second command is a `regression.mjs` phase** (`security-acceptance-gate`, `M139-5`); the first is
+a report run by hand. The split is D493's, and the reason is that the two fail differently: a ledger
+row that stops matching is a regression with a name, while a coverage table's gaps are recorded and
+accepted, so gating them would add a red no fix closes.
+
+Last run — 11 of the 12 rules demonstrated live in all three states, and the twelfth named:
 
 ```
   rule                                     fires  silent  n/a
-  sec/cookie-not-httponly                    ✓      ✓      ✓
-  sec/cookie-not-secure                      ✓      ✓      ✓
-  sec/cors-wildcard-with-credentials         ✓      ✓      ✓
-  sec/hsts-missing                           ✓      ✓      ✓
-  sec/csp-missing                            ✓      ✓      ✓
+  sec/cookie-not-httponly                    ✓      ~      ✓
+  sec/cookie-not-secure                      ✓      ~      ✓
+  sec/cors-wildcard-with-credentials         ✓      ~      ✓
+  sec/hsts-missing                           ✓      ~      ✓
+  sec/csp-missing                            ✓      ~      ✓
   sec/tls-version-old                        ·      ✓      ✓
   sec/tls-weak-cipher                        ✓      ✓      ✓
-  sec/x-frame-options                        ✓      ✓      ·
-  sec/cookie-samesite-none                   ✓      ✓      ·
-  sec/nosniff-missing                        ✓      ✓      —
-  sec/authenticated-response-cacheable       ✓      ✓      ·
+  sec/x-frame-options                        ✓      ~      ✓
+  sec/cookie-samesite-none                   ✓      ✓      ✓
+  sec/nosniff-missing                        ✓      ~      —
+  sec/authenticated-response-cacheable       ✓      ~      ✓
   sec/server-version-disclosure              ✓      ✓      —
 ```
 
-**The four gaps, named rather than rounded away** — the grader prints them on every run, because a
-coverage table with a silent hole in it reads as complete:
+**`silent` now prints two glyphs, and the difference is the point** (`M139-6`). `✓` is the rule census
+saying the rule *applied* in a run where it produced nothing — it ran and found nothing, which is the
+sufficient version of the claim. `~` is what this column has always meant and all it could mean: the
+rule was in play at that floor, did not fire, and the applicable count left room for it. Printing one
+glyph for both would be claiming the stronger thing on the weaker evidence, which is the failure this
+whole table exists to avoid.
+
+**One gap, named rather than rounded away** — the grader prints it on every run, because a coverage
+table with a silent hole in it reads as complete. There were four; `M137g` closed one by planting
+`V18`, and `M139-6` closed three by reading a field that had been in the report for two milestones:
 
 - `sec/tls-version-old` **fires** — not constructible on this platform at all; see below. **`M137g`
   removed the other half of what used to be one bullet here.** `sec/tls-weak-cipher` was recorded
@@ -532,17 +554,38 @@ coverage table with a silent hole in it reads as complete:
   *suite* could be and simply could not be reached by a client whose ClientHello excluded it. Reading
   them as a pair is what hid that difference for two milestones, and `V18` is what the distinction
   was worth.
-- `sec/x-frame-options`, `sec/cookie-samesite-none`, `sec/authenticated-response-cacheable`
-  **not applicable** — a *reporting* limit, not a target one. tflw names its not-applicable rules
-  only in D285's "no power to fail" message, which prints when **zero** rules applied; `nosniff` and
-  `server-version-disclosure` apply unconditionally, so any floor at `moderate` or below always has
-  at least one applicable rule and that message can never appear. These three rules do stand down in
-  the corpus — the counts prove *some* rules did — but the report cannot say which.
-- `—` marks the two rules with no not-applicable state to demonstrate: both apply unconditionally.
+- ~~`sec/x-frame-options`, `sec/cookie-samesite-none`, `sec/authenticated-response-cacheable`
+  **not applicable**~~ — **closed 2026-08-18 by `M139-6`, and the diagnosis was half right.** The
+  reason recorded here was: *"a reporting limit, not a target one. tflw names its not-applicable rules
+  only in D285's 'no power to fail' message, which prints when zero rules applied; `nosniff` and
+  `server-version-disclosure` apply unconditionally, so any floor at `moderate` or below always has at
+  least one applicable rule and that message can never appear. These three rules do stand down in the
+  corpus — the counts prove *some* rules did — **but the report cannot say which**."*
 
-`silent` is verified as far as the report allows and no further: the rule was in play at that floor,
-did not fire, and the applicable count leaves room for it. That is a necessary condition, not a
-sufficient one, and the grader's own header says so.
+  Everything up to the last clause still holds, and it is why all three rules are `moderate` and no
+  floor can isolate them. The last clause stopped being true with `M134b` / tflw `D389`, which
+  publishes `RunReport.scanCoverage` — a rule census carried on **every** scan assertion, passing or
+  failing, naming each not-applicable rule *with its unmet precondition*. The field was built two
+  milestones ago to answer exactly this question and no grader in this repo had ever read it.
+
+  Two measurements were needed rather than one, and the second is worth carrying. The census is
+  **run-level, and `applied` wins**: a rule that judged one response and stood down on another is
+  reported as applied. Measured 2026-08-18, all three of these apply *somewhere* in every one of the
+  three envs, so reading the census off the corpus runs closed **none** of the three gaps. What closes
+  them is one assertion at a `moderate` floor against `/health` — a JSON response with no cookie, no
+  credentials and no `text/html` — where all three apply nowhere and the census names them:
+
+  ```
+  sec/x-frame-options — the response is a document (Content-Type: text/html)
+  sec/cookie-samesite-none — the response sets a cookie
+  sec/authenticated-response-cacheable — the request carried session or bearer credentials
+  ```
+
+  That assertion **fails**, and that is fine: `nosniff` and `server-version-disclosure` really do fire
+  on `/health` and both are in the committed baseline. D389's whole point is that the census is
+  published either way. It lives in `APPLICABILITY_PROBES` as the one probe graded on the census rather
+  than on D285's listing.
+- `—` marks the two rules with no not-applicable state to demonstrate: both apply unconditionally.
 
 ## The Tier 2 acceptance measurement (`M130c`, D319)
 

@@ -27,13 +27,21 @@
 // | --- | --- | --- |
 // | **fires** | the rule id appears in the failure listing | yes |
 // | **silent** | the rule was in play at that floor and did not appear | yes |
-// | **not applicable** | only when D285's no-power-to-fail listing prints, which names every rule and its unmet precondition | for the cases where a floor isolates them |
+// | **not applicable** | D285's no-power-to-fail listing, **and** `RunReport.scanCoverage`, which names each rule with its unmet precondition on every assertion | yes, since `M139-6` |
 //
-// The third row is a genuine limit of the run report, not of this script: on a *passing* assertion
-// the report carries the counts (`12 rules — 5 applicable, 7 not applicable, 0 violations`) but not
-// which seven. This script therefore prints, at the end, exactly which rules' not-applicable case it
-// verified by name and which it did not — a coverage claim with a silent gap in it is the thing
-// this whole milestone is about.
+// **The third row used to be a genuine limit of the run report and no longer is, and the correction
+// matters more than the row.** It read: *"on a passing assertion the report carries the counts
+// (`12 rules — 5 applicable, 7 not applicable, 0 violations`) but not which seven."* That was true
+// when written and was falsified by `M134b`/tflw `D389`, which publishes a rule census on **every**
+// scan assertion — its own doc comment gives the reason: a rule that stands down produces nothing, so
+// the only run in which the information exists to be captured is the one where nobody is looking at a
+// failure message. The field existed for two milestones before any grader in this repo read it.
+//
+// So the table below distinguishes two strengths of evidence rather than one, and `silent` is no
+// longer uniformly a necessary-condition-only claim: `✓` is the census saying the rule applied in a
+// run where it produced nothing, `~` is the older inference from a floor and a count. This script
+// still prints, at the end, exactly which rules' cases it verified and which it did not — a coverage
+// claim with a silent gap in it is the thing this whole milestone is about.
 
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, rmSync } from 'node:fs';
@@ -320,6 +328,38 @@ const APPLICABILITY_PROBES = [
     source: 'test "serious rules over plaintext"\n  api GET /health\n  expect response has no serious security violations\n',
     // Seven, not four: a floor is a minimum, so `serious` carries the three critical rules as well.
     expectNotApplicable: ['sec/cookie-not-httponly', 'sec/cookie-not-secure', 'sec/cors-wildcard-with-credentials', 'sec/hsts-missing', 'sec/csp-missing', 'sec/tls-version-old', 'sec/tls-weak-cipher'],
+  },
+  // --- M139-6: the three rules D285's message structurally cannot name --------------------------
+  //
+  // **This probe is graded on the rule census, not on the "no power to fail" listing, and that is the
+  // whole reason it exists** (testFlow `PLAN_M139_LEDGER_ACCEPTANCE.md` D494).
+  //
+  // `sec/x-frame-options`, `sec/cookie-samesite-none` and `sec/authenticated-response-cacheable` are
+  // the three rows `VULNS.md` has carried as not-applicable gaps since `M128c`, and the reason it gave
+  // was right: D285's listing prints only when **zero** rules applied, and `nosniff` and
+  // `server-version-disclosure` apply unconditionally, so any floor at `moderate` or below always has
+  // an applicable rule and that message can never appear. All three rules are `moderate`, so no floor
+  // exists at which they are in play *and* the listing prints. That is not a target limit and never
+  // was — it is a property of the message.
+  //
+  // `M134b`/tflw `D389` published a census on **every** scan assertion, passing or failing, and it
+  // names each not-applicable rule with its unmet precondition. So the evidence exists; it is simply
+  // not in the message this file was reading. What it needs is a run in which these three apply
+  // *nowhere* — the census is run-level and `applied` wins — and no corpus run is that run: measured
+  // 2026-08-18, all three apply somewhere in every one of the three envs, which is exactly why reading
+  // the census off the corpus alone closed none of the three gaps.
+  //
+  // One assertion at a `moderate` floor against `/health` is that run: a JSON response with no cookie,
+  // no credentials and no `Content-Type: text/html`. The assertion **fails** — `nosniff` and
+  // `server-version-disclosure` really do fire there, and both are in the committed baseline — which is
+  // fine and is the point of D389: the census is published either way.
+  {
+    env: 'plaintext',
+    source: 'test "moderate rules over plaintext"\n  api GET /health\n  expect response has no moderate security violations\n',
+    // Graded by the census rather than by D285's listing. The three are named explicitly rather than
+    // "whatever stood down", because a probe that asserted the whole not-applicable set would go red
+    // every time the pack gained a rule — and this probe's job is three specific rows.
+    expectCensusNotApplicable: ['sec/x-frame-options', 'sec/cookie-samesite-none', 'sec/authenticated-response-cacheable'],
   },
   // --- Tier 2's third state, and D311's default half (M130c) --------------------------------------
   //
@@ -1040,6 +1080,62 @@ function gradePrecision(label, report) {
   console.log(`✓ [${label}] precision: ${findings.length} finding(s) — ${plants} on planted routes, ${accepted} accepted by the baseline, 0 elsewhere (D445)`);
 }
 
+/**
+ * **`RunReport.scanCoverage`, which was built two milestones ago to answer this file's own open
+ * question and had never been read** (`M139-6`, testFlow `PLAN_M139_LEDGER_ACCEPTANCE.md` D494).
+ *
+ * `VULNS.md` attributed three of the four gaps in the coverage table to a *reporting* limit: tflw
+ * names its not-applicable rules only in D285's "no power to fail" message, which prints when **zero**
+ * rules applied, so a rule that stood down beside a rule that fired could not be named. That was true
+ * when it was written and stopped being true with `M134b`/tflw `D389`, which added a census carried on
+ * **every** scan assertion, passing or failing — its own doc comment gives the reason: *"a rule that
+ * stands down produces nothing, so the only run in which the information exists to be captured is the
+ * one where nobody is looking at a failure message."*
+ *
+ * Two things come out of reading it, and they are different in kind:
+ *
+ *   - `notApplicable` names a rule **and its unmet precondition**, which is the third state
+ *     demonstrated by name rather than inferred from a count. Three gaps close here, with no engine
+ *     change and no new plant.
+ *   - `applied` turns silence from a necessary condition into a sufficient one. A rule the census says
+ *     applied, which produced no finding in that same run, *ran and found nothing* — which is the
+ *     claim `silent` has always made and could not previously back.
+ *
+ * **The census is run-level and `applied` wins** (tflw's `buildScanCoverage`): a rule that judged one
+ * response and stood down on another is `applied`, not not-applicable. So silence is computed
+ * per-run — applied here, fired nowhere here — rather than by mixing one env's `applied` with
+ * another's findings, which would claim evidence no single run produced.
+ *
+ * `input-handling` censuses are skipped rather than folded in: Tier 3's pack is
+ * `verify-input-acceptance.mjs`'s subject, and borrowing its rows would make this table say something
+ * two graders each half-checked.
+ */
+function gradeCoverage(env, report) {
+  const coverage = report.scanCoverage ?? [];
+  if (coverage.length === 0) {
+    // A gated assertion, not a report line. The field is optional in the type and present whenever a
+    // scan assertion ran, so an empty census on a corpus whose every test asserts a scan means tflw
+    // stopped publishing it — and everything below would then silently fall back to the weaker
+    // evidence this milestone exists to replace.
+    fail(`[${env}] the run report carries no \`scanCoverage\` at all, though every test in this corpus asserts a scan — D389's census has stopped being published, and the coverage table would quietly revert to inferring the third state from a count`);
+    return;
+  }
+  for (const c of coverage) {
+    const pool = c.scan === 'authorization' ? seenAuthz : c.scan === 'security' ? seen : null;
+    if (!pool) continue;
+    const firedHere = new Set((report.findings ?? []).filter((f) => f.scan === c.scan).map((f) => f.rule));
+    for (const rule of c.applied ?? []) if (!firedHere.has(rule)) pool.silentByCoverage.add(rule);
+    for (const { rule, because } of c.notApplicable ?? []) {
+      pool.notApplicable.add(rule);
+      const reasons = pool.naReasons.get(rule) ?? new Set();
+      for (const why of because ?? []) reasons.add(why);
+      pool.naReasons.set(rule, reasons);
+    }
+  }
+  const named = [...seen.notApplicable, ...seenAuthz.notApplicable].length;
+  console.log(`✓ [${env}] the run's rule census is published — ${coverage.length} scan(s), ${named} rule(s) named not-applicable with their unmet precondition so far (D389)`);
+}
+
 const COUNTS = /(\d+) rules? — (\d+) applicable, (\d+) not applicable, (\d+) violations?/;
 const VIOLATION = /^\s*- \[(critical|serious|moderate|minor)\] (sec\/[a-z0-9-]+):/gm;
 const STOOD_DOWN = /^\s*- (sec\/[a-z0-9-]+) applies when: (.+)$/gm;
@@ -1162,11 +1258,17 @@ const fail = (msg) => {
 
 // --- the fired set, per case, exact ------------------------------------------
 
-/** Which rules this run demonstrated in each state, accumulated across both envs. */
-const seen = { fires: new Set(), silent: new Set(), notApplicable: new Set() };
-/** The same three states for Tier 2, kept in its own accumulator so the coverage table can print two
- * packs without either borrowing the other's evidence. */
-const seenAuthz = { fires: new Set(), silent: new Set(), notApplicable: new Set() };
+/** Which rules this run demonstrated in each state, accumulated across both envs.
+ *
+ * `silentByCoverage` and the reasons behind `notApplicable` are `M139-6` (testFlow
+ * `PLAN_M139_LEDGER_ACCEPTANCE.md` D494) — see `gradeCoverage`. `silent` stays what it was: the
+ * ledger's own claim, verified as far as a failure message allows. The two are kept apart rather than
+ * merged because the difference between them is the difference between a necessary condition and a
+ * sufficient one, and the coverage table prints which is which. */
+const seen = { fires: new Set(), silent: new Set(), silentByCoverage: new Set(), notApplicable: new Set(), naReasons: new Map() };
+/** The same states for Tier 2, kept in its own accumulator so the coverage table can print two packs
+ * without either borrowing the other's evidence. */
+const seenAuthz = { fires: new Set(), silent: new Set(), silentByCoverage: new Set(), notApplicable: new Set(), naReasons: new Map() };
 
 /** Which corpus files each env runs. Not "everything under this root" — three of the six files here
  * are only meaningful under one env, and running them everywhere would grade a rule against a base
@@ -1305,6 +1407,7 @@ for (const env of ['secureLocal', 'plaintext', 'offeringTls']) {
   if (env === 'plaintext') gradeCrawl(report);
   if (env === 'plaintext') gradeSpider(report);
   gradePrecision(env, report);
+  gradeCoverage(env, report);
   // Kept for per-plant recall below (`M139-4`). Tagged with the env because two of the eighteen plants
   // are discriminated by nothing else: `V18` is a listener that only `offeringTls` dials, and `V3`'s
   // `sec/cookie-not-secure` is not-applicable over plaintext, so recall accumulated per-env would
@@ -1586,6 +1689,36 @@ for (const probe of APPLICABILITY_PROBES) {
     fail(`[${probe.env}] the applicability probe produced no security assertion`);
     continue;
   }
+  // `M139-6` — the census-graded probe. Deliberately not folded into the D285 path below: that path
+  // requires the assertion to fail *because nothing applied*, and this one fails because two rules
+  // applied and fired. Sharing a loop body would have meant one of the two checks silently accepting
+  // the other's evidence.
+  if (probe.expectCensusNotApplicable) {
+    const census = (report.scanCoverage ?? []).filter((c) => c.scan === 'security');
+    if (census.length === 0) {
+      fail(`[${probe.env}] the census-graded probe produced no \`scanCoverage\` — D389's field is what this probe reads, and without it the three rows it exists for cannot be demonstrated at all`);
+      continue;
+    }
+    const namedHere = new Map();
+    for (const c of census) for (const { rule, because } of c.notApplicable ?? []) namedHere.set(rule, because ?? []);
+    const missing = probe.expectCensusNotApplicable.filter((id) => !namedHere.has(id));
+    if (missing.length > 0) {
+      fail(
+        `[${probe.env}] the census did not name ${missing.join(', ')} as not-applicable on a moderate floor against a plain JSON response.\n` +
+          `    These are the three rows VULNS.md has carried as coverage gaps since M128c, and this probe is the\n` +
+          `    only evidence in the repo that closes them. Named by the census: ${[...namedHere.keys()].sort().join(', ') || '(none)'}`,
+      );
+      continue;
+    }
+    for (const [rule, because] of namedHere) {
+      seen.notApplicable.add(rule);
+      const reasons = seen.naReasons.get(rule) ?? new Set();
+      for (const why of because) reasons.add(why);
+      seen.naReasons.set(rule, reasons);
+    }
+    console.log(`✓ [${probe.env}] the census names ${namedHere.size} rule(s) not-applicable by name on a passing-or-failing assertion, including the three D285's listing structurally cannot reach: ${probe.expectCensusNotApplicable.join(', ')}`);
+    continue;
+  }
   if (step.ok) {
     fail(`[${probe.env}] an assertion where every rule stood down PASSED — D285 has been removed`);
     continue;
@@ -1621,10 +1754,27 @@ console.log('\nD295 coverage — one row per rule, three states:\n');
 const gaps = [];
 console.log(`  ${'rule'.padEnd(40)} fires  silent  n/a`);
 for (const [id] of PACK) {
-  const f = seen.fires.has(id), s = seen.silent.has(id);
+  const f = seen.fires.has(id);
+  // **`✓` and `~` are different evidence, and the table now says which** (`M139-6`, D494). `~` is what
+  // this column has always meant: the rule was in play at that floor, did not fire, and the applicable
+  // count left room for it — a necessary condition. `✓` is the census saying the rule *applied* in a
+  // run where it produced nothing, which is the sufficient version. A table that printed one glyph for
+  // both would be claiming the stronger thing on the weaker evidence.
+  const sufficient = seen.silentByCoverage.has(id);
+  const s = sufficient || seen.silent.has(id);
   const n = NO_NOT_APPLICABLE.has(id) ? 'n/a' : seen.notApplicable.has(id);
   if (!f || !s || n === false) gaps.push([id, { fires: f, silent: s, notApplicable: n !== false }]);
-  console.log(`  ${id.padEnd(40)} ${f ? '  ✓  ' : '  ·  '}  ${s ? '  ✓ ' : '  · '}   ${n === 'n/a' ? '—' : n ? ' ✓' : ' ·'}`);
+  console.log(`  ${id.padEnd(40)} ${f ? '  ✓  ' : '  ·  '}  ${sufficient ? '  ✓ ' : s ? '  ~ ' : '  · '}   ${n === 'n/a' ? '—' : n ? ' ✓' : ' ·'}`);
+}
+{
+  const weak = PACK.map(([id]) => id).filter((id) => !seen.silentByCoverage.has(id) && seen.silent.has(id));
+  console.log(`\n  silent: ✓ = the rule census says it applied and it produced nothing (sufficient, D389/D494)`);
+  console.log(`          ~ = in play at the floor, did not fire, count leaves room (necessary only)${weak.length > 0 ? ` — ${weak.length} row(s): ${weak.join(', ')}` : ''}`);
+  const named = [...seen.notApplicable].filter((id) => seen.naReasons.has(id));
+  if (named.length > 0) {
+    console.log(`     n/a: ${named.length} of these are named by the census with their unmet precondition, not inferred from a count:`);
+    for (const id of named.sort()) console.log(`          ${id} — ${[...seen.naReasons.get(id)].join(' / ')}`);
+  }
 }
 
 if (gaps.length > 0) {
@@ -1649,9 +1799,12 @@ console.log('\nD319 coverage — one row per authorization rule, three states:\n
 const authzGaps = [];
 console.log(`  ${'rule'.padEnd(40)} fires  silent  n/a`);
 for (const [id] of AUTHZ_PACK) {
-  const f = seenAuthz.fires.has(id), s = seenAuthz.silent.has(id), n = seenAuthz.notApplicable.has(id);
+  const f = seenAuthz.fires.has(id);
+  const sufficient = seenAuthz.silentByCoverage.has(id);
+  const s = sufficient || seenAuthz.silent.has(id);
+  const n = seenAuthz.notApplicable.has(id);
   if (!f || !s || !n) authzGaps.push([id, { fires: f, silent: s, notApplicable: n }]);
-  console.log(`  ${id.padEnd(40)} ${f ? '  ✓  ' : '  ·  '}  ${s ? '  ✓ ' : '  · '}   ${n ? ' ✓' : ' ·'}`);
+  console.log(`  ${id.padEnd(40)} ${f ? '  ✓  ' : '  ·  '}  ${sufficient ? '  ✓ ' : s ? '  ~ ' : '  · '}   ${n ? ' ✓' : ' ·'}`);
 }
 if (authzGaps.length > 0) {
   console.log('\nNot demonstrated live by this run:\n');
