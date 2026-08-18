@@ -1,0 +1,105 @@
+# D437/D438, the pentest arc Tier 4 half of this corpus (testFlow M137e,
+# PLAN_M137_PENTEST_TIER4.md) — `crawl`, and specifically the one thing a crawl can demonstrate that
+# no other file in this directory can: **that a finding was reached by a seed, and by which one.**
+#
+# Every other assertion in this corpus judges a request somebody wrote down. A crawl finds its own, so
+# what it is graded on is not only *did the rule fire* but *how was the route found at all* — which is
+# what `via` on a finding says, and what `verify-security-acceptance.mjs` reads here.
+#
+# **THE PAIR IS THE POINT, and it is a matched pair rather than two examples** (D437):
+#
+# | route | documented? | exercised by a test? | reachable by |
+# |---|---|---|---|
+# | `GET /v1/vuln/reports/orders` (`V15`) | **yes** — the only fixture route that is | **never** | `seed openapi` only |
+# | `GET /v1/vuln/orders` (`V7`) | no — `@ApiExcludeController()` | yes, by the test below | `seed traffic` only |
+#
+# Each seed therefore has a plant the other cannot see, so dropping either one makes a **named ledger
+# row** go missing rather than making recall fall by an amount nobody has a number for. That is the
+# whole argument for D437, and this file is where it is measured.
+#
+# **`check`, not `expect`, and it is a deliberate corpus choice rather than a weaker assertion.** A
+# crawl applies its body to *every* response it reaches, so the negated form this corpus uses for a
+# positive elsewhere (`expect response not has no critical …`) would demand a violation on every route
+# — which is the opposite of what a precision measurement wants. The soft form records exactly the same
+# findings in `results.json` and leaves the run green, so the grader judges the report. Nothing about
+# the engine's gating is being avoided: D439 says a synthesized finding gates like any other, and
+# `positives.tflw` still proves that with a hard assertion.
+#
+# **No security or input-handling assertion here, on purpose.** Under D285 each of those would need at
+# least one applicable rule of that family on *every* reached response, and a crawl reaches routes
+# chosen by a document rather than by an author — so a family that stands down on a plain JSON `200`
+# would fail the assertion on a route that is perfectly fine. Tier 1 and Tier 3 are graded against
+# requests this corpus writes; Tier 4's addition is the *surface*, and authorization is the family that
+# has something to say about all of it.
+#
+# Run under `--env plaintext`, with `VULN_MODE=1`.
+#
+# **Why plaintext rather than the default `secureLocal`.** The document is served unversioned at
+# `http://localhost:4001/openapi.json`, which is this env's own origin — so the seed source, the
+# `authorized target` and the crawled base are all one host and a reader has nothing to reconcile. It
+# also means `probe mutating` is **withheld** (see `tflw.config`), which is the state worth crawling in:
+# 50 synthesized writes are enumerated, disclosed and not sent, and D465's "affirming a scan is not
+# affirming writes" becomes a number in the surface line rather than a sentence in a plan.
+
+before
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  # Its own stock, for `authz.tflw`'s measured reason: ordering `GET /products` + `body[0].id` grabs
+  # whatever sorts first in a ~120-product catalog, and after a few runs against a long-lived stack
+  # that product's stock runs out and every test here fails on `409 insufficient stock`, nowhere near
+  # the assertion it exists to make.
+  api POST /products body { name: unique("Crawl Acceptance Widget"), price: 10, stock: 10, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+@crawl @authz
+test "an order exists to be leaked, and V7 enters the traffic set" as peer
+  # **Two jobs, both structural.**
+  #
+  # First, an order has to exist. The seed creates users and no orders, and both plants below return
+  # collections of them — an empty JSON array is `unreadable` to the oracle (D321), so with no order
+  # anywhere the leak rules would report *not applicable*, D285 would fail every crawl assertion, and
+  # the file would be red for a reason that has nothing to do with authorization. `peer` places it
+  # because `POST` is mutating and `peer` is bearer: a cookie principal meets the CSRF pre-flight first.
+  #
+  # Second, `GET /vuln/orders` below is this file's **traffic-seed plant**. It is `V7`, which is
+  # `@ApiExcludeController()` and therefore invisible to `seed openapi` — so the only way a crawl can
+  # reach it is by re-issuing a request this run actually made, and this is the request. A test that
+  # existed only to seed the traffic set would be a strange thing to write down; this one asserts the
+  # plant's own documented behaviour on the way past, so it is a test that also happens to seed.
+  api POST /orders body { items: [{ productId: "{productId}", quantity: 1 }] }
+  expect status equals 201
+  capture body.id as orderId
+
+  api GET /vuln/orders
+  expect status equals 200
+  # Deliberately *not* an authorization assertion: `authz.tflw` already grades `V7` that way, and
+  # grading it twice would make the crawl's `via: traffic` finding indistinguishable from a duplicate
+  # of a Tier 2 row. What this step is here for is the request, not the verdict.
+
+@crawl @vuln
+crawl "the documented surface, walked as a non-owner" as peer
+  # Absolute, because `/openapi.json` is served unversioned while this env's `api` base carries `/v1`
+  # — the same reason `tests/api/catalog/contract-and-retry.tflw` names an absolute schema source.
+  # `allow hosts "localhost"` covers it.
+  #
+  # The document's paths already carry the `/v1` prefix (NestJS `setGlobalPrefix`), and it declares no
+  # `servers`, so every route resolves to `<origin>/v1/…` and **not** to the `api` base's path twice
+  # over. That is `M137c1`/D480, and this line is the run that would catch it regressing.
+  seed openapi "http://localhost:4001/openapi.json"
+  seed traffic
+
+  # One `exclude`, and it moves a number. `/contract-demo/drifted` is a fixture route that exists to
+  # fail a schema assertion in `tests/api/catalog/`; it is reached, judged and uninteresting, so it is
+  # the honest example of what `exclude` is for — narrowing a discovered set, disclosed as withheld
+  # rather than silently dropped. Matched against the route template, never the filled-in path.
+  exclude "/v1/contract-demo/*"
+
+  check response has no critical authorization violations

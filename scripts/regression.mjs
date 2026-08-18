@@ -146,6 +146,25 @@ const PHASES = [
     cmd: 'node scripts/verify-security-target.mjs',
     stackEnv: { VULN_MODE: '1' },
   },
+  // M137e (testFlow PLAN_M137_PENTEST_TIER4.md, D438): the complement of the phase above, and the
+  // **only** reason it is a separate phase is that it needs the other stack. `security-target-check`
+  // asserts the fixture slice is there and correct; this one asserts it is not there at all, which
+  // is only a meaningful question without `VULN_MODE=1` — hence no `stackEnv`, like every ordinary
+  // phase.
+  //
+  // It exists because M137e narrowed a safety property: `VulnReportsController` is deliberately
+  // documented in `/openapi.json` (D438, so a crawl's OpenAPI seed can enumerate it), and the whole
+  // argument for that being safe is that the route is absent without the flag. Nothing checked that
+  // before, and nothing would have noticed it stop being true — every other file in this repo runs
+  // against the default stack and none of them assert what is missing from it.
+  //
+  // Placed immediately after its sibling so the pair reads as a pair, at the cost of one extra stack
+  // restart between two phases that want different flags. That cost is the reason they are adjacent
+  // rather than the reason to merge them.
+  {
+    name: 'vuln-slice-hidden-check',
+    cmd: 'node scripts/verify-vuln-slice-hidden.mjs',
+  },
   // M135c (testFlow PLAN_M135_SARIF.md, D415): the SARIF document, graded against `VULNS.md`.
   //
   // The only acceptance script in this repo that runs in CI, and the reason is the one asymmetry
@@ -183,11 +202,16 @@ const PHASES = [
 // measured duration — both are seconds of work dominated by the restart every phase pays anyway —
 // so they should be folded into a real re-pack the next time per-phase CI timings are pulled,
 // not treated as a considered placement.
+//
+// M137e adds `vuln-slice-hidden-check` on the same terms and to `security-ui`, one of the two bins
+// tied for smallest by count. It is the third phase now placed by hand rather than by measurement,
+// which is enough of them that the re-pack above should stop being deferred; it is not done here
+// because the timings it needs come from CI and this milestone has no reason to have pulled them.
 const PHASE_GROUPS = {
   core: ['full suite', '--tag orderOps', '--tag smoke,catalogOps', 'demo-fail-check', '--tag orgOps', '--tag inventoryOps', 'migrate-check', 'secure-local-check'],
   tooling: ['--tag api', 'watch-check', 'pick-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check', 'security-target-check', 'sarif-acceptance'],
   safety: ['--tag identityOps', '--tag mixed', '--tag smoke,orderOps', '--tag adminOps', '--tag catalogOps', 'safety-flags-check', 'check-diagnostics', 'artifact-contract', 'safety-redaction-check'],
-  'security-ui': ['--tag smoke,identityOps', 'cli-flags-check', '--tag smoke,adminOps', '--tag ui', 'webv2-admin-check', '--tag smoke,inventoryOps', 'logging-check', 'mtls-rejection'],
+  'security-ui': ['--tag smoke,identityOps', 'cli-flags-check', '--tag smoke,adminOps', '--tag ui', 'webv2-admin-check', '--tag smoke,inventoryOps', 'logging-check', 'mtls-rejection', 'vuln-slice-hidden-check'],
 };
 
 // The groups are a hand-maintained partition of PHASES, and CI runs *only* the groups (a 4-leg

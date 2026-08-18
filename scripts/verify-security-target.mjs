@@ -25,7 +25,7 @@
 // The `VULN_MODE` requirement is checked first and reported as a setup error rather than as five
 // failing assertions, because "the slice is absent" and "the slice is wrong" are different
 // problems with different fixes.
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -719,6 +719,92 @@ section('V10–V14 — the Tier 3 input-handling plants');
   );
 }
 
+// ── M137e: the Tier 4 enumeration plant (V15) ────────────────────────────────────────────────
+//
+// The one plant in this ledger whose distinguishing property is not in its response. `V15` serves
+// the same body `V7` does, breaks the same rule, and would be indistinguishable from it in a report
+// if the report did not say how it was reached: a crawl's OpenAPI seed can find this route and its
+// captured-traffic seed cannot, because nothing in this repo ever sends it a request (testFlow
+// PLAN_M137_PENTEST_TIER4.md, D437/D438).
+//
+// So this section asserts two different kinds of thing, and both of them matter:
+//
+//   1. **The response facts**, exactly as V6–V9 do — a non-owner gets everybody's orders, and the
+//      clean counterpart refuses the identical caller.
+//   2. **The document fact** — the route is in `/openapi.json`. That is what makes it enumerable at
+//      all, and it is the one claim in this whole file that is about the *description* of the target
+//      rather than its behaviour. An `@ApiExcludeController()` added here in a future tidy-up would
+//      leave every behavioural assertion below green while silently removing the crawl's only
+//      enumeration-exclusive positive.
+//
+// **The other half of the guard rail is not here, and cannot be.** Documented-under-`VULN_MODE` is
+// only safe if it is also *absent* without it, and this script only ever sees the stack it was given
+// — `regression.mjs` runs it under `stackEnv: { VULN_MODE: '1' }`. That claim lives in
+// `verify-vuln-slice-hidden.mjs`, which is its own phase against the default stack for exactly that
+// reason.
+section('V15 — GET /vuln/reports/orders  (positive: sec/authz-collection-leak, documented)');
+if (authz.orderId) {
+  const leak = await json(HTTP_BASE, '/vuln/reports/orders', { token: authz.peer });
+  ok('a non-owner gets 200', leak.status === 200, `status ${leak.status}`);
+  ok('…and an array', Array.isArray(leak.body));
+  ok("…containing user A's order id", (leak.body ?? []).some((o) => o.id === authz.orderId));
+
+  // The route is guarded, just not authorized — the pairing the whole slice rests on. Asserted
+  // here and not for V7 because this is the plant a crawler reaches without being told, so
+  // "documented and unauthenticated" is the failure that would matter most and is worth pinning.
+  const anon = await json(HTTP_BASE, '/vuln/reports/orders');
+  ok('an unauthenticated caller gets 401 — this is not a public route', anon.status === 401,
+    `status ${anon.status}`);
+}
+
+section('V15 clean counterpart — GET /orders/all refuses a non-admin');
+if (authz.orderId) {
+  // `orders.controller.ts:60` serves the identical unscoped collection and is `@Roles(ADMIN)`. The
+  // plant is that one missing decorator and nothing else, so this is the exact comparison.
+  const refused = await json(HTTP_BASE, '/orders/all', { token: authz.peer });
+  ok('a non-admin gets 403 from the real unscoped collection', refused.status === 403,
+    `status ${refused.status}`);
+  const asAdminAll = await json(HTTP_BASE, '/orders/all', {
+    token: await bearerLogin('admin (V15 counterpart)', process.env.ADMIN_EMAIL, process.env.ADMIN_PW),
+  });
+  ok('…while an admin gets 200 and the same order, so only a privilege declaration separates them',
+    asAdminAll.status === 200 && (asAdminAll.body ?? []).some((o) => o.id === authz.orderId),
+    `status ${asAdminAll.status}`);
+}
+
+section('V15 — the document fact: the route is enumerable under VULN_MODE=1');
+{
+  // Unversioned, like every other consumer of this document in the repo (`env local`'s `api root`
+  // service — see `tflw.config`'s comment, and `contract-and-retry.tflw`'s absolute source).
+  const doc = await probe('http://localhost:4001', '/openapi.json');
+  ok('/openapi.json is served', doc.status === 200, `status ${doc.status}`);
+  let paths = {};
+  try {
+    paths = JSON.parse(doc.body)?.paths ?? {};
+  } catch {
+    ok('/openapi.json parses as JSON', false);
+  }
+  // The denominator, before anything is asked of the contents. Every check below is satisfied by an
+  // empty document — including "it is the only documented fixture route", which is the one that
+  // would then pass while meaning nothing. This repo has caught that shape often enough (M127: an
+  // empty shard is an error, not an early return) that a document assertion should not be written
+  // without it.
+  ok('…and describes a real surface', Object.keys(paths).length > 50, `${Object.keys(paths).length} path(s)`);
+  ok('the document describes /v1/vuln/reports/orders — this is what the OpenAPI seed enumerates',
+    Object.prototype.hasOwnProperty.call(paths, '/v1/vuln/reports/orders'),
+    `${Object.keys(paths).length} path(s) documented, none of them this one`);
+  ok('…as a GET', paths['/v1/vuln/reports/orders']?.get !== undefined);
+  // The complement, in the same breath: the other three fixture controllers stay excluded, so V15
+  // really is the *only* enumerable plant and D437's per-seed attribution has one unambiguous
+  // owner. A second documented fixture route would make a missing `via: openapi` finding
+  // ambiguous about which plant went unfound.
+  const otherFixturePaths = Object.keys(paths).filter(
+    (p) => p.startsWith('/v1/vuln/') && p !== '/v1/vuln/reports/orders',
+  );
+  ok('…and it is the only documented fixture route', otherFixturePaths.length === 0,
+    otherFixturePaths.join(', '));
+}
+
 // ── ledger parity: no route without a row, no row without a route ────────────────────────────
 section('VULNS.md parity — every fixture route has a row, and every row has a route');
 {
@@ -738,11 +824,36 @@ section('VULNS.md parity — every fixture route has a row, and every row has a 
   // exactly the fail-open shape the paragraph above describes. It stays a list rather than a
   // directory scan only because `vuln/` also holds `vuln.module.ts` and `dto/`, and a scan that
   // had to exclude those would encode the same assumption less visibly.
+  //
+  // **M137e adds the fourth, and the warning above stopped being hypothetical** (testFlow
+  // PLAN_M137_PENTEST_TIER4.md, D438). It was written when a fourth controller was imaginary; it now
+  // describes a file that exists, and the paragraph is kept in its original words because the
+  // prediction coming true is the argument for the check below. So the fail-open shape is closed
+  // rather than re-warned about: the list is still hand-maintained, but a controller absent from it
+  // is now a failure here rather than a silence, because `vuln/` is read from disk and every
+  // `*.controller.ts` in it must appear.
   const controllers = [
     'vuln/vuln.controller.ts',
     'vuln/vuln-orders.controller.ts',
     'vuln/vuln-input.controller.ts',
+    'vuln/vuln-reports.controller.ts',
   ];
+
+  // The scan the comment above declined, used as a *cross-check on the list* rather than as a
+  // replacement for it. Reading the directory to decide what to check would silently start checking
+  // whatever landed there; reading it to decide whether the list is complete cannot, because the
+  // only thing it can do is fail. `dto/` and `vuln.module.ts` are excluded by the glob itself, so
+  // the assumption the comment worried about encoding invisibly is right here in one predicate.
+  const onDisk = readdirSync(path.join(ROOT, 'apiV2/src/vuln'))
+    .filter((f) => f.endsWith('.controller.ts'))
+    .map((f) => `vuln/${f}`)
+    .sort();
+  const missing = onDisk.filter((f) => !controllers.includes(f));
+  ok(
+    'every *.controller.ts in apiV2/src/vuln is in the list this check reads',
+    missing.length === 0,
+    missing.length ? `${missing.join(', ')} would be invisible to both halves below` : '',
+  );
   const routes = [];
   for (const file of controllers) {
     const src = readFileSync(path.join(ROOT, 'apiV2/src', file), 'utf8');

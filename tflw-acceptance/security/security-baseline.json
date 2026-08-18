@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "accepted": [
+    { "fingerprint": "1877e1a0b2c377f1", "rule": "sec/hsts-missing", "endpoint": "GET /v1/auth/profile" },
+    { "fingerprint": "2fcef791f459947b", "rule": "sec/server-version-disclosure", "endpoint": "GET /v1/health" },
+    { "fingerprint": "b32982bffae63fa3", "rule": "sec/nosniff-missing", "endpoint": "GET /v1/health" },
+    { "fingerprint": "c290fe79210d5ec3", "rule": "sec/authenticated-response-cacheable", "endpoint": "GET /v1/auth/profile" },
+    { "fingerprint": "c3ea4756074f3080", "rule": "sec/nosniff-missing", "endpoint": "GET /v1/auth/profile" },
+    { "fingerprint": "c52e553ba3b9a11b", "rule": "sec/hsts-missing", "endpoint": "GET /v1/health" },
+    { "fingerprint": "c8580da95b6a891e", "rule": "sec/hsts-missing", "endpoint": "POST /v1/auth/session-login" },
+    { "fingerprint": "cb23a8cb219ce3d9", "rule": "sec/nosniff-missing", "endpoint": "POST /v1/auth/session-login" }
+  ]
+}

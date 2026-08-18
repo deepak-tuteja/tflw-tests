@@ -23,6 +23,7 @@
     "test:unreachable-host": "tflw run --env unreachableHost tests/.env-specific/unreachable-host.tflw",
     "test:secure-local": "tflw run --env secureLocal tests/.env-specific/secure-local.tflw",
     "verify:security-target": "node scripts/verify-security-target.mjs",
+    "verify:vuln-slice-hidden": "node scripts/verify-vuln-slice-hidden.mjs",
     "verify:security-acceptance": "node scripts/verify-security-acceptance.mjs",
     "verify:input-acceptance": "node scripts/verify-input-acceptance.mjs",
     "verify:sarif-acceptance": "node scripts/verify-sarif-acceptance.mjs",
