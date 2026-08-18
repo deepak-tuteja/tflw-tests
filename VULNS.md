@@ -71,6 +71,7 @@ differently on the two, and that difference is itself part of the ledger.
 | `V15` | `GET /v1/vuln/reports/orders` — **the only documented fixture route** | **positive** | `sec/authz-collection-leak` (reachable by a crawl's `openapi` seed alone) | critical |
 | `V16` | **`webV2/admin` on `:8091` — every page it serves** | **positive** | `sec/csp-missing` (serious), `sec/x-frame-options` (moderate), `sec/nosniff-missing` (moderate), `sec/authenticated-response-cacheable` (moderate) — reachable by a crawl's `spider` seed alone | serious |
 | `V17` | `GET /hardened` on `:8091` | **negative** | the same three rules, all silent | — |
+| `V18` | **nginx's `:8445` listener — the transport, not a route** | **positive** | `sec/tls-weak-cipher` (serious), reachable under `probe ciphers` alone | serious |
 
 `V1`–`V5` are Tier 1's, and they are claims a response makes about *itself* — headers and cookie
 flags. `V6`–`V9` are Tier 2's, and they are claims about *who is allowed to see what*, which is a
@@ -503,7 +504,7 @@ VULN_MODE=1 node cli.mjs start
 npm run verify:security-acceptance
 ```
 
-Last run — 10 of the 12 rules demonstrated live in all three states:
+Last run — 11 of the 12 rules demonstrated live in all three states:
 
 ```
   rule                                     fires  silent  n/a
@@ -513,7 +514,7 @@ Last run — 10 of the 12 rules demonstrated live in all three states:
   sec/hsts-missing                           ✓      ✓      ✓
   sec/csp-missing                            ✓      ✓      ✓
   sec/tls-version-old                        ·      ✓      ✓
-  sec/tls-weak-cipher                        ·      ✓      ✓
+  sec/tls-weak-cipher                        ✓      ✓      ✓
   sec/x-frame-options                        ✓      ✓      ·
   sec/cookie-samesite-none                   ✓      ✓      ·
   sec/nosniff-missing                        ✓      ✓      —
@@ -521,10 +522,16 @@ Last run — 10 of the 12 rules demonstrated live in all three states:
   sec/server-version-disclosure              ✓      ✓      —
 ```
 
-**The five gaps, named rather than rounded away** — the grader prints them on every run, because a
+**The four gaps, named rather than rounded away** — the grader prints them on every run, because a
 coverage table with a silent hole in it reads as complete:
 
-- `sec/tls-version-old` / `sec/tls-weak-cipher` **fires** — not constructible; see above.
+- `sec/tls-version-old` **fires** — not constructible on this platform at all; see below. **`M137g`
+  removed the other half of what used to be one bullet here.** `sec/tls-weak-cipher` was recorded
+  beside it as "not constructible" from `M128c` until 2026-08-18, and the two were never
+  unconstructible for the same reason: TLS 1.0/1.1 cannot be made into a listener, while a broken
+  *suite* could be and simply could not be reached by a client whose ClientHello excluded it. Reading
+  them as a pair is what hid that difference for two milestones, and `V18` is what the distinction
+  was worth.
 - `sec/x-frame-options`, `sec/cookie-samesite-none`, `sec/authenticated-response-cacheable`
   **not applicable** — a *reporting* limit, not a target one. tflw names its not-applicable rules
   only in D285's "no power to fail" message, which prints when **zero** rules applied; `nosniff` and
@@ -868,6 +875,93 @@ otherwise show up as one more route quietly crawled.
 document declares no `servers`, which is what makes `M137c1`/`D480` (resolve OpenAPI paths against the
 document's own `servers`, not the `api` base) a live regression guard here rather than a note.
 
+## The Tier 4 cipher measurement (`M137g`, tflw D441/D485/D486)
+
+**`V18` is the first plant in this repo whose subject is not a request.** `V1`–`V15` are routes,
+`V16`/`V17` are pages; this one is a *listener*. nginx's 8445 port (`nginx/offering.conf`, installed
+only under `VULN_MODE=1`) serves the same app through the same proxy as 8443 with one line different:
+
+```nginx
+ssl_protocols TLSv1.2 TLSv1.3;
+ssl_ciphers 'ECDHE-RSA-AES128-GCM-SHA256:NULL-SHA256:@SECLEVEL=0';
+```
+
+Four handshakes against it, measured on nginx:1.27-alpine / OpenSSL 3.x, 2026-08-18:
+
+| a client that… | gets |
+| --- | --- |
+| asks the way anything modern asks | **TLSv1.3, `TLS_AES_256_GCM_SHA384`** — impeccable |
+| names `NULL-SHA256` at `@SECLEVEL=0` | **TLSv1.2, `NULL-SHA256`** — no encryption at all |
+| names `NULL-SHA` at `@SECLEVEL=0` | `handshake_failure` — the host does not offer it |
+| names `RC4-SHA` | its own OpenSSL refuses to build the ClientHello |
+
+**The first two rows are the plant.** A host that hands every current caller AES-GCM over TLS 1.3 is
+one that every per-response assertion tflw ships reads as clean — including `sec/tls-weak-cipher`
+itself, which until `M137g` judged the suite it was *given*. The broken suite is still in the
+configuration and still reachable by anybody who asks for it, which is what a scanner is for and what
+an assertion about one response structurally cannot do.
+
+Measured on the acceptance run, 2026-08-18 — the shape of one enumeration against this listener:
+
+| candidates offered | accepted | refused | unaskable |
+| --- | --- | --- | --- |
+| 18 | 1 (`NULL-SHA256`) | 7 | 10 (RC4 ×4, 3DES ×3, `DES-CBC-SHA`, EXPORT ×2) |
+
+**The last two columns are why the result has three lists rather than two.** `NULL-SHA` refused and
+`RC4-SHA` unaskable are different facts: one is the server answering, the other is tflw's own crypto
+stack declining to ask, and a report that folded them together would say "this host does not offer
+RC4" about a question nobody put to it — on this platform that would be **10 of 18 candidates**
+silently reported as clean. That distinction is `M136a`'s rule — *a scan that could not
+ask is not a scan that found nothing* — and this listener is where it is exercised on live traffic
+rather than only in a unit test. It also means the ceiling note prints on **every** enumeration on
+this platform, because RC4, 3DES and the EXPORT suites are unaskable here whatever the server does.
+
+### What the corpus does with it
+
+`tflw-acceptance/security/ciphers.tflw`, under its own env `offeringTls`, and one assertion:
+
+```
+api GET /health
+expect status equals 200
+expect response not has no serious security violations
+```
+
+`/health` on purpose — nothing about the finding is a property of the response. The exact rule set is
+pinned in `scripts/verify-security-acceptance.mjs`: `sec/hsts-missing` (nginx sets none on any
+listener) and `sec/tls-weak-cipher`, with `sec/tls-version-old` in play at that floor and silent,
+because a host offering a broken suite is not a host speaking a dead protocol and a corpus that could
+not tell those apart would be grading half of `M128c` by accident.
+
+**`probe ciphers` is granted on `offeringTls` and withheld on `secureLocal`, and both halves are
+graded.** The withheld half is the one worth explaining: on 8443 the rule still applies, still finds
+nothing, and prints a note saying it judged only the negotiated suite and naming the clause that
+would widen it. That assertion passes either way — which is exactly why the note is asserted by name.
+A rule that quietly stopped disclosing the limits of what it checked would leave every green line in
+this corpus meaning slightly less than it says, and nothing would go red.
+
+### The absence is gated too
+
+`scripts/verify-vuln-slice-hidden.mjs` — which runs as `vuln-slice-hidden-check` in the regression
+sweep, against a stack started **without** the flag — asserts that no TLS session can be established
+on 8445. That is a different gating mechanism from every other plant in this file (an included nginx
+config rather than a conditional Nest module), and a mechanism nothing checks is one that stops
+working quietly. The failure it prevents is worse than a leaked route, too: a route is at least
+discoverable by anyone reading the surface, whereas a listener left up would sit under every https
+suite in this repo offering a suite with no encryption, and nothing would mention it — `probe
+ciphers` is the only instrument that can see an offer, and no other env grants it.
+
+The claim is *no handshake*, not a particular errno. Compose publishes 8445 unconditionally (a port
+cannot be published only sometimes), so on a clean stack the host port accepts the TCP connection and
+Docker's proxy resets it: `ECONNRESET` here, `ECONNREFUSED` on a stack without that proxy. Pinning
+either would fail on a correct stack for a reason unrelated to the plant.
+
+### Why the plant is a separate listener
+
+8443 is the arc's clean-transport control and two ledger rows assert by name that
+`sec/tls-weak-cipher` stays silent there. Putting the broken suite on 8443 would have made those rows
+fail — not loudly, but in the way that gets an assertion "fixed". The same blast-radius rule every
+plant in this file follows, applied to a port instead of a route.
+
 ## The committed baseline (`D445`)
 
 `tflw-acceptance/security/security-baseline.json` — **8 accepted fingerprints**, and the definition of
@@ -953,28 +1047,40 @@ being a measurement rather than a gate is the honest description.
 
 ## Not planted, on purpose
 
-- **TLS version and cipher — measured, and the answer is that neither positive is constructible.**
-  `M128c` shipped `sec/tls-version-old` and `sec/tls-weak-cipher`, and the plan's §3 said to decide
-  their positives "on a real container, not now". Decided, on Fedora 43 / OpenSSL 3.2.6 / Node 22:
+- **~~TLS version and cipher.~~ Half of this row is now `V18`, and the half that is left is
+  permanent.** `M128c` shipped `sec/tls-version-old` and `sec/tls-weak-cipher`, and the plan's §3
+  said to decide their positives "on a real container, not now". Decided, on Fedora 43 / OpenSSL
+  3.2.6 / Node 22, and re-measured on nginx:1.27-alpine 2026-08-18:
 
   | weakness | listener constructible? | reachable by tflw's own probe? |
   | --- | --- | --- |
   | TLS 1.0 / 1.1 | **no** — the distro crypto policy compiles the protocols out (`ERR_SSL_NO_PROTOCOLS_AVAILABLE`, and an internal error even at `@SECLEVEL=0`) | — |
-  | 3DES, RC4 | **no** — not in OpenSSL 3.2's default provider (`ERR_SSL_NO_CIPHER_MATCH`) | — |
-  | `NULL-SHA256` | yes | **no** — Node's `DEFAULT_CIPHERS` carries `!eNULL` |
+  | 3DES, RC4, EXPORT | **no** — not in OpenSSL 3.2's default provider (`ERR_SSL_NO_CIPHER_MATCH`) | — |
+  | `NULL-SHA256` (eNULL) | **yes** | **yes, since `M137g`** — under `probe ciphers`, which offers one suite per handshake at `@SECLEVEL=0`. Not reachable by a default ClientHello, which carries `!eNULL` |
 
-  So the §3 fallback — "make `tls-weak-cipher` the demonstrated positive instead" — is **also**
-  unavailable, for a reason the plan did not anticipate: the *client* half is as modern as the server
-  half, and a weakness tflw cannot speak is one tflw cannot observe. Both rules are therefore
-  recorded here as **positive unverified by construction**, which is what the plan asked for in
-  preference to a proof that was never run. Their positives are covered by unit tests against
-  synthetic handshake facts (`packages/runtime/test/security-rules.test.ts`), and both rules' *live*
-  negative and not-applicable cases are demonstrated by `tflw-acceptance/security/` — see below.
+  **The original row read those three lines as one fact and they are two.** A protocol that cannot be
+  compiled into a listener is unconstructible forever on this platform; a *suite* that a listener
+  will speak and a client will not ask for is unconstructible only for as long as the client refuses
+  to ask. `D299` had said as much — *"enumerating a server's whole offer takes one handshake per
+  suite"* — and it was written here as future work rather than as the missing half of a measurement,
+  so for two milestones the two rules were quoted together as equally impossible. They were not.
 
-  One consequence worth reading twice: `sec/tls-weak-cipher` fires only on a host that gives a
-  current client nothing better, so it cannot see a server that merely still *offers* RC4 alongside
-  AES-GCM. That is the right answer for a per-response assertion and the wrong tool for an audit;
-  enumerating a server's whole offer takes one handshake per suite and is Tier 3's job (tflw D299).
+  What stands:
+
+  - **`sec/tls-version-old` — positive unverified by construction, permanently on this platform.**
+    Its positive is covered by unit tests against synthetic handshake facts
+    (`packages/runtime/test/security-rules.test.ts`); its live negative and not-applicable cases are
+    demonstrated by `tflw-acceptance/security/`.
+  - **`sec/tls-weak-cipher` — planted as `V18` and demonstrated live**, on nginx's 8445 listener.
+    3DES and RC4 remain unconstructible, so eNULL is the only broken suite this repo can plant — and
+    one is enough, because what the rule was missing was never a *particular* suite. See the section
+    below.
+
+  One consequence still worth reading twice, and now stated as the reason `V18` exists rather than as
+  a limitation being accepted: the rule as `M128c` shipped it fired only on a host that gave a
+  current client nothing better, so it could not see a server that merely still *offers* a broken
+  suite alongside AES-GCM. That is the right answer for a per-response assertion, and `probe ciphers`
+  is the audit that was missing.
 - **~~Broken object authorization (BOLA/IDOR).~~** **Planted in `M130a` as `V6`–`V8`** — this row
   said "Tier 2; a passive header scan cannot see it, so planting it now would be cost with no
   coverage behind it", and Tier 2 is what arrived. Kept struck through rather than deleted because

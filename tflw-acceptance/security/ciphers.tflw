@@ -1,0 +1,35 @@
+# **M137g — the offer, not the handshake** (tflw `D441`/`D485`/`D486`, this repo's `D447`).
+#
+# One host, one assertion, and the whole point is what the assertion is *able* to see. `--env
+# offeringTls` points at nginx's 8445 listener, which offers `NULL-SHA256` alongside a modern suite
+# and negotiates the modern one with any ordinary client (`nginx/offering.conf`). Measured on the
+# running stack:
+#
+#   what tflw's request negotiated   TLSv1.3, TLS_AES_256_GCM_SHA384
+#   what the host still speaks       NULL-SHA256 — no encryption at all
+#
+# Before `M137g`, `sec/tls-weak-cipher` read the first line and reported nothing. It now also reads
+# the second, by offering one suite per handshake under `probe ciphers`. **This file is that rule's
+# first live positive in this corpus's history** — `VULNS.md` has carried it as *"positive unverified
+# by construction"* since `M128c`, on a measurement that was correct at the time and was about the
+# client rather than the server.
+#
+# Run under `--env offeringTls`. It is graded by name in `scripts/verify-security-acceptance.mjs`,
+# which also asserts the *withheld* half on `secureLocal` — where the same rule applies, finds
+# nothing, and says in a note that nobody asked it the other question.
+#
+# Needs `VULN_MODE=1`: without it the listener is not installed and 8445 refuses the connection.
+
+@security @tls @vuln
+test "sec/tls-weak-cipher fires on a host that OFFERS a broken suite while negotiating a modern one"
+  # `/health` on purpose — the plainest response the app has. Nothing about this assertion is a
+  # property of the response at all: the finding comes from the transport underneath it, which is
+  # what makes a TLS rule different from the other ten in the pack and why an ordinary endpoint is
+  # the honest place to demonstrate it.
+  api GET /health
+  expect status equals 200
+  # `serious` is the floor `tls-weak-cipher` sits at. It does not isolate the rule — `hsts-missing`
+  # is serious too and nginx sets no HSTS header on any listener — so this line proves only that
+  # something serious fired. The exact set is pinned in the grader's ledger, which is where the
+  # claim "and it was the cipher rule" actually lives.
+  expect response not has no serious security violations
