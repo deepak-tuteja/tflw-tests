@@ -115,22 +115,15 @@ npm run test:secure-local    # runs .env-specific/secure-local.tflw through the 
 node cli.mjs stop      # docker compose down -v — drops the DB too (ephemeral per-run isolation)
 ```
 
-### If you just added a diagnostic code in tflw, run this before opening either PR
+### Contributing — the gates, and the cross-repo pair
 
-```sh
-npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs
-```
-
-**A tflw milestone that assigns a `TF0xx` code is not done until its companion PR here has merged
-too.** Adding a code is a breaking change for this repository's `main` with no additive path: CI
-here re-packs tflw from its live `main` (unpinned on purpose — pinning the checkout would kill the
-dogfooding exactly when it matters), and `verify-check-diagnostics.mjs` then demands a fixture for
-a code that has no fixture yet. The two PRs are one unit of work and merge back-to-back.
-
-Nothing automatic catches this — nothing here re-runs when tflw merges, and that is a decision
-rather than an oversight. The command above is the whole of the enforcement: `refresh-tflw` packs
-from your local tflw checkout, so it answers in seconds, before any PR exists. It would have caught
-all three times this has happened.
+**What has to be green before a branch is pushed lives in [CONTRIBUTING.md](CONTRIBUTING.md), and
+only there** — including the one command that catches a new tflw `TF0xx` diagnostic code before
+either PR exists, which used to be documented in this section. It **moved** rather than being
+copied: two homes for one command become one correct home and one stale one, and this README has
+already been one of five incomplete copies of the gate set. The list there is held to
+`.github/workflows/` by `scripts/verify-contributing.mjs`, so it cannot go stale the way this
+paragraph could.
 
 The pentest arc's hygiene fixture slice is off unless asked for — see [VULNS.md](VULNS.md):
 

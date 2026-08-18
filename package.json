@@ -35,7 +35,8 @@
     "check:acceptance": "node scripts/check-acceptance.mjs",
     "regression": "node scripts/regression.mjs",
     "regression:smoke": "node scripts/regression-smoke.mjs",
-    "verify:external-targets": "node scripts/verify-external-targets.mjs"
+    "verify:external-targets": "node scripts/verify-external-targets.mjs",
+  "verify:contributing": "node scripts/verify-contributing.mjs"
   },
   "dependencies": {
     "tflw": "file:vendor/tflw-0.1.0.tgz"
