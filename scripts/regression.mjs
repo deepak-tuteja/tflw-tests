@@ -314,4 +314,34 @@ if (failed.length > 0) {
   console.log(`\n${failed.length}/${results.length} phase(s) failed.`);
   process.exit(1);
 }
+
+// `M143d` — a phase that PASSED must not leave a failing `junit.xml` behind.
+//
+// This is the contradiction that cost twenty minutes of log-reading to attribute: `M141b`'s
+// negative control (`D536`) ends `watch-check` with a deliberately-failing run, so the phase printed
+// `✓ watch-check` while its archived report held one failed testcase. The leg went green and the
+// SEPARATE `merge-reports` job went red, three jobs and one artifact-download away from the thing
+// that caused it. `archivePhaseReport` already has the answer — a by-design failure is renamed to
+// `junit-by-design.xml` — so this asserts the two agree, and it does it HERE, in the leg that ran
+// the phase, where the phase name is still in scope.
+//
+// It is deliberately one-directional: a phase in JUNIT_EXCLUDED_PHASES that stops failing is not an
+// error, because a control can legitimately be rewritten. What must never happen silently is the
+// reverse.
+const contradictory = passedPhasesWithFailingJunit(results);
+if (contradictory.length > 0) {
+  for (const { name, failures, path: p } of contradictory) {
+    console.log(
+      `\n✗ ${name} reported success but its archived report contains ${failures} failing testcase(s).\n` +
+        `    ${p}\n` +
+        `    Either the phase is wrong to call itself green, or the failure is BY DESIGN — a negative\n` +
+        `    control, a demo fixture — and the phase belongs in JUNIT_EXCLUDED_PHASES in\n` +
+        `    scripts/lib/regression-shared.mjs, which renames the file so no JUnit reporter reads it.\n` +
+        `    Left alone, this passes here and fails in the merge-reports job instead, where nothing\n` +
+        `    names the phase that caused it.`,
+    );
+  }
+  process.exit(1);
+}
+
 console.log(`\nAll ${results.length} phases passed.`);

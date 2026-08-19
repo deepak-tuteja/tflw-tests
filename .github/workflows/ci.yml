@@ -300,8 +300,10 @@ jobs:
       # bare red X on the job.
       #
       # `demo-fail-check`'s own junit.xml is never named `junit.xml` on disk in the first place
-      # (scripts/regression.mjs's archivePhaseReport() renames it to `junit-by-design.xml` for
-      # exactly this phase) — a plain `*/junit.xml` glob structurally can't pick it up.
+      # (scripts/lib/regression-shared.mjs's archivePhaseReport() renames it to `junit-by-design.xml`)
+      # — a plain `*/junit.xml` glob structurally can't pick it up. `watch-check` joined it in
+      # `M143d`, for `M141`'s DISPLAY-less negative control; the phrase "exactly this phase" was
+      # true when written and is not any more, which is why the count is no longer written here.
       # scripts/verify-demofail.mjs's real pass/fail verdict is its own count-based `check()` logic
       # (already gating the regression job above via its exit code), not the raw junit.xml that
       # phase happens to produce — that's just whichever `npx tflw run` call the script made *last*
