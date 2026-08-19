@@ -14,6 +14,13 @@ import { execFileSync, execSync } from 'node:child_process';
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { tflwArgv, quoteArgv } from './lib/tflw-bin.mjs';
+
+/** `released`: this script grades the tflw a user would have installed, which is what
+ *  `npx tflw` resolved here before M141 — the program is unchanged, the question is now
+ *  declared and the entry is printed instead of inferred. */
+const TFLW_ARGV = tflwArgv('released', { label: 'verify-cli-flags' });
+const TFLW = quoteArgv(TFLW_ARGV);
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const REPORT_DIR = path.join(ROOT, 'report');
@@ -62,7 +69,7 @@ function runPassing(cmd, what) {
 {
   const pinned = '2027-05-01T00:00:00.000Z';
   const { stdout } = runPassing(
-    `npx tflw run tests/api/identity/mtls.tflw --env mtlsSidecar --now ${pinned} --seed 42 --no-color`,
+    `${TFLW} run tests/api/identity/mtls.tflw --env mtlsSidecar --now ${pinned} --seed 42 --no-color`,
     '--now',
   );
   ok('--now pins the printed run instant exactly', stdout.includes(`now ${pinned}`), stdout.trim().split('\n').pop());
@@ -83,8 +90,8 @@ function runPassing(cmd, what) {
       '  expect status equals 999\n',
   );
   try {
-    run('npx tflw run tests/_verify-cli-flags-scratch.tflw --no-color');
-    const { stdout } = run('npx tflw run --failed --no-color');
+    run(`${TFLW} run tests/_verify-cli-flags-scratch.tflw --no-color`);
+    const { stdout } = run(`${TFLW} run --failed --no-color`);
     const m = /(?:PASS|FAIL) (\d+)\/(\d+) passed/.exec(stdout);
     const ranOnlyTheFailedOne = m !== null && Number(m[2]) === 1;
     ok(
@@ -103,7 +110,7 @@ function runPassing(cmd, what) {
   run('node cli.mjs start');
   const bailReportDir = path.join(ROOT, 'report');
   run(
-    'npx tflw run tests/.demo-fail/bad-assertion.tflw tests/.demo-fail/contract-drift.tflw ' +
+    `${TFLW} run tests/.demo-fail/bad-assertion.tflw tests/.demo-fail/contract-drift.tflw ` +
       'tests/.demo-fail/large-response-diff.tflw --no-color --tag demofail --bail --format ndjson',
   );
   const events = readFileSync(path.join(bailReportDir, 'events.ndjson'), 'utf8')
@@ -120,7 +127,7 @@ function runPassing(cmd, what) {
 
 // --- --format ndjson: report/events.ndjson is valid line-delimited JSON with the right shape ---
 {
-  runPassing('npx tflw run tests/api/identity/mtls.tflw --env mtlsSidecar --format ndjson --no-color', '--format ndjson');
+  runPassing(`${TFLW} run tests/api/identity/mtls.tflw --env mtlsSidecar --format ndjson --no-color`, '--format ndjson');
   const lines = readFileSync(path.join(REPORT_DIR, 'events.ndjson'), 'utf8').trim().split('\n');
   let allValid = true;
   const types = new Set();
@@ -159,7 +166,10 @@ import pty, os
 pid, fd = pty.fork()
 if pid == 0:
     os.chdir(${JSON.stringify(ROOT)})
-    os.execvp('npx', ['npx', 'tflw', 'run', 'tests/api/identity/mtls.tflw', '--env', 'mtlsSidecar', '--log-file', ${JSON.stringify(logFilePath)}])
+    # The same entry every other run in this file uses, handed over as argv rather than as a
+    # shell string — a pty exec takes no shell. It was the last npx-argv literal in the repo, and
+    # the one the M141 guard's first pattern set could not see.
+    os.execvp(${JSON.stringify(TFLW_ARGV[0])}, [${TFLW_ARGV.map((a) => JSON.stringify(a)).join(', ')}, 'run', 'tests/api/identity/mtls.tflw', '--env', 'mtlsSidecar', '--log-file', ${JSON.stringify(logFilePath)}])
 else:
     output = b''
     while True:
@@ -201,11 +211,11 @@ else:
 {
   const TIMESTAMP_RE = /^\d{2}:\d{2}:\d{2}\.\d{3} /m;
   const { stdout: withTimestamps } = runPassing(
-    'npx tflw run tests/api/identity/mtls.tflw --env mtlsSidecar --no-color',
+    `${TFLW} run tests/api/identity/mtls.tflw --env mtlsSidecar --no-color`,
     'default timestamps',
   );
   const { stdout: withoutTimestamps } = runPassing(
-    'npx tflw run tests/api/identity/mtls.tflw --env mtlsSidecar --no-color --no-timestamps',
+    `${TFLW} run tests/api/identity/mtls.tflw --env mtlsSidecar --no-color --no-timestamps`,
     '--no-timestamps',
   );
   ok('default output has an HH:MM:SS.mmm prefix', TIMESTAMP_RE.test(withTimestamps));

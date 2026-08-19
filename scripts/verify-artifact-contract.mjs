@@ -41,10 +41,10 @@
 import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveArtifactContract } from './lib/tflw-bin.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const CONTRACT_FILE =
-  process.env.TFLW_ARTIFACT_CONTRACT ?? path.join(ROOT, 'node_modules', 'tflw', 'dist', 'artifact-contract.json');
+const CONTRACT_FILE = resolveArtifactContract('released', { label: 'verify-artifact-contract' }).file;
 
 /** The contract version this script was written against. A newer one is refused rather than read
  *  optimistically: the failure being guarded against is "the shape changed and nothing said so",

@@ -19,6 +19,12 @@ import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { tflwCommand } from './lib/tflw-bin.mjs';
+
+/** `released`: this script grades the tflw a user would have installed, which is what
+ *  `npx tflw` resolved here before M141 — the program is unchanged, the question is now
+ *  declared and the entry is printed instead of inferred. */
+const TFLW = tflwCommand('released', { label: 'verify-redaction' });
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -34,7 +40,7 @@ function loadEnv(file) {
 const env = loadEnv(path.join(ROOT, '.env'));
 
 console.log('Running tests/api/identity/safety-redaction.tflw ...');
-execSync('npx tflw run --env safetyRedaction tests/api/identity/safety-redaction.tflw', { cwd: ROOT, stdio: 'inherit' });
+execSync(`${TFLW} run --env safetyRedaction tests/api/identity/safety-redaction.tflw`, { cwd: ROOT, stdio: 'inherit' });
 
 console.log('Fetching real, unredacted PII directly from the api as ground truth ...');
 const loginRes = await fetch('http://localhost:4001/v1/auth/login', {

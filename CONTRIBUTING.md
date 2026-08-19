@@ -61,6 +61,7 @@ not a subset of the truth.
 npm run check:acceptance
 npm run verify:external-targets
 npm run verify:contributing
+npm run verify:tflw-resolution
 ```
 
 **And when a tflw milestone assigns or changes a `TF0xx` diagnostic code**, before opening either
@@ -74,7 +75,6 @@ npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs
 
 ```sh
 npm --prefix apiV2 run lint
-npm --prefix apiV2 test
 xvfb-run -a npm run regression
 ```
 
@@ -102,15 +102,45 @@ xvfb-run -a npm run regression -- --group security-ui
   it is for.** All three fences held before this existed, by omission rather than by design.
 - **`npm run verify:contributing`** — this document against `.github/workflows/`. It is in the set
   it guards, which is the point rather than an oversight.
-- **`npm --prefix apiV2 run lint` / `npm --prefix apiV2 test`** — eslint and jest over the target
-  app. **The prefix is not decoration:** a bare `npm test` at this repo's root is `tflw run`, a
-  Docker-dependent suite of `.tflw` files, and it is a completely different thing from apiV2's unit
-  tests.
-  **And `npm --prefix apiV2 test` currently asserts nothing** — it is `jest --passWithNoTests` over
-  a tree with no test files, so it is green unconditionally. That was found by running the list on
-  this page for the first time, three days after the page existed, and it is filed rather than
-  quietly fixed here (`M138b-01`). apiV2 is exercised for real by the sweep below, through HTTP,
-  which is the stronger check; the defect is that the CI job list overstates what is verified.
+- **`npm run verify:tflw-resolution`** — **which tflw a script is grading is declared, printed, and
+  asked in exactly one place.** Before `M141` this repo held seven answers to that one question: three
+  environment variable names, three defaults, and nowhere that printed which had won, so the same
+  command could grade the vendored 0.1.0 or your branch build and the log looked identical
+  (`M115-03`, `M128-04`). Every script now calls `resolveTflw('released')` or `resolveTflw('branch')`
+  — the question is an argument, not an inference — and the resolver announces the entry path and a
+  sha prefix on every call. The gate has two halves: the resolver's own refusals (asking for the
+  branch build and being handed the vendored one is an error, not a shrug), and a sweep of
+  `scripts/` proving nothing resolves a tflw any other way. **Its allow-list is the honest part** —
+  the files that legitimately do are named there, each with a reason.
+- **`npm --prefix apiV2 run lint`** — eslint over the target app. **The prefix is not decoration:**
+  a bare `npm test` at this repo's root is `tflw run`, a Docker-dependent suite of `.tflw` files, and
+  it is a completely different thing from anything inside `apiV2/`.
+
+  **`--fix` came off this command in `M141`.** An autofixing linter's failure surface is only the
+  subset eslint cannot repair, so the job was reporting clean on a tree it had just silently
+  rewritten — and on CI, where nothing commits the rewrite, the repairs were discarded every run
+  (`M141-01`).
+
+### apiV2 has no unit tests, and that is a decision
+
+`npm --prefix apiV2 test` used to be on the list above and in the `apiv2` CI job. It was
+`jest --passWithNoTests` over a tree with no test files: a gate green unconditionally (`M138b-01`,
+found by running this page's own list for the first time, three days after the page existed). It has
+been **deleted rather than filled in**, and this paragraph is the deliverable of that change —
+without it, the next person reads the diff as coverage quietly dropped and puts it back.
+
+**apiV2 is a dogfood target, not a product.** It exists to give tflw something realistic to point at,
+and it is expected to keep being rewritten as tflw grows: new auth shapes, new error surfaces, new
+endpoints invented specifically to exercise a feature that does not exist yet. Unit tests would pin
+the layer that is supposed to move, and each one would be work spent defending a fixture against its
+own purpose.
+
+What holds apiV2 honest instead is the **30-phase `.tflw` regression sweep**, asserted from outside
+over HTTP — the layer that stays stable across all that reshaping, and the same interface tflw's own
+users see. That is the stronger check of the two, and it was already the only one doing anything.
+
+If apiV2 ever stops being a target and starts being something whose internals other code depends on,
+this decision expires. That is the condition; it is deliberately not tied to a milestone number.
 - **`xvfb-run -a npm run regression`** — the 30-phase sweep, each phase on its own fresh Docker
   restart. Restarting is not optional: `unique(...)`'s counter resets per `tflw run` while Postgres
   data does not, so chained phases on one database reproduce false collisions. `xvfb-run -a` is not

@@ -42,6 +42,7 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveTflw } from './lib/tflw-bin.mjs';
 import { assertClaims, plantsFor, plantsWithSubject } from './lib/plants.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -137,9 +138,9 @@ function rootEnv() {
 }
 const CHILD_ENV = { ...rootEnv(), ...process.env };
 
-/** **Never `npx tflw`** (`M115-03`): that resolves this suite's vendored `tflw-0.1.0.tgz`, which
+/** **The BRANCH build, declared** (`M115-03`, closed by M141): `npx tflw` would resolve the vendored `tflw-0.1.0.tgz`, which
  *  predates the whole pentest arc and would grade a document it cannot produce. */
-const TFLW_BIN = process.env.TFLW_BIN ?? join(repoRoot, '..', 'testFlow', 'packages', 'cli', 'dist', 'cli.cjs');
+const TFLW_BIN = resolveTflw('branch', { label: 'verify-sarif-acceptance' }).entry;
 
 let failures = 0;
 const fail = (msg) => {

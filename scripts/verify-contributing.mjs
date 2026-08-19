@@ -58,15 +58,7 @@ const CLASSIFIED = [
     cmd: 'npm run lint',
     class: 'gate',
     local: 'npm --prefix apiV2 run lint',
-    why: 'eslint over the NestJS target app. The local form names the directory explicitly because this repo\'s root has no `lint` at all',
-  },
-  {
-    wf: 'ci.yml',
-    job: 'apiv2',
-    cmd: 'npm test',
-    class: 'gate',
-    local: 'npm --prefix apiV2 test',
-    why: 'jest over apiV2 — and as of `M138b-01` it runs ZERO tests (`--passWithNoTests` over a tree with no test files), so it is a gate that is green unconditionally. Classified `gate` anyway, because that is what the step IS; the row is where the argument about what to do belongs. **The local form must name the prefix**: a bare `npm test` at this repo\'s root is `tflw run`, a Docker-dependent suite of .tflw files, and confusing the two is a trap this table exists to remove',
+    why: 'eslint over the NestJS target app. The local form names the directory explicitly because this repo\'s root has no `lint` at all. **No `--fix`** as of `M141`/`D538` — an autofixing linter only fails on the unfixable subset, so the job was reporting on a tree it had just rewritten (`M141-01`). This job had a third command, `npm test`, until the same change: it was `jest --passWithNoTests` over a tree with no test files (`M138b-01`), and it was DELETED rather than filled in, because apiV2 is a dogfood target meant to keep changing shape',
   },
 
   // --- job `acceptance-check` — static, both trees checked out ------------------------------------
@@ -101,6 +93,14 @@ const CLASSIFIED = [
     class: 'gate',
     local: 'npm run verify:contributing',
     why: 'this file. It is in the set it guards — adding it meant classifying it and naming it in CONTRIBUTING.md, which is the mechanism working on its first day rather than an oversight',
+  },
+  {
+    wf: 'ci.yml',
+    job: 'acceptance-check',
+    cmd: 'npm run verify:tflw-resolution',
+    class: 'gate',
+    local: 'npm run verify:tflw-resolution',
+    why: 'M141 (`M115-03`, `M128-04`) — every script that grades a tflw declares WHICH tflw and prints the entry it resolved, and nothing resolves one outside `scripts/lib/tflw-bin.mjs`. In `acceptance-check` rather than `apiv2` for a load-bearing reason and not just cheapness: half of it asserts that `released` and `branch` resolve to two different programs, which is only checkable where both trees exist, and this is the only job that checks out both',
   },
 
   // --- job `regression` — the sweep, 4 matrix legs ------------------------------------------------

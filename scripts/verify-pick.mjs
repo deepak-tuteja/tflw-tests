@@ -13,9 +13,10 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveTflw } from './lib/tflw-bin.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const CLI_ENTRY = path.join(ROOT, 'node_modules', 'tflw', 'dist', 'cli.cjs');
+const CLI_ENTRY = resolveTflw('released', { label: 'verify-pick' }).entry;
 const TARGET_URL = 'http://localhost:8090/';
 
 let violations = 0;

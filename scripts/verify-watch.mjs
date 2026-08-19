@@ -17,9 +17,10 @@ import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveTflw } from './lib/tflw-bin.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const CLI_ENTRY = path.join(ROOT, 'node_modules', 'tflw', 'dist', 'cli.cjs');
+const CLI_ENTRY = resolveTflw('released', { label: 'verify-watch' }).entry;
 const SCRATCH_PATH = path.join(ROOT, 'tests', '_verify-watch-scratch.tflw');
 
 const INITIAL_CONTENT =
@@ -36,8 +37,8 @@ function ok(label, condition, detail = '') {
   }
 }
 
-function startWatch(extraArgs) {
-  const child = spawn('node', [CLI_ENTRY, 'watch', SCRATCH_PATH, '--no-color', ...extraArgs], { cwd: ROOT });
+function startWatch(extraArgs, env = process.env) {
+  const child = spawn('node', [CLI_ENTRY, 'watch', SCRATCH_PATH, '--no-color', ...extraArgs], { cwd: ROOT, env });
   let out = '';
   child.stdout.on('data', (d) => {
     out += d.toString();
@@ -75,7 +76,25 @@ const watch = startWatch([]);
 try {
   await watch.waitForRunsCompleted(1);
   ok('the initial run passes against the real webV2 storefront', /PASS 1\/1 passed/.test(watch.output()));
-  ok('the initial run launched a real headed browser (dogfoods this env’s real DISPLAY, not headless)', watch.output().includes('running the full suite') || watch.output().includes('running tests'));
+  // A SECOND ASSERTION USED TO BE HERE and was deleted rather than strengthened (`M128-03`, closed
+  // by `M141`). It claimed "the initial run launched a real headed browser", and its predicate was
+  // `output.includes('running the full suite') || output.includes('running tests')`. Both halves
+  // were empty:
+  //
+  //   - `'running tests'` appears NOWHERE in tflw's source. It matched nothing, ever.
+  //   - `'running the full suite'` is `watchCommand`'s own pre-run label, printed by `runOne`
+  //     BEFORE it invokes `runCommand` — so it says a run was about to start, not that a browser
+  //     opened.
+  //
+  // Worse, it was a tautology against its own neighbours: `waitForRunsCompleted(1)` returns only
+  // after `watching for changes`, which prints only after `runOne` — so by the time this line ran,
+  // its own predicate was already guaranteed true. It could not fail. Nothing about a *headed*
+  // browser was ever asserted by it, and the line above already asserts the run passed.
+  //
+  // What replaces it is at the bottom of this file: a negative control that unsets DISPLAY and
+  // requires the run to FAIL. That is the only shape that can distinguish headed from headless,
+  // because the difference is not visible in the log — it is visible in whether the browser can
+  // open at all.
 
   writeFileSync(SCRATCH_PATH, RESAVED_CONTENT);
   await watch.waitForRunsCompleted(2);
@@ -87,6 +106,42 @@ try {
   ok('Ctrl+C (SIGINT) stops cleanly (exit 0 or 130, the standard signal-death code)', exitCode === 0 || exitCode === 130, `exit ${exitCode}`);
 } finally {
   if (existsSync(SCRATCH_PATH)) unlinkSync(SCRATCH_PATH);
+}
+
+// --- the negative control (M141, D536) ----------------------------------------------------------
+//
+// `tflw watch` appends `--headed` to every triggered run unconditionally (`watchCommand`'s `runOne`,
+// tflw `packages/cli/src/cli.ts`), which is why this script needs a real DISPLAY and why testFlow's
+// own CI wraps it in `xvfb-run`. That is a claim about the child process, and the only way to test it
+// from out here is to take the display away and require the run to break.
+//
+// **This assertion is inverted on purpose**: it passes when the watched run FAILS. If tflw ever
+// stopped forcing `--headed` — or if this script stopped being the thing that launches a browser —
+// the run would succeed without a display and this would go red, which is exactly the notification
+// the deleted line above was supposed to give and never could.
+//
+// The whole `env` is rebuilt rather than mutated: `delete process.env.DISPLAY` would leak into the
+// cleanup below and into anything this script is chained after.
+{
+  const { DISPLAY: _display, ...noDisplay } = process.env;
+  writeFileSync(SCRATCH_PATH, INITIAL_CONTENT);
+  const blind = startWatch([], noDisplay);
+  try {
+    await blind.waitForRunsCompleted(1, 90000);
+    const passed = /PASS 1\/1 passed/.test(blind.output());
+    ok(
+      'with DISPLAY unset the watched run FAILS — proving the run above needed a real display, which is what a headed browser means',
+      !passed,
+      passed ? 'the run passed without a display, so nothing here is launching a headed browser' : '',
+    );
+  } catch (error) {
+    // A timeout is also a pass for this control: no display, no browser, no completed cycle. Said
+    // out loud rather than swallowed, because "it threw" and "it asserted" must not look alike.
+    ok('with DISPLAY unset the watched run never completes a cycle — same conclusion, by timeout', true, String(error.message).slice(0, 80));
+  } finally {
+    await blind.stop();
+    if (existsSync(SCRATCH_PATH)) unlinkSync(SCRATCH_PATH);
+  }
 }
 
 if (violations > 0) {

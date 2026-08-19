@@ -63,6 +63,7 @@ import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from '
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveTflw } from './lib/tflw-bin.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 // The *installed* tflw by default, which is the question this proof exists to answer: does the tflw
@@ -73,7 +74,7 @@ const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 // against a *stale list of codes* and can fail in either direction — missing fixtures for codes
 // that shipped, or "stale" fixtures for codes that had not yet. `M128-04` is the driver that made
 // that easy to hit; this is how you check a branch build without reinstalling one.
-const CLI_ENTRY = process.env.TFLW_CLI_ENTRY ?? path.join(ROOT, 'node_modules', 'tflw', 'dist', 'cli.cjs');
+const CLI_ENTRY = resolveTflw('released', { label: 'verify-check-diagnostics' }).entry;
 
 let violations = 0;
 function ok(label, condition, detail = '') {

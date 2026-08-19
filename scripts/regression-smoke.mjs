@@ -12,6 +12,15 @@
 // watch-check/pick-check/logging-check/report-overflow-check (real but narrow single-flag
 // proofs, lower regression-catching density per second than a broad smoke tag sweep).
 import { rmSync } from 'node:fs';
+import { tflwCommand } from './lib/tflw-bin.mjs';
+
+/** **`released`, and this is the loudest declaration of it in the repo.** The 30-phase sweep is
+ *  this project's primary dogfood gate, and until M141 it opened every phase with a literal
+ *  `npx tflw` — which resolves the VENDORED tarball through `node_modules/.bin`. So the gate a
+ *  contributor reads as "my change still passes" has always graded the *released* build, and
+ *  nothing anywhere said so (`M115-03`). The program is unchanged; the question is now declared
+ *  and the entry is printed once per run. To sweep a branch build instead, set `TFLW_BIN`. */
+const TFLW = tflwCommand('released', { label: 'regression-smoke' });
 import { ARCHIVE_DIR, CI_VERBOSE, archivePhaseReport, restart, run } from './lib/regression-shared.mjs';
 
 const SMOKE_PHASES = [
@@ -29,7 +38,7 @@ restart();
 const results = [];
 for (const phase of SMOKE_PHASES) {
   console.log(`\n--- ${phase.name} ---\n`);
-  const cmd = phase.cmd ?? ['npx', 'tflw', 'run', '--no-color', ...CI_VERBOSE, ...phase.args].join(' ');
+  const cmd = phase.cmd ?? [TFLW, 'run', '--no-color', ...CI_VERBOSE, ...phase.args].join(' ');
   try {
     run(cmd);
     results.push({ ...phase, ok: true });
