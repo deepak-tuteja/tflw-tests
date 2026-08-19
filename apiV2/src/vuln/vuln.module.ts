@@ -40,7 +40,12 @@ import { VulnReportsController } from './vuln-reports.controller';
 // touched.
 @Module({
   imports: [TypeOrmModule.forFeature([Order]), AuthModule],
-  controllers: [VulnController, VulnOrdersController, VulnInputController, VulnReportsController],
+  controllers: [
+    VulnController,
+    VulnOrdersController,
+    VulnInputController,
+    VulnReportsController,
+  ],
 })
 export class VulnModule {}
 
