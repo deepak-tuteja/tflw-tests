@@ -23,7 +23,7 @@
 // It needs no stack, no `.env` and no Playwright, so it runs in `acceptance-check` beside the other
 // static gates.
 
-import { existsSync, mkdtempSync, copyFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, copyFileSync, readFileSync, writeFileSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -132,15 +132,56 @@ console.log('resolver behaviour\n');
 
 // 4. `M128-04`'s refusal. The row asked for "the driver refusing to run npx-based phases without
 //    [an override]"; the driver is untracked (`D14`, in mac-fedora-connect), so the refusal lives
-//    here where a gate can hold it. Asking `branch` and being handed the vendored tarball is the
-//    exact confusion the row describes, and it must be an error, not a shrug.
+//    here where a gate can hold it. Asking `branch` and being handed a DIFFERENT program is the
+//    confusion the row describes, and it must be an error, not a shrug.
+//
+//    THIS ASSERTION WAS WRONG WHEN FIRST WRITTEN, and CI is what said so. It pointed `TFLW_BIN` at
+//    `RELEASED_ENTRY` and demanded a refusal — which passed here and failed there, because
+//    `refresh-tflw.mjs` packs the tarball **from the sibling checkout**: right after an install the
+//    vendored entry and the branch build are the SAME BYTES, and accepting it is then not a bug but
+//    the resolver's stated contract (assertion 5 — identity is by content, not by path). It had
+//    passed locally only because this machine's `node_modules/tflw` happened to be stale. A check
+//    whose green depends on an accident of when somebody last ran an install is exactly the kind of
+//    check Order 1 exists to remove, so it is replaced by both halves stated outright.
 {
-  const error = withEnv({ ...CLEAN_ENV, TFLW_BIN: RELEASED_ENTRY }, () =>
-    threw(() => resolveTflw('branch', { quiet: true })),
-  );
-  if (!error) fail('resolveTflw("branch") accepted the vendored tarball — M128-04 is open again');
-  else if (!/refuses/.test(error.message)) fail(`branch refused the vendored build with an unhelpful message: ${error.message}`);
-  else pass('asking for the branch build and being handed the vendored one is refused');
+  const shas = withEnv(CLEAN_ENV, () => ({
+    released: existsSync(RELEASED_ENTRY) ? resolveTflw('released', { quiet: true }).sha : null,
+    branch: existsSync(BRANCH_ENTRY) ? resolveTflw('branch', { quiet: true }).sha : null,
+  }));
+
+  // 4a. Whichever way the two builds currently stand, the resolver's answer is asserted — there is
+  //     no environment in which this is skipped, and the CI case is the identical one.
+  if (shas.released && shas.branch) {
+    const error = withEnv({ ...CLEAN_ENV, TFLW_BIN: RELEASED_ENTRY }, () =>
+      threw(() => resolveTflw('branch', { quiet: true })),
+    );
+    if (shas.released === shas.branch) {
+      if (error) fail(`the vendored entry is byte-identical to the branch build and was still refused: ${error.message}`);
+      else pass('a vendored entry freshly packed from the branch build IS the branch build, and is accepted');
+    } else if (!error) {
+      fail('resolveTflw("branch") accepted a vendored build whose bytes differ — M128-04 is open again');
+    } else {
+      pass('a vendored entry whose bytes differ from the branch build is refused');
+    }
+  }
+
+  // 4b. The refusal itself, against a vendored path built to differ rather than found differing —
+  //     so this half asserts the same thing on every machine and in CI. `node_modules` is in the
+  //     path on purpose: the message has to name it as a *vendored* build, which is the sentence a
+  //     reader gets when the confusion the row describes actually happens to them.
+  if (existsSync(BRANCH_ENTRY)) {
+    const dir = mkdtempSync(path.join(tmpdir(), 'tflw-bin-'));
+    const vendored = path.join(dir, 'node_modules', 'tflw', 'dist', 'cli.cjs');
+    mkdirSync(path.dirname(vendored), { recursive: true });
+    writeFileSync(vendored, `${readFileSync(BRANCH_ENTRY, 'utf8')}\n// packed from another commit\n`);
+    const error = withEnv({ ...CLEAN_ENV, TFLW_BIN: vendored }, () =>
+      threw(() => resolveTflw('branch', { quiet: true })),
+    );
+    if (!error) fail('resolveTflw("branch") accepted a vendored build that is not the branch build — M128-04 is open again');
+    else if (!/refuses/.test(error.message)) fail(`branch refused the vendored build with an unhelpful message: ${error.message}`);
+    else if (!/vendored build/.test(error.message)) fail(`the refusal did not name it as a vendored build: ${error.message}`);
+    else pass('a vendored build that is not the branch build is refused, and named as vendored');
+  }
 }
 
 // 5. …but identity is by CONTENT, not by path. `exec.mjs` rsyncs this tree to fedora-box under a
