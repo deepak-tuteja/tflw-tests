@@ -33,6 +33,14 @@ npm run refresh-tflw      # packs ../testFlow/packages/cli and installs the tarb
 npx playwright install --with-deps chromium
 ```
 
+**`--with-deps` here and not in CI, deliberately.** It runs `apt-get install`, and your machine may
+genuinely be missing a shared library an engine needs; you pay that once, on one machine. CI dropped
+it in `M143c` because it pays it on every job of every run against a mirror that is sometimes very
+slow — on run 32270050039 two legs sat in that step for over three hours while their siblings, same
+step and same run, finished in eleven and fourteen minutes. `ubuntu-latest` already ships
+Playwright's real dependency closure; the same reasoning and the full measurement live in tflw's
+`ci.yml` beside its own copy of the step (`M143a`).
+
 `refresh-tflw` is also this repo's own dependency install — there is nothing else in
 `package.json`. It packs tflw from **your local checkout**, and CI packs it from tflw's live
 `main`, unpinned on purpose: pinning would kill the dogfooding exactly when it matters.
