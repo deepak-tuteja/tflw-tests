@@ -116,9 +116,9 @@ const CLASSIFIED = [
   {
     wf: 'ci.yml',
     job: 'regression',
-    cmd: 'npx playwright install --with-deps chromium',
+    cmd: 'npx playwright install chromium',
     class: 'setup',
-    why: 'playwright has no postinstall download hook and the webV2 phases drive a real browser. Once per clone locally. Chromium only — this suite never runs firefox or webkit',
+    why: 'playwright has no postinstall download hook and the webV2 phases drive a real browser. Chromium only — this suite never runs firefox or webkit. NO `--with-deps` since `M143c`, where two legs of one run sat in this step for three hours; `CONTRIBUTING.md` keeps the flag for local setup on purpose and says why',
   },
   {
     wf: 'ci.yml',
@@ -187,6 +187,29 @@ function runSteps(text) {
   return out;
 }
 
+/** Every job and whether it declares its own `timeout-minutes`, as `{job, bounded}`. Indent 4
+ *  EXACTLY: a step may carry a `timeout-minutes` of its own at indent 8, and a step-level bound is
+ *  not a job-level one — `M143c` was caused by a job with no bound at all, and a check that counted
+ *  a step's bound as the job's would have passed over it. */
+function jobBounds(text) {
+  const lines = text.split('\n');
+  const out = [];
+  let inJobs = false;
+  let current = null;
+
+  for (const line of lines) {
+    if (/^jobs:\s*$/.test(line)) { inJobs = true; continue; }
+    const jobMatch = inJobs && /^ {2}([A-Za-z0-9_-]+):\s*$/.exec(line);
+    if (jobMatch) {
+      current = { job: jobMatch[1], bounded: false };
+      out.push(current);
+      continue;
+    }
+    if (current && /^ {4}timeout-minutes:/.test(line)) current.bounded = true;
+  }
+  return out;
+}
+
 let failures = 0;
 const fail = (msg) => {
   failures += 1;
@@ -195,8 +218,11 @@ const fail = (msg) => {
 
 const workflowFiles = (await readdir(WORKFLOW_DIR)).filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'));
 const steps = [];
+const jobs = [];
 for (const wf of workflowFiles) {
-  for (const s of runSteps(await readFile(join(WORKFLOW_DIR, wf), 'utf8'))) steps.push({ wf, ...s });
+  const text = await readFile(join(WORKFLOW_DIR, wf), 'utf8');
+  for (const s of runSteps(text)) steps.push({ wf, ...s });
+  for (const j of jobBounds(text)) jobs.push({ wf, ...j });
 }
 
 const key = (s) => `${s.wf} · ${s.job} · ${s.cmd}`;
@@ -325,6 +351,29 @@ if (sibling !== null) {
     console.log('✓ tflw\'s CONTRIBUTING.md points here for the cross-repo pair, and the section it points at exists');
   }
 }
+
+// --- 7. every job is bounded in time --------------------------------------------------------------
+
+// `M143c`. Not a claim about CONTRIBUTING.md, and the only check here that is not — it lives in this
+// file because this file already parses every workflow and runs in the one job that is static,
+// Docker-free and seconds long. A separate script would have meant a new gate to classify and name
+// in the prose, growing the gate set M138b exists to hold still, for one regex.
+//
+// WHAT IT IS FOR. `timeout-minutes` is not a budget and a job crossing it is not slow — it is the
+// bound that turns a hung job into a red one. Every job in this file went unbounded until `M143c`,
+// so run 32270050039's stalled Playwright install was heading for GitHub's 6-hour default while
+// tflw's identical stall — on a matrix that IS bounded — surfaced as twelve cancelled shards in
+// thirty minutes and got diagnosed the same day. Size it off measured duration, generously; the
+// number is chosen so that only a hang can reach it.
+for (const j of jobs) {
+  if (j.bounded) continue;
+  fail(
+    `job \`${j.wf}:${j.job}\` declares no \`timeout-minutes\`.\n` +
+      `    An unbounded job does not fail when it hangs, it occupies a runner until GitHub's 6-hour default and\n` +
+      `    reports nothing in the meantime. Add one at indent 4, sized off the job's measured maximum.`,
+  );
+}
+if (jobs.every((j) => j.bounded)) console.log(`✓ ${jobs.length} job(s) across ${workflowFiles.length} workflow(s), every one time-bounded`);
 
 if (failures > 0) {
   console.log(`\n✗ contributing gate set: ${failures} problem(s)`);

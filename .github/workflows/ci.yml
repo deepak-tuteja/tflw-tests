@@ -39,6 +39,9 @@ jobs:
   # the matrix via `needs:`, exactly like it used to gate the rest of the one job by running first.
   apiv2:
     runs-on: ubuntu-latest
+    # `M143c` — every job here declares one. Measured max under a minute across 10 runs; this is
+    # a hang bound, not a budget.
+    timeout-minutes: 15
     steps:
       - name: Checkout testFlow-tests
         uses: actions/checkout@v7
@@ -66,6 +69,8 @@ jobs:
   # are independent facts and should be reported independently.
   acceptance-check:
     runs-on: ubuntu-latest
+    # `M143c` — static checks, seconds. Same bound as `apiv2`, for the same reason.
+    timeout-minutes: 15
     steps:
       - name: Checkout testFlow-tests
         uses: actions/checkout@v7
@@ -139,6 +144,12 @@ jobs:
   regression:
     needs: apiv2
     runs-on: ubuntu-latest
+    # `M143c` — measured across 37 successful legs: max 16m, mean 10.8m. 30 is ~1.9x that max,
+    # the same ratio and the same number tflw gives its own heavy matrix. Before this milestone
+    # NO job in this file had a timeout, so run 32270050039's stalled install was heading for
+    # GitHub's 6-hour default; tflw's identical stall showed up in half an hour because its
+    # shards were bounded. The same defect is quieter in the repo with less instrumentation.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -192,8 +203,24 @@ jobs:
       # doesn't exist", confirmed on the first CI run after M7/webV2's suite actually landed on
       # main (run 30316658886; mirrors the same fix in tflw's own ci.yml). Chromium only — this
       # suite never exercises `--browser firefox`/`webkit`.
+      #
+      # M143c — no `--with-deps`, for the reason tflw's own `ci.yml` records in full at its build
+      # job's copy of this step (`M143a`). Short version: `--with-deps` is an `apt-get install` of
+      # 48.8 MB from azure.archive.ubuntu.com, measured at 58 kB/s on a bad runner, while the
+      # browser archives it is confused with come from cdn.playwright.dev in about six seconds.
+      # `ubuntu-latest` already carries Playwright's real dependency closure; what apt adds is CJK
+      # fonts and media codecs, and nothing in this suite renders either.
+      #
+      # THIS REPO WAS MEASURED CAUGHT BY IT, not argued into the change. On run 32270050039 (PR #27)
+      # the `tooling` and `security-ui` legs sat in THIS STEP for over three hours while `core` and
+      # `safety` — same step, same run — finished in 11m and 14m. The stall is per-runner and
+      # intermittent, which is why 8 samples of "0.4-0.7m, no stall" could not see it and Round 3
+      # decision 16 priced this step at "~2-3min per leg" in good faith.
+      #
+      # If an engine ever does fail to launch, Playwright names the missing library on stderr:
+      # install that one, by name, here. Never the closure again.
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
         working-directory: testFlow-tests
 
       # decisions 5-8 + Round 3 decision 16: this matrix leg's slice of the 30 phases only
@@ -233,6 +260,8 @@ jobs:
     needs: regression
     if: always()
     runs-on: ubuntu-latest
+    # `M143c` — downloads four artifacts and re-uploads one.
+    timeout-minutes: 15
     steps:
       # dorny/test-reporter shells out to `git ls-files` internally — needs a real git repo at
       # `working-directory` below, same reason the old single job checked this out (see that
