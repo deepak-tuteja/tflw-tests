@@ -24,7 +24,7 @@ import { tflwCommand } from './lib/tflw-bin.mjs';
  *  nothing anywhere said so (`M115-03`). The program is unchanged; the question is now declared
  *  and the entry is printed once per run. To sweep a branch build instead, set `TFLW_BIN`. */
 const TFLW = tflwCommand('released', { label: 'regression' });
-import { ARCHIVE_DIR, CI_VERBOSE, archivePhaseReport, restart, run } from './lib/regression-shared.mjs';
+import { ARCHIVE_DIR, CI_VERBOSE, archivePhaseReport, passedPhasesWithFailingJunit, restart, run } from './lib/regression-shared.mjs';
 
 // PLAN_CI.md decision 9 wants every phase's report.html/junit.xml/results.json uploaded, not just
 // a green run's — but every phase writes to the same `report/`, and the next phase's restart
