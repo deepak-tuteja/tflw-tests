@@ -47,6 +47,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveTflw } from './lib/tflw-bin.mjs';
 import { GRADERS, PLANTS, PLANT_IDS, isPlantFinding, plantsFor } from './lib/plants.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -1138,7 +1139,12 @@ function gradeCoverage(env, report) {
 
 const COUNTS = /(\d+) rules? — (\d+) applicable, (\d+) not applicable, (\d+) violations?/;
 const VIOLATION = /^\s*- \[(critical|serious|moderate|minor)\] (sec\/[a-z0-9-]+):/gm;
-const STOOD_DOWN = /^\s*- (sec\/[a-z0-9-]+) applies when: (.+)$/gm;
+// `STOOD_DOWN` USED TO BE HERE, and deleting it is what closes `M137a-01`. It scraped D285's
+// human-readable "no power to fail" listing — `- sec/x applies when: …` — for the set of rules that
+// stood down, which is the same question `RunReport.scanCoverage` answers structurally. Two answers,
+// one load-bearing and one decorative, and nothing said which: reword that message on the emitter
+// side and this regex silently matched nothing, leaving the probes below comparing their expectations
+// against an empty list. The census is now the only answer this file reads (`M141`).
 /** The discriminator between a Tier 1 step and a Tier 2 one, and the reason this script needed one
  * at all: **the two tiers share the counts line and the `sec/` id prefix**, so `securitySteps()`
  * ingests both and would have graded an authz assertion against the hygiene pack without
@@ -1184,7 +1190,6 @@ function securitySteps(report) {
         ok: s.ok,
         detail,
         fired: [...detail.matchAll(VIOLATION)].map((m) => m[2]),
-        stoodDown: [...detail.matchAll(STOOD_DOWN)].map((m) => m[1]),
         counts: COUNTS.exec(detail).slice(1).map(Number),
         probes: parseProbes(detail),
       });
@@ -1200,7 +1205,7 @@ function securitySteps(report) {
  * built CLI; the default points at the sibling checkout so a plain `npm run
  * verify:security-acceptance` on a dev machine works without ceremony.
  */
-const TFLW_BIN = process.env.TFLW_BIN ?? join(repoRoot, '..', 'testFlow', 'packages', 'cli', 'dist', 'cli.cjs');
+const TFLW_BIN = resolveTflw('branch', { label: 'verify-security-acceptance' }).entry;
 
 /**
  * The corpus declares `require env USER_A_EMAIL, USER_A_PW`, and tflw auto-loads `.env` from the
@@ -1723,10 +1728,30 @@ for (const probe of APPLICABILITY_PROBES) {
     fail(`[${probe.env}] an assertion where every rule stood down PASSED — D285 has been removed`);
     continue;
   }
-  const missing = probe.expectNotApplicable.filter((id) => !step.stoodDown.includes(id));
-  const extra = step.stoodDown.filter((id) => !probe.expectNotApplicable.includes(id));
+  // `M137a-01`, closed by `M141`. These four probes used to compare their expectations against a
+  // regex over D285's prose listing while the probe above compared against the structured census —
+  // two answers to one question in one file. They now read the same field. The `step.ok === false`
+  // check above is NOT redundant with it and stays: the census says which rules stood down, and
+  // that check says the assertion had no power to fail, which is a different claim.
+  //
+  // The census is run-level (tflw's `buildScanCoverage`) and these envs run one scan of one kind, so
+  // it names the same set the prose listing named. That is an equivalence claim, and it is held by
+  // this comparison itself: `expectNotApplicable` is unchanged from when the regex fed it, so a run
+  // that passes here is the two answers agreeing on all four probes.
+  const scanKind = probe.kind === 'authz' ? 'authorization' : 'security';
+  const censusHere = (report.scanCoverage ?? []).filter((c) => c.scan === scanKind);
+  if (censusHere.length === 0) {
+    fail(
+      `[${probe.env}] no \`scanCoverage\` for the \`${scanKind}\` scan — D389's census is the only answer this ` +
+        `file reads for which rules stood down (M141), so its absence is a failure and not a fallback`,
+    );
+    continue;
+  }
+  const stoodDown = [...new Set(censusHere.flatMap((c) => (c.notApplicable ?? []).map((n) => n.rule)))];
+  const missing = probe.expectNotApplicable.filter((id) => !stoodDown.includes(id));
+  const extra = stoodDown.filter((id) => !probe.expectNotApplicable.includes(id));
   if (missing.length || extra.length) {
-    fail(`[${probe.env}] not-applicable listing mismatch\n    missing: ${missing.join(', ') || '(none)'}\n    extra:   ${extra.join(', ') || '(none)'}`);
+    fail(`[${probe.env}] not-applicable census mismatch\n    missing: ${missing.join(', ') || '(none)'}\n    extra:   ${extra.join(', ') || '(none)'}`);
     continue;
   }
   if (probe.expectProbes) {
@@ -1739,8 +1764,10 @@ for (const probe of APPLICABILITY_PROBES) {
     }
   }
   if (probe.expectDeclines) gradeDeclines(`${probe.env} probe`, report, probe.expectDeclines);
-  for (const id of step.stoodDown) (probe.kind === 'authz' ? seenAuthz : seen).notApplicable.add(id);
-  console.log(`✓ [${probe.env}] D285 fired and named ${step.stoodDown.length} rules that stood down, exactly as the ledger says`);
+  for (const id of stoodDown) (probe.kind === 'authz' ? seenAuthz : seen).notApplicable.add(id);
+  console.log(
+    `✓ [${probe.env}] D285 fired and the census named ${stoodDown.length} rules that stood down, exactly as the ledger says`,
+  );
 }
 
 // --- the coverage table, gaps included ---------------------------------------

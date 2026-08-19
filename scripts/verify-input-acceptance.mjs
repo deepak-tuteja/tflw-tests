@@ -42,6 +42,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveTflw } from './lib/tflw-bin.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const corpus = join(repoRoot, 'tflw-acceptance', 'security');
@@ -313,8 +314,7 @@ function inputSteps(report) {
  * *vendored* `tflw-0.1.0.tgz`, which predates the entire pentest arc — a grader run through it would
  * report that none of the four rules exist and be perfectly happy about it.
  */
-const TFLW_BIN =
-  process.env.TFLW_BIN ?? join(repoRoot, '..', 'testFlow', 'packages', 'cli', 'dist', 'cli.cjs');
+const TFLW_BIN = resolveTflw('branch', { label: 'verify-input-acceptance' }).entry;
 
 /**
  * The corpus declares `require env …`, and tflw auto-loads `.env` from the *config* directory — which

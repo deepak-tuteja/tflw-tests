@@ -15,6 +15,15 @@
 // failures this project has already hit and documented twice (PROGRESS.md M20, M21). A phase's
 // result is only trustworthy in isolation.
 import { rmSync } from 'node:fs';
+import { tflwCommand } from './lib/tflw-bin.mjs';
+
+/** **`released`, and this is the loudest declaration of it in the repo.** The 30-phase sweep is
+ *  this project's primary dogfood gate, and until M141 it opened every phase with a literal
+ *  `npx tflw` — which resolves the VENDORED tarball through `node_modules/.bin`. So the gate a
+ *  contributor reads as "my change still passes" has always graded the *released* build, and
+ *  nothing anywhere said so (`M115-03`). The program is unchanged; the question is now declared
+ *  and the entry is printed once per run. To sweep a branch build instead, set `TFLW_BIN`. */
+const TFLW = tflwCommand('released', { label: 'regression' });
 import { ARCHIVE_DIR, CI_VERBOSE, archivePhaseReport, restart, run } from './lib/regression-shared.mjs';
 
 // PLAN_CI.md decision 9 wants every phase's report.html/junit.xml/results.json uploaded, not just
@@ -63,7 +72,7 @@ const PHASES = [
   ...AREA_TAGS.map((tag) => ({ name: `--tag smoke,${tag}`, args: ['--tag', `smoke,${tag}`] })),
   {
     name: 'mtls-rejection',
-    cmd: ['npx', 'tflw', 'run', '--no-color', ...CI_VERBOSE, '--env', 'mtlsSidecarNoCert', 'tests/.env-specific/mtls-rejection.tflw'].join(' '),
+    cmd: [TFLW, 'run', '--no-color', ...CI_VERBOSE, '--env', 'mtlsSidecarNoCert', 'tests/.env-specific/mtls-rejection.tflw'].join(' '),
   },
   { name: 'safety-redaction-check', cmd: 'node scripts/verify-redaction.mjs' },
   // M29 (plan_v2.md Part R, coverage audit): the tests/.demo-fail/ set and 6 previously-unproven
@@ -112,7 +121,7 @@ const PHASES = [
   // base points at the storefront's :8090, not this console's :8091.
   {
     name: 'ui-admin-check',
-    cmd: ['npx', 'tflw', 'run', '--no-color', ...CI_VERBOSE, '--env', 'webv2Admin', 'tests/.env-specific/ui-admin/*.tflw'].join(' '),
+    cmd: [TFLW, 'run', '--no-color', ...CI_VERBOSE, '--env', 'webv2Admin', 'tests/.env-specific/ui-admin/*.tflw'].join(' '),
   },
   // Pre-E3 housekeeping (found during E2, deliberately deferred there): `webv2-admin.tflw` itself
   // — the pre-existing *mixed* admin test living alongside `ui-admin/` — had never been wired into
@@ -122,7 +131,7 @@ const PHASES = [
   // holds `mtls-rejection.tflw`/`unreachable-host.tflw`, which need their own different envs.
   {
     name: 'webv2-admin-check',
-    cmd: ['npx', 'tflw', 'run', '--no-color', ...CI_VERBOSE, '--env', 'webv2Admin', 'tests/.env-specific/webv2-admin.tflw', 'tests/.env-specific/orgs-mixed.tflw'].join(' '),
+    cmd: [TFLW, 'run', '--no-color', ...CI_VERBOSE, '--env', 'webv2Admin', 'tests/.env-specific/webv2-admin.tflw', 'tests/.env-specific/orgs-mixed.tflw'].join(' '),
   },
   // M128a (testFlow PLAN_M128_PENTEST_TIER1.md, D293): the pentest arc's target. Two phases,
   // because they need two different things from the stack and only one of them needs anything
@@ -132,7 +141,7 @@ const PHASES = [
   // sidecar — `--env secureLocal`, same reason `mtls-rejection` needs its own `--env`.
   {
     name: 'secure-local-check',
-    cmd: ['npx', 'tflw', 'run', '--no-color', ...CI_VERBOSE, '--env', 'secureLocal', 'tests/.env-specific/secure-local.tflw'].join(' '),
+    cmd: [TFLW, 'run', '--no-color', ...CI_VERBOSE, '--env', 'secureLocal', 'tests/.env-specific/secure-local.tflw'].join(' '),
   },
   // `security-target-check` is the only phase that needs the stack itself brought up differently
   // (`VULN_MODE=1`, the fixture slice — Tier 1's hygiene routes plus, since M130a, Tier 2's
@@ -286,7 +295,7 @@ for (const phase of activePhases) {
     : '';
   console.log(`\n=== ${phase.name} (fresh restart${envNote}) ===\n`);
   restart(phase.stackEnv);
-  const cmd = phase.cmd ?? ['npx', 'tflw', 'run', '--no-color', ...CI_VERBOSE, ...phase.args].join(' ');
+  const cmd = phase.cmd ?? [TFLW, 'run', '--no-color', ...CI_VERBOSE, ...phase.args].join(' ');
   try {
     run(cmd);
     results.push({ ...phase, ok: true });

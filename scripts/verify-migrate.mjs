@@ -8,6 +8,7 @@
 import { execSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { tflwCommand } from './lib/tflw-bin.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -22,7 +23,10 @@ function ok(label, condition, detail = '') {
 }
 
 const before = execSync('git status --porcelain', { cwd: ROOT, encoding: 'utf8' });
-const stdout = execSync('node node_modules/tflw/dist/cli.cjs migrate --no-color', { cwd: ROOT, encoding: 'utf8' });
+// `released`: `migrate` is a command a user runs against the tflw they installed, so the
+// question this script asks is about the shipped build (M141).
+const TFLW = tflwCommand('released', { label: 'verify-migrate' });
+const stdout = execSync(`${TFLW} migrate --no-color`, { cwd: ROOT, encoding: 'utf8' });
 const after = execSync('git status --porcelain', { cwd: ROOT, encoding: 'utf8' });
 
 ok('reports nothing to migrate (grammar has been additive-only since v0.1.0)', stdout.includes('no deprecated syntax found — nothing to migrate.'), stdout.trim());

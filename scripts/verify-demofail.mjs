@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // M29 (plan_v2.md Part R decision 7): proves the whole `tests/.demo-fail/*.tflw` set still fails
-// for the reason each fixture exists to demonstrate — not just that `npx tflw run` on them exits
+// for the reason each fixture exists to demonstrate — not just that `${TFLW} run` on them exits
 // non-zero once, by hand, during whatever milestone first wrote them. Nothing today would notice
 // if a future tflw regression silently made one of these start *passing* (i.e. the behavior it's
 // supposed to prove-broken-without stopped failing) — that's exactly the gap this closes.
@@ -17,6 +17,12 @@ import { execSync } from 'node:child_process';
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { tflwCommand } from './lib/tflw-bin.mjs';
+
+/** `released`: this script grades the tflw a user would have installed, which is what
+ *  `npx tflw` resolved here before M141 — the program is unchanged, the question is now
+ *  declared and the entry is printed instead of inferred. */
+const TFLW = tflwCommand('released', { label: 'verify-demofail' });
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DEMO_FAIL_DIR = path.join(ROOT, 'tests', '.demo-fail');
@@ -59,14 +65,14 @@ const otherFiles = readdirSync(DEMO_FAIL_DIR)
   .sort();
 
 const otherPaths = otherFiles.map((f) => path.join('tests', '.demo-fail', f)).join(' ');
-const otherResult = runExpectingFailures(`npx tflw run ${otherPaths} --no-color --tag demofail`);
+const otherResult = runExpectingFailures(`${TFLW} run ${otherPaths} --no-color --tag demofail`);
 allOk = check(`${otherFiles.length} demo-fail fixtures (env local)`, otherResult, {
   passed: 0,
   total: otherFiles.length,
 }) && allOk;
 
 const allowHostsResult = runExpectingFailures(
-  `npx tflw run tests/.demo-fail/${allowHostsFile} --no-color --env allowHostsBlocked --tag demofail`,
+  `${TFLW} run tests/.demo-fail/${allowHostsFile} --no-color --env allowHostsBlocked --tag demofail`,
 );
 allOk = check('allow-hosts-blocked.tflw (env allowHostsBlocked)', allowHostsResult, { passed: 0, total: 1 }) && allOk;
 

@@ -12,6 +12,12 @@ import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { tflwCommand } from './lib/tflw-bin.mjs';
+
+/** `released`: this script grades the tflw a user would have installed, which is what
+ *  `npx tflw` resolved here before M141 — the program is unchanged, the question is now
+ *  declared and the entry is printed instead of inferred. */
+const TFLW = tflwCommand('released', { label: 'verify-safety-flags' });
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const RESULTS_PATH = path.join(ROOT, 'report', 'results.json');
@@ -49,7 +55,7 @@ function allApiSteps(results) {
 {
   // `insecure true` is genuinely active under mtlsSidecarNoCert (tflw.config) — the exact case
   // --forbid-insecure exists to catch before any test runs, not partway through one.
-  const { stdout, status } = run('npx tflw run --env mtlsSidecarNoCert --forbid-insecure --no-color tests/api/identity/mtls.tflw');
+  const { stdout, status } = run(`${TFLW} run --env mtlsSidecarNoCert --forbid-insecure --no-color tests/api/identity/mtls.tflw`);
   ok(
     '--forbid-insecure refuses to run when the active env has `insecure true`',
     status !== 0 && /forbid-insecure was set and env .* has `insecure true` active — refusing to run/.test(stdout),
@@ -60,14 +66,14 @@ function allApiSteps(results) {
 {
   // The positive path: --forbid-insecure must NOT block a genuinely secure env — proves it's
   // conditional on `insecure true`, not a blanket refusal that happens to always fire.
-  const { stdout, status } = run('npx tflw run --env local --forbid-insecure --no-color --tag smoke');
+  const { stdout, status } = run(`${TFLW} run --env local --forbid-insecure --no-color --tag smoke`);
   ok('--forbid-insecure does not block a secure env (`local`, no `insecure true`)', status === 0 && /PASS \d+\/\d+ passed/.test(stdout), stdout.trim().split('\n').pop());
 }
 
 // --- --evidence headers-only/none: real content trimmed from the emitted report, ground-truth ---
 // checked against results.json rather than just "the flag parsed and nothing crashed".
 {
-  run('npx tflw run --env safetyRedaction --evidence headers-only --no-color tests/api/identity/safety-redaction.tflw');
+  run(`${TFLW} run --env safetyRedaction --evidence headers-only --no-color tests/api/identity/safety-redaction.tflw`);
   const results = JSON.parse(readFileSync(RESULTS_PATH, 'utf8'));
   const steps = allApiSteps(results);
   ok('--evidence headers-only: at least one api step captured', steps.length > 0);
@@ -81,7 +87,7 @@ function allApiSteps(results) {
   );
 }
 {
-  run('npx tflw run --env safetyRedaction --evidence none --no-color tests/api/identity/safety-redaction.tflw');
+  run(`${TFLW} run --env safetyRedaction --evidence none --no-color tests/api/identity/safety-redaction.tflw`);
   const results = JSON.parse(readFileSync(RESULTS_PATH, 'utf8'));
   const steps = allApiSteps(results);
   ok('--evidence none: at least one api step captured', steps.length > 0);
@@ -98,7 +104,7 @@ function allApiSteps(results) {
   // The control case: with no --evidence flag (tflw.config's own `evidence` default, "full"), the
   // real body must actually be present — otherwise the two checks above would trivially pass
   // against a tool that always omits everything, proving nothing about the flag's own effect.
-  run('npx tflw run --env safetyRedaction --no-color tests/api/identity/safety-redaction.tflw');
+  run(`${TFLW} run --env safetyRedaction --no-color tests/api/identity/safety-redaction.tflw`);
   const results = JSON.parse(readFileSync(RESULTS_PATH, 'utf8'));
   const steps = allApiSteps(results);
   ok(

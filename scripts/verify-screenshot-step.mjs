@@ -7,6 +7,12 @@ import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { tflwCommand } from './lib/tflw-bin.mjs';
+
+/** `released`: this script grades the tflw a user would have installed, which is what
+ *  `npx tflw` resolved here before M141 — the program is unchanged, the question is now
+ *  declared and the entry is printed instead of inferred. */
+const TFLW = tflwCommand('released', { label: 'verify-screenshot-step' });
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const RESULTS_PATH = path.join(ROOT, 'report', 'results.json');
@@ -23,7 +29,7 @@ function ok(label, condition, detail = '') {
 }
 
 execSync(
-  'npx tflw run --only "row-scoped add-to-cart on a page of a dozen identical buttons, with its async toast" --no-color tests/mixed/storefront.tflw',
+  `${TFLW} run --only "row-scoped add-to-cart on a page of a dozen identical buttons, with its async toast" --no-color tests/mixed/storefront.tflw`,
   { cwd: ROOT, stdio: 'inherit' },
 );
 

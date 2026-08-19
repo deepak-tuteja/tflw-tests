@@ -52,6 +52,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statS
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveTflw } from './lib/tflw-bin.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const SWEEP = path.join(ROOT, '.sweep-input');
@@ -243,7 +244,7 @@ const started = Date.now();
 const run = spawnSync(
   'node',
   [
-    path.join(ROOT, 'node_modules', 'tflw', 'dist', 'cli.cjs'),
+    resolveTflw('released', { label: 'sweep-input-volume' }).entry,
     'run',
     '--env',
     'local',
