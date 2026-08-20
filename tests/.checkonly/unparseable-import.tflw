@@ -1,0 +1,30 @@
+# unparseable-import.tflw — CHECK-ONLY FIXTURE (tflw `M147c`, review `M140-03`):
+# an `import` naming a file that is there and does not parse — `tflw check`'s TF073.
+#
+# **What this replaces is silence, not a wrong message.** `tflw check <entry>` used to print
+# *no problems found* about a program that cannot start: the resolver ran a full parse of the
+# imported file, kept only the verdict *world unknown*, and threw every diagnostic it had just
+# computed away. The verdict was right and the report was missing, which is why it survived so long —
+# a check that is right and silent looks exactly like a check that is right.
+#
+# **The caret is on the local `import` path literal and never inside the other file.** Its line
+# numbers belong to that file; underlining them against this source would point at whatever text
+# happens to sit on those lines here. The hint hands over `tflw check <that file>` instead, which is
+# the one command that shows the real errors with their real carets.
+#
+# **Not `TF043`.** That code is MISSING_FILE, and this file is present — being present is what
+# leaves *does not parse* as the only thing wrong. The two are never both raised for one `import`.
+#
+# **Why `tflw check` over a directory never showed this:** it checks the broken file directly, so the
+# errors appear under their own filename and nobody notices the entry file said nothing. The gap
+# belongs to the single-entry run — `tflw check tests/entry.tflw` in CI — which is the shape this
+# language recommends.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/unparseable-import.tflw
+
+import "./unparseable-import-target.tflw"
+
+test "cannot start, because what it imports cannot be read"
+  api GET /health
+  expect status equals 200
