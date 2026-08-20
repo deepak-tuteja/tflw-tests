@@ -1,0 +1,11 @@
+# unparseable-import-target.tflw — SUPPORT FILE, not a fixture of its own.
+#
+# It exists to be imported by `unparseable-import.tflw` and to fail to parse when it is. The
+# unterminated string on the last line is the whole payload; nothing else about this file matters.
+#
+# It carries no row in `verify-check-diagnostics.mjs` deliberately — checked on its own it reports a
+# lexer error, and which one is not the thing `TF073` is about. `rows.txt` sits beside
+# `data-table-extension.tflw` for the same reason.
+
+action makeId(prefix)
+  let id = "ord-

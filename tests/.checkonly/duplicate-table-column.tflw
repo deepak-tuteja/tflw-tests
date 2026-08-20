@@ -1,0 +1,30 @@
+# duplicate-table-column.tflw — CHECK-ONLY FIXTURE (tflw `M147c`, review `A2-11`, D633):
+# a `with each` header that declares the same column name twice — `tflw check`'s TF072.
+#
+# **What the mistake costs, and why it was silent.** A row binds each column name once, so with
+# `| id | id |` the second column wins and every cell under the first is discarded — the table runs,
+# each case gets half the data it was written with, and nothing anywhere says so. That is the shape
+# this arc keeps finding: not a crash, a quiet wrong answer.
+#
+# **Refused by the parser, not the checker**, which is where the two halves of the language draw the
+# line: a name a file *does not declare* is the checker's business, and here the file declares it
+# twice. `TF071`'s numeric settings sit on the same side for the same reason.
+#
+# **The caret is on the SECOND occurrence** — the one to rename. Pointing at the first would name
+# the column that loses its cells rather than the one that took them, and a reader would rename the
+# wrong half of their own table.
+#
+# **Not covered here:** a file-backed table with a duplicate header (`with each from "./rows.csv"`).
+# The columns are not known until the file is read and `@tflw/lang` does no I/O, so that case is the
+# runtime's — `tests/.checkonly/data-table-extension.tflw`'s header explains the same split for
+# `TF056`.
+#
+# Run explicitly (dot-directory, invalid syntax — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/duplicate-table-column.tflw
+
+with each
+  | id | id |
+  | "a" | "b" |
+test "reads {id} from a header that declares it twice"
+  api GET /health
+  expect status equals 200

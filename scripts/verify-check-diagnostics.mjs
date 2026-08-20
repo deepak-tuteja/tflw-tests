@@ -201,6 +201,29 @@ const FILE_FIXTURES = {
   // (D351) — which is how this row's absence was caught before tflw's PR merged rather than after.
   TF068: 'crawl-without-seed.tflw',
   TF070: 'crawl-body-not-an-assertion.tflw',
+  //
+  // The ledger drawdown's Order 6 (tflw `M147c`). **Two codes here and one in `CONFIG_FIXTURES`
+  // below**, and the split across the two blocks is the finding rather than an accident of filing:
+  // all three refuse something the language had accepted in silence, and which dialect each lands in
+  // is decided by where the mistake can be written, not by what kind of mistake it is.
+  //
+  // `TF072` is a `with each` header declaring one column name twice — the second wins, every cell
+  // under the first is discarded, and before this the table simply ran with half its data. `TF073`
+  // is an `import` naming a file that is present and does not parse: `tflw check <entry>` printed
+  // *no problems found* about a program that cannot start, because the resolver parsed the imported
+  // file, kept the verdict and discarded the diagnostics. Neither is a new rule the runtime learnt —
+  // both are rules the runtime already enforced, moved to the place that can say them first.
+  //
+  // **`TF073` is the one row here whose fixture needs a second file**, `unparseable-import-target.tflw`,
+  // which carries no row of its own: checked directly it reports an ordinary lexer error, and which
+  // one is not what this proves. `rows.txt` sits beside `data-table-extension.tflw` for the same
+  // reason.
+  //
+  // Coupled with its tflw half and red until that half merges (D350/D382), as Tier 3's and Tier 4's
+  // rows above were. The local pre-flight is
+  // `npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs` (D351).
+  TF072: 'duplicate-table-column.tflw',
+  TF073: 'unparseable-import.tflw',
 };
 
 for (const [code, file] of Object.entries(FILE_FIXTURES)) {
@@ -231,6 +254,24 @@ const CONFIG_FIXTURES = {
   // code one step earlier: `TF060` compares origins, and a bare hostname has none.)
   TF061:
     'defaults\n  authorized target "https://*.example.com" reason "staging sweep"\n\nenv local default\n  api "http://localhost:4001"\n',
+  // tflw `M147c` (review `A2-09`, D631): a setting whose value cannot configure anything. `workers 0`
+  // is a worker pool that can run no test, and it parsed cleanly until this milestone — as did
+  // `viewport 0 0` and the fractional `retry 2.5`.
+  //
+  // **The zeros this does NOT refuse are the reason the rule has a per-slot floor**, and a fixture
+  // that read `workers 0 is refused, so zero is refused` would be describing a language this is not:
+  // `retry 0` and `timeout expect 0s` are meaningful settings — *do not re-run*, *evaluate once and
+  // do not poll* — and both stay legal. The question is never whether the number is zero; it is
+  // whether the setting can still keep its promise at that value.
+  //
+  // Config dialect because `workers` is a config directive, while `TF072` and `TF073` above are test
+  // dialect. One code, both dialects: the parser raises this for `retry` and `up to` inside a test
+  // file too, and the checker raises it for a typo under the reserved `tflw://` scheme (`M118-01`).
+  //
+  // The `defaults` block is not decoration here: `workers` is a `defaults` directive, and written at
+  // the top level it reports `TF022` instead — which is `TF022`'s own fixture above, three lines of
+  // this object apart. Writing this one the short way produced exactly that, and the gate said so.
+  TF071: 'defaults\n  workers 0\n\nenv local default\n  api "http://localhost:4001"\n',
 };
 
 const scratchDir = mkdtempSync(path.join(tmpdir(), 'tflw-check-config-'));
