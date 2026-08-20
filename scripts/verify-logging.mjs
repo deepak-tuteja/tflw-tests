@@ -8,7 +8,7 @@
 //
 // Drives tests/api/mechanics/logging.tflw (three log lines: a bare `debug`, a bare `warn`, and an explicit
 // `error ... to html`) under several `--log-output`/`--log-level` combinations and the dedicated
-// `logConfig` env (tflw.config: `log destination "console"` / `log level "warn"`), reading
+// `logConfig` env (tflw.config: `log destination console` / `log level warn`), reading
 // report/results.json (recording, always complete regardless of flags) and console stdout
 // (rendering, filtered) as ground truth — never inferred from the spec text alone.
 import { execSync } from 'node:child_process';

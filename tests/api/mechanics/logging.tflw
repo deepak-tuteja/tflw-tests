@@ -3,7 +3,7 @@
 # semantics, and "an explicit `to …` clause always wins" (SPEC.md §3.8/§7.7).
 #
 # Run under `--env logConfig` (or `npm run test:logging`) — its own dedicated env (tflw.config):
-# `log destination "console"` / `log level "warn"`, distinct from the built-in default (`both`/
+# `log destination console` / `log level warn`, distinct from the built-in default (`both`/
 # `debug`) so this file actually exercises the override, not just the default.
 #
 # What each line below is *for* (level/destination filtering itself isn't visible to `expect` —
