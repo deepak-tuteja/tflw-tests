@@ -224,6 +224,27 @@ const FILE_FIXTURES = {
   // `npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs` (D351).
   TF072: 'duplicate-table-column.tflw',
   TF073: 'unparseable-import.tflw',
+  // The drawdown's Order 6, Cluster 3 (tflw `M147e`, `A3-14`, D643) — and the only code in this file
+  // whose fixture proves the checker **returns at all**.
+  //
+  // Every other entry here proves a diagnostic says the right thing. This one proves there is a
+  // diagnostic: before `M147e`, `tflw check` on a file whose expression nests deeply enough printed
+  // `error: Maximum call stack size exceeded`, exit 2, with no filename, no line and no caret —
+  // `parseSource` throwing a raw V8 `RangeError` out of a function documented at `index.ts:122` as
+  // never throwing for a syntax error. Not a bad message but none, which is why the fixture matters
+  // more than its wording: a suite that only ever checks well-formed files cannot tell a parser that
+  // refuses from one that dies.
+  //
+  // 300 unary minuses, against a limit of 256 — deliberately just past it rather than at the 30 000
+  // the row was filed from, because what is being proved is the *refusal*, and a file large enough to
+  // exhaust a stack proves the same thing while making this fixture slow to read and slow to lex.
+  // Unary minus is the only production in the grammar that recurses per token; `+ - * /` chains
+  // iterate, `within` nesting is bounded by the lexer, and a JSON body goes through `JSON.parse`, so
+  // this one shape covers the whole surface.
+  //
+  // Coupled with its tflw half and red until that half merges (D350/D382). The local pre-flight is
+  // `npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs` (D351).
+  TF075: 'expression-nested-too-deeply.tflw',
 };
 
 for (const [code, file] of Object.entries(FILE_FIXTURES)) {
