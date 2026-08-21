@@ -272,6 +272,30 @@ const CONFIG_FIXTURES = {
   // the top level it reports `TF022` instead — which is `TF022`'s own fixture above, three lines of
   // this object apart. Writing this one the short way produced exactly that, and the gate said so.
   TF071: 'defaults\n  workers 0\n\nenv local default\n  api "http://localhost:4001"\n',
+  // tflw `M147d` (review `M137f-02`, D642): `session <name> for env <a>[, <b>...]` naming an env
+  // this config does not declare. The clause itself is the milestone's widening — a `session` was
+  // top level and therefore had to resolve under *every* env, which forced one origin's service
+  // name, its `allow hosts` entry and its `authorized target` affirmation into env blocks that never
+  // touch it.
+  //
+  // **Why a typo in that clause is worth a code of its own rather than tolerated silence, which is
+  // the whole reason this fixture exists.** A `session` is a member of every Tier 2 authorization
+  // probe set (`D306`), so a `for env` clause naming an env that is not there narrows the session to
+  // *nothing* — and the effect is that an identity disappears from every `has no authorization
+  // violations` assertion in the suite while every one of them stays green. That is `M130-01`'s
+  // shape, reachable by misspelling one word, and it is exactly the failure this repo exists to
+  // catch: silent narrowing looks identical to a passing run from the outside.
+  //
+  // Config dialect because `for env` can only be written in `tflw.config` — both halves of the
+  // question, the clause and the `env` blocks it names, are in that one file, so the check needs no
+  // resolved env and fires in the editor on the config alone. The sibling mistake, an unknown
+  // *session* name in a test file, is `TF028` and was **widened** by the same milestone rather than
+  // split: "no such session" and "declared, but not for this env" are one mistake with two repairs.
+  //
+  // Coupled with its tflw half and red until that half merges (D350/D382). The local pre-flight is
+  // `npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs` (D351).
+  TF074:
+    'env local default\n  api "http://localhost:4001"\n\nsession admin for env locl\n  api POST /auth/login body { email: "a@a.com", password: "x" }\n',
 };
 
 const scratchDir = mkdtempSync(path.join(tmpdir(), 'tflw-check-config-'));
