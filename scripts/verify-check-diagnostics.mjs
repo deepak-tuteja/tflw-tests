@@ -317,6 +317,30 @@ const CONFIG_FIXTURES = {
   // `npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs` (D351).
   TF074:
     'env local default\n  api "http://localhost:4001"\n\nsession admin for env locl\n  api POST /auth/login body { email: "a@a.com", password: "x" }\n',
+  // tflw `M147f` (review `M147-07`, D647): `header "X" is "Y" for <service>` naming a service no
+  // `env` declares. **`TF074`'s twin, one row later and in a clause that had already shipped** —
+  // which is the part worth recording here rather than only in the tflw ledger. Order 6 spent a code
+  // on silent narrowing in `session … for env`, and then found the identical shape sitting
+  // unchecked in `header … for <service>`, where it had been since the clause was written.
+  //
+  // The narrowing is total: the interpreter sets a header only where the clause is absent or matches
+  // the step's own service, so a name matching nothing attaches the header to **no request at all**.
+  // `tflw check` prints no problems, exit 0, the run is green, and every request goes out missing a
+  // header the config plainly says it carries. From the outside that is indistinguishable from a
+  // passing run — the same reason this repo exists, and the same reason `TF074` got a code.
+  //
+  // Config dialect, and the fixture needs the service name to be a *near miss* of nothing in
+  // particular: `shp` against a declared `shop` also exercises the `did you mean` branch, which is
+  // the whole value of the diagnostic in the case that actually happens.
+  //
+  // **The rule is the union of every service the file declares, not the active env's**, so a
+  // one-env fixture proves less than it looks like it does. That is deliberate on tflw's side — a
+  // `header` in `defaults` may legitimately scope to a service one env declares — and the
+  // under-approximation it accepts is pinned by tflw's own tests, not here.
+  //
+  // Coupled with its tflw half and red until that half merges (D350/D382). The local pre-flight is
+  // `npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs` (D351).
+  TF076: 'env local default\n  api shop "http://localhost:4001"\n  header "X-Tenant" is "acme" for shp\n',
 };
 
 const scratchDir = mkdtempSync(path.join(tmpdir(), 'tflw-check-config-'));
