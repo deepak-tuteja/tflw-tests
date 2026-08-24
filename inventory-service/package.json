@@ -1,7 +1,7 @@
 {
   "name": "inventory-service",
   "version": "0.0.1",
-  "description": "PLAN_ENTERPRISE_REGRESSION.md E4 — standalone warehouse/stock service, own Postgres, called by apiV2's checkout over real HTTP.",
+  "description": "Standalone warehouse/stock service — own Postgres, called by apiV2's checkout over real HTTP.",
   "author": "",
   "private": true,
   "license": "UNLICENSED",
