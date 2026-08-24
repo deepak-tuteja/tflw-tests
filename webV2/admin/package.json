@@ -2,7 +2,7 @@
   "name": "webv2-admin",
   "version": "0.1.0",
   "private": true,
-  "description": "SSR admin console (webV2-1) over apiV2 — moderation/coupons/categories/tickets via real full-page navigations, tflw's browser-arc dogfood target for the non-SPA flake class.",
+  "description": "SSR admin console over apiV2 — moderation/coupons/categories/tickets via real full-page navigations, tflw's browser-arc dogfood target for the non-SPA flake class.",
   "type": "module",
   "engines": {
     "node": ">=22"
