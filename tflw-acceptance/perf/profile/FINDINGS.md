@@ -1,5 +1,10 @@
 # M35a — CPU-profile findings (PLAN_BROWSER_PERF_SECURITY.md §2.7)
 
+<sub>**Notation.** `P#n`, `D<n>` and `M<n>` name blocks in design records neither repository
+publishes; each resolves in tflw's [DECISIONS.md](https://github.com/deepak-tuteja/tflw/blob/main/DECISIONS.md), which lifts the block verbatim.
+**Both repositories number their milestones from 1**, so an unqualified `M<n>` here is tflw's —
+this repository's own are written `testFlow-tests M22`, and are published nowhere.</sub>
+
 **Verdict up front: the leading redaction hypothesis is refuted by the data.** Building the
 discarded per-iteration redacted trace (`redactRequest`/`redactResponse`/`Redactor.redact`/
 `redactFields`) accounts for **~0.5% of samples** — real, but nowhere near large enough to explain

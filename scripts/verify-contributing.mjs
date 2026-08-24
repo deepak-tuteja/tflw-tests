@@ -103,6 +103,15 @@ const CLASSIFIED = [
     why: 'M141 (`M115-03`, `M128-04`) — every script that grades a tflw declares WHICH tflw and prints the entry it resolved, and nothing resolves one outside `scripts/lib/tflw-bin.mjs`. In `acceptance-check` rather than `apiv2` for a load-bearing reason and not just cheapness: half of it asserts that `released` and `branch` resolve to two different programs, which is only checkable where both trees exist, and this is the only job that checks out both',
   },
 
+  {
+    wf: 'ci.yml',
+    job: 'acceptance-check',
+    cmd: 'npm run verify:provenance',
+    class: 'gate',
+    local: 'npm run verify:provenance',
+    why: 'M152e (`D673`/`D709`/`D711`) — no tracked prose file links out of the repository, every file citing tflw\'s notation declares WHICH sequence it means (both repos number milestones from 1, and 35 identifiers are defined in both record sets), and every unqualified citation resolves in tflw\'s published `DECISIONS.md`. Also checks tflw\'s tracked pin of this repository\'s citations in both directions — like the two gates above it needs both trees, and this is the only job that has them',
+  },
+
   // --- job `regression` — the sweep, 4 matrix legs ------------------------------------------------
   { wf: 'ci.yml', job: 'regression', cmd: 'npm ci', class: 'setup', why: 'the tflw monorepo again — each matrix leg is a fresh runner' },
   {

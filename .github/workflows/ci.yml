@@ -149,6 +149,15 @@ jobs:
         run: npm run verify:tflw-resolution
         working-directory: testFlow-tests
 
+      # M152e (`D673`, `D709`, `D711`). Static, seconds, and in this job for the same load-bearing
+      # reason as the two above: it compares this repository's prose against tflw's published
+      # DECISIONS.md **and** against tflw's tracked pin of this repository's citations, and only a
+      # job with both trees can do either. Eight markdown links used to point at `../testFlow/…`,
+      # which 404s for everyone whose disk does not happen to hold both checkouts side by side.
+      - name: Prose links inside the repo, and citations that resolve
+        run: npm run verify:provenance
+        working-directory: testFlow-tests
+
   # Round 3 decision 16 (PLAN_CI.md, 2026-08-03 grill-me): the 30-phase sweep used to run
   # sequentially in one job (~34min). Split into a 4-leg GH Actions job matrix — real per-phase
   # timings pulled from run 30802717073 (2026-08-03) were greedy-LPT bin-packed into

@@ -1,5 +1,10 @@
 # M36 — real root cause found: load-scenario sessions never refresh their shared base snapshot
 
+<sub>**Notation.** `P#n`, `D<n>` and `M<n>` name blocks in design records neither repository
+publishes; each resolves in tflw's [DECISIONS.md](https://github.com/deepak-tuteja/tflw/blob/main/DECISIONS.md), which lifts the block verbatim.
+**Both repositories number their milestones from 1**, so an unqualified `M<n>` here is tflw's —
+this repository's own are written `testFlow-tests M22`, and are published nowhere.</sub>
+
 D42's fallback pass (does per-VU dispatch/scheduling overhead explain the residual gap?) was
 refuted almost as cleanly as D40 was — see the dispatch-gap measurement below — but chasing down
 *why* one specific real-target run's numbers looked odd surfaced something else entirely: a real,

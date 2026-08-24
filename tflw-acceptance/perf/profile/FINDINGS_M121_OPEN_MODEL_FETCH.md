@@ -1,5 +1,10 @@
 # M121 / `M118-02` — the open model's `fetch` reported the inter-arrival gap as service time
 
+<sub>**Notation.** `P#n`, `D<n>` and `M<n>` name blocks in design records neither repository
+publishes; each resolves in tflw's [DECISIONS.md](https://github.com/deepak-tuteja/tflw/blob/main/DECISIONS.md), which lifts the block verbatim.
+**Both repositories number their milestones from 1**, so an unqualified `M<n>` here is tflw's —
+this repository's own are written `testFlow-tests M22`, and are published nowhere.</sub>
+
 **Status:** fixed in tflw `M121` (D206). This file is the record, not a test. Sibling of
 [`FINDINGS_M35B_ROOT_CAUSE.md`](./FINDINGS_M35B_ROOT_CAUSE.md), which is the *first* time an undici
 behaviour cost tflw a measurement — this is the second, at the one client path M45 declined to move.
