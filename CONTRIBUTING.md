@@ -1,9 +1,14 @@
 # Contributing to testFlow-tests
 
+<sub>**Notation.** `P#n`, `D<n>` and `M<n>` name blocks in design records neither repository
+publishes; each resolves in tflw's [DECISIONS.md](https://github.com/deepak-tuteja/tflw/blob/main/DECISIONS.md), which lifts the block verbatim.
+**Both repositories number their milestones from 1**, so an unqualified `M<n>` here is tflw's —
+this repository's own are written `testFlow-tests M22`, and are published nowhere.</sub>
+
 This repository is not a library — it is **tflw's target**. A realistic e-commerce API (NestJS +
 Postgres), two browser front-ends, an mTLS sidecar, a deliberately vulnerable slice, and the
 `.tflw` suites that exercise all of it. Everything here exists so that a change to
-[tflw](../testFlow) has something real to fail against.
+[tflw](https://github.com/deepak-tuteja/tflw) has something real to fail against.
 
 That shapes the gates: they are slower than a library's, they need Docker and a `.env`, and one of
 them is not about this repo at all.
@@ -62,6 +67,7 @@ npm run check:acceptance
 npm run verify:external-targets
 npm run verify:contributing
 npm run verify:tflw-resolution
+npm run verify:provenance
 ```
 
 **And when a tflw milestone assigns or changes a `TF0xx` diagnostic code**, before opening either
@@ -112,6 +118,22 @@ xvfb-run -a npm run regression -- --group security-ui
   branch build and being handed the vendored one is an error, not a shrug), and a sweep of
   `scripts/` proving nothing resolves a tflw any other way. **Its allow-list is the honest part** —
   the files that legitimately do are named there, each with a reason.
+- **`npm run verify:provenance`** — **nothing in this repository's prose points somewhere a reader
+  cannot follow.** Three claims, checked as one because they are one claim from the reader's side.
+  Eight markdown links pointed at `../testFlow/…`, and a relative link cannot climb above a
+  repository root — every one of them 404s for anyone whose disk does not happen to hold both
+  checkouts side by side, which is exactly why they survived a year. Four of the eight named a
+  `PLAN_*.md` that tflw's `.gitignore` excludes, so even the right URL would have 404'd. Second,
+  every file that cites tflw's `P#n`/`D<n>`/`M<n>` notation **declares which sequence it means**:
+  both repositories number their milestones from 1, and 35 identifiers are defined in both record
+  sets — `testFlow-tests M22` is the nginx mTLS sidecar and `tflw M22` is a coverage audit — so an
+  unqualified one resolving to a real entry about the wrong thing is worse than one resolving to
+  nothing. Each file
+  declares a default and spells out the minority (`tflw M128a`, `testFlow-tests M22`). Third, every
+  unqualified citation has an entry in tflw's published `DECISIONS.md`, and tflw's tracked pin of
+  this repository's citations agrees with this repository's prose **in both directions** — a pin
+  that has gone stale makes tflw's index publish entries nothing asks for, and this is the only
+  place in either repository that can see both sides.
 - **`npm --prefix apiV2 run lint`** — eslint over the target app. **The prefix is not decoration:**
   a bare `npm test` at this repo's root is `tflw run`, a Docker-dependent suite of `.tflw` files, and
   it is a completely different thing from anything inside `apiV2/`.
@@ -171,7 +193,7 @@ from your local tflw checkout, so it answers in seconds, before any PR exists. *
 caught all three times this has happened**, and `M132` found that nobody knew it existed.
 
 This section lives here, in the repo where the failure actually happens, and tflw's
-[`CONTRIBUTING.md`](../testFlow/CONTRIBUTING.md) points at it rather than repeating it. Two homes
+[`CONTRIBUTING.md`](https://github.com/deepak-tuteja/tflw/blob/main/CONTRIBUTING.md) points at it rather than repeating it. Two homes
 for one command become one correct home and one stale one.
 
 ## Merge order, when a change spans both repos
@@ -198,7 +220,7 @@ box.
 
 Two traps worth writing down, both of which have cost a real debugging session:
 
-- **[tflw](../testFlow) has its own `scripts/exec.mjs`, and your working directory decides which one
+- **[tflw](https://github.com/deepak-tuteja/tflw) has its own `scripts/exec.mjs`, and your working directory decides which one
   runs** — and therefore which copy on the box. Driving the wrong one produces `MODULE_NOT_FOUND`
   for a script that plainly exists.
 - **A trailing `| tail` makes the pipeline's exit status `tail`'s.** The shell reports success while

@@ -1,10 +1,15 @@
 # VULNS.md — the known-answer ledger for tflw's pentest arc
 
+<sub>**Notation.** `P#n`, `D<n>` and `M<n>` name blocks in design records neither repository
+publishes; each resolves in tflw's [DECISIONS.md](https://github.com/deepak-tuteja/tflw/blob/main/DECISIONS.md), which lifts the block verbatim.
+**Both repositories number their milestones from 1**, so an unqualified `M<n>` here is tflw's —
+this repository's own are written `testFlow-tests M22`, and are published nowhere.</sub>
+
 Every deliberately-flawed and deliberately-hardened response this suite can produce, and which
 tflw rule each one is the answer to. Written for testFlow `M128a`
-([PLAN_M128_PENTEST_TIER1.md](../testFlow/PLAN_M128_PENTEST_TIER1.md), D293/D295); consumed by
+(`D293`/`D295`); consumed by
 `M128c`'s acceptance pass, which measures the Tier 1 rule pack's precision and recall against it.
-Extended for `M130a` ([PLAN_M130_PENTEST_TIER2.md](../testFlow/PLAN_M130_PENTEST_TIER2.md), D317)
+Extended for `M130a` (`D317`)
 with the arc's Tier 2 slice — broken object authorization.
 
 **A planted flaw with no row here is how a target drifts out of sync with the acceptance that
@@ -47,7 +52,7 @@ other stack: whether any of this is reachable **without** `VULN_MODE=1`. A row e
 editing those scripts is a row some graders check and others no longer do.
 
 The plaintext base is `env local` (`http://localhost:4001/v1`, straight to the app). The TLS base is
-`env secureLocal` (`https://localhost:8443/v1`, through M22's nginx sidecar). Several rules answer
+`env secureLocal` (`https://localhost:8443/v1`, through `testFlow-tests M22`'s nginx sidecar). Several rules answer
 differently on the two, and that difference is itself part of the ledger.
 
 ## The fixture routes (`VULN_MODE=1` only)
@@ -225,7 +230,7 @@ fact about the credential, and now demonstrably about the *declaration* rather t
 
 ### The Tier 3 plants `V10`–`V14`, and why a whole new controller was needed
 
-`M134c` (testFlow [PLAN_M134_PENTEST_TIER3.md](../testFlow/PLAN_M134_PENTEST_TIER3.md), D379/D395)
+`M134c` (testFlow `D379`/`D395`)
 adds the arc's third tier — input handling — and it could not reuse a single existing route.
 Measured at scoping time rather than discovered at build time:
 
@@ -384,7 +389,7 @@ exactly what a scanner is supposed to notice.
 
 ### The Tier 4 enumeration plant `V15`, and why it is the one documented fixture route
 
-`M137e` (testFlow [PLAN_M137_PENTEST_TIER4.md](../testFlow/PLAN_M137_PENTEST_TIER4.md), D437/D438)
+`M137e` (testFlow `D437`/`D438`)
 adds the arc's fourth tier — a **crawl**, which finds its own requests instead of judging the ones the
 suite made. It has two seeds, and they find different things:
 

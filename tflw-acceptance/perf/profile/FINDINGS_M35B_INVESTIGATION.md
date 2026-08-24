@@ -1,5 +1,10 @@
 # M35b root-cause investigation — post-M35a follow-up (PLAN_BROWSER_PERF_SECURITY.md §2.7)
 
+<sub>**Notation.** `P#n`, `D<n>` and `M<n>` name blocks in design records neither repository
+publishes; each resolves in tflw's [DECISIONS.md](https://github.com/deepak-tuteja/tflw/blob/main/DECISIONS.md), which lifts the block verbatim.
+**Both repositories number their milestones from 1**, so an unqualified `M<n>` here is tflw's —
+this repository's own are written `testFlow-tests M22`, and are published nowhere.</sub>
+
 M35a ([FINDINGS.md](FINDINGS.md)) refuted the original D32 redaction hypothesis (~2.4% of CPU
 samples) and found the real differentiator was `(idle)` time — 26.7% for tflw vs 2.7% for raw
 `fetch`, both at 30 concurrent VUs. It flagged, but explicitly did not confirm, an async-call-chain-

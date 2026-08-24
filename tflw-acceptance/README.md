@@ -1,5 +1,10 @@
 # Acceptance: tflw vs. raw fetch + node:test
 
+<sub>**Notation.** `P#n`, `D<n>` and `M<n>` name blocks in design records neither repository
+publishes; each resolves in tflw's [DECISIONS.md](https://github.com/deepak-tuteja/tflw/blob/main/DECISIONS.md), which lifts the block verbatim.
+**Both repositories number their milestones from 1**, so an unqualified `M<n>` here is tflw's —
+this repository's own are written `testFlow-tests M22`, and are published nowhere.</sub>
+
 > **`security/` is a different kind of corpus.** Everything below compares tflw against a hand-rolled
 > baseline on line count and readability. `security/` measures a *coverage claim* instead — testFlow
 > `M128c`'s D295 bar for the pentest arc's rule pack — and is graded by
@@ -187,7 +192,7 @@ cd tflw-acceptance/webv2/raw && node --env-file=.env --test *.test.mjs
 **Bug found + fixed during Phase 2 move verification (2026-08-02):** scenario 2 (full checkout)
 failed on both sides — `wait until button "Checkout" is enabled` timed out on tflw, the equivalent
 hand-rolled poll timed out on raw. Root cause was already spelled out in `payment-widget.html`'s own
-comment: M46 (in the `testFlow-tests` app itself, after this suite's checkout scenario was last
+comment: `testFlow-tests M46` (in the app itself, after this suite's checkout scenario was last
 written) made "Authorize payment" call a real, permanently-unreachable
 `https://payments.example.test/v1/authorize` — every path through the widget must `stub` that route
 or the widget's own `fetch().catch()` fires and it never `postMessage`s the parent, so `Checkout`
@@ -276,7 +281,7 @@ than the API-only leg's 2.8–8.3× range, since Playwright's own locator API al
 share of the UI-specific complexity tflw would otherwise need to add value on top of. Report
 quality remains a categorical difference, not a matter of degree, exactly as on the API-only leg.
 Combined with the two real, previously-latent runtime bugs this same acceptance pass found and
-fixed at the source (see `testFlow-tests/PROGRESS.md`'s M7 entry — an action's own browser steps
+fixed at the source (see `testFlow-tests M7`'s `PROGRESS.md` entry — an action's own browser steps
 silently losing the caller's browser context, and `import.meta.resolve` breaking inside the
 packaged CJS CLI bundle), this is a clear win for the browser-arc scenarios in scope for `1.0.0`.
 

@@ -1,5 +1,10 @@
 # M35b — root cause found (PLAN_BROWSER_PERF_SECURITY.md D34-D37)
 
+<sub>**Notation.** `P#n`, `D<n>` and `M<n>` name blocks in design records neither repository
+publishes; each resolves in tflw's [DECISIONS.md](https://github.com/deepak-tuteja/tflw/blob/main/DECISIONS.md), which lifts the block verbatim.
+**Both repositories number their milestones from 1**, so an unqualified `M<n>` here is tflw's —
+this repository's own are written `testFlow-tests M22`, and are published nowhere.</sub>
+
 Per D35's two-step plan: a V8 tick-log pass, then direct `performance.now()` instrumentation of
 the real `execSteps`/`execApi`/`sendRequest` call chain. The first step gave a partial clue; the
 second found the actual mechanism. **Root cause confirmed, mechanism understood, fix scope is

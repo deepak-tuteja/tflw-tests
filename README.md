@@ -1,7 +1,12 @@
 # testFlow-tests
 
+<sub>**Notation.** **Both repositories number their milestones from 1**, so an unqualified `M<n>`
+here is this repository's own, and its records are published nowhere. tflw's are written
+`tflw M128a`; those, and every `P#n`/`D<n>`, resolve in [DECISIONS.md](https://github.com/deepak-tuteja/tflw/blob/main/DECISIONS.md), which lifts
+the block verbatim.</sub>
+
 A purpose-built, realistic e-commerce API (NestJS + Postgres, Dockerized) for
-[tflw](../testFlow) — a testing-only DSL/CLI. This project exists solely to give tflw's current
+[tflw](https://github.com/deepak-tuteja/tflw) — a testing-only DSL/CLI. This project exists solely to give tflw's current
 and upcoming features something real to run against, and to surface genuine tflw DSL gaps by
 writing the scenarios a user would naturally reach for. See `plan_v2.md` for the full v2 rewrite
 plan and `PROGRESS.md` for build status.
@@ -24,14 +29,14 @@ docker-compose.yml   postgres (ephemeral per-run volume) + api + nginx (TLS side
                      webv2-admin + postgres-inventory + inventory-service (E4), healthchecked
 nginx/               TLS sidecar (M22) — self-signed :8443 + mTLS-requiring :8444, proxying
                      unchanged to api:4001; certs generated fresh at every container start.
-                     :8443 is the pentest arc's target as of M128a (`env secureLocal`); all
+                     :8443 is the pentest arc's target as of `tflw M128a` (`env secureLocal`); all
                      listeners forward X-Forwarded-Proto, which is how apiV2 knows to mark
                      the session cookie `Secure`. M137g adds a third listener, :8445
                      (`offering.conf`, VULN_MODE=1 only) — the V18 plant: it offers
                      NULL-SHA256 alongside a modern suite and negotiates the modern one, so
                      it is the one host here that `sec/tls-weak-cipher` can fire on and it is
                      invisible to every per-response assertion tflw ships
-apiV2/src/vuln/      M128a — the pentest arc's hygiene fixture slice: five routes with deliberately
+apiV2/src/vuln/      `tflw M128a` — the pentest arc's hygiene fixture slice: five routes with deliberately
                      wrong (or deliberately correct) headers and cookie flags, absent from the app
                      entirely unless `VULN_MODE=1`. Headers only, no logic flaws. See VULNS.md
 webV2/               React+Vite+TS SPA storefront (webV2-0) — tflw's browser-arc dogfood target
@@ -81,8 +86,8 @@ tests/.env-specific/ passing tests whose assertions only hold under a non-defaul
                      UI-only backfill, run via `npm run test:ui-admin` (`--env webv2Admin`), same
                      reason as webv2-admin.tflw; orgs-mixed.tflw (E3) sits alongside
                      webv2-admin.tflw for the same reason, run via `npm run test:webv2-admin`;
-                     secure-local.tflw (M128a) needs `--env secureLocal` for its own such reason
-VULNS.md             the known-answer ledger for tflw's pentest arc (M128a) — every deliberately
+                     secure-local.tflw (`tflw M128a`) needs `--env secureLocal` for its own such reason
+VULNS.md             the known-answer ledger for tflw's pentest arc (`tflw M128a`) — every deliberately
                      flawed or deliberately hardened response, and which rule each answers.
                      scripts/verify-security-target.mjs asserts it against the running stack
 tflw-acceptance/     DSL-vs-alternative comparison suite (tflw vs raw fetch+node:test, vs k6, vs
@@ -105,13 +110,13 @@ cp .env.example .env   # Postgres creds, JWT secrets, seeded admin/userA/userB/O
 node cli.mjs start     # docker compose up -d --build --wait (postgres + api :4001 + nginx TLS sidecar + webV2 :8090 + inventory-service :4002)
 npm run refresh-tflw   # packs ../testFlow/packages/cli and installs the tarball
 npm test               # tflw run over the whole tests/ tree (api/ui/mixed) against the running api —
-                        # tflw.config's `exclude "tflw-acceptance"` (tflw 0.1.0 M58) keeps bare
+                        # tflw.config's `exclude "tflw-acceptance"` (`tflw M58`, 0.1.0) keeps bare
                         # discovery from also sweeping that separate suite/config
 npm run test:mtls      # runs tests/api/identity/mtls.tflw against the sidecar's mTLS-requiring listener (own env, M22)
 npm run test:mtls-rejection  # runs .env-specific/mtls-rejection.tflw — no client cert, real rejection (M25)
 npm run test:safety    # runs tests/api/identity/safety-redaction.tflw with `redact` active (own env, M23)
 npm run test:ui-admin  # runs tests/.env-specific/ui-admin/*.tflw against the SSR admin console (own env, E2)
-npm run test:secure-local    # runs .env-specific/secure-local.tflw through the sidecar's plain https listener (own env, M128a)
+npm run test:secure-local    # runs .env-specific/secure-local.tflw through the sidecar's plain https listener (own env, `tflw M128a`)
 node cli.mjs stop      # docker compose down -v — drops the DB too (ephemeral per-run isolation)
 ```
 
@@ -171,7 +176,7 @@ reports into `report-by-phase/` the same way the full sweep does.
 `http://localhost:8090` after `node cli.mjs start` — a React+Vite+TS SPA storefront (catalog →
 product → cart → checkout) over apiV2's REST + session-cookie auth, the Tier-A ("clean": proper
 ARIA roles, `<label>`-associated inputs, one unambiguous "Add to cart" button per product) target
-tflw's browser steps (`PLAN_BROWSER_PERF_SECURITY.md` M3a/M3b, shipped 2026-07-26) run against.
+tflw's browser steps (`tflw M3a`/`tflw M3b`, shipped 2026-07-26) run against.
 `.tflw` coverage: `tests/mixed/storefront.tflw` (mixed, E1) plus the full UI-only backfill at
 `tests/ui/storefront/` (login, catalog browse/search, product detail, add-to-cart, checkout,
 review submission, support, a11y-demo — E2). Log in as any seeded user (e.g. `alice@example.com` / `alice-pw-123`); its own nginx image (`webV2/Dockerfile`
@@ -352,7 +357,7 @@ A plain `npm test` (or any `npx tflw run` below) already exercises a lot of what
 | `@lifecycle` | token-refresh-lifecycle.tflw, user-lifecycle.tflw (`PLAN_LIFECYCLE.md` L3 — attribute enrich→conflict→retry→redact, then soft async self-deletion, as one realistic chain) |
 | `@orderReturns` | return-requests.tflw (`PLAN_RETURNS.md` R3 — order return/refund requests: owner submits, admin approves/rejects, an approved decision fires a real async refund job) |
 | `@ticketing` | tickets.tflw (`PLAN_TICKETING.md` T3 — a third role (`AGENT`) scoped to specific resource instances, role-filtered comment visibility, a cross-endpoint cancel/resolve race, and the suite's first collection-level `wait until` combined with `has count`) |
-| `@fileFormats` | file-formats.tflw (`PLAN_FILEFORMATS.md` F2 — upload→download round-trips for CSV/TXT/PDF in both response-envelope modes, `body csv`/`body pdf text` against real generated content (the orders CSV export, a naturally multi-page order receipt), `tests/.demo-fail/malformed-{csv,pdf}-upload.tflw` for the loud-error negative cases; closes TFLW-GAPS.md gap #19, tflw M25) |
+| `@fileFormats` | file-formats.tflw (`PLAN_FILEFORMATS.md` F2 — upload→download round-trips for CSV/TXT/PDF in both response-envelope modes, `body csv`/`body pdf text` against real generated content (the orders CSV export, a naturally multi-page order receipt), `tests/.demo-fail/malformed-{csv,pdf}-upload.tflw` for the loud-error negative cases; closes TFLW-GAPS.md gap #19, `tflw M25`) |
 | `@logging` | logging.tflw (`PLAN_LOG_CONSUME.md` M51 — `log` statement consumption: config-default `log destination`/`log level` resolution, override-not-accumulate semantics, and "an explicit `to …` clause always wins" over both config and `--log-output`/`--log-level`; every other file also gets one narration `log` line in its own clearest test, untagged) |
 
 ### Demo-fail / check-only / env-specific fixtures
@@ -400,4 +405,4 @@ See `../testFlow/PLAN.md`'s "Dogfood / acceptance" section and this project's ow
 Short version: automationTestPOC is a generic Playwright+Docker POC that predates tflw and was
 never designed around it. testFlow-tests/ is deliberately shaped around tflw's actual feature
 set — two named services, both bearer and cookie auth, deliberately flaky endpoints, array
-responses — and grows a UI showcase once tflw's browser binding (M3) ships.
+responses — and grows a UI showcase once tflw's browser binding (`tflw M3`) ships.

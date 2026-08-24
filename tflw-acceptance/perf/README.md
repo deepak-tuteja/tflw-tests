@@ -1,5 +1,10 @@
 # The perf ladder — tflw vs. k6 vs. Artillery
 
+<sub>**Notation.** `P#n`, `D<n>` and `M<n>` name blocks in design records neither repository
+publishes; each resolves in tflw's [DECISIONS.md](https://github.com/deepak-tuteja/tflw/blob/main/DECISIONS.md), which lifts the block verbatim.
+**Both repositories number their milestones from 1**, so an unqualified `M<n>` here is tflw's —
+this repository's own are written `testFlow-tests M22`, and are published nowhere.</sub>
+
 The same load scenarios written three times, against the same targets, so tflw's numbers can be
 compared against two established tools rather than asserted. `PLAN_BROWSER_PERF_SECURITY.md` (D31,
 M34/M39/M47/M48/M49) is the arc that built it; `../README.md`'s *"perf leg: tflw vs. k6"* section
