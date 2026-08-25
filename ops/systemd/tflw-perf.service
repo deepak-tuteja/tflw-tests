@@ -16,7 +16,7 @@
 # (dashboard finding 196).
 
 [Unit]
-Description=tflw perf-conformance run (testFlow-tests, M154e)
+Description=tflw perf-conformance run (testFlow-tests, M154e/M154f)
 Documentation=https://github.com/deepak-tuteja/tflw-tests
 # Advisory only — the real coordination is the box mutex, which this unit takes at runtime. Named
 # so `systemctl --user list-dependencies` shows the relationship a reader would otherwise have to
@@ -28,11 +28,23 @@ Type=oneshot
 WorkingDirectory=%h/tflw-perf/checkout
 Environment=TFLW_PERF_PROFILE=full
 Environment=TFLW_PERF_RESULTS=%h/tflw-perf/results
+# `M154f` — the tflw tree the functional leg packs from; see the ExecStartPre pair below.
+Environment=TFLW_PERF_TFLW_CHECKOUT=%h/tflw-perf/tflw
 # `origin/main`, in this unit's own checkout, never the rsync target `scripts/exec.mjs` maintains
 # (`D748`). A scheduled gate pointed at the exec copy grades whatever a Mac session last pushed
 # there — arbitrarily stale, possibly mid-rsync, attributable to no commit.
 ExecStartPre=/usr/bin/git -C %h/tflw-perf/checkout fetch --quiet origin main
 ExecStartPre=/usr/bin/git -C %h/tflw-perf/checkout reset --hard --quiet origin/main
+# `M154f` / `M124-03` — the second checkout, and it is tflw's. The functional leg packs tflw from
+# **its** `origin/main` and runs the four gates whose ground truth is that binary, which is the
+# whole cross-repo seam. Same reset-hard discipline and the same reason: the leg re-vendors into
+# `checkout`, so without a reset each run would inherit the last one's tarball.
+#
+# `TFLW_SIBLING_CLI` is why `refresh-tflw.mjs` no longer hard-codes `../testFlow`: these two trees
+# are siblings under `~/tflw-perf/` with names of this unit's choosing, and a hard-coded `..` would
+# have packed nothing at 04:30 with nobody reading the exit code.
+ExecStartPre=/usr/bin/git -C %h/tflw-perf/tflw fetch --quiet origin main
+ExecStartPre=/usr/bin/git -C %h/tflw-perf/tflw reset --hard --quiet origin/main
 ExecStart=/usr/bin/node scripts/perf-conformance.mjs --profile ${TFLW_PERF_PROFILE}
 # Long enough for the full ladder plus the lease wait, short enough that a wedged run does not sit
 # on the box until someone notices. The driver's own boxlock timeout (1800s) fires first in the
