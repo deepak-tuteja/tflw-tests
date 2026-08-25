@@ -489,6 +489,82 @@ if (wanted('C12')) {
 }
 
 // =============================================================================
+// C13-C22 — the six locators, and the three steps that cannot be graded apart
+// =============================================================================
+//
+// One run, ten rows. The plant is a single test, so `test.ok` is one bit for ten claims — which is
+// exactly the shape `C2`'s comment warns about. Every row therefore names *its own* assertion by the
+// token it expects, and the precision half asserts the decoys are still on the page: a fixture that
+// lost its near-misses would leave ten green rows grading nothing.
+
+if (['C13','C14','C15','C16','C17','C18','C19','C20','C21','C22'].some(wanted)) {
+  const plant = plantFor('locator:button');
+  console.log(`\nC13-C22 — ${plant.title}\n  target: ${plant.target}`);
+  const { report, output } = runCorpus(ROOT, [plant.evidence.file]);
+  const ids = ['C13','C14','C15','C16','C17','C18','C19','C20','C21','C22'].filter(wanted);
+  if (!report) {
+    for (const id of ids) {
+      fail(`${id} produced no report. Needs the stack and a browser.\n${output.trim().split('\n').slice(-12).join('\n')}`);
+      scores.get(id).skipped = 'no report';
+    }
+  } else {
+    // Named, not `[0]`: the plant carries a second, deliberately-red test (`C19`'s unscoped case),
+    // and a positional lookup would start grading it the day someone reorders the file.
+    const test = named(report, 'each locator resolves');
+    const steps = stepsOf(test);
+    const okStep = (needle) => steps.some((s) => s.source.includes(needle) && s.ok);
+    const indexOf = (needle) => steps.findIndex((s) => s.source.includes(needle));
+
+    // Recall: each row's own named answer.
+    if (wanted('C13')) recall('C13', okStep("data-token='button/true'"), 'the `<button>` answered, not the link, the menuitem or the bare div');
+    if (wanted('C14')) recall('C14', okStep("data-token='text/true'"), 'the rendered `<p>` answered, not the value/alt/title/aria-label decoys');
+    if (wanted('C17')) recall('C17', okStep("data-token='css/3'"), 'the third of four identical siblings answered, not the first');
+    if (wanted('C18')) recall('C18', okStep("data-token='xpath/4'"), 'the last of four answered, through an expression the `//` auto-detect cannot rescue');
+    if (wanted('C16')) {
+      recall('C16', okStep("data-token='list/items'"), 'the items list answered when named');
+      recall('C16', okStep("data-token='list/suppliers'"), 'the suppliers list answered when named — the pair is the claim, either alone is satisfied by a locator that ignores the name');
+    }
+    if (wanted('C15')) recall('C15', okStep('#field-by-label" has value "GLASGOW'), "the label won `D6`'s cascade over the colliding placeholder");
+    if (wanted('C21')) recall('C21', okStep('#field-by-placeholder" has value "UNTOUCHED'), 'the fill reached exactly one input — the decoy still holds its initial value');
+    if (wanted('C22')) {
+      const valueSteps = steps.filter((s) => /has value "/.test(s.source));
+      recall('C22', valueSteps.length >= 2 && valueSteps.every((s) => s.ok), `\`has value\` was asserted in both directions and both held (got ${valueSteps.length} use(s))`);
+    }
+    if (wanted('C19')) {
+      const withins = steps.filter((s) => /^\s*within /.test(s.source));
+      recall('C19', withins.length >= 2, `both scoped blocks are still in the plant (got ${withins.length}) — the inner name is ambiguous without them`);
+      // The second half, and the one the twenty-five pre-existing uses could not supply: the
+      // unscoped case must be genuinely impossible, not merely untried. A `within` that resolved
+      // its scope and then searched the document passes every scoped assertion above.
+      const unscoped = named(report, 'MUST end red');
+      const ambiguous = failingSteps(unscoped);
+      recall('C19', unscoped?.ok === false, `the unscoped click did NOT succeed (got ok=${unscoped?.ok})`);
+      precision('C19', ambiguous.length === 1 && /ambiguous locator/.test(ambiguous[0]?.detail ?? ''),
+        `the red is an ambiguity error on the click itself, not a not-found or a timeout (got: ${(ambiguous[0]?.detail ?? 'none').split('\n')[0]})`);
+      precision('C19', /matched 2 elements/.test(ambiguous[0]?.detail ?? ''),
+        'exactly two elements matched — one decoy short and the ambiguity disappears along with the plant');
+    }
+    if (wanted('C20')) {
+      recall('C20', okStep("data-token='none'"), 'the control held — the readout was untouched before any click');
+      recall('C20', indexOf("data-token='none'") < indexOf("data-token='button/true'"), 'the control runs BEFORE the first token assertion — after them it would assert nothing');
+    }
+    for (const id of ids) recall(id, test?.ok === true, `the plant passed (got ok=${test?.ok})`);
+
+    // Precision: nothing else fired, and the near-misses are still there to be missed. The second
+    // half is the one that matters — every recall above stays green on a fixture page whose decoys
+    // were deleted, and that page grades nothing at all.
+    const failed = failingSteps(test);
+    for (const id of ids) precision(id, failed.length === 0, `no step failed (got ${failed.map((s) => `line ${s.line}: ${s.source.trim()}`).join('; ') || 'none'})`);
+    if (wanted('C20')) {
+      const clicks = steps.filter((s) => /^\s*click /.test(s.source));
+      precision('C20', clicks.length === 6, `exactly six clicks, one per candidate (got ${clicks.length})`);
+    }
+    if (wanted('C17')) precision('C17', okStep("li:nth-child(3)"), 'the positional selector is still positional — a rewrite to a unique selector would grade nothing');
+    if (wanted('C18')) precision('C18', steps.some((s) => /click xpath "\(\/\//.test(s.source)), 'the xpath expression still opens with `(` — a leading `//` would let the auto-detect stand in for the prefix');
+  }
+}
+
+// =============================================================================
 // the table
 // =============================================================================
 

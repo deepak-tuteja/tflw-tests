@@ -295,6 +295,188 @@ export const PLANTS = [
     catches: 'a `give` returning the wrong value rather than no value.',
     blockedOn: null,
   },
+  // ---------------------------------------------------------------------------------------------
+  // `M154d` — the UI tier opens with one artifact and ten rows, because six of tflw's locators and
+  // three of its steps cannot be graded apart from each other. See
+  // `tests/.constructs/locator-near-miss.tflw`'s header for the full argument; the short version is
+  // that `button`/`text`/`css`/`field` carry 93/92/69/65 uses between them and **not one of those
+  // uses could tell "resolved the right element" from "resolved an element"**, because every one of
+  // them names something unique on its page.
+  // ---------------------------------------------------------------------------------------------
+  {
+    id: 'C13',
+    construct: 'locator:button',
+    family: 'locator',
+    tier: 'ui',
+    title: 'the button, and not the three decoys wearing its text',
+    target: 'webV2 `/locator-fixture` — one `<button>` and three same-text decoys with different roles',
+    evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: '^\\s*click button "Archive', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'A link, a `menuitem` and a bare `<div>` all carry the identical accessible text "Archive ' +
+      'shipment", and each writes its own token. The answer is `button/true`. A `button` locator ' +
+      'that had degenerated into a text search reports a decoy\u2019s token or hard-errors on ' +
+      'ambiguity \u2014 and would still pass all ninety-three existing uses, which name things that ' +
+      'are unique on their page.',
+    catches: 'a `button` locator that stopped resolving by role.',
+    blockedOn: null,
+  },
+  {
+    id: 'C14',
+    construct: 'locator:text',
+    family: 'locator',
+    tier: 'ui',
+    title: 'rendered content, not the four attributes that spell the same phrase',
+    target: 'webV2 `/locator-fixture` — the phrase repeated in a `value`, an `alt`, a `title` and an `aria-label`',
+    evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: '^\\s*click text "', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'Only the `<p>` renders "Restock queued" as text; four decoys carry it somewhere a content ' +
+      'match must not look. The answer is `text/true`, and any attribute starting to match makes ' +
+      'the step ambiguous rather than merely wrong. The decoy input is deliberately `type="text"`: ' +
+      'Playwright\u2019s text engine matches `input[type=button|submit]` by `value` **by design**, so ' +
+      'making it a submit would turn a correct engine red.',
+    catches: 'a `text` locator that widened past rendered text content.',
+    blockedOn: null,
+  },
+  {
+    id: 'C15',
+    construct: 'locator:field',
+    family: 'locator',
+    tier: 'ui',
+    title: "`D6`'s cascade has a fixed priority, and this is the only thing that grades the order",
+    target: 'webV2 `/locator-fixture` — two inputs answering to "Ship to", one by `<label>` and one by placeholder',
+    evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: '^\\s*fill field "Ship to"', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      '`field` is a closed three-step cascade \u2014 label, then placeholder, then `role=textbox` \u2014 ' +
+      'checked in that fixed order every poll (`D6`, `browser.ts:579`). The label input must receive ' +
+      '`GLASGOW` and the placeholder decoy must still hold `UNTOUCHED`. **An order that flipped would ' +
+      'pass all sixty-five existing `fill field` uses in this repository**, because no other page ' +
+      'collides a label with a placeholder.',
+    catches: 'a reordered or short-circuited `field` cascade.',
+    blockedOn: null,
+  },
+  {
+    id: 'C16',
+    construct: 'locator:list',
+    family: 'locator',
+    tier: 'ui',
+    title: 'the named list, told from its twin only by its accessible name',
+    target: 'webV2 `/locator-fixture` — two `<ul>`s, each holding a button named exactly "Remove"',
+    evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: '^\\s*within list "', min: 2 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'Zero uses before this file. Both lists hold a button named "Remove", so an unscoped click on ' +
+      'it is ambiguous **by construction** \u2014 the pair of assertions can only pass if `list` picked ' +
+      'the list its accessible name names. Answers `list/items` then `list/suppliers`, in that order; ' +
+      'either one alone would be satisfied by a locator that ignored the name.',
+    catches: 'a `list` locator that resolves any role=list rather than the named one.',
+    blockedOn: null,
+  },
+  {
+    id: 'C17',
+    construct: 'locator:css',
+    family: 'locator',
+    tier: 'ui',
+    title: 'the third of four identical siblings, not the first',
+    target: 'webV2 `/locator-fixture` — four `<li>`s whose buttons are indistinguishable by name',
+    evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: '^\\s*click css "\\[data-group-list=\'css\'\\]', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'The four buttons are identical in text and role, so `:nth-child(3)` is the entire answer. ' +
+      '`css/3`. A resolution that quietly took the first match reports `css/1` \u2014 a failure mode ' +
+      'invisible to all sixty-nine existing `css` uses, which select things that are unique anyway.',
+    catches: 'a `css` locator that stopped honouring structural position.',
+    blockedOn: null,
+  },
+  {
+    id: 'C18',
+    construct: 'locator:xpath',
+    family: 'locator',
+    tier: 'ui',
+    title: "the `xpath=` prefix is load-bearing, and a leading `//` hides that",
+    target: 'webV2 `/locator-fixture` — four indistinguishable buttons, answered by `last()`',
+    evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: '^\\s*click xpath "\\(//', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'Zero uses before this file. Playwright auto-detects a selector beginning with `//` or `..` as ' +
+      'XPath, **so an implementation that forgot `browser.ts:590`\u2019s `xpath=` prefix would still pass ' +
+      'an xpath test written the usual way.** The expression here opens with `(`, which defeats the ' +
+      'auto-detect and would be parsed as CSS; `last()` is the second half, since CSS cannot express ' +
+      'it over a parenthesised group. Answer `xpath/4`.',
+    catches: 'a dropped `xpath=` prefix, which a `//`-leading expression cannot see.',
+    blockedOn: null,
+  },
+  {
+    id: 'C19',
+    construct: 'step:within',
+    family: 'step',
+    tier: 'ui',
+    title: 'the scope narrows the search, proven by an inner name that is ambiguous outside it',
+    target: 'webV2 `/locator-fixture` — the same button name in both lists',
+    evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: '^\\s*within ', min: 2 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'Twenty-five uses before this file and none of them could fail for the right reason: each ' +
+      'scopes to a container whose inner locator would have resolved uniquely on the whole page ' +
+      'anyway, so a `within` that scoped to nothing would pass them all. Here the inner ' +
+      '`click button "Remove"` is ambiguous at page scope \u2014 tflw hard-errors on N>1 (`D7`) \u2014 so a ' +
+      'lost scope is a red step, not a wrong element.',
+    catches: 'a `within` that resolves its scope and then searches outside it.',
+    blockedOn: null,
+  },
+  {
+    id: 'C20',
+    construct: 'step:click',
+    family: 'step',
+    tier: 'ui',
+    title: 'a click that was really dispatched, against one that only resolved',
+    target: 'webV2 `/locator-fixture` — every candidate writes a token, and nothing else does',
+    evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: '^\\s*click ', min: 6 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'The readout starts at `none` and the first assertion in the file says so. Every later token ' +
+      'exists only because a click really reached the DOM, so a `click` that resolved its locator ' +
+      'and dispatched nothing leaves `none` standing and fails on the next line rather than passing ' +
+      'silently. Six clicks, each landing on a different element.',
+    catches: 'a `click` that waits for a locator and never fires the event.',
+    blockedOn: null,
+  },
+  {
+    id: 'C21',
+    construct: 'step:fill',
+    family: 'step',
+    tier: 'ui',
+    title: 'the text arrived in the input the cascade chose, and in no other',
+    target: 'webV2 `/locator-fixture` — the label/placeholder collision, read back from both inputs',
+    evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: '^\\s*fill field ', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'Read back from **both** inputs by id, so "the right one was filled" and "the wrong one was ' +
+      'not" are two separate assertions. The decoy starts at `UNTOUCHED` rather than empty on ' +
+      'purpose: not-filled is then a positive observation instead of a claim about an empty string.',
+    catches: 'a `fill` that types into the wrong element, or into both.',
+    blockedOn: null,
+  },
+  {
+    id: 'C22',
+    construct: 'matcher:has-value',
+    family: 'matcher',
+    tier: 'ui',
+    title: 'the value matcher reads the live control, and discriminates',
+    target: 'webV2 `/locator-fixture` — one input filled, one deliberately left alone',
+    evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: 'has value "', min: 2 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      '**Zero uses in this repository before this file** \u2014 a shipped matcher nothing exercised. ' +
+      'The two assertions are a pair by design: `GLASGOW` on one input and `UNTOUCHED` on the other, ' +
+      'so a `has value` that returned true unconditionally fails the second, and one that read the ' +
+      '`value` *attribute* rather than the live `.value` property fails the first (React sets the ' +
+      'property; the attribute keeps its initial markup).',
+    catches: 'a `has value` that always passes, or that reads the attribute instead of the property.',
+    blockedOn: null,
+  },
 ];
 
 export const PLANT_IDS = PLANTS.map((p) => p.id);
@@ -321,14 +503,14 @@ export const RATCHET = [
   'declaration:as', 'declaration:concurrency',
   // --- step (33) ---
   'step:api', 'step:wait', 'step:expect', 'step:let', 'step:capture', 'step:log', 'step:open',
-  'step:click', 'step:double', 'step:right', 'step:fill', 'step:select', 'step:tick', 'step:untick',
-  'step:press', 'step:hover', 'step:scroll', 'step:within', 'step:dismiss', 'step:switch', 'step:close',
+  'step:double', 'step:right', 'step:select', 'step:tick', 'step:untick',
+  'step:press', 'step:hover', 'step:scroll', 'step:dismiss', 'step:switch', 'step:close',
   'step:download', 'step:drag', 'step:drop', 'step:screenshot', 'step:stub', 'step:pause', 'step:ramp',
   'step:hold', 'step:step', 'step:spike', 'step:threshold', 'step:cleanup',
   // --- matcher (15) ---
   'matcher:equals', 'matcher:contains', 'matcher:matches-regex', 'matcher:matches-subset',
   'matcher:matches-schema', 'matcher:greater-less-than', 'matcher:has-count',
-  'matcher:has-value', 'matcher:state-word', 'matcher:was-made',
+  'matcher:state-word', 'matcher:was-made',
   'matcher:has-no-a11y-violations', 'matcher:has-no-security-violations',
   'matcher:has-no-authorization-violations', 'matcher:has-no-input-handling-violations',
   'matcher:matches-snapshot',
@@ -337,7 +519,7 @@ export const RATCHET = [
   'generator:unique-uuid', 'generator:random-number', 'generator:random-date', 'generator:random-of',
   'generator:random-string', 'generator:random-like', 'generator:random-uuid', 'generator:random-password',
   // --- locator (6) ---
-  'locator:button', 'locator:field', 'locator:text', 'locator:list', 'locator:css', 'locator:xpath',
+  
   // --- config (24) ---
   'config:directive:defaults', 'config:directive:env', 'config:directive:session',
   'config:directive:require', 'config:directive:exclude', 'config:key:header', 'config:key:timeout',
@@ -366,17 +548,23 @@ export const RATCHET = [
  * `RATCHET.length` must not exceed this (`D740`). Lower it as milestones roster constructs; raising
  * it is the edit this pin exists to make loud.
  *
- * `166` is the whole manifest (178 constructs since `M154c`/`D742` added the `declaration` family)
- * minus the twelve plants rostered so far, and `M154f`'s acceptance clause 5 is that it reaches 0.
+ * `156` is the whole manifest (178 constructs) minus the twenty-two plants rostered so far, and
+ * `M154f`'s acceptance clause 5 is that it reaches 0.
  *
- * It went **up** from `M154b`'s `163`, and that is the one direction this pin exists to make loud —
- * so it is worth saying plainly why it is not a regression. Twelve constructs arrived at once when
- * `tflw spec --json` grew the family it had been missing, and nine were rostered in the same
- * milestone; the arithmetic is `163 + 12 - 9`. Coverage went from 3/166 to 12/178. What the ratchet
- * measures is the unrostered remainder, and a remainder can only be honest about a denominator that
- * has itself just been corrected upwards.
+ * `M154d`'s first artifact took it down ten in one step — six locators and three steps that cannot
+ * be graded apart from them, plus `matcher:has-value`, which had **zero** uses in this repository.
+ * Four of those ten are among the most-used constructs here (`button` 93, `text` 92, `css` 69,
+ * `field` 65), which is worth saying beside the number: the ratchet fell by ten and the *volume* of
+ * newly-graded usage is far larger, because `D739`'s "unrostered, not unexercised" cuts both ways.
+ *
+ * It went **up** once, from `M154b`'s `163` to `M154c`'s `166`, and that is the one direction this
+ * pin exists to make loud — so it is worth leaving the reason on the record. Twelve constructs
+ * arrived at once when `tflw spec --json` grew the family it had been missing, and nine were
+ * rostered in the same milestone; the arithmetic was `163 + 12 - 9`. What the ratchet measures is
+ * the unrostered remainder, and a remainder can only be honest about a denominator that has itself
+ * just been corrected upwards.
  */
-export const RATCHET_CEILING = 166;
+export const RATCHET_CEILING = 156;
 
 /**
  * `CONSTRUCTS.md` carries one row per plant and prose a human reads; this asserts their id sets

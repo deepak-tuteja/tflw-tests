@@ -112,6 +112,16 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C10` | `url encode/decode` (`generator:transform-url`) | api | `encodeURIComponent`: space is `%20` not `+`, `~` is left alone, `+`/`/`/`=` are all escaped | form-urlencoding and `encodeURI`, the two near-misses a round trip cannot see |
 | `C11` | `matches file` (`matcher:matches-file`) | api | two **34-byte** files, `A U+00A0 B` against `A SP SP B` — the first comparison passes, the second must fail | a matcher that has stopped comparing bytes, which no existing use could notice |
 | `C12` | `give` (`step:give`) | api | the action's own `first`, and not `caller-value`, `EUR`, or a missing suffix — three named wrong answers, one assertion each | a `give` returning the wrong value rather than no value |
+| `C13` | `button "…"` (`locator:button`) | ui | `button/true` — a link, a `menuitem` and a bare `<div>` carry the identical text and each writes its own token | a `button` locator that stopped resolving by role |
+| `C14` | `text "…"` (`locator:text`) | ui | `text/true` — the phrase also sits in a `value`, an `alt`, a `title` and an `aria-label`, and none of them may match | a `text` locator that widened past rendered text content |
+| `C15` | `field "…"` (`locator:field`) | ui | the `<label>` input holds `GLASGOW` and the placeholder decoy still holds `UNTOUCHED` — `D6`'s cascade order, which nothing else grades | a reordered or short-circuited `field` cascade |
+| `C16` | `list "…"` (`locator:list`) | ui | `list/items` then `list/suppliers`, from two lists holding the identical button name | a `list` locator that resolves any role=list rather than the named one |
+| `C17` | `css "…"` (`locator:css`) | ui | `css/3` — the third of four siblings identical in text and role | a `css` locator that stopped honouring structural position |
+| `C18` | `xpath "…"` (`locator:xpath`) | ui | `xpath/4`, from an expression opening with `(` so Playwright's `//` auto-detect cannot stand in for the `xpath=` prefix | a dropped `xpath=` prefix, which a `//`-leading expression cannot see |
+| `C19` | `within` (`step:within`) | ui | the inner `button "Remove"` is ambiguous at page scope, so a lost scope is a red step rather than a wrong element | a `within` that resolves its scope and then searches outside it |
+| `C20` | `click` (`step:click`) | ui | the readout starts at `none` and only a really-dispatched click ever changes it — six clicks, six different elements | a `click` that waits for a locator and never fires the event |
+| `C21` | `fill` (`step:fill`) | ui | read back from **both** inputs by id: the right one filled, the wrong one not | a `fill` that types into the wrong element, or into both |
+| `C22` | `has value` (`matcher:has-value`) | ui | `GLASGOW` on one input and `UNTOUCHED` on the other — a pair, so an unconditional true fails the second | a `has value` that always passes, or that reads the attribute instead of the property |
 
 ### `C1` — the soft assertion records a failure and keeps going
 
@@ -396,6 +406,56 @@ And `expect {first} equals "caller-value"` closes the loop in the other directio
 caller's own binding alone. Actions are file-scoped with no globals (`P#17`), so a leak in either
 direction turns one of those four lines red.
 
+### `C13`–`C22` — the locator near-miss harness
+
+**Target.** `webV2/src/pages/LocatorFixturePage.tsx`, at the public route `/locator-fixture`.
+**Plant.** `tests/.constructs/locator-near-miss.tflw`, one test, ten rows.
+
+Ten rows from one artifact because six locators and three steps are not separable: you cannot grade
+`within` without a locator to scope, or `fill` without knowing which input received the text.
+
+**What was wrong before it existed.** `button`, `text`, `css` and `field` carry **93, 92, 69 and 65**
+uses between them — four of the most-used constructs in this repository — and not one of those uses
+could tell *resolved the right element* from *resolved an element*. Every one of them names something
+that is unique on its page, so a `button` locator that had quietly degenerated into a text search
+passes all ninety-three. `list` and `xpath` were at **zero**, and so was `has value`.
+
+**Why it is a fixture page.** `D729` orders real flows first and this is the fallback it allows, for
+a reason specific to locators: the plant has to grade that the locator resolved *this* element and
+not a plausible neighbour, and that needs a **deliberate** near-miss — a link wearing a button's
+text, a placeholder colliding with another field's label, four identical buttons where only the
+third is the answer. A storefront that shipped those collisions would be a bug in the storefront.
+The precedent is `RenderFixturePage.tsx` (M45), which exists for the same shape of reason.
+
+**How a wrong resolution is observed.** Every candidate on the page — the true target *and* every
+decoy — writes its own token into `#locator-readout` when interacted with. A locator that lands on a
+decoy therefore does not fail by not-found; it fails by reporting **the decoy's token**. The wrong
+answers are named, not merely absent, which is the same bar `C12` sets for `give`.
+
+Three of the ten are worth reading on their own:
+
+| row | the near-miss, and why it is not obvious |
+|---|---|
+| `C15` | `field` is a closed three-step cascade — label, then placeholder, then `role=textbox` — checked in that **fixed priority** every poll (`D6`, `browser.ts:579`). Two inputs answer to "Ship to". **An order that flipped would pass all sixty-five existing `fill field` uses**, because no other page in this repository collides a label with a placeholder. |
+| `C18` | Playwright auto-detects a selector beginning with `//` or `..` as XPath. So an implementation that dropped `browser.ts:590`'s `xpath=` prefix would still pass an xpath test written the usual way — the auto-detect silently stands in for it. The expression here opens with `(`, which is parsed as CSS if the prefix is missing. |
+| `C19` | Twenty-five `within` uses existed and none could fail for the right reason: each scopes to a container whose inner locator resolves uniquely on the whole page anyway, so a `within` that scoped to nothing passes them all. Here the inner name is ambiguous at page scope, and tflw hard-errors on N>1 (`D7`). |
+
+**The decoy input in `C14` is deliberately `type="text"`.** Playwright's text engine matches
+`input[type=button]` and `input[type=submit]` by their `value` **by design**, so "fixing" that decoy
+into a submit would turn a correct engine red. The page says so at the decoy.
+
+**Every one of the ten was run in its failure direction** before being rostered, on `fedora-box`
+against the same stack: a probe flipped each assertion to the decoy's own token — `button/decoy-link`
+for `C13`, `css/1` for `C17`, the placeholder input for `C15`, and the control after a click for
+`C20` — and all nine went red, 0/9 passed.
+
+`C19`'s failure direction is the one that is **not** a flipped token, and it is the only one kept in
+the plant rather than recorded here. The plant's second test clicks the same inner locator with the
+`within` removed, and must end red on ambiguity; the grader asserts the failure is an ambiguity error
+naming **exactly two** matches, not a not-found and not a timeout. It is kept because `C19` is the
+row whose twenty-five pre-existing uses could not fail for the right reason — leaving its only proof
+in prose would repeat precisely that mistake. The same reasoning `C11` follows for `matches file`.
+
 ## Blocked plants (`D734`)
 
 A plant that goes red because tflw is genuinely broken **keeps its row**, gets a row in tflw's
@@ -403,8 +463,9 @@ ledger, and is marked `blocked-on:<row>` here — counted as *covered but curren
 known reason*, never deleted and never quietly moved to the ratchet. Without this convention, this
 ledger's successes and its bugs look identical.
 
-**None at present.** All twelve plants pass, measured on `fedora-box` 2026-08-25 — the first three
-against tflw `5cba2da` and `C4`–`C12` against the `M154c` build that added the `declaration` family.
+**None at present.** All twenty-two plants pass, measured on `fedora-box` 2026-08-25 — the first
+three against tflw `5cba2da`, `C4`–`C12` against the `M154c` build that added the `declaration`
+family, and `C13`–`C22` against `M154c`'s `main`.
 
 `M154b-02` is deliberately **not** a `blocked-on` marking. `D734` reserves that for a plant that
 goes red for a known tflw defect, and `C2` is green; the defect sits beside the plant, not under it.

@@ -1,0 +1,112 @@
+# `M154d` / `C13`–`C22` — the known-answer plant for all six of tflw's locators, and for the three
+# constructs that cannot be graded apart from them.
+#
+# `locator:button` (93 uses), `locator:text` (92), `locator:css` (69) and `locator:field` (65) are
+# four of the most-used constructs in this repository, and before this file **not one of those uses
+# could tell "resolved the right element" from "resolved an element"**. Every one of them names a
+# thing that is unique on its page, so a `button` locator that had quietly degenerated into a text
+# search would pass all ninety-three. `locator:list` and `locator:xpath` were at **zero** uses.
+#
+# That is what this file is for, and it is why it is a fixture page (`/locator-fixture`,
+# `webV2/src/pages/LocatorFixturePage.tsx`) rather than a storefront flow. `D729` orders real flows
+# first; a locator plant needs *deliberate* near-misses — a link wearing a button's text, a
+# placeholder colliding with another field's label, four identical buttons where only the third is
+# the answer — and a storefront that shipped those collisions would be a bug in the storefront. The
+# precedent is `RenderFixturePage.tsx` (M45), which exists for the same shape of reason.
+#
+# ## How a wrong resolution is observed
+#
+# Every candidate on that page — the true target **and** every decoy — writes its own token into
+# `#locator-readout` when interacted with. So a locator that lands on a decoy does not fail by
+# not-found. It fails by reporting **the decoy's token**, which is the only way to tell the two
+# apart. The wrong answers are named, not merely absent.
+#
+# ## What each locator's known answer actually is
+#
+#   `button`  resolves by ROLE. Three decoys carry the identical accessible text with a different
+#             role (link, menuitem, bare div). Answer `button/true`; a text search reports one of
+#             the others, or hard-errors on ambiguity.
+#   `text`    resolves by rendered TEXT CONTENT. Four decoys carry the phrase in an attribute
+#             instead — an input `value`, an `alt`, a `title`, an `aria-label`. Answer `text/true`.
+#   `field`   resolves through `D6`'s closed three-step cascade, label → placeholder → role=textbox,
+#             **in that fixed priority**. Two inputs answer to "Ship to", one by its `<label>` and
+#             one by its placeholder. Nothing in this repository graded that order before, and an
+#             order that flipped would still pass all sixty-five existing `fill field` uses.
+#   `list`    resolves a role=list by its ACCESSIBLE NAME, and supplies the scope `within` narrows
+#             to. Both lists hold a button named exactly "Remove", so an unscoped click on it is
+#             ambiguous by construction — the pair below can only pass if `list` picked the named
+#             list *and* `within` confined the search to it.
+#   `css`     answers a positional question among four identical siblings. A resolution that took
+#             the first match reports `css/1`.
+#   `xpath`   the same shape, with an expression that deliberately does **not** start with `//`.
+#             Playwright auto-detects a selector beginning with `//` or `..` as XPath, so an
+#             implementation that forgot to prefix `xpath=` would still pass an xpath test written
+#             the usual way. A leading `(` defeats that: the expression below resolves only because
+#             `packages/runtime/src/browser.ts` prefixes it.
+#
+# ## The three constructs folded in, and why they are not separable
+#
+#   `step:click`       the readout only ever changes because a click was really dispatched. The
+#                      first assertion below is the control: `none`, before anything is clicked.
+#   `step:fill`        the field cascade's answer is *which input received the text*, which is a
+#                      fact about the fill as much as about the locator.
+#   `matcher:has-value` at **zero** uses in this repository before this file, and it is what reads
+#                      the answer back out of both inputs.
+
+@constructs @locators @ui
+test "each locator resolves the element it names, and not the decoy wearing its clothes"
+  open "/locator-fixture"
+
+  # The control. Nothing has been clicked, so nothing has claimed the readout. Every assertion
+  # after this one is only meaningful because this one holds.
+  expect css "#locator-readout[data-token='none']" is visible
+
+  # `button` — role, not text.
+  click button "Archive shipment"
+  expect css "#locator-readout[data-token='button/true']" is visible
+
+  # `text` — rendered content, not attributes.
+  click text "Restock queued"
+  expect css "#locator-readout[data-token='text/true']" is visible
+
+  # `css` — the third of four identical buttons, not the first.
+  click css "[data-group-list='css'] li:nth-child(3) button"
+  expect css "#locator-readout[data-token='css/3']" is visible
+
+  # `xpath` — the last of four, by an expression CSS cannot express, on a string that only
+  # resolves if `xpath=` was really prefixed.
+  click xpath "(//ol[@data-group-list='xpath']/li)[last()]//button"
+  expect css "#locator-readout[data-token='xpath/4']" is visible
+
+  # `list` + `within` — the same button name in both lists, told apart only by the scope.
+  within list "Backordered items"
+    click button "Remove"
+  expect css "#locator-readout[data-token='list/items']" is visible
+
+  within list "Backordered suppliers"
+    click button "Remove"
+  expect css "#locator-readout[data-token='list/suppliers']" is visible
+
+  # `field` + `fill` + `has value` — the label wins the cascade, and the placeholder decoy is
+  # still holding the value it started with. Both halves are the answer: "the right input was
+  # filled" and "the wrong one was not".
+  fill field "Ship to" with "GLASGOW"
+  expect css "#field-by-label" has value "GLASGOW"
+  expect css "#field-by-placeholder" has value "UNTOUCHED"
+
+@constructs @locators @ui
+test "without the scope, the same inner locator is ambiguous — this test MUST end red on its last line"
+  # **This test is meant to fail**, and that red is `C19`'s second assertion.
+  #
+  # The twenty-five `within` uses that existed before this file all scope to a container whose inner
+  # locator would have resolved uniquely on the whole page anyway. So a `within` that resolved its
+  # scope and then searched the document would pass every one of them, and the block would read as
+  # load-bearing while carrying nothing. Asserting that the scoped clicks *work* cannot see that —
+  # it needs the unscoped case to be genuinely impossible.
+  #
+  # Here it is. Both lists hold a button named exactly "Remove", so at page scope the name matches
+  # two elements and tflw hard-errors rather than picking one (`D7`: N>1 is always an error, and
+  # `has count` is the only matcher exempt). If this line ever goes green, either the fixture lost a
+  # decoy or `within` stopped being the thing that made the two tests above differ.
+  open "/locator-fixture"
+  click button "Remove"
