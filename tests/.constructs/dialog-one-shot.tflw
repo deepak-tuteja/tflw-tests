@@ -1,0 +1,97 @@
+# `M154b` / `C2` — the known-answer plant for `accept dialog`, and specifically for the two halves
+# of its contract: *"arm a one-shot handler accepting the next native dialog; without it Playwright
+# auto-dismisses silently"*.
+#
+# **This file is meant to pass.** It is a plant because each assertion distinguishes a real tflw
+# regression from correct behaviour, which the two `accept dialog` uses already in this repository
+# do not:
+#
+#   `tests/mixed/storefront.tflw` and `tests/.env-specific/webv2-admin.tflw` each pair a
+#   `dismiss dialog` with an `accept dialog` on a single confirm. The `accept` half is real — the
+#   default is dismissal, so the delete cannot happen unless the step armed something. The `dismiss`
+#   half proves nothing at all: Playwright dismisses an unhandled dialog anyway, so that assertion
+#   holds identically whether or not `dismiss dialog` did anything. Filed as `M154b-01`.
+#
+# The target is `webV2/admin`'s bulk out-of-stock delete, whose form runs two `confirm()`s in one
+# short-circuited handler and records which one it stopped at. The plant asserts **two states of the
+# same click**, and the pair is what carries the claim — either one alone would be vacuous:
+#
+#   nothing armed        #1 dismissed by default, #2 never shown   -> data-state="cancelled"
+#   `accept dialog` once #1 accepted, #2 dismissed by default      -> data-state="cancelled-final"
+#
+# Same page, same button, different arming, different state. A step that armed nothing would leave
+# `cancelled` both times; a handler that stayed armed past its first dialog would navigate away and
+# produce neither.
+#
+# **The third state — both confirms accepted, the products really deleted — is not asserted, and
+# not because it was hard.** It is unreachable: `armedDialog` is a single slot rather than a queue
+# (`packages/runtime/src/browser.ts:220`), so two consecutive `accept dialog` steps arm one handler,
+# and the two dialogs come from a single `click` with no step boundary between them to arm again.
+# That is `M154b-02`, found on this plant's first run. Asserting it here would be a plant that is
+# *wrong* rather than a plant that is *blocked* — the distinction `D734` exists to keep visible —
+# so the case is a ledger row and this file grades what the language actually promises.
+
+@constructs @dialog @mixed
+test "one `accept dialog` accepts exactly one dialog; with none armed the first is dismissed"
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+  api GET /categories
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  # Two out-of-stock products under one prefix that is unique **across runs**, so the list filter
+  # below selects exactly these two and the bulk action can never reach the seed catalogue — the
+  # route is scoped to `stock === 0` *and* to the filter, and this is the half of that fence the
+  # test owns.
+  #
+  # `unique uuid` and not `unique("C2 Dialog Plant")`. The prefix form promises collision-safety
+  # "across tests/workers/retries" and that list does not include *runs*: it is a run-scoped
+  # counter, so two runs both produce `-0`. Against a database that survives between runs — which
+  # is every run of this plant after the first — the second run then created a second `… alpha` and
+  # the filter matched two elements. tflw's contract says exactly what it covers and this plant had
+  # assumed one word more. `unique uuid` guarantees distinctness instead.
+  let prefix = unique uuid
+  api POST /products body { name: "{prefix} alpha", price: 5.00, stock: 0, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as alphaId
+  api POST /products body { name: "{prefix} beta", price: 6.00, stock: 0, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as betaId
+
+  open "/login"
+  fill form
+    | "Email"    | env(ADMIN_EMAIL) |
+    | "Password" | env(ADMIN_PW)    |
+  click button "Log in"
+  expect button "Log out" is visible
+
+  open "/products?q={prefix}"
+  expect text "{prefix} alpha" is visible
+  expect text "{prefix} beta" is visible
+  expect css "#bulk-delete-state[data-state='idle']" is visible
+
+  # THE CONTROL. Nothing armed, so Playwright dismisses the first confirm and the second is never
+  # shown. On its own this measures Playwright, not tflw — it earns its place as the other half of
+  # the contrast below, and the two assertions are only meaningful as a pair.
+  click button "Delete 2 out-of-stock"
+  expect css "#bulk-delete-state[data-state='cancelled']" is visible
+
+  # THE PLANT. One arming, same button. The first dialog is accepted by the armed handler and the
+  # second falls through to the default dismissal, which is exactly what `cancelled-final` records —
+  # a state the control cannot reach and a sticky handler would skip past.
+  accept dialog
+  click button "Delete 2 out-of-stock"
+  expect css "#bulk-delete-state[data-state='cancelled-final']" is visible
+
+  # Neither state deleted anything, and this line would hold under both — which is why it is here as
+  # a fence on the bulk route's blast radius and not as the claim about `accept dialog`.
+  api GET /products/{alphaId}
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  api GET /products/{betaId}
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200

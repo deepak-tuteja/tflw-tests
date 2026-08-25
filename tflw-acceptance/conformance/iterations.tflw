@@ -1,0 +1,32 @@
+# `M154b` / `C3` — the known-answer plant for `run N iterations [per user] across M users`.
+#
+# Zero occurrences in 126 `.tflw` files before this one (PLAN_M154 §2.1). Four of tflw's six
+# workload shapes have never been executed by anything; this is the first of them to be graded, and
+# it is graded against `arrival-server.mjs`'s own count rather than against tflw's iteration
+# counter — see that file for why the distinction is the whole plant.
+#
+# The two tests below are the two spellings, and their known answers are chosen so that **confusing
+# them is visible**. Both should land exactly 60 requests, by different arithmetic:
+#
+#   `run 60 iterations across 6 users`            60 total, shared out among 6 VUs
+#   `run 12 iterations per user across 5 users`   12 each, 5 VUs
+#
+# A build that ignored `per user` would land 12 on the second path, not 60. A build that read the
+# first as per-user would land 360 on the first. Equal expected totals by unequal routes is the
+# point: the paths are distinct, so neither test can be satisfied by the other's traffic.
+
+test "run N iterations across M users lands exactly N requests"
+  run 60 iterations across 6 users
+  api GET /shared
+  expect status equals 200
+  # `TF033` (tflw M60): a workload-bearing test's verdict comes only from its thresholds, so one is
+  # required. Deliberately tight rather than loose — this target is a local counter with no database
+  # behind it, so any error at all means the generator or the socket layer misbehaved, and there is
+  # no contention here to excuse it.
+  threshold error rate is less than 1%
+
+test "run N iterations per user across M users lands exactly N*M requests"
+  run 12 iterations per user across 5 users
+  api GET /per-user
+  expect status equals 200
+  threshold error rate is less than 1%

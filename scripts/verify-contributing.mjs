@@ -89,6 +89,14 @@ const CLASSIFIED = [
   {
     wf: 'ci.yml',
     job: 'acceptance-check',
+    cmd: 'npm run verify:construct-coverage',
+    class: 'gate',
+    local: 'npm run verify:construct-coverage',
+    why: 'every construct tflw ships is rostered in `CONSTRUCTS.md` or explicitly on the ratchet, measured against `tflw spec --json` from the build under test (`M154b`, `D723`/`D730`). A contributor gate rather than ci-only because the thing it catches is a construct arriving with nowhere to be graded, and the person who can cheapest write that row is the one who just added it. It **refuses to run** against a vendored tflw that is not current with the sibling checkout (`D741`), so running it locally without `npm run refresh-tflw` first tells you so by name instead of guessing',
+  },
+  {
+    wf: 'ci.yml',
+    job: 'acceptance-check',
     cmd: 'npm run verify:contributing',
     class: 'gate',
     local: 'npm run verify:contributing',

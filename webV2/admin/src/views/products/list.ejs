@@ -1,6 +1,7 @@
 <%- include('../partials/head', { title: 'Products' }) %>
 <%- include('../partials/nav') %>
 <h1>Products</h1>
+<% if (deleted) { %><p data-state="bulk-deleted">Deleted <%= deleted %> out-of-stock product(s).</p><% } %>
 <form method="get" action="/products">
   <label for="q">Search</label>
   <input id="q" name="q" value="<%= q %>" />
@@ -30,6 +31,63 @@
     <% }) %>
   </tbody>
 </table>
+
+<%
+  // `M154b` / `C2` — the double-confirm bulk action, and the reason it has two confirms.
+  //
+  // `accept dialog` arms a ONE-SHOT handler for the next native dialog; without it Playwright
+  // dismisses every dialog silently. A single-confirm flow can only distinguish "armed" from "not
+  // armed" — it proves the step fires and says nothing about how long it stays armed, so a tflw
+  // regression that made the handler sticky would pass every existing test in this repository.
+  //
+  // Two confirms, short-circuited, give three outcomes — and tflw can reach exactly two of them:
+  //   nothing armed        -> #1 dismissed, #2 never shown            -> state `cancelled`
+  //   `accept dialog` once -> #1 accepted, #2 auto-dismissed          -> state `cancelled-final`
+  //   armed twice          -> both accepted, the rows are really gone -> UNREACHABLE, `M154b-02`
+  //
+  // The third is unreachable because `armedDialog` is a single slot, so two `accept dialog` steps
+  // arm one handler and the two dialogs arrive from one `click` with no step boundary between them.
+  // Found on this plant's first run. The feature keeps its second confirm regardless: it is what
+  // makes the *reachable* pair distinguishable, which is the whole reason the plant works.
+  //
+  // The first two are the plant, and the status line below is why they are a plant at all: without
+  // it, "armed once" and "nothing armed" both end with the products still present and are
+  // indistinguishable from outside the browser. The assertion would then hold whether or not
+  // `accept dialog` did anything — a vacuous check, which is the class `M141`/`D538` spent an
+  // order of the ledger removing. The line is not scaffolding bolted on for the test; a
+  // two-step destructive confirmation telling you which step you are on is the honest form of
+  // this feature (`D729`).
+  const outOfStock = products.filter(function (p) { return p.stock === 0; });
+%>
+<% if (currentUser && currentUser.role === 'admin' && outOfStock.length) { %>
+  <form method="post" action="/products/delete-out-of-stock" onsubmit="return bulkDeleteConfirm(this)">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <input type="hidden" name="q" value="<%= q %>" />
+    <input type="hidden" name="categoryId" value="<%= categoryId %>" />
+    <button type="submit">Delete <%= outOfStock.length %> out-of-stock</button>
+    <p id="bulk-delete-state" data-state="idle">No bulk delete started.</p>
+  </form>
+  <script>
+    function bulkDeleteConfirm(form) {
+      var state = form.querySelector('#bulk-delete-state');
+      var setState = function (key, text) {
+        state.setAttribute('data-state', key);
+        state.textContent = text;
+      };
+      if (!confirm('Delete <%= outOfStock.length %> out-of-stock product(s) matching this filter?')) {
+        setState('cancelled', 'Cancelled at the first confirmation. Nothing was deleted.');
+        return false;
+      }
+      setState('first-confirmed', 'Confirmed once \u2014 awaiting the final confirmation.');
+      if (!confirm('This cannot be undone. Delete them for good?')) {
+        setState('cancelled-final', 'Cancelled at the final confirmation. Nothing was deleted.');
+        return false;
+      }
+      setState('submitting', 'Deleting\u2026');
+      return true;
+    }
+  </script>
+<% } %>
 
 <p>
   Page <%= page %> of <%= Math.max(1, Math.ceil(total / pageSize)) %> (<%= total %> products)

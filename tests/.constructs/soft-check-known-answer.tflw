@@ -1,0 +1,34 @@
+# `M154b` / `C1` — the known-answer plant for `check`, tflw's soft assertion.
+#
+# **This file is meant to fail, and the shape of its failure is the assertion.** It lives in a
+# dot-directory so a bare `tflw run` never discovers it (the same arrangement `tests/.demo-fail/`
+# uses), and it is graded by `scripts/verify-construct-acceptance.mjs`, which runs it explicitly and
+# reads the report rather than the exit status.
+#
+# What the grader demands, and why an exit status cannot express it:
+#
+#   - all SIX `check` rows are present in the report. A `check` that failed fast like `expect` would
+#     stop at row 5 and rows 5-6 plus the `expect` below would simply be absent — and the run would
+#     still exit non-zero, still print `FAIL 0/1`, and look identical from outside.
+#   - exactly TWO of them failed, and they are `body.currency` and `body.falsy` by name. A count
+#     alone would be satisfied by an implementation that failed the wrong two.
+#   - the `expect status equals 200` at the end RAN and PASSED. This is the "and keeps going" half
+#     of the contract, and it is the half nothing in this repository has ever checked.
+#
+# The payload is `apiV2/src/soft-check/soft-check.constants.ts` — six literal fields, frozen, with
+# no seed or database behind them. `body.truthy` and `body.falsy` are the endpoint's own statement
+# of the known answer, so the plant and its target cannot drift apart silently: the fifth and sixth
+# lines below assert the wrong values *against numbers the payload itself carries*.
+
+@constructs @softcheck
+test "the six-row known answer: four checks true, two false, and execution continues past both"
+  api GET /soft-check/known-answer
+  check body.label equals "known-answer"
+  check body.price equals 42
+  check body.inStock equals true
+  check body.truthy equals 4
+  # The two deliberate falsehoods. `currency` is really "EUR" and `falsy` is really 2.
+  check body.currency equals "USD"
+  check body.falsy equals 99
+  # The proof that `check` is soft. If it were not, this line is unreachable.
+  expect status equals 200
