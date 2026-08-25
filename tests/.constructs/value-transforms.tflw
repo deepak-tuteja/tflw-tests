@@ -1,0 +1,70 @@
+# `M154c` / `C8`, `C9`, `C10` — the known-answer plants for `base64`, `hex` and `url`.
+#
+# **This file is meant to pass.** It is the one plant in this set whose known answer is the value
+# itself, and it needs no endpoint at all: these are pure value transforms (`SPEC` §7.6), so a
+# server hop would prove the HTTP client works and nothing about the transform. That is a departure
+# from `D725` and it is deliberate — see `CONSTRUCTS.md`'s `C8`–`C10` rows.
+#
+# ## Why the existing evidence cannot fail
+#
+# `tests/api/mechanics/actions-and-helpers.tflw` exercises all six directions today, like this:
+#
+#     let hexed = hex encode("{tag}")
+#     let unhexed = hex decode(hexed)
+#     ...
+#     expect body.name equals "{productName}"
+#
+# That is a **round trip**, and a round trip holds for *any* pair of mutually inverse functions.
+# A `base64` on the URL-safe alphabet round-trips perfectly. A `url encode` that emitted
+# form-urlencoding round-trips perfectly. The assertion at the end is about the server echoing a
+# string back, and it passes whatever the six transforms did in between. Six constructs, twelve
+# lines of evidence, and not one of them can go red for a wrong encoding.
+#
+# So every line below compares against a **hand-written literal**, and encode and decode are
+# checked against separate literals rather than against each other.
+#
+# ## The input, and what it discriminates
+#
+# One string, chosen so that each transform's most plausible wrong implementation produces a
+# visibly different answer:
+#
+#   base64   `.../...+...`      standard alphabet.   URL-safe would give `_` and `-`.
+#   hex      lowercase          `Buffer.toString('hex')`.  Uppercase is the other common answer.
+#   url      `%20`, `~`, `%2B`  encodeURIComponent.  Form-urlencoding gives `+`, `%7E`.
+#
+# `SPEC` §7.6 names `encodeURIComponent` outright, so `url` is spec-derived. `base64`'s alphabet is
+# derivable too, from the other end: `TF054` refuses a `decode` literal on the URL-safe alphabet, so
+# an `encode` emitting one would produce output its own `decode` rejects. **`hex`'s case is pinned
+# by this file and by nothing else** — `SPEC` §7.6 does not state it. That is recorded as `M154c-02`
+# in tflw's ledger rather than quietly asserted here as though it were a specified answer.
+
+@constructs @transforms
+test "base64 encode emits the standard alphabet, and decode reads it back"
+  let raw = "M154c xÿ?>~a+b/c d=e"
+  let encoded = base64 encode("{raw}")
+  # Both `+` and `/` appear. On the URL-safe alphabet this literal is `TTE1NGMgeMO_Pz5-YStiL2MgZD1l`.
+  expect {encoded} equals "TTE1NGMgeMO/Pz5+YStiL2MgZD1l"
+  # Decoded from a hand-written literal, not from `encoded` — so this line is not a round trip and
+  # cannot be satisfied by an encode/decode pair that is wrong in the same direction twice.
+  let decoded = base64 decode("TTE1NGMgeMO/Pz5+YStiL2MgZD1l")
+  expect {decoded} equals "{raw}"
+
+@constructs @transforms
+test "hex encode emits lowercase digits, two per byte, and decode reads them back"
+  let raw = "M154c xÿ?>~a+b/c d=e"
+  let encoded = hex encode("{raw}")
+  # 21 bytes of UTF-8 -> 42 digits. `xÿ` is `78 c3 bf`: the non-ASCII character is two bytes, which
+  # is what makes this a byte-level transform rather than a character-level one.
+  expect {encoded} equals "4d313534632078c3bf3f3e7e612b622f6320643d65"
+  let decoded = hex decode("4d313534632078c3bf3f3e7e612b622f6320643d65")
+  expect {decoded} equals "{raw}"
+
+@constructs @transforms
+test "url encode is encodeURIComponent, not form-urlencoding"
+  let raw = "M154c xÿ?>~a+b/c d=e"
+  let encoded = url encode("{raw}")
+  # Three separate discriminators in one literal: space is `%20` and not `+`; `~` is left alone and
+  # not `%7E`; `+` and `/` and `=` are all escaped, which `encodeURI` would not do.
+  expect {encoded} equals "M154c%20x%C3%BF%3F%3E~a%2Bb%2Fc%20d%3De"
+  let decoded = url decode("M154c%20x%C3%BF%3F%3E~a%2Bb%2Fc%20d%3De")
+  expect {decoded} equals "{raw}"

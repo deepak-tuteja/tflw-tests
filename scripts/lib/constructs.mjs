@@ -132,6 +132,169 @@ export const PLANTS = [
     catches: 'a mis-paced or miscounted generator that still reports green, and a dropped `per user`.',
     blockedOn: null,
   },
+  {
+    id: 'C4',
+    construct: 'declaration:retry',
+    family: 'declaration',
+    tier: 'api',
+    title: 'the retry budget is three attempts of the whole test, and it is bounded at both ends',
+    target: 'apiV2/src/lifecycle/ — a per-key attempt counter and a mark counter, read back after the run',
+    evidence: { file: 'tests/.constructs/retry-attempt-budget.tflw', pattern: '^test .* retry 2$', min: 2 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'Two keys, one inside the budget and one past it. `c4-settles` answers 200 on attempt 3 and ' +
+      'its test passes `flaky`; `c4-exhausts` answers 200 on attempt 4 and its test ends red — and ' +
+      'BOTH keys are attempted exactly 3 times. A `retry N` meaning *N total attempts* never reaches ' +
+      'the first; a retry that ignored its budget passes the second. The `c4-preamble` mark, set by ' +
+      'the step BEFORE the one that fails, reaches 3: that separates re-running the whole test from ' +
+      're-running the failing step, which every existing endpoint settles identically under.',
+    catches: 'an off-by-one retry budget, an unbounded retry, and a step-level retry wearing a test-level spelling.',
+    blockedOn: null,
+  },
+  {
+    id: 'C5',
+    construct: 'declaration:after',
+    family: 'declaration',
+    tier: 'api',
+    title: 'teardown runs in both scopes, and runs for the test that failed',
+    target: 'apiV2/src/lifecycle/ — two labelled counters the hooks mark instead of cleaning up',
+    evidence: { file: 'tests/.constructs/after-hook-scopes.tflw', pattern: '^after( file)?$', min: 2 },
+    graders: ['acceptance'],
+    knownAnswer:
+      '`c5-after-file` == 1 and `c5-after-test` == 2, over a file whose second test ends red on ' +
+      'purpose. Three defects fall out of those two integers: a hook that never runs leaves 0, one ' +
+      'that skips failed tests leaves 1, and an `after file` implemented at test scope leaves 2. ' +
+      'The second is the clause `tflw spec` states for this construct — *runs whether the test ' +
+      'passed or failed* — and nothing in this repository had ever observed it.',
+    catches: 'a teardown that silently does not run, and the two hook scopes collapsing into one.',
+    blockedOn: null,
+  },
+  {
+    id: 'C6',
+    construct: 'matcher:fails',
+    family: 'matcher',
+    tier: 'api',
+    title: 'a transport failure, and not an HTTP error response',
+    target: 'port 9 under `env unreachableHost`, against `/flaky-widget`\'s first-attempt 503 under `env local`',
+    evidence: { file: 'tests/.constructs/request-fails-live-control.tflw', pattern: '^\\s*expect request fails\\b', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'Two runs under two envs, and the pair is the claim. Against a closed port `fails` passes; ' +
+      'against a server that answered 503 it MUST NOT, and the red must land on that line rather ' +
+      'than on the 503 above it. `SPEC` §6.2.2 puts this matcher at the transport layer, and a ' +
+      '`fails` that treated any non-2xx as a failure passes every existing test in this repository ' +
+      '— the closed-port one included — while reclassifying every 4xx and 5xx in the suite.',
+    catches: 'a `fails` matcher that has drifted from the transport layer up to the status code.',
+    blockedOn: null,
+  },
+  {
+    id: 'C7',
+    construct: 'matcher:connects',
+    family: 'matcher',
+    tier: 'api',
+    title: 'the complement of `fails`, asserted on both sides of the same boundary',
+    target: 'the same two runs as `C6` — this is one plant graded as two claims, not two plants',
+    evidence: { file: 'tests/.constructs/request-fails-unreachable.tflw', pattern: '^\\s*expect request connects\\s*$', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      '`connects` fails against the closed port and passes against the 503 — the exact inverse of ' +
+      '`C6` on the same two requests. Rostered here rather than left on the ratchet because the ' +
+      'plant already grades it: asserting only that `fails` passes where it should would be ' +
+      'satisfied by a matcher that passes unconditionally, so the complement is what rules that out ' +
+      'and it costs one row to say so.',
+    catches: 'a `connects` that is a tautology, and the pair drifting apart.',
+    blockedOn: null,
+  },
+  {
+    id: 'C8',
+    construct: 'generator:transform-base64',
+    family: 'generator',
+    tier: 'api',
+    title: 'the standard alphabet, not the URL-safe one',
+    target: 'none — a pure value transform, graded against a literal (see `D743`)',
+    evidence: { file: 'tests/.constructs/value-transforms.tflw', pattern: '^\\s*let encoded = base64 encode\\(', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      '`base64 encode("M154c xÿ?>~a+b/c d=e")` is `TTE1NGMgeMO/Pz5+YStiL2MgZD1l` — an input chosen ' +
+      'so the output carries BOTH `+` and `/`, the two characters the URL-safe alphabet spells ' +
+      'differently. Derivable rather than merely observed: `TF054` refuses a URL-safe literal to ' +
+      '`base64 decode`, so an `encode` emitting one would produce output its own `decode` rejects. ' +
+      'The decode direction is checked against a hand-written literal, not against `encoded`, so ' +
+      'the pair cannot be wrong in the same direction twice and still pass.',
+    catches: 'an alphabet swap, which every round-trip test in this repository passes.',
+    blockedOn: null,
+  },
+  {
+    id: 'C9',
+    construct: 'generator:transform-hex',
+    family: 'generator',
+    tier: 'api',
+    title: 'lowercase digits, two per byte, over a multi-byte input',
+    target: 'none — a pure value transform, graded against a literal (see `D743`)',
+    evidence: { file: 'tests/.constructs/value-transforms.tflw', pattern: '^\\s*let encoded = hex encode\\(', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      '21 bytes of UTF-8 to 42 lowercase digits, `4d31…3d65`, with `ÿ` as `c3bf` — so this is ' +
+      'asserted as a byte transform rather than a character one. **The case is pinned by this plant ' +
+      'and by nothing else**: `SPEC` §7.6 does not state it. Recorded as `M154c-02` in tflw rather ' +
+      'than asserted here as though it were specified, because a plant that quietly promotes an ' +
+      'implementation detail to a contract is how a spec gap becomes invisible.',
+    catches: 'an uppercase drift, and a character-level transform mistaken for a byte-level one.',
+    blockedOn: null,
+  },
+  {
+    id: 'C10',
+    construct: 'generator:transform-url',
+    family: 'generator',
+    tier: 'api',
+    title: 'encodeURIComponent, not form-urlencoding',
+    target: 'none — a pure value transform, graded against a literal (see `D743`)',
+    evidence: { file: 'tests/.constructs/value-transforms.tflw', pattern: '^\\s*let encoded = url encode\\(', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'Three discriminators in one literal: space is `%20` and not `+`, `~` is left alone and not ' +
+      '`%7E`, and `+`/`/`/`=` are all escaped where `encodeURI` would leave them. Fully ' +
+      'spec-derived — `SPEC` §7.6 names `encodeURIComponent` outright — which makes this the one ' +
+      'transform whose known answer needed no judgement at all.',
+    catches: 'form-urlencoding and `encodeURI`, the two near-misses a round trip cannot see.',
+    blockedOn: null,
+  },
+  {
+    id: 'C11',
+    construct: 'matcher:matches-file',
+    family: 'matcher',
+    tier: 'api',
+    title: 'byte equality that actually discriminates',
+    target: 'apiV2/src/uploads/ — the golden file round-tripped, compared against itself and against a near miss',
+    evidence: { file: 'tests/.constructs/bytes-near-miss.tflw', pattern: '^\\s*expect body bytes matches file\\b', min: 2 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'Two 34-byte files — `A U+00A0 B` against `A SP SP B` — of **identical length**, differing in ' +
+      'two bytes, and indistinguishable in any editor or diff. The first comparison passes and the ' +
+      'second MUST fail. `file-formats.tflw` has used this matcher on three formats since `F2`, but ' +
+      'every one of them compares a file against itself: a `matches file` returning true ' +
+      'unconditionally passes all three, and so does one that compares lengths.',
+    catches: 'a matcher that has stopped comparing bytes — which no existing use could notice.',
+    blockedOn: null,
+  },
+  {
+    id: 'C12',
+    construct: 'step:give',
+    family: 'step',
+    tier: 'api',
+    title: 'the named value, and not the two other values in reach',
+    target: 'apiV2/src/soft-check/ — `C1`\'s frozen constant, reused so no seed or fixture is involved',
+    evidence: { file: 'tests/.constructs/action-give.tflw', pattern: '^\\s*give\\s+\\S', min: 2 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'The action gives `first` and captures `second` afterwards, and the caller binds `first` too, ' +
+      'to a different string. So three named wrong answers exist and each has its own assertion: ' +
+      '`caller-value` if scoping leaked, `EUR` if `give` returned the last capture rather than the ' +
+      'named expression, and a missing suffix if a parameter never arrived. The only live `give` in ' +
+      'this repository feeds a path segment — it can catch a `give` returning nothing, and nothing else.',
+    catches: 'a `give` returning the wrong value rather than no value.',
+    blockedOn: null,
+  },
 ];
 
 export const PLANT_IDS = PLANTS.map((p) => p.id);
@@ -147,24 +310,32 @@ export const plantFor = (construct) => PLANTS.find((p) => p.construct === constr
  * exercised*. `step:api` sits here with 1139 occurrences behind it.
  */
 export const RATCHET = [
-  // --- step (34) ---
-  'step:api', 'step:wait', 'step:expect', 'step:let', 'step:capture', 'step:log', 'step:give', 'step:open',
+  // --- declaration (10) ---
+  // The family `M154a` missed and `M154c`/`D742` added; `declaration:after` and `declaration:retry`
+  // are rostered above, so ten of the twelve land here. Five of these are `test`-header clauses
+  // rather than top-level words, and three of those five (`tags`, `with-each`, `concurrency`) are
+  // manifest ids for constructs the language spells differently — `@…`, `with each`, and
+  // `parallel`/`sequential`. Read them as ids, never as keywords (`M154a`, `spec-data.ts`).
+  'declaration:test', 'declaration:crawl', 'declaration:action', 'declaration:import',
+  'declaration:use', 'declaration:before', 'declaration:tags', 'declaration:with-each',
+  'declaration:as', 'declaration:concurrency',
+  // --- step (33) ---
+  'step:api', 'step:wait', 'step:expect', 'step:let', 'step:capture', 'step:log', 'step:open',
   'step:click', 'step:double', 'step:right', 'step:fill', 'step:select', 'step:tick', 'step:untick',
   'step:press', 'step:hover', 'step:scroll', 'step:within', 'step:dismiss', 'step:switch', 'step:close',
   'step:download', 'step:drag', 'step:drop', 'step:screenshot', 'step:stub', 'step:pause', 'step:ramp',
   'step:hold', 'step:step', 'step:spike', 'step:threshold', 'step:cleanup',
-  // --- matcher (18) ---
+  // --- matcher (15) ---
   'matcher:equals', 'matcher:contains', 'matcher:matches-regex', 'matcher:matches-subset',
-  'matcher:matches-schema', 'matcher:matches-file', 'matcher:greater-less-than', 'matcher:has-count',
-  'matcher:has-value', 'matcher:state-word', 'matcher:connects', 'matcher:fails', 'matcher:was-made',
+  'matcher:matches-schema', 'matcher:greater-less-than', 'matcher:has-count',
+  'matcher:has-value', 'matcher:state-word', 'matcher:was-made',
   'matcher:has-no-a11y-violations', 'matcher:has-no-security-violations',
   'matcher:has-no-authorization-violations', 'matcher:has-no-input-handling-violations',
   'matcher:matches-snapshot',
-  // --- generator (15) ---
+  // --- generator (12) ---
   'generator:unique-prefix', 'generator:unique-email', 'generator:unique-number', 'generator:unique-like',
   'generator:unique-uuid', 'generator:random-number', 'generator:random-date', 'generator:random-of',
   'generator:random-string', 'generator:random-like', 'generator:random-uuid', 'generator:random-password',
-  'generator:transform-base64', 'generator:transform-hex', 'generator:transform-url',
   // --- locator (6) ---
   'locator:button', 'locator:field', 'locator:text', 'locator:list', 'locator:css', 'locator:xpath',
   // --- config (24) ---
@@ -195,10 +366,17 @@ export const RATCHET = [
  * `RATCHET.length` must not exceed this (`D740`). Lower it as milestones roster constructs; raising
  * it is the edit this pin exists to make loud.
  *
- * `163` is the whole manifest minus this milestone's three plants — the honest starting state, and
- * `M154f`'s acceptance clause 5 is that it reaches 0.
+ * `166` is the whole manifest (178 constructs since `M154c`/`D742` added the `declaration` family)
+ * minus the twelve plants rostered so far, and `M154f`'s acceptance clause 5 is that it reaches 0.
+ *
+ * It went **up** from `M154b`'s `163`, and that is the one direction this pin exists to make loud —
+ * so it is worth saying plainly why it is not a regression. Twelve constructs arrived at once when
+ * `tflw spec --json` grew the family it had been missing, and nine were rostered in the same
+ * milestone; the arithmetic is `163 + 12 - 9`. Coverage went from 3/166 to 12/178. What the ratchet
+ * measures is the unrostered remainder, and a remainder can only be honest about a denominator that
+ * has itself just been corrected upwards.
  */
-export const RATCHET_CEILING = 163;
+export const RATCHET_CEILING = 166;
 
 /**
  * `CONSTRUCTS.md` carries one row per plant and prose a human reads; this asserts their id sets

@@ -63,8 +63,22 @@ exercises" would be false of a third of it, and a list nobody believes is a list
 
 The construct set is **not a list in this repository**. It comes from `tflw spec --json`, emitted by
 the vendored build — the same artifact every other grader here runs — so the checklist and the
-program under test cannot disagree. At tflw `5cba2da` that is **166 constructs**: 37 step keywords,
-18 matchers, 15 generators, 6 locators, 24 config words, 66 diagnostic codes.
+program under test cannot disagree. Since tflw's `M154c` that is **178 constructs**: 12
+declarations, 37 step keywords, 18 matchers, 15 generators, 6 locators, 24 config words, 66
+diagnostic codes.
+
+It was **166** one milestone ago, and the twelve that arrived are worth a sentence because they are
+not new language. `M154a` built the manifest out of six tables and shipped without a seventh: the
+declaration dialect — `test`, `crawl`, `action`, `import`, `use`, `before`, `after`, and the five
+`test`-header clauses — was simply absent. Under `D723` and `D724` together that made a whole
+dialect one this gate **could never go red for**, including two constructs `M154c` was scoped to
+plant. tflw added the family as `D742`; the ratchet ceiling went up by twelve and back down by nine
+in the same milestone, which is the one direction that pin exists to make loud, so the arithmetic is
+written out beside it in `scripts/lib/constructs.mjs`.
+
+Three of the twelve ids name a construct the language spells differently — `tags` is `@…`,
+`with-each` is `with each`, `concurrency` is `parallel`/`sequential`. They are **ids, not keywords**,
+and tflw's own vocabulary guard refuses to let them be written as keywords.
 
 A hand-maintained list was rejected on `D659` grounds (this repository's guards do not maintain
 wordlists, and a stale one reports green for ever — which is the exact failure being closed).
@@ -89,6 +103,15 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C1` | `check` (`step:check`) | api | six `check` rows, exactly two failed — `body.currency` and `body.falsy` by name — and the `expect` after them ran and passed | `check` regressing to `expect` semantics, or to no semantics |
 | `C2` | `accept dialog` (`step:accept`) | ui | two states of one click — nothing armed leaves `#bulk-delete-state` at `cancelled`, one `accept dialog` leaves it at `cancelled-final` | a handler that stays armed, and a step that arms nothing |
 | `C3` | `run … iterations` (`step:run`) | workload | exactly 60 arrivals on `/shared` and exactly 60 on `/per-user`, counted by the server, under `--workers 1` and `--workers 4` alike | a mis-paced or miscounted generator that still reports green, and a dropped `per user` |
+| `C4` | `retry N` (`declaration:retry`) | api | both keys attempted **exactly 3 times** — one settles inside the budget, one is stopped one short of the answer it wanted — and the pre-failure step ran 3 times | an off-by-one retry budget, an unbounded retry, and a step-level retry wearing a test-level spelling |
+| `C5` | `after` / `after file` (`declaration:after`) | api | `c5-after-file` == 1 and `c5-after-test` == **2**, over a file whose second test ends red on purpose | a teardown that silently does not run, and the two hook scopes collapsing into one |
+| `C6` | `request fails` (`matcher:fails`) | api | passes against a closed port; **must not** pass against a server that answered 503, and the red must land on that line | a `fails` matcher that has drifted from the transport layer up to the status code |
+| `C7` | `request connects` (`matcher:connects`) | api | the exact inverse of `C6` on the same two requests | a `connects` that is a tautology, and the pair drifting apart |
+| `C8` | `base64 encode/decode` (`generator:transform-base64`) | api | `TTE1NGMgeMO/Pz5+YStiL2MgZD1l` — an output carrying **both** `+` and `/`, the two characters the URL-safe alphabet spells differently | an alphabet swap, which every round-trip test here passes |
+| `C9` | `hex encode/decode` (`generator:transform-hex`) | api | 21 UTF-8 bytes to 42 **lowercase** digits, `ÿ` as `c3bf` | an uppercase drift, and a character-level transform mistaken for a byte-level one |
+| `C10` | `url encode/decode` (`generator:transform-url`) | api | `encodeURIComponent`: space is `%20` not `+`, `~` is left alone, `+`/`/`/`=` are all escaped | form-urlencoding and `encodeURI`, the two near-misses a round trip cannot see |
+| `C11` | `matches file` (`matcher:matches-file`) | api | two **34-byte** files, `A U+00A0 B` against `A SP SP B` — the first comparison passes, the second must fail | a matcher that has stopped comparing bytes, which no existing use could notice |
+| `C12` | `give` (`step:give`) | api | the action's own `first`, and not `caller-value`, `EUR`, or a missing suffix — three named wrong answers, one assertion each | a `give` returning the wrong value rather than no value |
 
 ### `C1` — the soft assertion records a failure and keeps going
 
@@ -194,6 +217,185 @@ smears timing. `run N iterations` is the one shape whose ground truth is a **cou
 exact under contention: a saturated CPU makes 60 requests arrive late, never 59. That is why it can
 gate on every PR while the other four wait for `M154e`.
 
+### `C4` — the retry budget is bounded at both ends, and it re-runs the whole test
+
+**Target.** `apiV2/src/lifecycle/` — a per-key attempt counter and a mark counter, read back from
+`GET /v1/lifecycle/counts` after the run. **Plant.** `tests/.constructs/retry-attempt-budget.tflw`.
+
+`retry N` is not an unexercised construct — it has five occurrences, and
+`tests/api/mechanics/retry-and-flake.tflw` asserts a real recovery. The `D739` distinction is the
+whole point here: what those uses cannot see.
+
+| defect | `retry-and-flake.tflw` | this plant |
+|---|---|---|
+| retry never retries | **red** | red |
+| `retry N` means *N total attempts* | green — settles on attempt 3 either way | **red** — `c4-settles` never reaches 200 |
+| retry ignores its budget entirely | green — it succeeded, eventually | **red** — `c4-exhausts` would pass |
+| only the *failing step* re-runs | green — same endpoint, same count | **red** — `c4-preamble` stays at 1 |
+
+Two keys, deliberately: `c4-settles` answers 200 on attempt 3 and `c4-exhausts` on attempt 4, so the
+budget is pinned from **both** sides. One key alone is satisfied by either of the first two defects.
+
+The third row is what `c4-preamble` is for. It is marked by the step *before* the one that fails, so
+a test-level retry drives it to 3 and a step-level retry leaves it at 1 — and `SPEC` §4.4 says "re-runs
+the whole test". Every flaky endpoint in this repository settles on attempt 3 under either reading,
+which is why no existing file could tell them apart.
+
+tflw's own `attempts[]` is checked too, against the server's counters. Not as the bar: a
+disagreement between the report and the arrivals is a different and more interesting defect than
+either being wrong alone. `SPEC` §4.4's *flaky, never silently green* clause is asserted for the same
+reason — a pass after retrying that reported a plain pass would satisfy every count above.
+
+### `C5` — teardown runs in both scopes, and runs for the test that failed
+
+**Target.** `apiV2/src/lifecycle/` again, two labelled counters. **Plant.**
+`tests/.constructs/after-hook-scopes.tflw`, whose second test ends red on purpose.
+
+This row exists because of a specific, checkable claim about the existing evidence:
+`tests/examples/hooks-explained.tflw` has an `after` hook that deletes what its test created, and
+**if that hook simply never ran, nothing in that file would fail.** The test has already passed; the
+cleanup is invisible to it. It is a construct exercised in a way that cannot go red in the direction
+that matters — `D722`'s bar stated as a defect rather than as a policy.
+
+So the hooks here do not clean anything up. They mark a counter, and two integers separate three
+defects:
+
+| what `after` does | `c5-after-file` | `c5-after-test` |
+|---|---|---|
+| both scopes correct | **1** | **2** |
+| never runs | 0 | 0 |
+| skips the failed test | 1 | 1 |
+| `after file` is really test-scoped | 2 | 2 |
+
+The middle row is the clause `tflw spec` states for this construct — *runs whether the test passed or
+failed* — and nothing in this repository had ever observed it, because nothing had ever put a
+deliberately red test under a hook and then looked.
+
+The grader also asserts that this plant attempted **no** settle key at all. That is not idle: it is
+the proof that the `before file` reset really ran, and therefore that `C4`'s counters above were
+`C4`'s own. Both plants use fixed names, so their runs are read back in order and never batched.
+
+### `C6`, `C7` — the transport boundary, asserted from both sides
+
+**Target.** port 9 under `env unreachableHost` (the discard port, guaranteed closed), and
+`/flaky-widget`'s first-attempt 503 under `env local`. **Plants.**
+`tests/.constructs/request-fails-unreachable.tflw` and `request-fails-live-control.tflw`.
+
+`SPEC` §6.2.2 puts these two matchers at the **transport** layer: either the request reached a server
+and came back, or it did not. `tests/.env-specific/unreachable-host.tflw` has proved the positive
+half since `M29`. The half nobody had asserted is the one that makes the matcher mean anything —
+**an HTTP error response is not a request failure.**
+
+A `fails` that treated any non-2xx as a failure passes every existing test in this repository, the
+closed-port one included, while quietly reclassifying every 4xx and 5xx in the suite as a connection
+problem. So the control runs against a server that is very much up and answering 503.
+
+|  | closed port | live 503 |
+|---|---|---|
+| `expect request fails` | passes | **must fail** |
+| `expect request connects` | **must fail** | passes |
+
+Neither run alone says anything: the first column is satisfied by a `fails` that always passes, the
+second by a `connects` that never fails. The claim is the 2×2, which is why `matcher:connects` is
+rostered here as its own row rather than left on the ratchet — the plant already grades it, and it
+costs one row to say so.
+
+**The control is three `api` calls, not one, and `tflw check` is why.** `TF031` refuses `expect
+status` on the same request as `connects`/`fails` — *"there is no response to check once a
+connection-level failure is being asserted on"* — which is correct, and was found by running the
+checker over the first draft of this plant. Each claim therefore gets its own request to its own
+fresh key, every one a first attempt and so every one a 503.
+
+The grader reads **which step** failed rather than the exit status. A file that goes red for the
+wrong reason and one that goes red for the right reason are indistinguishable from outside.
+
+### `C8`, `C9`, `C10` — the value transforms, against literals rather than against each other
+
+**Target.** none. **Plant.** `tests/.constructs/value-transforms.tflw`.
+
+This is the one plant in the ledger with no endpoint behind it, and that is a deliberate departure
+from `D725` recorded as `D743`: these are pure value transforms (`SPEC` §7.6), so a server hop would
+prove the HTTP client works and nothing whatever about the transform.
+
+All six directions are already exercised, in
+`tests/api/mechanics/actions-and-helpers.tflw`, like this:
+
+```
+let hexed = hex encode("{tag}")
+let unhexed = hex decode(hexed)
+```
+
+**That is a round trip, and a round trip holds for any pair of mutually inverse functions —
+including a wrong pair.** A `base64` on the URL-safe alphabet round-trips perfectly. A `url encode`
+emitting form-urlencoding round-trips perfectly. Six constructs, twelve lines of evidence, and not
+one of them can go red for a wrong encoding.
+
+So every line in the plant compares against a **hand-written literal**, and the encode and decode
+directions are checked against *separate* literals rather than against each other — a pair that is
+wrong in the same direction twice cannot pass. One input, `M154c xÿ?>~a+b/c d=e`, chosen so that
+each transform's most plausible wrong implementation produces a visibly different answer:
+
+| construct | the known answer | the wrong answer it rules out |
+|---|---|---|
+| `base64 encode` | `TTE1NGMgeMO/Pz5+YStiL2MgZD1l` | `…eMO_Pz5-…` — the URL-safe alphabet |
+| `hex encode` | `4d3135…3d65`, lowercase, `ÿ` as `c3bf` | uppercase; a character-level transform |
+| `url encode` | `M154c%20x%C3%BF%3F%3E~a%2Bb%2Fc%20d%3De` | `+` for space, `%7E` for `~`; `encodeURI` |
+
+**Two of the three are derived and one is pinned, and the difference is worth stating.** `SPEC` §7.6
+names `encodeURIComponent` outright, so `url` needed no judgement. `base64`'s alphabet is derivable
+from the other end — `TF054` refuses a URL-safe literal to `base64 decode`, so an `encode` emitting
+one would produce output its own `decode` rejects. **`hex`'s case is pinned by this plant and by
+nothing else**: `SPEC` §7.6 does not state it. That is filed as `M154c-02` in tflw rather than
+asserted here as though it were specified, because a plant that quietly promotes an implementation
+detail to a contract is how a spec gap becomes invisible.
+
+The grader asserts the literal is still present in the file, character for character, as well as
+that the tests pass. That second half is what stops the plant being weakened into a tautology later.
+
+### `C11` — byte equality that actually discriminates
+
+**Target.** `apiV2/src/uploads/`, round-tripping a committed golden file. **Plant.**
+`tests/.constructs/bytes-near-miss.tflw`, whose second test ends red on purpose.
+
+`tests/api/orders/file-formats.tflw` has used `matches file` on CSV, TXT and PDF since `F2`, and
+those uses are real — they would catch a corrupted round trip. What they cannot show is that the
+matcher **discriminates**, because every one of them compares a file against itself. A `matches
+file` that returned true unconditionally passes all three; so does one that compares lengths, or
+content types, or the first sixteen bytes.
+
+| file | bytes | length |
+|---|---|---|
+| `constructs-golden.txt` | `… A` `C2 A0` `B` | 34 |
+| `constructs-near-miss.txt` | `… A` `20 20` `B` | 34 |
+
+**Identical length, two bytes different, and indistinguishable in every editor and every diff.** A
+length check passes it, an eyeball passes it, and byte equality is the only thing that fails. The
+day the second test goes green, this matcher has stopped comparing bytes — and `file-formats.tflw`
+would not notice.
+
+### `C12` — `give` returns the named value, not the two others in reach
+
+**Target.** `apiV2/src/soft-check/` — `C1`'s frozen constant, reused so that no seed, fixture or
+other test's data is involved. **Plant.** `tests/.constructs/action-give.tflw`.
+
+`give` has three occurrences here and exactly one live one: `tests/shared/catalog.tflw`'s `give id`,
+whose value the caller uses as a path segment. That *can* fail — a `give` returning nothing produces
+`/products/` and a 404 shortly after. What it cannot distinguish is **which** value came back, and
+`SPEC` §8 is specific: `give <expr>` returns the expression, resolved in the action's own scope.
+
+So the action gives `first` and captures `second` *afterwards*, and the caller binds a variable
+called `first` too, to a different string. Three named wrong answers, one assertion each:
+
+| if `give` were… | it would return | asserted against |
+|---|---|---|
+| resolved in the caller's scope | `caller-value` | `expect {got} equals "known-answer"` |
+| "the most recent capture" | `EUR` | `expect {got} not equals "EUR"` |
+| dropping its parameter | `-echoed` | `expect {got} equals "M154c-echoed"` |
+
+And `expect {first} equals "caller-value"` closes the loop in the other direction: the call left the
+caller's own binding alone. Actions are file-scoped with no globals (`P#17`), so a leak in either
+direction turns one of those four lines red.
+
 ## Blocked plants (`D734`)
 
 A plant that goes red because tflw is genuinely broken **keeps its row**, gets a row in tflw's
@@ -201,9 +403,8 @@ ledger, and is marked `blocked-on:<row>` here — counted as *covered but curren
 known reason*, never deleted and never quietly moved to the ratchet. Without this convention, this
 ledger's successes and its bugs look identical.
 
-**None at present.** All three plants pass against tflw `5cba2da`, measured on `fedora-box`
-2026-08-25: `C1` recall 4/4 precision 2/2, `C2` recall 4/4 precision 1/1, `C3` recall 5/5
-precision 4/4.
+**None at present.** All twelve plants pass, measured on `fedora-box` 2026-08-25 — the first three
+against tflw `5cba2da` and `C4`–`C12` against the `M154c` build that added the `declaration` family.
 
 `M154b-02` is deliberately **not** a `blocked-on` marking. `D734` reserves that for a plant that
 goes red for a known tflw defect, and `C2` is green; the defect sits beside the plant, not under it.
