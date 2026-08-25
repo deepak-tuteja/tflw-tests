@@ -1284,6 +1284,46 @@ if (wanted('C42')) {
   }
 }
 
+// C54 — the `evidence` key, `M154f`. Same shape as `C42` above and for the same structural reason:
+// the key is project-wide, so it needs its own config root rather than a line in the root config
+// that would change what every other plant's report contains.
+//
+// **What separates this from `C41` is the absence of a flag.** `C41` proves the *level* changes what
+// a `screenshot` step does, and it sets that level with `--evidence` both times. This run passes no
+// `--evidence` at all, so the level can only have arrived from `defaults`. The control is `C41`'s own
+// default-level run above — same step, same page, no key, `not captured (evidence level)` — which is
+// why this half asserts the positive and the ROOT config is asserted to declare nothing.
+if (wanted('C54')) {
+  const plant = plantFor('config:key:evidence');
+  const corpus = path.join(ROOT, path.dirname(plant.evidence.file));
+  const { report, output } = runCorpus(corpus, [path.basename(plant.evidence.file)]);
+  if (!report) {
+    fail(`C54's configured run produced no report (cwd ${corpus}).\n${output.trim().split('\n').slice(-12).join('\n')}`);
+    scores.get('C54').skipped = 'no report';
+  } else {
+    const test = report.tests[0];
+    const shot = (test?.steps ?? []).find((st) => /^\s*screenshot "evidence-key-configured"/.test(st.source));
+    recall('C54', report.evidenceLevel === 'full', `the run was at full evidence with no flag passed (got ${report.evidenceLevel})`);
+    recall('C54', /captured$/.test(shot?.detail ?? ''), `the step reports a capture (got ${JSON.stringify(shot?.detail ?? null)})`);
+    // Same reason as `C41`: a step can report a capture it did not make, so decode what the report
+    // actually carries rather than trusting its own sentence about itself.
+    const png = shot?.screenshot?.base64 ? Buffer.from(shot.screenshot.base64, 'base64') : null;
+    recall('C54', png !== null && png.length > 0 && png.subarray(1, 4).toString() === 'PNG',
+      `the report carries real PNG bytes (got ${png ? `${png.length} bytes` : 'no payload'})`);
+    const dims = png && png.length > 24 ? `${png.readUInt32BE(16)}x${png.readUInt32BE(20)}` : 'unreadable';
+    recall('C54', dims === '1280x720', `and no viewport key moved the page underneath it (got ${dims})`);
+    // The two halves of "the key did it": the corpus config declares the level, and no command line
+    // could have. `runCorpus` above passes only the file name, and the ROOT config sets nothing —
+    // so a green here with the key deleted would have to come from a default that is not the default.
+    const cfg = readFileSync(path.join(corpus, 'tflw.config'), 'utf8');
+    precision('C54', /^\s*evidence full\s*$/m.test(cfg), 'the corpus config really declares `evidence full`');
+    precision('C54', !/^\s*evidence\s/m.test(readFileSync(path.join(ROOT, 'tflw.config'), 'utf8')),
+      'and the ROOT config declares no level, so the control is a genuine default rather than a second configured value');
+    precision('C54', !/^\s*viewport\s/m.test(cfg), 'and declares no `viewport`, so the IHDR check above grades this key and not that one');
+    precision('C54', test?.ok === true, `the configured half passed (got ok=${test?.ok})`);
+  }
+}
+
 // =============================================================================
 // the table
 // =============================================================================
