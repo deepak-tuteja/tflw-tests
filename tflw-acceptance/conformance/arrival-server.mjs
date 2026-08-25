@@ -146,6 +146,26 @@ const server = createServer((req, res) => {
     res.end(JSON.stringify({ epochBinMs: binMs, dropped, byPath: curve }));
     return;
   }
+  // `M154e` / `C49` — one path that is deliberately slow, and it is the only thing in this file
+  // that delays anything. `threshold` decides a workload's verdict from the run's *aggregate*
+  // metrics, and a plant for it needs a latency it can predict: against the zero-latency paths
+  // above, p95 sits at 1 ms and no duration threshold can be written that is neither vacuous nor
+  // flaky. 50 ms is far above any scheduling jitter this process can suffer and far below any
+  // sensible timeout, so `p95 duration is less than 10ms` breaches on every machine and
+  // `less than 5000ms` passes on every machine. Both halves are needed: a threshold plant that only
+  // ever showed the red half would not distinguish "the verdict comes from thresholds" from
+  // "the verdict is always red".
+  if (path === '/slow') {
+    arrivals.set(path, (arrivals.get(path) ?? 0) + 1);
+    const list = offsets.get(path) ?? (offsets.set(path, []).get(path));
+    if (list.length < MAX_SAMPLES) list.push(performance.now() - epoch);
+    else dropped += 1;
+    setTimeout(() => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end('{"ok":true,"slow":true}');
+    }, 50);
+    return;
+  }
   // Counted on *arrival*, before any work and before the response is written. A counter incremented
   // on the way out would undercount anything the process failed to answer, which is the opposite of
   // what this measures: the question is what tflw issued, not what it got back.

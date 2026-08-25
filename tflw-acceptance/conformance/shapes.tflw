@@ -1,0 +1,69 @@
+# `M154e` / `C44`–`C47` — the known-answer plants for the four workload shapes that describe
+# **when** requests arrive: `hold`, `ramp`, `step` and `spike`.
+#
+# Three of these four had **zero occurrences** in this repository before this file, and `ramp` — the
+# one with uses — has only ever been graded against tflw's own report of what it did. `PLAN_M154`
+# §2.1 is blunt about what that means: four of six workload shapes were never executed by anything,
+# and the fifth was executed but never checked.
+#
+# ## What makes these plants rather than uses
+#
+# Every one of them is graded against `arrival-server.mjs`'s recorded arrival times — see that
+# file's `M154e-D2` for why the target is a zero-latency counter and not apiV2, which is the
+# opposite of what `D726` says and is forced by `D726`'s own principle. The short version: in the
+# closed model a VU issues its next request when the last one returns, so grading a shape against a
+# real database measures Postgres's lock queue and calls it tflw's spawn schedule.
+#
+# The four tests below use **distinct paths**, so one shape's traffic can never satisfy another's
+# known answer, and they run sequentially, so each path's curve is its own timeline.
+#
+# ## The known answers, and why each one is sharp
+#
+# Measured live on fedora-box while scoping, against the released build:
+#
+#   hold 50 rps for 4s        200 arrivals   bins 43,50,50,50,7      flat from the first bin
+#   ramp to 50 rps over 4s    100 arrivals   bins 4,17,30,42,7       rising
+#   step 20/2s then 80/2s     200 arrivals   two plateaus, ratio 1:4
+#   spike 10 / 120 / 10       104 arrivals   peak ~5x baseline, symmetric
+#
+# **`ramp` lands exactly half of what `hold` lands** at the same target rate and the same duration,
+# because a triangle is half its bounding rectangle. That is the sharpest discriminator in this
+# file: it is arithmetic rather than a tolerance, it cannot be satisfied by a shape that is merely
+# *approximately* right, and a build that quietly implemented `ramp` as `hold` would double the
+# count rather than perturb it. The same idea gives `step` its answer — 20/s for 2s plus 80/s for 2s
+# is 200, which is *also* what a flat 50 rps for 4s lands, so the totals alone cannot tell them
+# apart and the grader must read the plateaus. That is deliberate: it is the case where a lazy
+# grader would pass.
+#
+# `error rate` thresholds are required (`TF033`) rather than decorative, and they are tight because
+# the target is a local counter with no database behind it: any error at all means the generator or
+# the socket layer misbehaved, and there is no contention here to excuse it.
+
+test "hold is flat from the first bin — the whole point is that there is no ramp-in"
+  hold 50 rps for 4s
+  api GET /hold
+  expect status equals 200
+  threshold error rate is less than 1%
+
+test "ramp rises, and lands exactly half of what hold lands"
+  ramp to 50 rps over 4s
+  api GET /ramp
+  expect status equals 200
+  threshold error rate is less than 1%
+
+test "step is a staircase of instant jumps, each stage held for its own duration"
+  step rps
+    to 20 for 2s
+    to 80 for 2s
+  api GET /step
+  expect status equals 200
+  threshold error rate is less than 1%
+
+test "spike goes baseline, burst, recovery, mixing a flat stage with a ramped one"
+  spike rps
+    hold 10 for 2s
+    to 120 over 1s
+    hold 10 for 2s
+  api GET /spike
+  expect status equals 200
+  threshold error rate is less than 1%

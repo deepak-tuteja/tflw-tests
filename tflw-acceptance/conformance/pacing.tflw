@@ -1,0 +1,47 @@
+# `M154e` / `C50` — the known-answer plant for `pause`, the construct `M154d` handed back.
+#
+# `pause` was scoped into `M154d`'s browser tier and does not belong there. `TF033`: *"`pause` is
+# only legal inside a workload-bearing `test`"* — the checker's own help text sends a browser test
+# to `wait until …` or the JS escape hatch instead. It is `M67`'s per-iteration pacing, renamed from
+# `think` (`FS-05`) precisely because *a real wait belongs in `wait until`, not here*. So it is a
+# perf-tier construct, it stayed on the ratchet through `M154d`, and it is graded here, against the
+# only thing that can see pacing: the times requests actually arrived.
+#
+# ## Two claims, and the second one is the one nothing has ever checked
+#
+# **It paces.** One VU, twelve iterations, `pause 200ms` between them. Every gap the server records
+# must be at least 200 ms. The control test is the same shape with no `pause`, against its own path,
+# where the gaps are sub-millisecond — the target is a local counter. A `pause` that had become a
+# no-op would leave the two paths indistinguishable, and nothing else in this repository would
+# notice, because `pause` appeared in **zero** files before this one.
+#
+# **It is excluded from the reported duration.** tflw's own report labels the column *"duration (ms,
+# pause-excluded)"*, and that is a claim about the instrument rather than about the run: pacing is
+# time the test chose to spend, not latency the server imposed, so counting it would make every
+# paced workload's p95 a function of its own `pause` value. The grader reads the report and asserts
+# the reported duration stays in single-digit milliseconds while the arrival gaps are 200 ms apart.
+# A build that stopped subtracting pause time would report ~200 ms and every threshold in every
+# paced workload would silently start measuring the wrong thing — green tests, wrong numbers, which
+# is `M146`'s whole class.
+#
+# **One VU, spelled `across 1 users`.** The grammar requires the plural — `across 1 user` is
+# `TF010`, "expected `users`, found `user`" — and one VU is not a detail here but the whole design:
+# the claim is about the gap between *consecutive iterations of the same VU*, and with two VUs their
+# arrivals interleave at the server, so the minimum recorded gap collapses to nearly zero and the
+# known answer would be about scheduling rather than about `pause`.
+#
+# Twelve iterations rather than a round hundred: at 200 ms each this test costs ~2.4 s, and the
+# claim is about the *minimum* gap, which one VU establishes as well at twelve as at a thousand.
+
+test "pause spaces the iterations of one VU by at least the duration it names"
+  run 12 iterations across 1 users
+  api GET /paced
+  expect status equals 200
+  pause 200ms
+  threshold error rate is less than 1%
+
+test "the same shape without pause runs flat out — the control that makes the gap mean something"
+  run 12 iterations across 1 users
+  api GET /unpaced
+  expect status equals 200
+  threshold error rate is less than 1%

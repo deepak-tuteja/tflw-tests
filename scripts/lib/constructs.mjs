@@ -910,6 +910,105 @@ export const PLANTS = [
     catches: 'a `dismiss dialog` that does not arm, which no direct observation can detect.',
     blockedOn: null,
   },
+  // --- M154e: the perf tier -------------------------------------------------------------------
+  //
+  // Every row here is graded against `arrival-server.mjs`'s recorded arrival TIMES rather than
+  // against tflw's report of what it did — `M154e-D2` in that file argues why the target is a
+  // zero-latency counter and not apiV2, which inverts `D726`'s placement to keep `D726`'s
+  // principle. Three of the four shapes had zero occurrences anywhere in this repository; `ramp`
+  // had uses and had never been checked against anything but its own report.
+  {
+    id: 'C44',
+    construct: 'step:ramp',
+    family: 'step',
+    tier: 'workload',
+    title: 'a linear ramp lands exactly half of what the same flat rate lands',
+    target: 'tflw-acceptance/conformance/arrival-server.mjs — the recorded arrival curve, no stack behind it',
+    evidence: { file: 'tflw-acceptance/conformance/shapes.tflw', pattern: '^\\s*ramp\\s+to\\s+\\d+\\s+rps\\s+over\\b', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer: '`ramp to 50 rps over 4s` lands ~100 requests where `hold 50 rps for 4s` lands ~200 — a triangle is half its bounding rectangle, so the discriminator is arithmetic rather than a tolerance. Its opening bins are near zero and its closing bins carry more than twice its opening ones, so a `ramp` that had become a flat half-rate — right total, wrong shape — still fails.',
+    catches: 'a ramp implemented as a hold (doubles the count), and a ramp that starts at its target instead of at zero.',
+    blockedOn: null,
+  },
+  {
+    id: 'C45',
+    construct: 'step:hold',
+    family: 'step',
+    tier: 'workload',
+    title: 'a flat target is at full rate from the start, with no ramp-in',
+    target: 'tflw-acceptance/conformance/arrival-server.mjs — the recorded arrival curve',
+    evidence: { file: 'tflw-acceptance/conformance/shapes.tflw', pattern: '^\\s*hold\\s+\\d+\\s+rps\\s+for\\b', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer: '`hold 50 rps for 4s` lands ~200 requests AND is already at ~25 per 500ms bin in its second bin. `tflw spec` says "a flat target for the whole duration, **with no ramp-in**", and the only way to be wrong about that while landing the right total is to ramp — so the opening rate is asserted against the target, not merely against zero.',
+    catches: 'a hold that ramps in, and a hold whose steady rate drifts.',
+    blockedOn: null,
+  },
+  {
+    id: 'C46',
+    construct: 'step:step',
+    family: 'step',
+    tier: 'workload',
+    title: 'a staircase of instant jumps, each stage held for its own duration',
+    target: 'tflw-acceptance/conformance/arrival-server.mjs — the recorded arrival curve',
+    evidence: { file: 'tflw-acceptance/conformance/shapes.tflw', pattern: '^\\s*step\\s+rps\\s*$', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer: '20 rps for 2s then 80 rps for 2s lands ~200 requests — **which is exactly what `hold 50 rps for 4s` lands.** That collision is deliberate: the totals cannot tell the two shapes apart, so the plant asserts the two plateaus and their 1:4 ratio. A grader that only counted would pass a build that had collapsed the staircase into its flat average.',
+    catches: 'a step collapsed to its mean rate, and a staircase that slopes between stages instead of jumping.',
+    blockedOn: null,
+  },
+  {
+    id: 'C47',
+    construct: 'step:spike',
+    family: 'step',
+    tier: 'workload',
+    title: 'baseline, burst, recovery — and the recovery is the half a step up would also pass',
+    target: 'tflw-acceptance/conformance/arrival-server.mjs — the recorded arrival curve',
+    evidence: { file: 'tflw-acceptance/conformance/shapes.tflw', pattern: '^\\s*spike\\s+rps\\s*$', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer: '`hold 10 for 2s` / `to 120 over 1s` / `hold 10 for 2s` lands ~105 requests with a peak bin more than 3x its baseline and a tail that returns to baseline. `tflw spec` says a spike "mixes flat and ramped stages in any order", which is the part a two-stage shape cannot demonstrate; the recovery assertion is what a build that simply held the burst would fail.',
+    catches: 'a spike that never returns to baseline, and a burst that is a rounding artefact rather than a burst.',
+    blockedOn: null,
+  },
+  {
+    id: 'C48',
+    construct: 'step:cleanup',
+    family: 'step',
+    tier: 'workload',
+    title: 'cleanup opts a workload back into the after-each hook, and omitting it really does skip teardown',
+    target: 'tflw-acceptance/conformance/verdict.tflw + arrival-server.mjs — a marker path the file\'s `after each` hook hits',
+    evidence: { file: 'tflw-acceptance/conformance/verdict.tflw', pattern: '^\\s*cleanup\\s*$', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer: 'The marker path receives exactly 8 requests — one per iteration of the test that carries `cleanup`, and **none** from the sibling test that omits it. The contrast is the plant: 16 would mean teardown ran unconditionally, which is precisely what `D26` says must not happen under load, and 0 would mean the opt-in does nothing. **Graded against the construct that exists, not the one the manifest describes** — `tflw spec --json` gets this row wrong in three ways and the defect is filed as `M154e-01`.',
+    catches: 'teardown running under load when nothing asked for it (double request volume, polluted latency), and a `cleanup` line that is a no-op.',
+    blockedOn: null,
+  },
+  {
+    id: 'C49',
+    construct: 'step:threshold',
+    family: 'step',
+    tier: 'workload',
+    title: "a workload's verdict comes from its thresholds and from nothing else",
+    target: 'tflw-acceptance/conformance/verdict.tflw — a 50ms path, one threshold that breaches and one that does not',
+    evidence: { file: 'tflw-acceptance/conformance/verdict.tflw', pattern: '^\\s*threshold\\s+p95\\s+duration\\b', min: 2 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer: 'Two tests issue the same request against the same 50ms path, and every `expect status equals 200` in both succeeds. The one bounded at 5000ms passes; the one bounded at 10ms **fails with every assertion in it green**. That is the claim `tflw spec` makes — "decided once, after the run, against the run\'s aggregate metrics" — and the reason it matters is on the record: on 2026-08-05 a rung that declared no threshold ran at a 100% error rate and reported PASS.',
+    catches: 'a verdict computed from the steps rather than the metrics, and a threshold that cannot breach.',
+    blockedOn: null,
+  },
+  {
+    id: 'C50',
+    construct: 'step:pause',
+    family: 'step',
+    tier: 'workload',
+    title: 'pause paces the iterations and is excluded from the duration it is not part of',
+    target: 'tflw-acceptance/conformance/pacing.tflw + arrival-server.mjs — inter-arrival gaps for one VU',
+    evidence: { file: 'tflw-acceptance/conformance/pacing.tflw', pattern: '^\\s*pause\\s+\\d+ms\\s*$', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer: 'One VU, twelve iterations: every recorded gap is >=200ms with `pause 200ms`, and <50ms without it on an otherwise identical control path. Second and independent: tflw\'s reported p50 duration stays under 50ms, because the report\'s own column is labelled "pause-excluded" — pacing is time the test chose to spend, not latency the server imposed. **Handed back by `M154d`**, where it was scoped into the browser tier before `TF033` refused it: `pause` is legal only inside a workload-bearing test.',
+    catches: 'a `pause` that became a no-op (zero occurrences anywhere before this plant), and a build that stopped subtracting pacing from the duration — which would silently make every paced workload\'s threshold measure the wrong thing.',
+    blockedOn: null,
+  },
+
 ];
 
 export const PLANT_IDS = PLANTS.map((p) => p.id);
@@ -934,18 +1033,18 @@ export const RATCHET = [
   'declaration:test', 'declaration:crawl', 'declaration:action', 'declaration:import',
   'declaration:use', 'declaration:before', 'declaration:tags', 'declaration:with-each',
   'declaration:as', 'declaration:concurrency',
-  // --- step (13) ---
-  // Six are the workhorses `D739` is about — `api` alone has 1139 occurrences. The rest are the
-  // perf tier's and due at `M154e`: `ramp`, `hold`, `step`, `spike`, `threshold`, `cleanup` — and
-  // now `pause` too, which is the one construct `M154d` handed BACK. It had been filed here as a
-  // browser step needing an observable, and it is not one: `TF033` says "`pause` is only legal
-  // inside a workload-bearing `test`", so it is `M67`'s per-iteration pacing and `D726`'s
-  // arrival-curve grading is what will close it. The four that really did need an observable built
-  // — `hover`, `scroll`, `screenshot`, and `dismiss`, which was worse than un-plantable
-  // (`M154b-01`) — are rostered as of `M154d`'s third artifact.
+  // --- step (6) ---
+  // What is left here are the workhorses `D739` is about — `api` alone has 1139 occurrences, and
+  // `expect` 1692. A `RATCHET` entry says only that no row in `CONSTRUCTS.md` states their known
+  // answer; for these six the evidence already exists and it is the claim that is missing, which is
+  // the cheap end of `D739`'s two very different costs.
+  //
+  // The seven that used to sit under this heading are rostered as of `M154e`: `ramp`, `hold`,
+  // `step`, `spike`, `threshold` and `cleanup` — the perf tier — plus `pause`, the one construct
+  // `M154d` handed BACK. It had been filed here as a browser step needing an observable, and it is
+  // not one: `TF033` says "`pause` is only legal inside a workload-bearing `test`", so it is
+  // `M67`'s per-iteration pacing and its known answer is an inter-arrival gap.
   'step:api', 'step:wait', 'step:expect', 'step:let', 'step:capture', 'step:log',
-  'step:pause',
-  'step:ramp', 'step:hold', 'step:step', 'step:spike', 'step:threshold', 'step:cleanup',
   // --- matcher (11) ---
   'matcher:equals', 'matcher:contains', 'matcher:matches-regex', 'matcher:matches-subset',
   'matcher:matches-schema', 'matcher:greater-less-than', 'matcher:has-count', 'matcher:was-made',
@@ -1014,7 +1113,7 @@ export const RATCHET = [
  * the unrostered remainder, and a remainder can only be honest about a denominator that has itself
  * just been corrected upwards.
  */
-export const RATCHET_CEILING = 135;
+export const RATCHET_CEILING = 128;
 
 /**
  * `CONSTRUCTS.md` carries one row per plant and prose a human reads; this asserts their id sets
