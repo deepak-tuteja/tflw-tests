@@ -65,6 +65,7 @@ not a subset of the truth.
 ```sh
 npm run check:acceptance
 npm run verify:external-targets
+npm run verify:perf-parity
 npm run verify:contributing
 npm run verify:tflw-resolution
 npm run verify:provenance
@@ -107,6 +108,17 @@ xvfb-run -a npm run regression -- --group security-ui
   (functional API tests only: no load runs, no security scans, not on CI and not on any repeated
   schedule), and **a new external target anywhere in the repo fails until somebody writes down what
   it is for.** All three fences held before this existed, by omission rather than by design.
+- **`npm run verify:perf-parity`** — the perf ladder's three runners agree on the fixture values
+  they share, every rung file is rostered in `scripts/lib/perf-ladder.mjs`, and **every host a load
+  generator points at is one of ours.** That last one was asserted by nothing before this gate: the
+  step above discovers corpora by walking for a `tflw.config`, so `perf/k6/`'s JavaScript and
+  `perf/artillery/`'s YAML are not overlooked but ineligible. The fixture half exists because the
+  shared product id has drifted twice with a comment in each file saying it must not — 98% k6
+  failure at `M48`, and on 2026-08-05 a 100% error rate reported as PASS. `D744` records why the
+  three copies stay literal and are *checked* against the constant rather than resolved from it at
+  run time: the rung they sit in exists to measure a POST with zero capture or interpolation
+  overhead, so importing the id would change what it measures, by a different amount in each of the
+  three runners.
 - **`npm run verify:contributing`** — this document against `.github/workflows/`. It is in the set
   it guards, which is the point rather than an oversight.
 - **`npm run verify:tflw-resolution`** — **which tflw a script is grading is declared, printed, and

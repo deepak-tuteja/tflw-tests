@@ -1,0 +1,75 @@
+# `M154e` / `C48`–`C49` — `cleanup` and `threshold`, the two constructs that decide what happens
+# *after* a workload rather than during it.
+#
+# **This file is meant to produce one red test.** That is its known answer, not a defect, and the
+# grader asserts the red as precisely as it asserts the greens. `tflw run` here exits non-zero by
+# design; `verify-construct-acceptance.mjs` reads `report/results.json` rather than the exit status.
+#
+# ## `C49` — the verdict of a workload-bearing test comes from its thresholds, and from nothing else
+#
+# `tflw spec` states it in one sentence: *"the pass/fail rule for a workload-bearing test — decided
+# once, after the run, against the run's aggregate metrics"*. `TF033`/`M60` is the checker half. No
+# test in this repository has ever demonstrated the *only* part, and it is the part with
+# consequences: on 2026-08-05 `dogfood-post-uncontended` ran at a **100% error rate and reported
+# PASS**, because it declared no threshold at all. The two tests below are the two sides.
+#
+#   - "a breaching threshold turns the test red **while every assertion passes**" is the sharp one.
+#     Every `expect status equals 200` below succeeds — the server really does answer 200 — and the
+#     test must still be red. A build that decided a workload's verdict from its assertions would
+#     pass it, and nothing else in this repository would notice.
+#   - "a satisfied threshold leaves it green" is the control. Without it the plant cannot tell
+#     *the verdict comes from thresholds* from *the verdict is always red*.
+#
+# Both hit `/slow`, which delays 50 ms and is the only delaying path in `arrival-server.mjs` — see
+# its comment for why a predictable latency is a requirement here rather than a convenience. 10 ms
+# breaches on every machine, 5000 ms passes on every machine, and neither bound is close enough to
+# 50 ms for scheduling jitter to reach it.
+#
+# ## `C48` — `cleanup`, and the manifest row that describes a different construct
+#
+# **Writing this plant found a tflw defect, filed as `M154e-01`.** It is recorded here because the
+# plant reads strangely otherwise, and because `D723` makes `tflw spec --json` the ground truth this
+# entire gate is built on — a wrong row there produces a plant that is confidently wrong, which is
+# `D734`'s worst case rather than its intended one.
+#
+# The manifest says: syntax `cleanup` + an indented block, *"steps that run once after a workload
+# finishes, whatever its verdict"*. All three of those are wrong, and `SPEC.md`'s own prose
+# (§ workload directives) contradicts the manifest table twelve lines further down the same file:
+#
+#   - **Syntax.** `cleanup` is a bare line. `ast.ts` carries it as a boolean on the test, and an
+#     indented block after it is `TF011`, "expected a step, found an indented block". There is no
+#     block form to write.
+#   - **What runs.** Not steps of its own — the *file's* `after each` hooks, which the run would
+#     otherwise skip. `D26`: teardown per iteration would double request volume and pollute the
+#     latency numbers the run exists to measure, so it is off by default and `cleanup` opts back in.
+#   - **When.** Not once after the workload — **once per iteration**, and only on an iteration's
+#     success path (`interpreter.ts:1067`, inside the `try`, after the `if (!exec.ok) throw`). So
+#     "whatever its verdict" is false twice over: wrong granularity, and a failing iteration skips
+#     it.
+#
+# The plant grades the construct that exists, not the one the manifest describes. `after each` below
+# hits a marker path; the first test opts in with `cleanup` and the second does not. The known
+# answer is therefore a **contrast**, which is what makes it a plant rather than a use: the opted-in
+# test lands one marker per successful iteration, and the test without the line lands **exactly
+# zero**. A build that ran teardown unconditionally — which is precisely what `D26` says must not
+# happen, and what the manifest's wording would lead someone to implement — turns the second
+# assertion red.
+
+after
+  api GET /after-each-marker
+  expect status equals 200
+
+test "a satisfied threshold leaves the test green, and cleanup opts the after-each hook back in"
+  run 8 iterations across 2 users
+  api GET /slow
+  expect status equals 200
+  threshold error rate is less than 1%
+  threshold p95 duration is less than 5000ms
+  cleanup
+
+test "a breaching threshold turns the test red though every assertion passed, and no cleanup line means no teardown"
+  run 8 iterations across 2 users
+  api GET /slow
+  expect status equals 200
+  threshold error rate is less than 1%
+  threshold p95 duration is less than 10ms

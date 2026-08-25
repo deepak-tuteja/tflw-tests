@@ -122,6 +122,17 @@ jobs:
         run: npm run verify:external-targets
         working-directory: testFlow-tests
 
+      # M154e (`B6-15`). Beside the step above because it is the same fence extended to the files
+      # that step structurally cannot see: `verify-external-targets.mjs` discovers corpora by
+      # walking for a `tflw.config`, so `perf/k6/`'s JavaScript and `perf/artillery/`'s YAML are not
+      # overlooked but ineligible, and until now the host a load generator pointed at was asserted
+      # by nothing at all. It also holds the three fixture values the ladder's three runners must
+      # agree on — the drift that produced a 98% k6 failure rate at M48 and, on 2026-08-05, a 100%
+      # error rate reported as PASS. Static, milliseconds, this repo only.
+      - name: The perf ladder's runners agree, and every host is ours
+        run: npm run verify:perf-parity
+        working-directory: testFlow-tests
+
       # M138b (`M136a-02`). Static, seconds, and here for two reasons rather than one. The cheap
       # reason is that it is the same shape as the step above — no Docker, no .env, no Playwright.
       # The load-bearing one is that this is **the only job that checks out both repositories**, so

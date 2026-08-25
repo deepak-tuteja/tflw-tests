@@ -301,6 +301,249 @@ if (wanted('C3')) {
 }
 
 // =============================================================================
+// C44-C50 — the perf tier: the four workload shapes, the verdict rule, and pacing
+// =============================================================================
+//
+// Everything here is graded against `arrival-server.mjs`'s recorded arrival *times*. See that
+// file's `D745` for why the target is a zero-latency counter rather than apiV2, which inverts
+// `D726`'s placement in order to keep `D726`'s principle: in the closed model a VU issues its next
+// request when the last one returned, so a shape graded against a real database measures the
+// database.
+//
+// **The tolerances below are bands, not point equalities, and each one is justified where it is
+// used.** A shape is a claim about pacing on a wall clock, so demanding an exact bin count would be
+// a flake generator on a contended box — and a band chosen loosely enough to never fail would be
+// `M141`'s vacuity. Every band here was set against a measured run (fedora-box, 2026-08-25) and is
+// wide enough for jitter, narrow enough that the *neighbouring shape* fails it. That last clause is
+// the real bar: `ramp`'s band must reject `hold`'s curve, and it does.
+
+/** The manifest id each perf-tier row grades, so the announcement loops below can look a plant up
+ *  by row id. Stated rather than derived: `constructs.mjs` is explicit that a construct id is
+ *  opaque by tflw's own contract and must not be split apart. */
+const PLANT_CONSTRUCT = {
+  C44: 'step:ramp', C45: 'step:hold', C46: 'step:step', C47: 'step:spike',
+  C48: 'step:cleanup', C49: 'step:threshold', C50: 'step:pause',
+};
+
+/** The binned arrival curve, per path. `bin` is chosen per assertion — a `hold` reads naturally in
+ *  500 ms bins and a `spike`'s burst needs them. */
+const curve = async (binMs) => JSON.parse(await (await fetch(`http://127.0.0.1:4507/__curve?bin=${binMs}`)).text());
+
+/** The bins of one path with the leading empty ones dropped, so each test's curve is its own
+ *  timeline rather than an offset into the server's. The corpus runs its tests sequentially onto
+ *  distinct paths, which is what makes this sound. */
+function ownBins(c, p) {
+  const bins = c.byPath[p]?.bins ?? [];
+  const first = bins.findIndex((n) => n > 0);
+  return first === -1 ? [] : bins.slice(first);
+}
+
+if (wanted('C44') || wanted('C45') || wanted('C46') || wanted('C47')) {
+  for (const id of ['C44', 'C45', 'C46', 'C47']) {
+    if (!wanted(id)) continue;
+    const pl = plantFor(PLANT_CONSTRUCT[id]);
+    console.log(`\n${pl.id} — ${pl.title}\n  target: ${pl.target}`);
+  }
+  const corpus = path.join(ROOT, 'tflw-acceptance', 'conformance');
+  let server = null;
+  try {
+    server = await startArrivalServer(corpus);
+    await arrivals('__reset');
+    const { report, output } = runCorpus(corpus, ['shapes.tflw']);
+    if (!report) {
+      for (const id of ['C44', 'C45', 'C46', 'C47']) if (wanted(id)) fail(`${id} — no report\n${output.trim().split('\n').slice(-10).join('\n')}`);
+    } else {
+      const counted = await arrivals('__arrivals');
+      const c500 = await curve(500);
+
+      // --- C45 `hold` ------------------------------------------------------------------------
+      // `hold 50 rps for 4s` -> 200 arrivals, and flat from the FIRST bin. The flatness is the
+      // whole construct: `tflw spec` says "a flat target for the whole duration, **with no
+      // ramp-in**", and the only way to be wrong about that while landing the right total is to
+      // ramp. So the first full bin is asserted against the target rate, not merely against zero.
+      if (wanted('C45')) {
+        const n = counted.byPath['/hold'] ?? 0;
+        recall('C45', n >= 190 && n <= 210, `hold 50 rps for 4s landed ${n} request(s) — 200 expected, +/-5%`);
+        const b = ownBins(c500, '/hold');
+        // Bin 1 rather than bin 0: bin 0 is clipped by wherever in the bin the run started.
+        const second = b[1] ?? 0;
+        recall('C45', second >= 20 && second <= 30, `it is at full rate by its second 500ms bin (${second}, 25 expected) — a flat target has no ramp-in`);
+        const body = b.slice(1, -1);
+        const spread = body.length ? Math.max(...body) - Math.min(...body) : 999;
+        precision('C45', spread <= 6, `and it stays flat: the spread across its steady bins is ${spread} (bins ${JSON.stringify(b)})`);
+      }
+
+      // --- C44 `ramp` ------------------------------------------------------------------------
+      // The sharp one, and the reason it is sharp is arithmetic rather than tolerance: a linear ramp
+      // to the same target over the same duration is a triangle inside `hold`'s rectangle, so it
+      // must land HALF. A build that implemented `ramp` as `hold` doubles the count. Nothing in this
+      // repository has ever checked this: `ramp` has uses, and every one of them was graded against
+      // tflw's own report of what it did.
+      if (wanted('C44')) {
+        const n = counted.byPath['/ramp'] ?? 0;
+        recall('C44', n >= 90 && n <= 110, `ramp to 50 rps over 4s landed ${n} request(s) — 100 expected, exactly half of hold's 200`);
+        const hold = counted.byPath['/hold'] ?? 0;
+        recall('C44', hold > 0 && n < hold * 0.62, `and it landed materially less than hold at the same rate and duration (${n} vs ${hold}) — the triangle inside the rectangle`);
+        const b = ownBins(c500, '/ramp');
+        const head = b.slice(0, 2).reduce((a, x) => a + x, 0);
+        const tail = b.slice(-3, -1).reduce((a, x) => a + x, 0);
+        recall('C44', tail > head * 2, `and it rises: its last full bins carry ${tail} against ${head} in its first (bins ${JSON.stringify(b)})`);
+        // The complement of C45's flatness assertion, and the one that would catch a `ramp` that had
+        // silently become a `hold` at half rate — which lands the right total and the wrong shape.
+        precision('C44', head <= 12, `its opening bins are near zero (${head}), so it started from nothing rather than at a flat half-rate`);
+      }
+
+      // --- C46 `step` ------------------------------------------------------------------------
+      // 20/s for 2s then 80/s for 2s is 200 arrivals, which is ALSO what `hold 50 rps for 4s` lands.
+      // That collision is deliberate: the totals cannot tell the two apart, so a grader that only
+      // counted would pass a build that had collapsed `step` into a flat average. The plateaus and
+      // their 1:4 ratio are the claim.
+      if (wanted('C46')) {
+        const n = counted.byPath['/step'] ?? 0;
+        recall('C46', n >= 190 && n <= 210, `step 20/2s then 80/2s landed ${n} request(s) — 200 expected`);
+        const b = ownBins(c500, '/step');
+        const low = b.slice(0, 3);
+        const high = b.slice(4, 7);
+        const loAvg = low.reduce((a, x) => a + x, 0) / Math.max(1, low.length);
+        const hiAvg = high.reduce((a, x) => a + x, 0) / Math.max(1, high.length);
+        recall('C46', loAvg >= 7 && loAvg <= 13, `its first stage runs at ${loAvg.toFixed(1)} per 500ms (10 expected, i.e. 20 rps)`);
+        recall('C46', hiAvg >= 34 && hiAvg <= 46, `its second stage runs at ${hiAvg.toFixed(1)} per 500ms (40 expected, i.e. 80 rps)`);
+        precision('C46', hiAvg > loAvg * 2.5, `and the jump is a staircase rather than a slope: ${(hiAvg / Math.max(1, loAvg)).toFixed(1)}x between stages (bins ${JSON.stringify(b)})`);
+      }
+
+      // --- C47 `spike` -----------------------------------------------------------------------
+      // Baseline, burst, recovery — and `tflw spec` is explicit that a spike mixes flat and ramped
+      // stages in any order, which is the part a two-stage shape cannot demonstrate. The recovery is
+      // what makes it a spike rather than a step up: a build that held the burst would pass every
+      // assertion about the peak.
+      if (wanted('C47')) {
+        const n = counted.byPath['/spike'] ?? 0;
+        recall('C47', n >= 90 && n <= 120, `spike 10 / 120 / 10 landed ${n} request(s) — ~105 expected (2s+1s ramp+2s)`);
+        const b = ownBins(c500, '/spike');
+        const peak = Math.max(...(b.length ? b : [0]));
+        const base = b.slice(0, 3).reduce((a, x) => a + x, 0) / 3;
+        const rec = b.slice(-3).reduce((a, x) => a + x, 0) / 3;
+        recall('C47', peak >= 25, `it bursts: its peak bin carries ${peak} against a baseline of ${base.toFixed(1)}`);
+        recall('C47', rec <= base * 2.5 + 2, `and it recovers to baseline (${rec.toFixed(1)} vs ${base.toFixed(1)}) rather than holding the burst`);
+        precision('C47', peak > base * 3, `the burst is ${(peak / Math.max(0.5, base)).toFixed(1)}x baseline, not a rounding artefact (bins ${JSON.stringify(b)})`);
+      }
+
+      // Nothing may land anywhere but the four declared paths.
+      const declared = new Set(['/hold', '/ramp', '/step', '/spike']);
+      const stray = Object.keys(counted.byPath).filter((p) => !declared.has(p));
+      for (const id of ['C44', 'C45', 'C46', 'C47']) {
+        if (wanted(id)) precision(id, stray.length === 0, `no request landed off the four declared paths (stray: ${stray.join(', ') || 'none'})`);
+      }
+    }
+  } catch (e) {
+    for (const id of ['C44', 'C45', 'C46', 'C47']) {
+      if (!wanted(id)) continue;
+      fail(`${id} could not run: ${e.message}`);
+      scores.get(id).skipped = e.message;
+    }
+  } finally {
+    server?.kill();
+  }
+}
+
+if (wanted('C48') || wanted('C49')) {
+  for (const id of ['C48', 'C49']) {
+    if (!wanted(id)) continue;
+    const pl = plantFor(PLANT_CONSTRUCT[id]);
+    console.log(`\n${pl.id} — ${pl.title}\n  target: ${pl.target}`);
+  }
+  const corpus = path.join(ROOT, 'tflw-acceptance', 'conformance');
+  let server = null;
+  try {
+    server = await startArrivalServer(corpus);
+    await arrivals('__reset');
+    // This corpus is MEANT to end red: one of its two tests breaches its threshold by design. So the
+    // exit status is not read at all and the report is. A grader that treated non-zero as "could not
+    // run" would skip the only plant that proves a workload's verdict comes from its thresholds.
+    const { report, output } = runCorpus(corpus, ['verdict.tflw']);
+    if (!report) {
+      for (const id of ['C48', 'C49']) if (wanted(id)) fail(`${id} — no report\n${output.trim().split('\n').slice(-10).join('\n')}`);
+    } else {
+      const counted = await arrivals('__arrivals');
+      const tests = report.tests ?? [];
+      const green = tests.find((t) => (t.name ?? '').includes('a satisfied threshold'));
+      const red = tests.find((t) => (t.name ?? '').includes('a breaching threshold'));
+
+      if (wanted('C49')) {
+        recall('C49', green?.ok === true, `a workload whose p95 threshold is satisfied passes (got ${green ? (green.ok ? 'pass' : 'fail') : 'no such test'})`);
+        recall('C49', red?.ok === false, `a workload whose p95 threshold breaches FAILS (got ${red ? (red.ok ? 'pass' : 'fail') : 'no such test'})`);
+        // The sharp half. Both tests issue the same request against the same path and every
+        // `expect status equals 200` succeeds in both — the server really does answer 200. So the
+        // red verdict cannot have come from an assertion, which is the claim `tflw spec` makes and
+        // nothing has ever checked: "decided once, after the run, against the run's aggregate
+        // metrics". On 2026-08-05 a rung with no threshold at all ran at a 100% error rate and
+        // reported PASS.
+        const redAssertionsAllPassed = (red?.steps ?? []).every((st) => st.ok !== false);
+        recall('C49', red?.ok === false && redAssertionsAllPassed, `and it fails with EVERY assertion in it green — the verdict came from the threshold, not from the steps`);
+        const bothSlow = (counted.byPath['/slow'] ?? 0);
+        precision('C49', bothSlow === 16, `both tests really ran: ${bothSlow} request(s) reached /slow (16 expected, 8 iterations each)`);
+      }
+
+      if (wanted('C48')) {
+        // The manifest describes a construct that does not exist (`M154e-01`); this grades the one
+        // that does. `cleanup` opts a workload-bearing test back into the file's `after each` hook,
+        // per successful iteration (`interpreter.ts:1067`, `D26`). The contrast IS the plant: the
+        // opted-in test has 8 iterations, the test without the line has 8 more, and the marker path
+        // must see exactly the first 8.
+        const markers = counted.byPath['/after-each-marker'] ?? 0;
+        recall('C48', markers === 8, `the after-each hook ran once per iteration of the test that opted in: ${markers} marker(s), 8 expected`);
+        recall('C48', markers !== 16, `and NOT for the test that omitted \`cleanup\` — 16 would mean teardown ran unconditionally, which is exactly what D26 says must not happen under load`);
+        precision('C48', markers > 0, `the hook is reachable at all (a 0 here would make the assertion above vacuous rather than satisfied)`);
+      }
+    }
+  } catch (e) {
+    for (const id of ['C48', 'C49']) {
+      if (!wanted(id)) continue;
+      fail(`${id} could not run: ${e.message}`);
+      scores.get(id).skipped = e.message;
+    }
+  } finally {
+    server?.kill();
+  }
+}
+
+if (wanted('C50')) {
+  const pl = plantFor('step:pause');
+  console.log(`\n${pl.id} — ${pl.title}\n  target: ${pl.target}`);
+  const corpus = path.join(ROOT, 'tflw-acceptance', 'conformance');
+  let server = null;
+  try {
+    server = await startArrivalServer(corpus);
+    await arrivals('__reset');
+    const { report, output } = runCorpus(corpus, ['pacing.tflw']);
+    if (!report) {
+      fail(`C50 — no report\n${output.trim().split('\n').slice(-10).join('\n')}`);
+    } else {
+      const c = await curve(1000);
+      const paced = c.byPath['/paced']?.gapsMs;
+      const unpaced = c.byPath['/unpaced']?.gapsMs;
+      recall('C50', paced != null && paced.minMs >= 195, `every gap between the paced VU's iterations is at least the 200ms it named (min ${paced?.minMs ?? 'n/a'}ms)`);
+      recall('C50', unpaced != null && unpaced.maxMs < 50, `the control, same shape without \`pause\`, runs flat out (max gap ${unpaced?.maxMs ?? 'n/a'}ms) — which is what makes the number above mean something`);
+      // The second claim, and the one with consequences. tflw's report labels the column
+      // "duration (ms, pause-excluded)" — pacing is time the test chose to spend, not latency the
+      // server imposed. A build that stopped subtracting it would report ~200ms here and every
+      // threshold in every paced workload would silently start measuring the wrong thing: green
+      // tests, wrong numbers.
+      const pacedTest = (report.tests ?? []).find((t) => (t.name ?? '').includes('pause spaces'));
+      const p50 = pacedTest?.metrics?.durations?.p50 ?? pacedTest?.metrics?.p50 ?? null;
+      recall('C50', p50 != null && p50 < 50, `and the reported duration EXCLUDES the pause: p50 ${p50 ?? 'n/a'}ms against 200ms of pacing per iteration`);
+      const n = (await arrivals('__arrivals')).byPath;
+      precision('C50', (n['/paced'] ?? 0) === 12 && (n['/unpaced'] ?? 0) === 12, `both tests issued their full 12 iterations (/paced ${n['/paced'] ?? 0}, /unpaced ${n['/unpaced'] ?? 0}) — pacing slowed them, it did not drop them`);
+    }
+  } catch (e) {
+    fail(`C50 could not run: ${e.message}`);
+    scores.get('C50').skipped = e.message;
+  } finally {
+    server?.kill();
+  }
+}
+
+// =============================================================================
 // C4, C5 — the run lifecycle: what a retried test actually did, and whether teardown ran
 // =============================================================================
 //

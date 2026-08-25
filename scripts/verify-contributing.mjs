@@ -89,6 +89,14 @@ const CLASSIFIED = [
   {
     wf: 'ci.yml',
     job: 'acceptance-check',
+    cmd: 'npm run verify:perf-parity',
+    class: 'gate',
+    local: 'npm run verify:perf-parity',
+    why: 'the perf ladder\'s three runners agree on the fixture values, every rung is rostered, and every host a load generator points at is ours — the last of which nothing asserted before, because the gate above walks `tflw.config` roots and k6/Artillery files can never hold one',
+  },
+  {
+    wf: 'ci.yml',
+    job: 'acceptance-check',
     cmd: 'npm run verify:construct-coverage',
     class: 'gate',
     local: 'npm run verify:construct-coverage',
