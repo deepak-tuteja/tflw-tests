@@ -36,6 +36,7 @@
     "regression": "node scripts/regression.mjs",
     "regression:smoke": "node scripts/regression-smoke.mjs",
     "verify:external-targets": "node scripts/verify-external-targets.mjs",
+    "verify:perf-parity": "node scripts/verify-perf-parity.mjs",
     "verify:contributing": "node scripts/verify-contributing.mjs",
     "verify:tflw-resolution": "node scripts/verify-tflw-resolution.mjs",
     "verify:provenance": "node scripts/verify-provenance.mjs",
