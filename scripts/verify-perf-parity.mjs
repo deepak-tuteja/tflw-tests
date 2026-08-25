@@ -21,6 +21,13 @@
 //      recorded as not one. A new rung that joins the ladder without a row goes red here.
 //   4. **Ragged edges are recorded.** A rung missing a runner must say why. Artillery has no
 //      `search-read`; that is a decision, and the gate makes it a written one.
+//   5. **The k6 sub-metric each rung is measured on really exists.** A rung declares `k6Tag`, and
+//      the comparison in `perf-conformance.mjs` reads `http_req_duration{name:<k6Tag>,…}` — never
+//      the bare metric, because tflw's percentiles are successful-only and k6's are not (`D749`).
+//      A tag that has been renamed in the k6 file makes that sub-metric silently absent, and the
+//      whole point of the ladder is that the two sides are comparable. Added when the scheduled
+//      run was built: the tag is never the rung's own name (`checkout-burst` measures `checkout`),
+//      so an extractor that guessed would have been wrong on all seven.
 //
 // Exits non-zero on any failure. No `--gate` flag: unlike the acceptance graders this is static,
 // costs milliseconds, and has no expensive mode to opt into.
@@ -140,6 +147,27 @@ for (const [rel, src] of sources) {
         fail(`\`tflw-acceptance/${rel}\` contains ${scanner.what} \`${literal}\`, but ${FIXTURES[scanner.fixture].constant} is \`${want}\` — ${FIXTURES[scanner.fixture].what}. This is exactly the drift that produced a 98% k6 failure rate at M48 and, on 2026-08-05, a 100% error rate reported as PASS.`);
       }
     }
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// 5 — every declared k6 sub-metric tag is really in the file that is supposed to emit it.
+// ---------------------------------------------------------------------------------------------
+for (const rung of RUNGS) {
+  const rel = rung.impls?.k6;
+  if (!rel) continue;
+  if (!rung.k6Tag) {
+    fail(`rung \`${rung.name}\` has a k6 implementation but declares no \`k6Tag\`, so nothing can say which sub-metric it is measured on. Add one, or drop the k6 impl.`);
+    continue;
+  }
+  const src = sources.get(rel);
+  if (src === undefined) continue; // already reported by the rung loop above
+  // Matched as a tag literal rather than a bare substring: `name: 'search'` must not be satisfied
+  // by the word "search" appearing in a URL or a comment.
+  const tagged = new RegExp(`name:\\s*['"\`]${rung.k6Tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"\`]`);
+  if (!tagged.test(src)) {
+    const present = [...src.matchAll(/name:\s*['"`]([^'"`]+)['"`]/g)].map((m) => m[1]);
+    fail(`rung \`${rung.name}\` declares k6Tag \`${rung.k6Tag}\`, but \`tflw-acceptance/${rel}\` tags no request with that name (it tags: ${present.join(', ') || 'nothing'}). The scheduled run reads \`http_req_duration{name:${rung.k6Tag},expected_response:true}\`, which would be silently absent — and comparing against the bare metric instead is the M89 population bug this ladder has already paid for once.`);
   }
 }
 

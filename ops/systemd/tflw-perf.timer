@@ -1,0 +1,23 @@
+# Fires the perf-conformance run — `M154e` step 4.
+#
+# WHY 04:30 AND NOT A BOOT-RELATIVE SCHEDULE. The run needs the box quiet (`tflw:load` declares
+# `requires: quiet`), and the box's other tenants — the four image forges, the MoE server, tflw's
+# own Docker/browser runs — are all driven interactively from the Mac. Overnight is the only window
+# that is quiet by default rather than by luck. `Persistent=false` for the same reason: a run that
+# was missed because the box was asleep should wait for the next quiet window, not fire into
+# whatever is happening at the moment the box wakes up.
+#
+# RandomizedDelaySec spreads it off the exact minute so it cannot lock-step with any other timer.
+
+[Unit]
+Description=Fire the tflw perf-conformance run daily
+Requires=tflw-perf.service
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+RandomizedDelaySec=900
+Persistent=false
+Unit=tflw-perf.service
+
+[Install]
+WantedBy=timers.target

@@ -145,6 +145,16 @@ export const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0', 
  * is a tflw-only demonstration), and a gate that demanded all three everywhere would be a gate
  * somebody switches off. What the gate refuses is an *unrecorded* absence and an unrostered file.
  *
+ * `k6Tag` is the k6 request-name tag whose `http_req_duration` sub-metric is *the thing this rung
+ * measures* — never the rung's own name, and never the bare top-level metric. Every k6 rung also
+ * tags a `login` request, and `checkout-burst` additionally tags a `lookup`, so reading
+ * `http_req_duration` unfiltered averages the measured call together with its auth overhead. Worse,
+ * tflw's percentiles are successful-only (`SPEC` §12, tflw `M89a`) while k6's unfiltered metric is
+ * not — `tflw-acceptance/README.md` §M89 records that this exact mismatch made `M49`'s published
+ * 3.54% p95 gap a comparison of two different populations, which held only by the luck of a
+ * near-zero error rate. Declared here, and `verify-perf-parity.mjs` proves each tag really appears
+ * in the file it names, so a renamed tag is a red gate rather than a silently absent sub-metric.
+ *
  * `fixtures` lists which of `FIXTURES` every implementation of this rung must carry verbatim. A
  * rung that does not use a fixture lists none; the gate then only checks its hosts and its roster
  * membership.
@@ -152,6 +162,7 @@ export const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0', 
 export const RUNGS = [
   {
     name: 'checkout-burst',
+    k6Tag: 'checkout',
     what: 'the contended rung — every VU races the one hot product row through a real Postgres row lock',
     impls: {
       tflw: 'perf/tflw/checkout-burst.tflw',
@@ -161,6 +172,7 @@ export const RUNGS = [
   },
   {
     name: 'dogfood-get-only',
+    k6Tag: 'health',
     what: 'the read rung — GET with no body, no capture',
     impls: {
       tflw: 'perf/tflw/dogfood-get-only.tflw',
@@ -170,6 +182,7 @@ export const RUNGS = [
   },
   {
     name: 'dogfood-post-uncontended',
+    k6Tag: 'cart-add',
     what: 'the write rung with zero interpolation overhead — the one the drifting id broke twice',
     impls: {
       tflw: 'perf/tflw/dogfood-post-uncontended.tflw',
@@ -179,6 +192,7 @@ export const RUNGS = [
   },
   {
     name: 'search-read',
+    k6Tag: 'search',
     what: 'catalog search under load',
     impls: {
       tflw: 'perf/tflw/search-read.tflw',
@@ -188,6 +202,7 @@ export const RUNGS = [
   },
   {
     name: 'ticket-write',
+    k6Tag: 'ticket-create',
     what: 'the rate-limited + uniquely-constrained write path',
     impls: {
       tflw: 'perf/tflw/ticket-write.tflw',
@@ -197,6 +212,7 @@ export const RUNGS = [
   },
   {
     name: 'echo-get-only',
+    k6Tag: 'products',
     what: 'the runner-overhead floor: a local echo server, no database, no auth',
     impls: {
       tflw: 'perf/profile/echo-get-only.tflw',
@@ -207,6 +223,7 @@ export const RUNGS = [
   },
   {
     name: 'echo-post-only',
+    k6Tag: 'orders',
     what: 'the same floor, with a body',
     impls: {
       tflw: 'perf/profile/echo-post-only.tflw',

@@ -1,0 +1,36 @@
+{
+  "_what": "The perf ladder's regression baseline — M154e step 5, see scripts/verify-perf-baseline.mjs.",
+  "_bands": "Ratios of tflw to its co-runner in the SAME run (D750), never absolute numbers: absolutes on this box move with thermal state, the 2.4 GHz link and whoever else holds the lease. null means not yet measured.",
+  "_establishing": "The first scheduled box run records observed ratios in its artifact; a human promotes them here and flips `established`. That run is also what closes B6-15, whose condition is \"reopens when the parity ladder is next run in anger\".",
+  "established": false,
+  "rungs": {
+    "checkout-burst": {
+      "rpsRatio": null,
+      "p95Ratio": null
+    },
+    "dogfood-get-only": {
+      "rpsRatio": null,
+      "p95Ratio": null
+    },
+    "dogfood-post-uncontended": {
+      "rpsRatio": null,
+      "p95Ratio": null
+    },
+    "search-read": {
+      "rpsRatio": null,
+      "p95Ratio": null
+    },
+    "ticket-write": {
+      "rpsRatio": null,
+      "p95Ratio": null
+    },
+    "echo-get-only": {
+      "rpsRatio": null,
+      "p95Ratio": null
+    },
+    "echo-post-only": {
+      "rpsRatio": null,
+      "p95Ratio": null
+    }
+  }
+}
