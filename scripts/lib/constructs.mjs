@@ -295,6 +295,621 @@ export const PLANTS = [
     catches: 'a `give` returning the wrong value rather than no value.',
     blockedOn: null,
   },
+  // ---------------------------------------------------------------------------------------------
+  // `M154d` — the UI tier opens with one artifact and ten rows, because six of tflw's locators and
+  // three of its steps cannot be graded apart from each other. See
+  // `tests/.constructs/locator-near-miss.tflw`'s header for the full argument; the short version is
+  // that `button`/`text`/`css`/`field` carry 93/92/69/65 uses between them and **not one of those
+  // uses could tell "resolved the right element" from "resolved an element"**, because every one of
+  // them names something unique on its page.
+  // ---------------------------------------------------------------------------------------------
+  {
+    id: 'C13',
+    construct: 'locator:button',
+    family: 'locator',
+    tier: 'ui',
+    title: 'the button, and not the three decoys wearing its text',
+    target: 'webV2 `/locator-fixture` — one `<button>` and three same-text decoys with different roles',
+    evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: '^\\s*click button "Archive', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'A link, a `menuitem` and a bare `<div>` all carry the identical accessible text "Archive ' +
+      'shipment", and each writes its own token. The answer is `button/true`. A `button` locator ' +
+      'that had degenerated into a text search reports a decoy\u2019s token or hard-errors on ' +
+      'ambiguity \u2014 and would still pass all ninety-three existing uses, which name things that ' +
+      'are unique on their page.',
+    catches: 'a `button` locator that stopped resolving by role.',
+    blockedOn: null,
+  },
+  {
+    id: 'C14',
+    construct: 'locator:text',
+    family: 'locator',
+    tier: 'ui',
+    title: 'rendered content, not the four attributes that spell the same phrase',
+    target: 'webV2 `/locator-fixture` — the phrase repeated in a `value`, an `alt`, a `title` and an `aria-label`',
+    evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: '^\\s*click text "', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'Only the `<p>` renders "Restock queued" as text; four decoys carry it somewhere a content ' +
+      'match must not look. The answer is `text/true`, and any attribute starting to match makes ' +
+      'the step ambiguous rather than merely wrong. The decoy input is deliberately `type="text"`: ' +
+      'Playwright\u2019s text engine matches `input[type=button|submit]` by `value` **by design**, so ' +
+      'making it a submit would turn a correct engine red.',
+    catches: 'a `text` locator that widened past rendered text content.',
+    blockedOn: null,
+  },
+  {
+    id: 'C15',
+    construct: 'locator:field',
+    family: 'locator',
+    tier: 'ui',
+    title: "`D6`'s cascade has a fixed priority, and this is the only thing that grades the order",
+    target: 'webV2 `/locator-fixture` — two inputs answering to "Ship to", one by `<label>` and one by placeholder',
+    evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: '^\\s*fill field "Ship to"', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      '`field` is a closed three-step cascade \u2014 label, then placeholder, then `role=textbox` \u2014 ' +
+      'checked in that fixed order every poll (`D6`, `browser.ts:579`). The label input must receive ' +
+      '`GLASGOW` and the placeholder decoy must still hold `UNTOUCHED`. **An order that flipped would ' +
+      'pass all sixty-five existing `fill field` uses in this repository**, because no other page ' +
+      'collides a label with a placeholder.',
+    catches: 'a reordered or short-circuited `field` cascade.',
+    blockedOn: null,
+  },
+  {
+    id: 'C16',
+    construct: 'locator:list',
+    family: 'locator',
+    tier: 'ui',
+    title: 'the named list, told from its twin only by its accessible name',
+    target: 'webV2 `/locator-fixture` — two `<ul>`s, each holding a button named exactly "Remove"',
+    evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: '^\\s*within list "', min: 2 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'Zero uses before this file. Both lists hold a button named "Remove", so an unscoped click on ' +
+      'it is ambiguous **by construction** \u2014 the pair of assertions can only pass if `list` picked ' +
+      'the list its accessible name names. Answers `list/items` then `list/suppliers`, in that order; ' +
+      'either one alone would be satisfied by a locator that ignored the name.',
+    catches: 'a `list` locator that resolves any role=list rather than the named one.',
+    blockedOn: null,
+  },
+  {
+    id: 'C17',
+    construct: 'locator:css',
+    family: 'locator',
+    tier: 'ui',
+    title: 'the third of four identical siblings, not the first',
+    target: 'webV2 `/locator-fixture` — four `<li>`s whose buttons are indistinguishable by name',
+    evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: '^\\s*click css "\\[data-group-list=\'css\'\\]', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'The four buttons are identical in text and role, so `:nth-child(3)` is the entire answer. ' +
+      '`css/3`. A resolution that quietly took the first match reports `css/1` \u2014 a failure mode ' +
+      'invisible to all sixty-nine existing `css` uses, which select things that are unique anyway.',
+    catches: 'a `css` locator that stopped honouring structural position.',
+    blockedOn: null,
+  },
+  {
+    id: 'C18',
+    construct: 'locator:xpath',
+    family: 'locator',
+    tier: 'ui',
+    title: "the `xpath=` prefix is load-bearing, and a leading `//` hides that",
+    target: 'webV2 `/locator-fixture` — four indistinguishable buttons, answered by `last()`',
+    evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: '^\\s*click xpath "\\(//', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'Zero uses before this file. Playwright auto-detects a selector beginning with `//` or `..` as ' +
+      'XPath, **so an implementation that forgot `browser.ts:590`\u2019s `xpath=` prefix would still pass ' +
+      'an xpath test written the usual way.** The expression here opens with `(`, which defeats the ' +
+      'auto-detect and would be parsed as CSS; `last()` is the second half, since CSS cannot express ' +
+      'it over a parenthesised group. Answer `xpath/4`.',
+    catches: 'a dropped `xpath=` prefix, which a `//`-leading expression cannot see.',
+    blockedOn: null,
+  },
+  {
+    id: 'C19',
+    construct: 'step:within',
+    family: 'step',
+    tier: 'ui',
+    title: 'the scope narrows the search, proven by an inner name that is ambiguous outside it',
+    target: 'webV2 `/locator-fixture` — the same button name in both lists',
+    evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: '^\\s*within ', min: 2 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'Twenty-five uses before this file and none of them could fail for the right reason: each ' +
+      'scopes to a container whose inner locator would have resolved uniquely on the whole page ' +
+      'anyway, so a `within` that scoped to nothing would pass them all. Here the inner ' +
+      '`click button "Remove"` is ambiguous at page scope \u2014 tflw hard-errors on N>1 (`D7`) \u2014 so a ' +
+      'lost scope is a red step, not a wrong element.',
+    catches: 'a `within` that resolves its scope and then searches outside it.',
+    blockedOn: null,
+  },
+  {
+    id: 'C20',
+    construct: 'step:click',
+    family: 'step',
+    tier: 'ui',
+    title: 'a click that was really dispatched, against one that only resolved',
+    target: 'webV2 `/locator-fixture` — every candidate writes a token, and nothing else does',
+    evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: '^\\s*click ', min: 6 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'The readout starts at `none` and the first assertion in the file says so. Every later token ' +
+      'exists only because a click really reached the DOM, so a `click` that resolved its locator ' +
+      'and dispatched nothing leaves `none` standing and fails on the next line rather than passing ' +
+      'silently. Six clicks, each landing on a different element.',
+    catches: 'a `click` that waits for a locator and never fires the event.',
+    blockedOn: null,
+  },
+  {
+    id: 'C21',
+    construct: 'step:fill',
+    family: 'step',
+    tier: 'ui',
+    title: 'the text arrived in the input the cascade chose, and in no other',
+    target: 'webV2 `/locator-fixture` — the label/placeholder collision, read back from both inputs',
+    evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: '^\\s*fill field ', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'Read back from **both** inputs by id, so "the right one was filled" and "the wrong one was ' +
+      'not" are two separate assertions. The decoy starts at `UNTOUCHED` rather than empty on ' +
+      'purpose: not-filled is then a positive observation instead of a claim about an empty string.',
+    catches: 'a `fill` that types into the wrong element, or into both.',
+    blockedOn: null,
+  },
+  {
+    id: 'C22',
+    construct: 'matcher:has-value',
+    family: 'matcher',
+    tier: 'ui',
+    title: 'the value matcher reads the live control, and discriminates',
+    target: 'webV2 `/locator-fixture` — one input filled, one deliberately left alone',
+    evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: 'has value "', min: 2 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      '**Zero uses in this repository before this file** \u2014 a shipped matcher nothing exercised. ' +
+      'The two assertions are a pair by design: `GLASGOW` on one input and `UNTOUCHED` on the other, ' +
+      'so a `has value` that returned true unconditionally fails the second, and one that read the ' +
+      '`value` *attribute* rather than the live `.value` property fails the first (React sets the ' +
+      'property; the attribute keeps its initial markup).',
+    catches: 'a `has value` that always passes, or that reads the attribute instead of the property.',
+    blockedOn: null,
+  },
+  // ===========================================================================
+  // `C23`-`C38` — the UI tier's real flows, `D729`'s first preference
+  //
+  // Every row below points at a test that already existed and already went red for the right
+  // reason. Nothing here is a new fixture page, and that is the point: `D729` orders real flows
+  // first, and for these sixteen constructs `M40`/`M41`/`M43`/`M48` had already built one. What
+  // was missing was never the exercise — it was the *written-down known answer*. In several cases
+  // the answer was sitting in a test comment, unread by any gate, which is exactly the state
+  // `D724` exists to end.
+  //
+  // **Evidence pointing outside `tests/.constructs/` is deliberate and it carries a risk.** A
+  // plant living in a real suite file can be edited by work that has never heard of this roster.
+  // That is what the acceptance grader is for: the static half catches the spelling disappearing,
+  // and the per-step half catches the assertions being loosened while the spelling stays. `C3`
+  // set the precedent by pointing at `tflw-acceptance/conformance/iterations.tflw`.
+  {
+    id: 'C23',
+    construct: 'step:open',
+    family: 'step',
+    tier: 'ui',
+    title: 'a navigation reaches the named path, interpolated segment and all',
+    target: 'webV2 storefront — `/orders/:id`, a route that exists only for an order really placed',
+    evidence: { file: 'tests/mixed/storefront.tflw', pattern: '^\\s*open "/orders/\\{orderId\\}"', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      '75 uses and every one of them navigates somewhere the next assertion needs, so `open` was ' +
+      'never at risk of being unexercised — what none of them isolate is the **interpolated ' +
+      'segment**. `/orders/{orderId}` is the one path in the suite whose target does not exist ' +
+      'until the test creates it: the id comes from a `POST /orders` two steps earlier, and the ' +
+      '"Order confirmed" heading is rendered by no other route. An `open` that dropped the ' +
+      'interpolation lands on `/orders/%7BorderId%7D` and 404s; one that ignored its argument ' +
+      'stays on the login page it arrived from.',
+    catches: 'an `open` that does not interpolate, or does not navigate.',
+    blockedOn: null,
+  },
+  {
+    id: 'C24',
+    construct: 'step:double',
+    family: 'step',
+    tier: 'ui',
+    title: 'two independent clicks against a DOM that changes between them',
+    target: 'webV2 storefront — `ProductQuickViewModal`, whose backdrop self-closes',
+    evidence: { file: 'tests/mixed/storefront.tflw', pattern: '^\\s*double click button "Quick view"', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'The known answer is a **hidden** modal, and that is stronger than a visible one. Playwright ' +
+      "resolves the target position once, so both clicks land on the same screen point; the first " +
+      'opens the Quick View modal, whose full-viewport backdrop then covers that point, and the ' +
+      "second lands on the backdrop and closes it. So `expect button \"Close\" is hidden` only " +
+      'passes if two *separate* click events were dispatched against the live DOM. A step that ' +
+      'coalesced them into one gesture, or fired one click, leaves the modal open and fails.',
+    catches: 'a `double click` that is one click, or one synthetic gesture.',
+    blockedOn: null,
+  },
+  {
+    id: 'C25',
+    construct: 'step:right',
+    family: 'step',
+    tier: 'ui',
+    title: 'the secondary button dispatches no `click` at all',
+    target: 'webV2 storefront — the row-scoped Add to cart button and its toast',
+    evidence: { file: 'tests/mixed/storefront.tflw', pattern: '^\\s*right click button "Add to cart"', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'A **negative** known answer, and the only honest one available: browsers reserve the ' +
+      'secondary button for `contextmenu` and never dispatch `click`, so the add-to-cart toast ' +
+      'must not appear. `expect text "Added 1 × Bulk Item 6 to your cart." is hidden` is therefore ' +
+      'red for a `right click` that has degenerated into an ordinary click — the single most ' +
+      'likely way this step breaks — and the surrounding steps prove the button is real and ' +
+      'reachable, so the absence is not an absence of everything.',
+    catches: 'a `right click` implemented as `click`.',
+    blockedOn: null,
+  },
+  {
+    id: 'C26',
+    construct: 'step:press',
+    family: 'step',
+    tier: 'ui',
+    title: 'a named key reaches the focused document',
+    target: 'webV2 storefront — the Quick View modal, re-opened so that Escape is what closes it',
+    evidence: { file: 'tests/mixed/storefront.tflw', pattern: '^\\s*press "Escape"', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'The modal is asserted open on the step **immediately** before the key and closed on the step ' +
+      'after, with nothing between them but the key. Adjacency is the whole row, and it is a repair: ' +
+      'until `M154d` the `press` sat after a successful add-to-cart, which `handleAdd` already ' +
+      'closes — so the `is hidden` after it was satisfied by the add, and **deleting the `press` ' +
+      'line left the test green**. That is how it was found. Now a `press` that sent nothing, or ' +
+      'sent the literal five characters `Escape` as text, leaves `button "Close"` visible.',
+    catches: 'a `press` that types its key name instead of pressing it, and an assertion something else satisfies.',
+    blockedOn: null,
+  },
+  {
+    id: 'C27',
+    construct: 'step:select',
+    family: 'step',
+    tier: 'ui',
+    title: 'the option chosen really drives the page, both ways',
+    target: 'webV2 storefront — `CatalogPage`’s Category `<select>`, combined with Search',
+    evidence: { file: 'tests/mixed/storefront.tflw', pattern: '^\\s*select "Electronics" from field "Category"', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'Two selections against one search term, and the pair is the claim: "Wireless Mouse" under ' +
+      '**Books** yields `has count 0`, and the same term under **Electronics** yields `has count ' +
+      '1`. A `select` that silently did nothing leaves whichever category was active, so one of ' +
+      'the two counts is wrong whichever it was; a `select` that matched by position rather than ' +
+      'by label picks the wrong category and fails the same way. Asserting only the positive case ' +
+      'would pass for a dropdown that never filtered at all.',
+    catches: 'a `select` that no-ops, or selects by index rather than by option text.',
+    blockedOn: null,
+  },
+  {
+    id: 'C28',
+    construct: 'step:tick',
+    family: 'step',
+    tier: 'ui',
+    title: 'the checkbox ends checked, read off the control',
+    target: 'webV2 storefront — `/a11y-demo`’s labelled, accessible checkbox',
+    evidence: { file: 'tests/mixed/storefront.tflw', pattern: '^\\s*tick field "Subscribe to updates"', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'Graded against the field’s actual `checked` state rather than against "the click did not ' +
+      'error", and bracketed: `not is checked` before, `is checked` after. The control opens ' +
+      'unchecked, so a `tick` that toggled instead of setting would still pass here — which is why ' +
+      '`C29` immediately unticks and `C30` grades the matcher that reads both.',
+    catches: 'a `tick` that clicks without settling, or asserts nothing about state.',
+    blockedOn: null,
+  },
+  {
+    id: 'C29',
+    construct: 'step:untick',
+    family: 'step',
+    tier: 'ui',
+    title: 'the checkbox returns to unchecked, from a state it was really in',
+    target: 'webV2 storefront — the same `/a11y-demo` checkbox, immediately after `C28`',
+    evidence: { file: 'tests/mixed/storefront.tflw', pattern: '^\\s*untick field "Subscribe to updates"', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'The half that makes `C28` mean something. `untick` runs on a control the previous assertion ' +
+      'just proved was checked, and the state afterwards is asserted, not assumed — so an ' +
+      '`untick` that is really a toggle, and an `untick` that is really a no-op, are told apart ' +
+      'from a working one and from each other.',
+    catches: 'an `untick` that no-ops on an already-checked control.',
+    blockedOn: null,
+  },
+  {
+    id: 'C30',
+    construct: 'matcher:state-word',
+    family: 'matcher',
+    tier: 'ui',
+    title: 'the state words read the live element, and negate',
+    target: 'webV2 storefront — the `/a11y-demo` checkbox and the Quick View modal',
+    evidence: { file: 'tests/mixed/storefront.tflw', pattern: '^\\s*expect field "Subscribe to updates" (not )?is checked', min: 2 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'The same subject asserted in both states within one test — `not is checked`, `is checked`, ' +
+      '`not is checked` — so a matcher that always returns true fails the negations and one that ' +
+      'always returns false fails the positive. `is visible`/`is hidden` are graded in the same ' +
+      'file by `C24`’s and `C26`’s modal, which is the other half of this id: the manifest ' +
+      'spells every state word as one construct.',
+    catches: 'a state matcher stuck at one answer, or a broken `not`.',
+    blockedOn: null,
+  },
+  {
+    id: 'C31',
+    construct: 'step:drag',
+    family: 'step',
+    tier: 'ui',
+    title: 'the row really moves, and the order is read back position by position',
+    target: 'webV2 storefront — the cart’s drag-to-reorder handles',
+    evidence: { file: 'tests/mixed/storefront.tflw', pattern: '^\\s*drag css "\\.drag-handle', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'Both rows are asserted by name **and by position** after the drag, with the names read from ' +
+      'the API first rather than assumed from insertion order. So a `drag` that dropped nothing ' +
+      'leaves row 1 where it was and fails the first assertion; one that moved both rows, or moved ' +
+      'the wrong one, fails the second. A single-row assertion would pass for a table that had ' +
+      'merely re-rendered.',
+    catches: 'a `drag` that fires no drop, or reorders something else.',
+    blockedOn: null,
+  },
+  {
+    id: 'C32',
+    construct: 'step:drop',
+    family: 'step',
+    tier: 'ui',
+    title: 'a real file reaches a drop zone that has no file input to fill',
+    target: 'webV2 storefront — `/support`’s drop zone, whose field id changes per render',
+    evidence: { file: 'tests/mixed/storefront.tflw', pattern: '^\\s*drop file "\\.\\./payloads/sample\\.csv" onto ', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'The zone accepts nothing but a real `DataTransfer` drop — there is no file input to fill and ' +
+      'no click that would open one — and it echoes the dropped file’s **name** back into the page. ' +
+      '`expect text "sample.csv" is visible` therefore fails for a step that dispatched a bare ' +
+      '`drop` event with no payload, which is the shape this breaks in.',
+    catches: 'a `drop` with an empty or missing file payload.',
+    blockedOn: null,
+  },
+  {
+    id: 'C33',
+    construct: 'step:stub',
+    family: 'step',
+    tier: 'ui',
+    title: 'the stub intercepts by method, and its status surfaces through the app',
+    target: 'webV2 storefront — the cross-origin iframe payment widget at `payments.example.test`',
+    evidence: { file: 'tests/mixed/storefront.tflw', pattern: '^\\s*stub (GET|POST) "https://payments\\.example\\.test', min: 2 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'Two stubs on **one URL** and they disagree on purpose: `GET` answers 200 with a token named ' +
+      '`tok_wrong_method`, `POST` answers 500. The widget issues a POST, so the page must show the ' +
+      'gateway-declined message and `status of request to … with method "POST"` must equal 500. A ' +
+      'stub that matched on URL alone would serve the GET row, the payment would appear to ' +
+      'succeed, and the token name in the report says which rule fired. The host resolves nowhere: ' +
+      'without interception the request fails outright rather than passing by accident.',
+    catches: 'a `stub` that ignores the method, or that never intercepts.',
+    blockedOn: null,
+  },
+  {
+    id: 'C34',
+    construct: 'matcher:matches-snapshot',
+    family: 'matcher',
+    tier: 'ui',
+    title: 'the baseline catches a real change, and the mask absorbs the same one',
+    target: 'webV2 storefront — `/render-fixture` (M45), the harness page this arc keeps citing',
+    evidence: { file: 'tests/mixed/storefront.tflw', pattern: 'matches snapshot "render-fixture-', min: 4 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'One state change, asserted four times against two baselines. Unmasked: matches before the ' +
+      'checkbox is ticked, `not matches` after — so a comparison that always passed fails the ' +
+      'second. Masked over that same checkbox: matches in **both** states — so a mask that was ' +
+      'ignored fails there. The pair is what separates "the matcher compares pixels" from "the ' +
+      'matcher compares pixels it was told to skip".',
+    catches: 'a snapshot compare that always passes, and a `mask` clause that is decorative.',
+    blockedOn: null,
+  },
+  {
+    id: 'C35',
+    construct: 'matcher:has-no-a11y-violations',
+    family: 'matcher',
+    tier: 'ui',
+    title: 'the scanner finds real violations, and severity is a floor',
+    target: 'webV2 storefront — `/a11y-demo`’s deliberately inaccessible section (M48)',
+    evidence: { file: 'tests/mixed/storefront.tflw', pattern: 'has no (minor |moderate |serious |critical )?a11y violations', min: 4 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'Both directions in one file: clean on the happy-path product and catalog pages, and red on ' +
+      '`/a11y-demo`, which carries real `color-contrast` (serious) and `image-alt`/`label` ' +
+      '(critical) violations probed empirically rather than guessed. The floor is the sharp half — ' +
+      '`not has no moderate a11y violations` passes only under genuine "moderate or worse" ' +
+      'semantics, because **zero** violations on that page are actually tagged moderate. An ' +
+      'exact-match implementation reports that floor clean.',
+    catches: 'a scanner that never fires, and a severity filter that matches exactly instead of as a floor.',
+    blockedOn: null,
+  },
+  {
+    id: 'C36',
+    construct: 'step:switch',
+    family: 'step',
+    tier: 'ui',
+    title: 'the popup is caught, and the numbered tab is really the one in front',
+    target: 'webV2 storefront — the order confirmation page’s `target="_blank"` receipt link',
+    evidence: { file: 'tests/mixed/storefront.tflw', pattern: '^\\s*switch to (new tab|tab \\d)', min: 3 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      '`switch to new tab` arms `waitForEvent(\'page\')` **before** running its block, so it goes ' +
+      'red on its own if the click opens nothing — the mechanics half needs no assertion. The ' +
+      'numbered half is graded by what follows: `switch to tab 1` then "Order confirmed" is ' +
+      'visible, which is true on tab 1 and false on the receipt PDF in tab 2, so a `switch to tab ' +
+      'N` that no-opped or was off by one fails there.',
+    catches: 'a `switch to new tab` that misses the popup, and a `switch to tab N` that stays put.',
+    blockedOn: null,
+  },
+  {
+    id: 'C37',
+    construct: 'step:close',
+    family: 'step',
+    tier: 'ui',
+    title: 'the tab that closes is the one in front, and the run survives it',
+    target: 'webV2 storefront — the second tab opened by the receipt link',
+    evidence: { file: 'tests/mixed/storefront.tflw', pattern: '^\\s*close tab\\s*$', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'The close is preceded by `switch to tab 2` and followed by an assertion that only holds on ' +
+      'tab 1, so the two failure directions separate cleanly: a `close tab` that closed the wrong ' +
+      'tab takes the order page with it and the assertion has nowhere to run, and one that closed ' +
+      'nothing leaves the receipt PDF in front and "Order confirmed" is not on it.',
+    catches: 'a `close tab` that closes the wrong tab, or none, or does not restore focus.',
+    blockedOn: null,
+  },
+  {
+    id: 'C38',
+    construct: 'step:download',
+    family: 'step',
+    tier: 'ui',
+    title: 'a real download event fires, and the name it binds comes from the server',
+    target: 'webV2 admin console — the dashboard’s Download orders CSV link, streamed BFF-style from apiV2',
+    evidence: { file: 'tests/.env-specific/webv2-admin.tflw', pattern: '^\\s*expect \\{file\\} equals "orders-export\\.csv"', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'Two halves, and only the first was graded before `M154d`. The step waits on ' +
+      "`waitForEvent('download')`, so a link that navigated instead of downloading goes red " +
+      'unaided. What was prose until now is the **binding**: `orders-export.csv` is set by ' +
+      '`orders.controller.ts`’s `Content-Disposition` and forwarded intact by the console’s BFF ' +
+      'route, and it appears nowhere in the markup — the link reads "Download orders CSV" and ' +
+      'points at `/orders/export`. So a step that bound the anchor text, the URL’s last segment, ' +
+      'or nothing at all fails an assertion that passes today.',
+    catches: 'a `download as` that binds the wrong string, or the right one by coincidence.',
+    blockedOn: null,
+  },
+
+  // ---------------------------------------------------------------------------------------------
+  // `M154d`, third artifact — the five constructs the UI tier had left, and the one it gave back.
+  //
+  // These are the expensive half, and the reason is uniform: each already had uses that assert
+  // nothing about the step's own effect. `hover` and `scroll to` land on a button on `/a11y-demo`
+  // and are never observed; `screenshot` writes an artifact nothing reads; `dismiss dialog` takes
+  // the SAME code branch as no arming at all. Unlike `C23`-`C38`, no amount of asserting harder on
+  // the existing pages closes them — the pages do not react, so a surface had to be built.
+  //
+  // `webV2/src/pages/StepFixturePage.tsx` is that surface, and the third harness page in this
+  // repository after `RenderFixturePage` (M45) and `LocatorFixturePage` (`C13`-`C22`). It is NOT
+  // built onto `/a11y-demo` where the existing uses live, and that is deliberate: `/a11y-demo` is
+  // `C35`'s axe-count target, and a hover tooltip plus a scroll sentinel are exactly the markup
+  // that moves an axe score. A plant that broke another plant to grade itself is not a plant.
+  //
+  // **`step:pause` was scoped into this batch and is deliberately NOT here.** `TF033`: "`pause` is
+  // only legal inside a workload-bearing `test`". It is `M67`'s per-iteration pacing, not a general
+  // wait, so no browser page can grade it and the fixture section built for it was deleted. It
+  // stays on the ratchet and belongs to `M154e`, where `D726` already grades workload shape against
+  // a server-observed arrival curve. The UI tier is 31 constructs, not 32 — found by writing the
+  // test and running `tflw check`, not by reading the manifest.
+  {
+    id: 'C39',
+    construct: 'step:hover',
+    family: 'step',
+    tier: 'ui',
+    title: 'the pointer arrives without clicking, and the page can tell which happened',
+    target: 'webV2 storefront — the step fixture page’s menu button, which records pointer events',
+    evidence: { file: 'tests/.constructs/step-observables.tflw', pattern: '^\\s*hover button "Open menu"', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'Both wrong answers are named rather than merely absent, which is what the one pre-existing ' +
+      'use could not do. `onMouseEnter` writes `hovered:menu` and `onClick` writes `clicked:menu` ' +
+      'to the same readout, so a `hover` that did nothing leaves `none` and one implemented as a ' +
+      'click reports `clicked:menu` — and the test then clicks the very same button to show that ' +
+      '`clicked:menu` is reachable, so the contrast is demonstrated rather than asserted. A ' +
+      'tooltip that is absent from the DOM until the pointer arrives is the same event observed a ' +
+      'second time, in the language’s own idiom, so the row does not rest on one `data-` attribute.',
+    catches: 'a `hover` that is a click, and a `hover` that is a no-op.',
+    blockedOn: null,
+  },
+  {
+    id: 'C40',
+    construct: 'step:scroll',
+    family: 'step',
+    tier: 'ui',
+    title: 'the viewport really moves, latched so nothing else can satisfy the assertion',
+    target: 'webV2 storefront — the step fixture page’s sentinel, below a 2400px spacer',
+    evidence: { file: 'tests/.constructs/step-observables.tflw', pattern: '^\\s*scroll to button "Bottom marker"', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'An `IntersectionObserver` latches on first intersection and never resets, so the readout ' +
+      'flips from `no` to `yes` only if something genuinely scrolled the sentinel into the real ' +
+      'viewport. Latching is load-bearing twice over: the assertion must not depend on the element ' +
+      'still being on screen when it runs, and — the trap this row exists to avoid — Playwright ' +
+      'visibility has NOTHING to do with the viewport, so `expect <the marker> is visible` passes ' +
+      'before any scrolling at all. A row written the obvious way would have graded nothing.',
+    catches: 'a `scroll to` that resolves the element and never scrolls, which visibility cannot see.',
+    blockedOn: null,
+  },
+  {
+    id: 'C41',
+    construct: 'step:screenshot',
+    family: 'step',
+    tier: 'ui',
+    title: 'the shot is taken at `evidence full`, is skipped below it, and says which',
+    target: 'webV2 storefront — the step fixture page, captured at two evidence levels',
+    evidence: { file: 'tests/.constructs/step-observables.tflw', pattern: '^\\s*screenshot "step-fixture-observables"', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      '**The only row in the roster whose known answer is a report fact, and it has to be.** ' +
+      '`interpreter.ts:3496` — "`screenshot` is an evidence step, never an assertion" — so the ' +
+      'step ALWAYS passes and no `.tflw` assertion can go red when it breaks. The grader runs the ' +
+      'plant twice: at `evidence full` the step reports `captured`, and at `headers-only` it ' +
+      'reports `not captured (evidence level)` while still passing. Words alone would be a weak ' +
+      'instrument, so the grader also decodes the base64 in `results.json` and reads the PNG’s own ' +
+      'IHDR — a real capture is 1280x720, the run’s actual viewport.',
+    catches: 'a step that reports a capture it did not make, and evidence gating that stopped working.',
+    blockedOn: null,
+  },
+  {
+    id: 'C42',
+    construct: 'config:key:viewport',
+    family: 'config',
+    tier: 'ui',
+    title: 'the configured window size is the one the browser actually gets',
+    target: 'webV2 storefront — the step fixture page’s window readout, under two configs',
+    evidence: { file: 'tests/.constructs/viewport/configured.tflw', pattern: '^\\s*expect css "#viewport-readout\\[data-size=.900x600.\\]" is visible', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'A pair across two configs, because one alone measures Playwright rather than tflw: the ' +
+      'root config sets no `viewport` and the page reads **1280x720** (Playwright’s own default, ' +
+      'confirmed by running it, not assumed); `tests/.constructs/viewport/tflw.config` sets ' +
+      '`viewport 900 600` and the same page reads **900x600**. The value differs from the default ' +
+      'in BOTH dimensions on purpose — a key read for width and dropped for height would pass a ' +
+      'plant that moved only one. The separate directory is not a preference: `viewport` is legal ' +
+      'only in `defaults` (`TF025`), which is project-wide, and declaring it at the root would ' +
+      'have re-laid-out the storefront underneath `C34`’s snapshot baselines and `C35`’s axe counts.',
+    catches: 'a `viewport` key that is parsed and never reaches `newContext`.',
+    blockedOn: null,
+  },
+  {
+    id: 'C43',
+    construct: 'step:dismiss',
+    family: 'step',
+    tier: 'ui',
+    title: 'dismissal is unobservable directly, so the plant grades the arming it overwrites',
+    target: 'webV2 admin console — the bulk out-of-stock delete’s two confirms',
+    evidence: { file: 'tests/.constructs/dialog-one-shot.tflw', pattern: '^\\s*dismiss dialog\\s*$', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'Closes `M154b-01`. `browser.ts:232` is `void (armed === \'accept\' ? dialog.accept() : ' +
+      'dialog.dismiss())`, so **`dismiss` and nothing-armed take the same branch** and the step is ' +
+      'genuinely indistinguishable from its absence by direct observation — which is why the two ' +
+      'uses elsewhere in this repository prove nothing and why the step sat on the ratchet WITH ' +
+      'uses. What it does that its absence cannot is overwrite a prior arming (a single slot, ' +
+      '`browser.ts:220`). So the plant arms `accept`, overwrites it with `dismiss`, and clicks ' +
+      'once with no dialog in between: a real `dismiss` leaves `cancelled`, a no-op leaves the ' +
+      'accept standing and produces `cancelled-final` — the state the preceding step in that same ' +
+      'test just demonstrated, so the wrong answer is reachable and not hypothetical.',
+    catches: 'a `dismiss dialog` that does not arm, which no direct observation can detect.',
+    blockedOn: null,
+  },
 ];
 
 export const PLANT_IDS = PLANTS.map((p) => p.id);
@@ -319,31 +934,36 @@ export const RATCHET = [
   'declaration:test', 'declaration:crawl', 'declaration:action', 'declaration:import',
   'declaration:use', 'declaration:before', 'declaration:tags', 'declaration:with-each',
   'declaration:as', 'declaration:concurrency',
-  // --- step (33) ---
-  'step:api', 'step:wait', 'step:expect', 'step:let', 'step:capture', 'step:log', 'step:open',
-  'step:click', 'step:double', 'step:right', 'step:fill', 'step:select', 'step:tick', 'step:untick',
-  'step:press', 'step:hover', 'step:scroll', 'step:within', 'step:dismiss', 'step:switch', 'step:close',
-  'step:download', 'step:drag', 'step:drop', 'step:screenshot', 'step:stub', 'step:pause', 'step:ramp',
-  'step:hold', 'step:step', 'step:spike', 'step:threshold', 'step:cleanup',
-  // --- matcher (15) ---
+  // --- step (13) ---
+  // Six are the workhorses `D739` is about — `api` alone has 1139 occurrences. The rest are the
+  // perf tier's and due at `M154e`: `ramp`, `hold`, `step`, `spike`, `threshold`, `cleanup` — and
+  // now `pause` too, which is the one construct `M154d` handed BACK. It had been filed here as a
+  // browser step needing an observable, and it is not one: `TF033` says "`pause` is only legal
+  // inside a workload-bearing `test`", so it is `M67`'s per-iteration pacing and `D726`'s
+  // arrival-curve grading is what will close it. The four that really did need an observable built
+  // — `hover`, `scroll`, `screenshot`, and `dismiss`, which was worse than un-plantable
+  // (`M154b-01`) — are rostered as of `M154d`'s third artifact.
+  'step:api', 'step:wait', 'step:expect', 'step:let', 'step:capture', 'step:log',
+  'step:pause',
+  'step:ramp', 'step:hold', 'step:step', 'step:spike', 'step:threshold', 'step:cleanup',
+  // --- matcher (11) ---
   'matcher:equals', 'matcher:contains', 'matcher:matches-regex', 'matcher:matches-subset',
-  'matcher:matches-schema', 'matcher:greater-less-than', 'matcher:has-count',
-  'matcher:has-value', 'matcher:state-word', 'matcher:was-made',
-  'matcher:has-no-a11y-violations', 'matcher:has-no-security-violations',
-  'matcher:has-no-authorization-violations', 'matcher:has-no-input-handling-violations',
-  'matcher:matches-snapshot',
+  'matcher:matches-schema', 'matcher:greater-less-than', 'matcher:has-count', 'matcher:was-made',
+  'matcher:has-no-security-violations', 'matcher:has-no-authorization-violations',
+  'matcher:has-no-input-handling-violations',
   // --- generator (12) ---
   'generator:unique-prefix', 'generator:unique-email', 'generator:unique-number', 'generator:unique-like',
   'generator:unique-uuid', 'generator:random-number', 'generator:random-date', 'generator:random-of',
   'generator:random-string', 'generator:random-like', 'generator:random-uuid', 'generator:random-password',
-  // --- locator (6) ---
-  'locator:button', 'locator:field', 'locator:text', 'locator:list', 'locator:css', 'locator:xpath',
-  // --- config (24) ---
+  // --- locator (0) ---
+  // The first family to empty, at `M154d`'s locator harness. The header stays so the seven
+  // families read in manifest order and an emptied one is visibly empty rather than absent.
+  // --- config (23) ---
   'config:directive:defaults', 'config:directive:env', 'config:directive:session',
   'config:directive:require', 'config:directive:exclude', 'config:key:header', 'config:key:timeout',
   'config:key:workers', 'config:key:report', 'config:key:web', 'config:key:api', 'config:key:insecure',
   'config:key:cert', 'config:key:key', 'config:key:allow', 'config:key:authorized', 'config:key:evidence',
-  'config:key:redact', 'config:key:viewport', 'config:key:log', 'config:probe:mutating',
+  'config:key:redact', 'config:key:log', 'config:probe:mutating',
   'config:probe:oversized', 'config:probe:traversal', 'config:probe:ciphers',
   // --- diagnostic (66) ---
   'diagnostic:TF001', 'diagnostic:TF002', 'diagnostic:TF003', 'diagnostic:TF010', 'diagnostic:TF011',
@@ -366,17 +986,35 @@ export const RATCHET = [
  * `RATCHET.length` must not exceed this (`D740`). Lower it as milestones roster constructs; raising
  * it is the edit this pin exists to make loud.
  *
- * `166` is the whole manifest (178 constructs since `M154c`/`D742` added the `declaration` family)
- * minus the twelve plants rostered so far, and `M154f`'s acceptance clause 5 is that it reaches 0.
+ * `140` is the whole manifest (178 constructs) minus the thirty-eight plants rostered so far, and
+ * `M154f`'s acceptance clause 5 is that it reaches 0.
  *
- * It went **up** from `M154b`'s `163`, and that is the one direction this pin exists to make loud —
- * so it is worth saying plainly why it is not a regression. Twelve constructs arrived at once when
- * `tflw spec --json` grew the family it had been missing, and nine were rostered in the same
- * milestone; the arithmetic is `163 + 12 - 9`. Coverage went from 3/166 to 12/178. What the ratchet
- * measures is the unrostered remainder, and a remainder can only be honest about a denominator that
- * has itself just been corrected upwards.
+ * `M154d`'s second artifact took it down another sixteen, and cost no new target-app surface at
+ * all: every one of those sixteen already had a real flow that already went red for the right
+ * reason. What was missing was the written-down known answer, and in three cases (`double click`,
+ * `right click`, `download as`) the answer was sitting in a test comment that no gate read. One
+ * assertion was added to the whole batch — `download as`'s bound filename, which its own comment
+ * had claimed and nothing had checked.
+ *
+ * That is the cheap half of this tier, and it is now spent. The four steps left in the `step`
+ * family below — `hover`, `scroll`, `screenshot`, `pause` — all have uses that assert nothing
+ * about the step's own effect, so each needs an observable built before it can be rostered;
+ * `dismiss` needs an argument before it needs a surface.
+ *
+ * `M154d`'s first artifact took it down ten in one step — six locators and three steps that cannot
+ * be graded apart from them, plus `matcher:has-value`, which had **zero** uses in this repository.
+ * Four of those ten are among the most-used constructs here (`button` 93, `text` 92, `css` 69,
+ * `field` 65), which is worth saying beside the number: the ratchet fell by ten and the *volume* of
+ * newly-graded usage is far larger, because `D739`'s "unrostered, not unexercised" cuts both ways.
+ *
+ * It went **up** once, from `M154b`'s `163` to `M154c`'s `166`, and that is the one direction this
+ * pin exists to make loud — so it is worth leaving the reason on the record. Twelve constructs
+ * arrived at once when `tflw spec --json` grew the family it had been missing, and nine were
+ * rostered in the same milestone; the arithmetic was `163 + 12 - 9`. What the ratchet measures is
+ * the unrostered remainder, and a remainder can only be honest about a denominator that has itself
+ * just been corrected upwards.
  */
-export const RATCHET_CEILING = 166;
+export const RATCHET_CEILING = 135;
 
 /**
  * `CONSTRUCTS.md` carries one row per plant and prose a human reads; this asserts their id sets

@@ -45,16 +45,36 @@ const SIBLING = join(ROOT, '..', 'testFlow');
 /**
  * The notation, in the four spellings this repository's prose uses. Deliberately the same shapes
  * tflw's `gen-decisions.mjs` collects, written out again — see the header.
+ *
+ * **`M154d` — the D-form was `D\d{2,3}` and the sentence above was false, which is the only kind of
+ * duplication bug this arrangement can have.** tflw's `CITATION` is `D\d{1,3}`. Nothing noticed
+ * while no tracked prose here cited a single-digit decision; `M154d`'s locator rows cited `D6`
+ * (`field`'s cascade order) and `D7`, and the two instruments then disagreed about whether those
+ * were citations at all. tflw's refresher put them in the pin, this file could not see them, and
+ * `verify:provenance` reported them as stale-in-pin — a red that no edit to either document could
+ * clear, because both documents were right.
+ *
+ * The narrow side was the wrong one. tflw numbers decisions from `D1` and publishes `D1`, `D5`,
+ * `D6`, `D7`, `D9`; excluding them here meant this repository could cite any of them and the gate
+ * would silently not require them to resolve — a vacuity in the gate whose entire job is that
+ * citations resolve.
+ *
+ * Widened after measuring rather than before (`D716`'s lesson: that widening was reversed by
+ * measuring it). Across all 13 tracked markdown files the change adds **exactly two** identifiers,
+ * `D6` and `D7`, both in `CONSTRUCTS.md`, both published in tflw's index. No false positives.
  */
-const CITATION = /(?<!\w)(P#\d{1,3}[a-z]?|D\d{2,3}[a-z]?|M\d{1,3}[a-z]?\d?)(?!-\d)\b/g;
+const CITATION = /(?<!\w)(P#\d{1,3}[a-z]?|D\d{1,3}[a-z]?|M\d{1,3}[a-z]?\d?)(?!-\d)\b/g;
 
 /**
  * A citation marked as belonging to the other repository than the file's default. `D711`'s whole
  * mechanism: the default carries the majority and the minority is spelled out, so no reader has to
  * know which repository numbered a milestone and no gate has to guess.
  */
-const OWN = /`?testFlow-tests\s+(?:M\d{1,3}[a-z]?\d?|D\d{2,3}[a-z]?)`?/g;
-const THEIRS = /`?tflw\s+(M\d{1,3}[a-z]?\d?|D\d{2,3}[a-z]?)`?/g;
+// Widened with `CITATION` above, for parity rather than for a symptom: measured across every
+// tracked file, no marked citation here is a single-digit D-form today, so this changes nothing —
+// which is the point. Leaving these two narrow would rebuild the divergence that just cost a red.
+const OWN = /`?testFlow-tests\s+(?:M\d{1,3}[a-z]?\d?|D\d{1,3}[a-z]?)`?/g;
+const THEIRS = /`?tflw\s+(M\d{1,3}[a-z]?\d?|D\d{1,3}[a-z]?)`?/g;
 
 /** The declaration `D711` requires, matched on the two parts that carry the meaning. */
 const DECLARES = (text) => /\*\*Notation\.\*\*/.test(text) && text.includes('/blob/main/DECISIONS.md');

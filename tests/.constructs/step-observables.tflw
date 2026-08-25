@@ -1,0 +1,95 @@
+# `M154d` / `C39`–`C41` — the known-answer plant for the browser steps whose effect nothing in this
+# repository could see: `hover`, `scroll to` and `screenshot`.
+#
+# **`pause` was scoped into this file and does not belong in it.** `TF033`: "`pause` is only legal
+# inside a workload-bearing `test`". It is `M67`'s per-iteration pacing, not a general wait — the
+# checker's own help text sends a browser test to `wait until …` or the JS escape hatch instead. So
+# `step:pause` is a **perf-tier** construct, it stays on the ratchet through this milestone, and
+# `M154e` grades it where `D726` already grades workload shape: against a server-observed arrival
+# curve, with no browser involved at all. Found by writing the test and running `tflw check`.
+#
+# **This file is meant to pass.** It is a plant because each assertion below distinguishes a real
+# tflw regression from correct behaviour, which the uses already in this repository do not:
+#
+#   `tests/mixed/storefront.tflw`'s a11y test runs `scroll to button "Save preferences"` and
+#   `hover button "Save preferences"` back to back and then asserts a checkbox's `checked` state.
+#   Neither step is observed. Delete both lines and that test still passes — the same vacuity
+#   `M154d` found in its `press "Escape"`, and the reason both steps have been on the ratchet since
+#   `M154b` despite having uses. `screenshot "cart-toast"` is the same shape at one remove: it
+#   writes an artifact nothing ever reads.
+#
+# The target is `webV2/src/pages/StepFixturePage.tsx` at `/step-fixture`, a harness page under
+# `D729`'s fallback clause. Its header carries the argument for why these observables are not bolted
+# onto `/a11y-demo`, which is short: that page is `C35`'s axe-count target, and a tooltip and a
+# scroll sentinel are exactly the markup that moves an axe score.
+#
+# ## `screenshot` is graded from the report, not from the run, and that is a real distinction
+#
+# `interpreter.ts:3496` is explicit — "`screenshot` is an evidence step, never an assertion, so a
+# run that deliberately turned evidence down must not start failing because of it". The step
+# **always passes**. There is therefore no assertion this file can write that goes red when
+# `screenshot` breaks, and a plant that pretended otherwise would be `D734`'s *plant that is wrong*.
+#
+# What is observable is what the step reports: `captured` at `evidence full`, and `not captured
+# (evidence level)` below it. `verify-construct-acceptance.mjs` runs this file at both levels and
+# grades the pair — and, crucially, it does not stop at the words. The shot arrives in
+# `results.json` as base64 (there is no `report/assets/` on a plain run, whatever `--help` says),
+# so the grader decodes it and reads the PNG's own IHDR: a real capture of this page is
+# **1280x720**, the run's actual viewport. That is what separates `captured` from a step that
+# reports a capture it did not make.
+#
+# `C41` is the first row in the roster whose known answer is a fact about the report rather than a
+# test outcome, and it is worth saying out loud that this is a weaker instrument than the other
+# rows have: it grades what tflw *says* it did, checked against the artifact it left behind.
+
+@constructs @mixed
+test "hover lands the pointer without clicking, and the page can tell the difference"
+  open "/step-fixture"
+  expect css "#pointer-readout[data-token='none']" is visible
+
+  # The claim is `move the pointer over the element a locator resolves to`, and the two ways it can
+  # be wrong are both named here rather than merely absent: a `hover` that did nothing leaves
+  # `none`, and one that had become a click reports `clicked:menu`.
+  hover button "Open menu"
+  expect css "#pointer-readout[data-token='hovered:menu']" is visible
+  # The same event observed a second way, in the language's own idiom, so the row does not rest
+  # entirely on one `data-` attribute. This element is not in the DOM at all until the pointer
+  # arrives.
+  expect text "pointer-is-over-the-menu" is visible
+
+  # And the contrast that makes `hovered:menu` mean something: the *same* button, clicked, reports
+  # a different token. Without this pair, a `hover` implemented as a click would pass the two
+  # assertions above.
+  click button "Open menu"
+  expect css "#pointer-readout[data-token='clicked:menu']" is visible
+
+@constructs @mixed
+test "scroll to really moves the viewport, latched so the assertion cannot be satisfied by anything else"
+  open "/step-fixture"
+  # The sentinel sits below a 2400px spacer, so it starts outside any viewport this suite
+  # configures. Note that it is nonetheless *visible* to Playwright right now — visibility is a
+  # bounding box and CSS, not the viewport — which is precisely why the readout below exists and
+  # why `expect ... is visible` on the marker itself would grade nothing.
+  expect css "#scroll-readout[data-seen='no']" is visible
+
+  scroll to button "Bottom marker"
+  expect css "#scroll-readout[data-seen='yes']" is visible
+
+@constructs @mixed
+test "screenshot captures at evidence full and says so, and says so when it does not"
+  open "/step-fixture"
+  # Nothing is asserted here and nothing can be — see the file header. The grader reads this step's
+  # own reported detail out of `report/results.json` at two evidence levels and checks the PNG on
+  # disk. The `expect` below is a fence, not the claim: it establishes that the page really had
+  # rendered when the shot was taken, so a `captured` detail cannot be credited to a blank tab.
+  expect css "#pointer-readout[data-token='none']" is visible
+  screenshot "step-fixture-observables"
+
+@constructs @mixed
+test "the window starts at Playwright's own default when no config sets one"
+  # `C42`'s control. This file runs under the ROOT config, which sets no `viewport`, so
+  # `browser.ts:349` passes no viewport to `newContext` and Playwright's default stands. The
+  # configured half lives in `viewport/configured.tflw`, which has a `tflw.config` of its own —
+  # `viewport` is legal only in `defaults` (`TF025`), so a second config is the only way to vary it.
+  open "/step-fixture"
+  expect css "#viewport-readout[data-size='1280x720']" is visible
