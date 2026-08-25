@@ -1,0 +1,42 @@
+# `M154c` / `C4` — the known-answer plant for `retry N`, the `test`-header clause.
+#
+# **This file is meant to fail**, and the shape of its failure is the assertion. It lives in a
+# dot-directory so a bare `tflw run` never discovers it, and it is graded by
+# `scripts/verify-construct-acceptance.mjs`, which runs it explicitly and reads both the report and
+# the server's own counters.
+#
+# `tests/api/mechanics/retry-and-flake.tflw` and `tests/examples/retry-explained.tflw` already use
+# this clause, and they do catch a `retry` that never retries. What no existing file can see:
+#
+#   - **the budget's upper end.** `retry 2` is three attempts, not two and not unbounded. Every
+#     existing endpoint settles on attempt 3, so a retry that kept going until it succeeded passes
+#     all of them identically.
+#   - **what re-runs.** `SPEC` §4.4 says the *whole test* re-runs. A retry that re-ran only the
+#     failing step would settle on attempt 3 too, and look the same from outside.
+#
+# Both are read from `/v1/lifecycle/counts` after the run — from the server, not from tflw's report.
+# The report's own `attempts[]` is checked as well, and the two must agree; a disagreement between
+# them is a different and more interesting defect than either being wrong alone.
+
+before file
+  # Fixed keys need a clean slate. `POST /reset` rather than a fresh key per run, because the
+  # grader reads these counters back by name — see `apiV2/src/lifecycle/lifecycle.constants.ts`.
+  api POST /lifecycle/reset
+  expect status equals 200
+
+@constructs @lifecycle
+test "retry 2 is three attempts of the whole test, and the third one settles" retry 2
+  # Marked BEFORE the step that fails. This is the whole-test-vs-failing-step discriminator: a
+  # test-level retry drives this counter to 3, a step-level retry leaves it at 1.
+  api POST /lifecycle/mark body { label: "c4-preamble" }
+  expect status equals 200
+
+  api POST /lifecycle/attempt body { key: "c4-settles" }
+  expect status equals 200
+
+@constructs @lifecycle
+test "retry 2 stops at three attempts even when a fourth would have settled" retry 2
+  # `c4-exhausts` answers 200 on attempt 4 — one past the budget. This test MUST end red, and its
+  # key MUST have been attempted exactly 3 times. A retry that ignored its budget would pass here.
+  api POST /lifecycle/attempt body { key: "c4-exhausts" }
+  expect status equals 200

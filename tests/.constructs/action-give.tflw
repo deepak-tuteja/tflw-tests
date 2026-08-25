@@ -1,0 +1,50 @@
+# `M154c` / `C12` — the known-answer plant for `give`, an action's return.
+#
+# **This file is meant to pass**, and every assertion in it names a *different* wrong answer.
+#
+# `give` appears three times in this repository. `tests/shared/catalog.tflw` has the only live one:
+# `give id`, whose value the caller then uses as a path segment. That does have power to fail — a
+# `give` returning nothing would produce `/products/` and a 404 shortly after. What it cannot
+# distinguish is *which* value came back, and `SPEC` §8 is specific about that: `give <expr>` returns
+# **the expression**, resolved in the action's own scope.
+#
+# Three ways that could be wrong, and one assertion each:
+#
+#   the caller's binding wins       the test below binds `first` too, to a different string
+#   the last capture is returned    the action captures a second value AFTER the one it gives
+#   the parameter never arrives     the second action gives a value built from its argument
+#
+# The target is `/v1/soft-check/known-answer`, `C1`'s frozen constant — no seed, no database, no
+# other test's fixtures. Its `label` is `known-answer` and its `currency` is `EUR`, so the two wrong
+# answers are literal strings this file can name.
+
+action labelled fields()
+  api GET /soft-check/known-answer
+  expect status equals 200
+  capture body.label as first
+  # Captured after the value that gets given, on purpose: a `give` that returned "the most recent
+  # capture" rather than the named one would hand back `EUR`.
+  capture body.currency as second
+  give first
+
+action echo with suffix(tag)
+  api GET /soft-check/known-answer
+  expect status equals 200
+  give "{tag}-echoed"
+
+@constructs @actions
+test "`give` returns the named value — not the caller's binding, and not the last capture"
+  # Deliberately the same name the action binds internally. Actions are file-scoped with no globals
+  # (`P#17`); if that scoping leaked in either direction, one of the next three lines goes red.
+  let first = "caller-value"
+  let got = labelled fields()
+  expect {got} equals "known-answer"
+  # `EUR` is what a `give` returning the action's last capture would produce.
+  expect {got} not equals "EUR"
+  # And the call left the caller's own binding alone.
+  expect {first} equals "caller-value"
+
+@constructs @actions
+test "`give` carries the action's parameter into its returned value"
+  let got = echo with suffix("M154c")
+  expect {got} equals "M154c-echoed"

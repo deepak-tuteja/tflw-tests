@@ -1,0 +1,39 @@
+# `M154c` / `C6`, `C7` — the negative half, and the reason this plant exists at all.
+#
+# **This file is meant to fail.** `tests/.env-specific/unreachable-host.tflw` has proved since `M29`
+# that `expect request fails` passes against a closed port. What it cannot prove is the thing that
+# actually makes the matcher useful: that **an HTTP error response is not a request failure**.
+#
+# A `fails` matcher that treated any non-2xx as a failure would pass every existing test in this
+# repository — the closed-port file included — and would quietly reclassify every 4xx and 5xx in the
+# suite as a "connection problem". `SPEC` §6.2.2 puts this matcher at the *transport* layer: either
+# the request reached a server and came back, or it did not.
+#
+# So this runs under the ordinary `env local` against `/flaky-widget`, which answers 503 on the
+# first attempt for a fresh key — a real response, from a real server, with a real error status.
+#
+# **Three `api` calls, not one, and that is `TF031`'s doing.** tflw refuses `expect status` on the
+# same request as `connects`/`fails` ("there is no response to check once a connection-level failure
+# is being asserted on"), which is correct and was found by running `tflw check` over this file. So
+# each of the three claims below gets its own request, to its own fresh key — every one of them a
+# first attempt, and so every one a 503.
+#
+#   `expect status equals 503`  MUST pass  — the server is up and answering with an error
+#   `expect request connects`   MUST pass  — that 503 arrived, so the connection plainly worked
+#   `expect request fails`      MUST fail  — and the run's red must land on THAT line
+#
+# Graded by `scripts/verify-construct-acceptance.mjs`, which reads which line failed rather than the
+# exit status: a file that went red for the wrong reason and one that went red for the right reason
+# are indistinguishable from outside.
+
+@constructs @requestlifecycle
+test "a 503 is a response, not a connection failure — this test MUST end red on its last line"
+  api POST /flaky-widget body { key: "c6-control-status" }
+  expect status equals 503
+
+  api POST /flaky-widget body { key: "c6-control-connects" }
+  expect request connects
+
+  api POST /flaky-widget body { key: "c6-control-fails" }
+  # The connection worked. This must NOT pass.
+  expect request fails matching "503"

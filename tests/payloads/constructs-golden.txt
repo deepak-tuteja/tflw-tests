@@ -1,0 +1,2 @@
+M154c byte-equality fixture.
+A B

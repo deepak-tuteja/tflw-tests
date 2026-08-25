@@ -1,0 +1,44 @@
+# `M154c` / `C5` — the known-answer plant for `after`, in both of its scopes.
+#
+# **This file is meant to fail.** The second test below ends red on purpose, and that is the
+# assertion: `tflw spec` says this construct "runs whether the test passed or failed", and nothing
+# in this repository has ever checked the second half of that sentence.
+#
+# More than that — nothing here has ever been able to check the *first* half either.
+# `tests/examples/hooks-explained.tflw` has an `after` hook that deletes what its test created. If
+# that hook simply never ran, **nothing in that file fails**: the test already passed, the cleanup
+# is invisible to it, and the suite stays green. It is a construct exercised in a way that cannot go
+# red in the direction that matters, which is `D722`'s bar stated as a defect.
+#
+# So the hooks here do not clean anything up. They mark a counter, and the counter is the claim:
+#
+#   `c5-after-file` == 1   `after file` runs ONCE for the file, not once per test
+#   `c5-after-test` == 2   `after` runs once per test — INCLUDING the one that failed
+#
+# Three distinct defects are separated by those two integers. A hook that never runs leaves 0. A
+# hook that skips failed tests leaves 1. An `after file` implemented at test scope leaves 2.
+
+before file
+  api POST /lifecycle/reset
+  expect status equals 200
+
+after file
+  # Deliberately not cleanup. A side effect whose absence is measurable is the only kind of hook
+  # body that can make this construct fail.
+  api POST /lifecycle/mark body { label: "c5-after-file" }
+  expect status equals 200
+
+after
+  api POST /lifecycle/mark body { label: "c5-after-test" }
+  expect status equals 200
+
+@constructs @lifecycle
+test "the passing test — its `after` must run"
+  api GET /health
+  expect status equals 200
+
+@constructs @lifecycle
+test "the failing test — its `after` must run too, and this is the half nothing checked"
+  api GET /health
+  # Deliberately false. `/health` answers 200; 599 is not a status this app can return.
+  expect status equals 599

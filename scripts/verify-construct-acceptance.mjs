@@ -257,6 +257,238 @@ if (wanted('C3')) {
 }
 
 // =============================================================================
+// C4, C5 — the run lifecycle: what a retried test actually did, and whether teardown ran
+// =============================================================================
+//
+// **Order matters here, and it is the one sharp edge in this file.** Both plants reset
+// `/v1/lifecycle/*` in their `before file`, because both use fixed counter names. So each run's
+// counts must be read back BEFORE the next plant runs, not collected at the end — a batch read
+// would show C5's numbers under C4's name and produce a confident, meaningless mismatch. Same
+// family of mistake as the stale-report guard in `runCorpus` above, one layer out.
+
+const LIFECYCLE_COUNTS = 'http://localhost:4001/v1/lifecycle/counts';
+
+/** Read the server's own record of what happened. Returns null (rather than throwing) so a stack
+ *  that is down is reported as a skip against the plant, not as a crash in the grader. */
+async function lifecycleCounts() {
+  try {
+    const r = await fetch(LIFECYCLE_COUNTS);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  }
+}
+
+const functionalTests = (report) => (report?.tests ?? []).filter((t) => t.kind === 'functional');
+/** Find one test by a distinctive fragment of its name.
+ *
+ *  Positional indexing would have been shorter and is a latent flake: `tflw run` may execute a
+ *  file's tests across workers, and a report ordered by completion rather than by declaration would
+ *  silently swap `tests[0]` and `tests[1]` — turning "the failing test failed" into a real-looking
+ *  red on a green build. Every plant below names the test it means. */
+const named = (report, fragment) => functionalTests(report).find((t) => (t.name ?? '').includes(fragment));
+/** The steps of one test, flattened — a retried test carries `attempts[]`, and its top-level
+ *  `steps` is the last attempt's (SPEC §4.4). */
+const stepsOf = (test) => test?.steps ?? [];
+const failingSteps = (test) => stepsOf(test).filter((s) => !s.ok);
+
+if (wanted('C4')) {
+  const plant = plantFor('declaration:retry');
+  console.log(`\n${plant.id} — ${plant.title}\n  target: ${plant.target}`);
+  const { report, output } = runCorpus(ROOT, [plant.evidence.file]);
+  const counts = await lifecycleCounts();
+  if (!report || !counts) {
+    fail(`${plant.id} produced no ${report ? 'lifecycle counts' : 'report'}. Is the stack up (\`node cli.mjs start\`)?\n${output.trim().split('\n').slice(-12).join('\n')}`);
+    scores.get('C4').skipped = report ? 'no lifecycle counts' : 'no report';
+  } else {
+    const tests = functionalTests(report);
+    const settled = named(report, 'the third one settles');
+    const exhausted = named(report, 'even when a fourth would have settled');
+
+    // Recall — the server's own arithmetic. Every one of these is a number tflw's report cannot be
+    // the source of, which is `D726`'s formulation carried over from the workload shapes.
+    recall('C4', counts.attempts?.['c4-settles'] === 3, `\`c4-settles\` was attempted exactly 3 times (got ${counts.attempts?.['c4-settles'] ?? 0}) — \`retry 2\` is three attempts, not two`);
+    recall('C4', counts.attempts?.['c4-exhausts'] === 3, `\`c4-exhausts\` was attempted exactly 3 times (got ${counts.attempts?.['c4-exhausts'] ?? 0}) — the budget stopped it one short of the answer it wanted`);
+    recall('C4', counts.marks?.['c4-preamble'] === 3, `the pre-failure step ran 3 times (got ${counts.marks?.['c4-preamble'] ?? 0}) — the WHOLE test re-ran, not just the step that failed`);
+    recall('C4', settled?.ok === true, `the in-budget test passed (got ok=${settled?.ok})`);
+    recall('C4', settled?.flaky === true, `and is reported \`flaky\` rather than silently green (got flaky=${settled?.flaky ?? false}) — SPEC §4.4`);
+    recall('C4', exhausted?.ok === false, `the past-budget test ended red (got ok=${exhausted?.ok}) — a retry that ignored its budget would have passed here`);
+
+    // Precision — nothing else happened. A retry that also re-issued the `before file` reset, or
+    // that attempted a third key, satisfies every count above.
+    const strayKeys = Object.keys(counts.attempts ?? {}).filter((k) => k !== 'c4-settles' && k !== 'c4-exhausts');
+    precision('C4', strayKeys.length === 0, `no key was attempted beyond the two the plant declares (stray: ${strayKeys.join(', ') || 'none'})`);
+    const strayMarks = Object.keys(counts.marks ?? {}).filter((k) => k !== 'c4-preamble');
+    precision('C4', strayMarks.length === 0, `no label was marked beyond \`c4-preamble\` (stray: ${strayMarks.join(', ') || 'none'})`);
+    precision('C4', tests.length === 2, `the plant is exactly two tests (got ${tests.length})`);
+    // tflw's own account against the server's. Not the bar — a disagreement between them is a
+    // different and more interesting defect than either number being wrong alone.
+    precision('C4', (settled?.attempts?.length ?? 1) === 3, `tflw reports 3 attempts for the in-budget test (got ${settled?.attempts?.length ?? 1}) — the report and the arrivals agree`);
+    precision('C4', (exhausted?.attempts?.length ?? 1) === 3, `tflw reports 3 attempts for the past-budget test (got ${exhausted?.attempts?.length ?? 1})`);
+  }
+}
+
+if (wanted('C5')) {
+  const plant = plantFor('declaration:after');
+  console.log(`\n${plant.id} — ${plant.title}\n  target: ${plant.target}`);
+  const { report, output } = runCorpus(ROOT, [plant.evidence.file]);
+  const counts = await lifecycleCounts();
+  if (!report || !counts) {
+    fail(`${plant.id} produced no ${report ? 'lifecycle counts' : 'report'}.\n${output.trim().split('\n').slice(-12).join('\n')}`);
+    scores.get('C5').skipped = report ? 'no lifecycle counts' : 'no report';
+  } else {
+    const tests = functionalTests(report);
+    const fileMarks = counts.marks?.['c5-after-file'] ?? 0;
+    const testMarks = counts.marks?.['c5-after-test'] ?? 0;
+
+    // Two integers, three defects. 0 is a hook that never ran; `c5-after-test` at 1 is a hook that
+    // skipped the failed test; `c5-after-file` at 2 is the file scope collapsed into the test scope.
+    recall('C5', fileMarks === 1, `\`after file\` ran exactly once for the file (got ${fileMarks}) — 2 would mean the file scope is really the test scope`);
+    recall('C5', testMarks === 2, `\`after\` ran once per test, both of them (got ${testMarks}) — 1 would mean it skipped the test that failed, which is the half nothing had ever observed`);
+    const passing = named(report, 'the passing test');
+    const failing = named(report, 'the failing test');
+    recall('C5', passing?.ok === true, `the passing test passed (got ok=${passing?.ok})`);
+    recall('C5', failing?.ok === false, `the failing test failed (got ok=${failing?.ok}) — without a red test, \`after\`'s "whether it passed or failed" clause is unasserted`);
+
+    const strayMarks = Object.keys(counts.marks ?? {}).filter((k) => k !== 'c5-after-file' && k !== 'c5-after-test');
+    precision('C5', strayMarks.length === 0, `no label was marked beyond the two hooks (stray: ${strayMarks.join(', ') || 'none'})`);
+    precision('C5', Object.keys(counts.attempts ?? {}).length === 0, `this plant attempted no settle key at all (got ${Object.keys(counts.attempts ?? {}).join(', ') || 'none'}) — proof the reset in \`before file\` really ran, and so that C4's counts above were its own`);
+    precision('C5', tests.length === 2, `the plant is exactly two tests (got ${tests.length})`);
+  }
+}
+
+// =============================================================================
+// C6, C7 — `request fails` / `request connects`, on both sides of the transport boundary
+// =============================================================================
+//
+// One plant, two runs, two envs, and graded as two rows because they are two claims. Neither run
+// alone says anything: "fails passes against a closed port" is satisfied by a matcher that always
+// passes, and "connects passes against a live server" by one that never fails.
+
+if (wanted('C6') || wanted('C7')) {
+  const fails = plantFor('matcher:fails');
+  const connects = plantFor('matcher:connects');
+  console.log(`\n${fails.id}/${connects.id} — ${fails.title}\n  target: ${fails.target}`);
+
+  const dead = runCorpus(ROOT, ['--env', 'unreachableHost', connects.evidence.file]);
+  const live = runCorpus(ROOT, [fails.evidence.file]);
+
+  if (!dead.report || !live.report) {
+    const which = !dead.report ? 'the unreachable-host run' : 'the live-control run';
+    fail(`${fails.id}/${connects.id} — ${which} produced no report.\n${(!dead.report ? dead : live).output.trim().split('\n').slice(-12).join('\n')}`);
+    scores.get('C6').skipped = 'no report';
+    scores.get('C7').skipped = 'no report';
+  } else {
+    const deadTests = functionalTests(dead.report);
+    const deadFails = named(dead.report, 'a closed port is a connection-layer failure');
+    const deadConnects = named(dead.report, 'asserted the other way round');
+    const liveTest = named(live.report, 'a 503 is a response');
+    const stepFor = (needle) => stepsOf(liveTest).find((s) => s.source.includes(needle));
+
+    // C6 — `fails`. Passes where the transport genuinely failed; must NOT pass where it did not.
+    recall('C6', deadFails?.ok === true, `against a closed port, \`expect request fails\` passed (got ok=${deadFails?.ok})`);
+    const liveFails = stepFor('expect request fails');
+    recall('C6', liveFails !== undefined && liveFails.ok === false, `against a server that answered 503, \`expect request fails\` did NOT pass (got ${liveFails ? `ok=${liveFails.ok}` : 'no such step'})`);
+    // Precision: the red landed on that line and on no other. A file that goes red for the wrong
+    // reason and one that goes red for the right reason are identical from the exit status.
+    const liveFailed = failingSteps(liveTest);
+    precision('C6', liveFailed.length === 1 && liveFailed[0].source.includes('expect request fails'), `it is the ONLY failing step in the control (failed: ${liveFailed.map((s) => s.source.trim()).join('; ') || 'none'})`);
+    precision('C6', stepFor('expect status equals 503')?.ok === true, `the 503 itself was asserted and passed — so the server really did answer, and \`fails\` was judging a completed exchange`);
+
+    // C7 — `connects`, the exact inverse on the same two requests.
+    recall('C7', deadConnects?.ok === false, `against a closed port, \`expect request connects\` failed (got ok=${deadConnects?.ok})`);
+    recall('C7', stepFor('expect request connects')?.ok === true, `against the 503, \`expect request connects\` passed (got ok=${stepFor('expect request connects')?.ok})`);
+    precision('C7', deadTests.length === 2, `the unreachable-host plant is exactly two tests, one per matcher (got ${deadTests.length})`);
+  }
+}
+
+// =============================================================================
+// C8, C9, C10 — the value transforms, against literals rather than against each other
+// =============================================================================
+//
+// The one plant here with no target and no server hop (`D743`). What it replaces is a round trip,
+// and a round trip holds for any pair of mutually inverse functions — including a wrong pair. So
+// the grading is: the three tests pass, AND the exact discriminating literal is still in the file.
+// The second half is what stops the plant being weakened into a tautology later.
+
+const TRANSFORM_ROWS = [
+  { id: 'C8', construct: 'generator:transform-base64', word: 'base64', literal: 'TTE1NGMgeMO/Pz5+YStiL2MgZD1l', wrong: 'the URL-safe alphabet (`_`/`-`)' },
+  { id: 'C9', construct: 'generator:transform-hex', word: 'hex', literal: '4d313534632078c3bf3f3e7e612b622f6320643d65', wrong: 'uppercase digits' },
+  { id: 'C10', construct: 'generator:transform-url', word: 'url', literal: 'M154c%20x%C3%BF%3F%3E~a%2Bb%2Fc%20d%3De', wrong: 'form-urlencoding (`+` for space, `%7E` for `~`)' },
+];
+
+if (TRANSFORM_ROWS.some((r) => wanted(r.id))) {
+  const first = plantFor('generator:transform-base64');
+  console.log(`\nC8/C9/C10 — the value transforms\n  target: ${first.target}`);
+  const { report, output } = runCorpus(ROOT, [first.evidence.file]);
+  if (!report) {
+    for (const r of TRANSFORM_ROWS) { fail(`${r.id} produced no report.\n${output.trim().split('\n').slice(-8).join('\n')}`); scores.get(r.id).skipped = 'no report'; }
+  } else {
+    const tests = functionalTests(report);
+    for (const row of TRANSFORM_ROWS) {
+      if (!wanted(row.id)) continue;
+      const test = tests.find((t) => t.name?.startsWith(`${row.word} encode`));
+      recall(row.id, test?.ok === true, `\`${row.word}\` matched its literal (got ${test ? `ok=${test.ok}` : 'no such test'}) — the wrong answer it rules out is ${row.wrong}`);
+      const asserted = stepsOf(test).some((s) => s.source.includes(row.literal));
+      precision(row.id, asserted, `the discriminating literal is still asserted in the plant, character for character`);
+      const failed = failingSteps(test);
+      precision(row.id, failed.length === 0, `no step failed (got ${failed.map((s) => s.source.trim()).join('; ') || 'none'})`);
+    }
+  }
+}
+
+// =============================================================================
+// C11 — `matches file`, against a near miss of identical length
+// =============================================================================
+
+if (wanted('C11')) {
+  const plant = plantFor('matcher:matches-file');
+  console.log(`\n${plant.id} — ${plant.title}\n  target: ${plant.target}`);
+  const { report, output } = runCorpus(ROOT, [plant.evidence.file]);
+  if (!report) {
+    fail(`${plant.id} produced no report. Needs the stack and an authenticated upload.\n${output.trim().split('\n').slice(-12).join('\n')}`);
+    scores.get('C11').skipped = 'no report';
+  } else {
+    const golden = named(report, 'the golden file matches itself');
+    const nearMiss = named(report, 'the near-miss file does not');
+    recall('C11', golden?.ok === true, `the golden file matched itself (got ok=${golden?.ok})`);
+    recall('C11', nearMiss?.ok === false, `the near-miss file did NOT match (got ok=${nearMiss?.ok}) — same 34 bytes long, two bytes different`);
+    const failed = failingSteps(nearMiss);
+    precision('C11', failed.length === 1 && failed[0].source.includes('constructs-near-miss'), `the red is on the near-miss comparison and nothing else (failed: ${failed.map((s) => s.source.trim()).join('; ') || 'none'})`);
+    precision('C11', failingSteps(golden).length === 0, `nothing in the positive test failed — so the upload round-trip itself is sound and the red above is the matcher's`);
+  }
+}
+
+// =============================================================================
+// C12 — `give`: the named value, and not the two other values in reach
+// =============================================================================
+
+if (wanted('C12')) {
+  const plant = plantFor('step:give');
+  console.log(`\n${plant.id} — ${plant.title}\n  target: ${plant.target}`);
+  const { report, output } = runCorpus(ROOT, [plant.evidence.file]);
+  if (!report) {
+    fail(`${plant.id} produced no report.\n${output.trim().split('\n').slice(-12).join('\n')}`);
+    scores.get('C12').skipped = 'no report';
+  } else {
+    const tests = functionalTests(report);
+    const namedValue = named(report, 'returns the named value');
+    const parameter = named(report, "carries the action's parameter");
+    recall('C12', namedValue?.ok === true, `\`give\` returned the action's own \`first\`, not the caller's binding and not the last capture (got ok=${namedValue?.ok})`);
+    recall('C12', parameter?.ok === true, `\`give\` carried the action's parameter into its value (got ok=${parameter?.ok})`);
+    // Precision: the three named wrong answers are each still asserted against. A plant reduced to
+    // "the call returned something" would satisfy the two recalls above and nothing else.
+    const sources = tests.flatMap((t) => stepsOf(t)).map((s) => s.source);
+    for (const wrong of ['"known-answer"', '"EUR"', '"caller-value"', '"M154c-echoed"']) {
+      precision('C12', sources.some((src) => src.includes(wrong)), `${wrong} is still named in the plant`);
+    }
+    const failed = tests.flatMap((t) => failingSteps(t));
+    precision('C12', failed.length === 0, `no step failed (got ${failed.map((s) => s.source.trim()).join('; ') || 'none'})`);
+  }
+}
+
+// =============================================================================
 // the table
 // =============================================================================
 

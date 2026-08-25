@@ -1,0 +1,21 @@
+# `M154c` / `C6`, `C7` — the positive half of `expect request fails` / `expect request connects`.
+#
+# Runs under `env unreachableHost` (port 9, the universally-unassigned discard port), the dedicated
+# env `tests/.env-specific/unreachable-host.tflw` established and whose blast-radius fence this
+# respects rather than working around with an absolute URL. Its sibling
+# `request-fails-live-control.tflw` runs the *same two matchers* under `env local` against a host
+# that is very much up, and the pair is the claim — see that file for why one alone proves nothing.
+#
+#   npx tflw run --env unreachableHost tests/.constructs/request-fails-unreachable.tflw
+
+@constructs @requestlifecycle
+test "a closed port is a connection-layer failure, and `connects` refuses it"
+  api GET /health
+  expect request fails matching "fetch failed"
+
+@constructs @requestlifecycle
+test "the same request, asserted the other way round — this test MUST end red"
+  # `connects` and `fails` are complements. Asserting only that `fails` passes here would be
+  # satisfied by a matcher that passes unconditionally; this line is what rules that out.
+  api GET /health
+  expect request connects

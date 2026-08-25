@@ -1,0 +1,50 @@
+# `M154c` / `C11` — the known-answer plant for `expect body bytes matches file "<path>"`.
+#
+# **This file is meant to fail.** The second test below ends red on purpose, and that red is the
+# assertion.
+#
+# `tests/api/orders/file-formats.tflw` has used this matcher on three formats since `F2`, and those
+# uses are real: they would go red if an upload round-trip corrupted the stored bytes. What they
+# cannot show is that the matcher **discriminates** — every one of them compares a file against
+# itself, so a `matches file` that returned true unconditionally passes all three, and so does one
+# that compared lengths, or content types, or the first sixteen bytes.
+#
+# The pair here is a 34-byte file and another 34-byte file:
+#
+#   `tests/payloads/constructs-golden.txt`     ... `A` `U+00A0` `B`   (0x41 0xC2 0xA0 0x42)
+#   `tests/payloads/constructs-near-miss.txt`  ... `A` `SP` `SP` `B`  (0x41 0x20 0x20 0x42)
+#
+# **Identical length, two bytes different, and visually indistinguishable in every editor and every
+# diff.** That is deliberate: a length check passes, an eyeball passes, and byte equality is the
+# only thing that fails. If the second test below ever goes green, this matcher has stopped
+# comparing bytes — and `file-formats.tflw` would not notice.
+
+before
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as userAToken
+
+@constructs @bytes
+test "the golden file matches itself, byte for byte"
+  api POST /uploads upload "../payloads/constructs-golden.txt" as "file"
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as uploadId
+
+  api GET /uploads/{uploadId}
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  expect body bytes matches file "../payloads/constructs-golden.txt"
+
+@constructs @bytes
+test "the near-miss file does not — this test MUST end red on its last line"
+  api POST /uploads upload "../payloads/constructs-golden.txt" as "file"
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  capture body.id as uploadId
+
+  api GET /uploads/{uploadId}
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  # Same 34 bytes long, two bytes different. This line is the whole plant.
+  expect body bytes matches file "../payloads/constructs-near-miss.txt"
