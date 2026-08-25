@@ -31,6 +31,9 @@ router.get(
       categories,
       categoryId: categoryId ?? '',
       q: q ?? '',
+      // `M154b` / `C2` — set only by the bulk-delete redirect below. Rendered rather than dropped:
+      // a redirect that carries a count nothing displays is a claim with no reader.
+      deleted: req.query.deleted ?? '',
     });
   }),
 );
@@ -67,6 +70,28 @@ router.post(
   asyncRoute(async (req, res) => {
     await apiRequest(req.session.auth, 'DELETE', `/products/${req.params.id}`);
     res.redirect('/products');
+  }),
+);
+
+// `M154b` / `C2` — the bulk action `list.ejs`'s double-confirm form guards.
+//
+// Scoped by the list page's own filter and to `stock === 0`, deliberately, in both directions. A
+// "delete every out-of-stock product" button would take the seed catalogue with it the first time a
+// test used it, and a plant that damages the fixtures every other test reads is not a plant, it is
+// an outage. Bounded by the same `pageSize` the list uses so the button acts on what the operator
+// can actually see.
+router.post(
+  '/delete-out-of-stock',
+  verifyCsrf,
+  asyncRoute(async (req, res) => {
+    const { q, categoryId } = req.body;
+    const query = qs({ page: 1, pageSize: PAGE_SIZE, categoryId, q });
+    const { data: result } = await apiRequest(req.session.auth, 'GET', `/products?${query}`);
+    const doomed = result.data.filter((p) => p.stock === 0);
+    for (const p of doomed) {
+      await apiRequest(req.session.auth, 'DELETE', `/products/${p.id}`);
+    }
+    res.redirect(`/products?${qs({ q, categoryId, deleted: doomed.length })}`);
   }),
 );
 

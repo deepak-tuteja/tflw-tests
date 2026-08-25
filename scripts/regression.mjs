@@ -217,6 +217,24 @@ const PHASES = [
     cmd: 'node scripts/verify-security-acceptance.mjs --gate',
     stackEnv: { VULN_MODE: '1' },
   },
+  // M154b (`D722`, `D726`, `D732`). The construct ledger's three plants, graded against their known
+  // answers. Needs everything: the stack for `C1`, a browser and the admin console for `C2`, and a
+  // standalone arrival counter this script starts itself for `C3`.
+  //
+  // NOT `VULN_MODE=1`, unlike its three neighbours above — deliberately, and `D725` is the reason.
+  // A known answer is not a vulnerability: `vuln/` earns its gate because it serves live flaws,
+  // while `apiV2/src/soft-check/` serves a frozen constant and `webV2/admin`'s bulk delete is an
+  // ordinary admin feature. Gating them would double the CI legs for nothing and force the five
+  // existing demo modules to move.
+  //
+  // Its static half — is every construct tflw ships accounted for at all — is NOT here. That costs
+  // seconds and needs no stack, so it runs as its own step in the `acceptance-check` job on every
+  // PR (`D727`). Two questions, two instruments, two failure meanings: a red here says a plant
+  // stopped producing its known answer, and a red there says the roster and the language disagree.
+  {
+    name: 'construct-acceptance',
+    cmd: 'node scripts/verify-construct-acceptance.mjs --gate',
+  },
 ];
 
 // PLAN_CI.md decision 16 (Round 3, 2026-08-03 grill-me): duration-balanced static groups for a
@@ -242,6 +260,13 @@ const PHASES = [
 // which is enough of them that the re-pack above should stop being deferred; it is not done here
 // because the timings it needs come from CI and this milestone has no reason to have pulled them.
 //
+// M154b adds `construct-acceptance` to `tooling` — the fifth hand placement, and the first with no
+// bin-count argument available, because all four bins are tied at 9 after `M139-5`. Placed on theme
+// instead: `tooling` already carries `ui-admin-check`, so that leg is the one whose runner has paid
+// for a browser, and this phase needs one. Its own cost is ~35s of graded work against a stack
+// restart every phase pays regardless. Five hand placements is well past the point where the re-pack
+// below should still be deferred, and this milestone did not pull the CI timings it needs either.
+//
 // M139-5 adds `security-acceptance-gate` to `core`, the fourth such placement and on the same terms
 // with one measurement behind it: its graded work is ~2s on the box, so what it actually costs a leg
 // is the stack restart every phase pays regardless. That makes bin *count* the only proxy worth
@@ -249,7 +274,7 @@ const PHASES = [
 // past the point where the re-pack above should still be deferred.
 const PHASE_GROUPS = {
   core: ['full suite', '--tag orderOps', '--tag smoke,catalogOps', 'demo-fail-check', '--tag orgOps', '--tag inventoryOps', 'migrate-check', 'secure-local-check', 'security-acceptance-gate'],
-  tooling: ['--tag api', 'watch-check', 'pick-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check', 'security-target-check', 'sarif-acceptance'],
+  tooling: ['--tag api', 'watch-check', 'pick-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check', 'security-target-check', 'sarif-acceptance', 'construct-acceptance'],
   safety: ['--tag identityOps', '--tag mixed', '--tag smoke,orderOps', '--tag adminOps', '--tag catalogOps', 'safety-flags-check', 'check-diagnostics', 'artifact-contract', 'safety-redaction-check'],
   'security-ui': ['--tag smoke,identityOps', 'cli-flags-check', '--tag smoke,adminOps', '--tag ui', 'webv2-admin-check', '--tag smoke,inventoryOps', 'logging-check', 'mtls-rejection', 'vuln-slice-hidden-check'],
 };

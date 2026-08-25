@@ -158,6 +158,23 @@ jobs:
         run: npm run verify:provenance
         working-directory: testFlow-tests
 
+      # M154b (`D723`, `D727`, `D730`, `D741`). Static — it reads one JSON document out of the
+      # binary and compares some sets — and in THIS job for the load-bearing reason the three steps
+      # above share: it is the only job that checks out both repositories, and this gate's ground
+      # truth is `tflw spec --json` from the sibling's build. It also *refuses to run* unless the
+      # vendored copy is current with that checkout, which only holds where both trees exist.
+      #
+      # `refresh-tflw` above is what makes it hold here on every run. That is also why CI could
+      # never reproduce `M153b-01`: for CI the vendored build and the sibling are the same build by
+      # construction, and the failure mode exists only where a human works.
+      #
+      # The plants themselves are NOT here — they need a stack, a browser and a load generator, and
+      # they run as the `construct-acceptance` regression phase. This is the half that costs seconds
+      # and answers the question that decayed: is every construct tflw ships accounted for at all.
+      - name: Every construct tflw ships is rostered or explicitly unrostered
+        run: npm run verify:construct-coverage
+        working-directory: testFlow-tests
+
   # Round 3 decision 16 (PLAN_CI.md, 2026-08-03 grill-me): the 30-phase sweep used to run
   # sequentially in one job (~34min). Split into a 4-leg GH Actions job matrix — real per-phase
   # timings pulled from run 30802717073 (2026-08-03) were greedy-LPT bin-packed into

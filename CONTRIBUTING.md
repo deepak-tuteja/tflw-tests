@@ -68,6 +68,7 @@ npm run verify:external-targets
 npm run verify:contributing
 npm run verify:tflw-resolution
 npm run verify:provenance
+npm run verify:construct-coverage
 ```
 
 **And when a tflw milestone assigns or changes a `TF0xx` diagnostic code**, before opening either
@@ -118,6 +119,22 @@ xvfb-run -a npm run regression -- --group security-ui
   branch build and being handed the vendored one is an error, not a shrug), and a sweep of
   `scripts/` proving nothing resolves a tflw any other way. **Its allow-list is the honest part** —
   the files that legitimately do are named there, each with a reason.
+- **`npm run verify:construct-coverage`** — **every construct tflw ships is either graded here with
+  a known answer or explicitly listed as not yet graded, and a new one is neither.** The construct
+  set is not a list in this repository: it comes from `tflw spec --json`, emitted by the vendored
+  build, so the checklist and the program under test cannot disagree (`M154b`, `D723`). The roster
+  is [`CONSTRUCTS.md`](CONSTRUCTS.md) and everything else is a ratchet in
+  `scripts/lib/constructs.mjs` that may only shrink — with a pinned ceiling, so growing it takes two
+  edits and the second is a number going the wrong way (`D730`, `D740`).
+  **This gate refuses to run** against a vendored tflw that is not current with the sibling
+  checkout, and says so by name (`D741`). That is not fussiness: its ground truth *is* the manifest
+  that build emits, so a stale copy does not give an old answer, it gives a green one on exactly the
+  day a newly-shipped construct should have turned it red. Run `npm run refresh-tflw` first.
+  Why it is worth its seconds: nothing was watching before it, and the measurement is unflattering —
+  **seven step keywords at literally zero occurrences across 126 `.tflw` files, fourteen more at
+  exactly one, four of six workload shapes never executed by anything.**
+  The plants themselves are graded by `npm run verify:construct-acceptance`, which needs the stack
+  and a browser and runs as the `construct-acceptance` regression phase.
 - **`npm run verify:provenance`** — **nothing in this repository's prose points somewhere a reader
   cannot follow.** Three claims, checked as one because they are one claim from the reader's side.
   Eight markdown links pointed at `../testFlow/…`, and a relative link cannot climb above a

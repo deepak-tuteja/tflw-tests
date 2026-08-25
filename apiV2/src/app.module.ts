@@ -35,6 +35,7 @@ import { FlakyWidgetModule } from './flaky-widget/flaky-widget.module';
 import { RetryDemoModule } from './retry-demo/retry-demo.module';
 import { SafetyDemoModule } from './safety-demo/safety-demo.module';
 import { ContractDemoModule } from './contract-demo/contract-demo.module';
+import { SoftCheckModule } from './soft-check/soft-check.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { CouponsModule } from './coupons/coupons.module';
 import { CartModule } from './cart/cart.module';
@@ -98,6 +99,9 @@ import { VulnModule, VULN_MODE_ENABLED } from './vuln/vuln.module';
     RetryDemoModule,
     SafetyDemoModule,
     ContractDemoModule,
+    // `M154b` / `C1` — the known-answer plant for tflw's `check` step. Unconditionally mounted
+    // (`D725`); it serves a frozen constant, not a flaw.
+    SoftCheckModule,
     NotificationsModule,
     CouponsModule,
     CartModule,

@@ -36,6 +36,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 import { resolveTflw } from './lib/tflw-bin.mjs';
+import { readSpec, siblingState, gradeProvenance, announceProvenance, stalenessBanner } from './lib/tflw-provenance.mjs';
 
 /**
  * **This corpus is checked against the RELEASED build, and says so** (M128c, then M141).
@@ -54,6 +55,38 @@ import { resolveTflw } from './lib/tflw-bin.mjs';
  * `node_modules/.bin`, so this is the same program by a path a reader can see.
  */
 const TFLW_BIN = resolveTflw('released', { label: 'check-acceptance' }).entry;
+
+/**
+ * **`M154b`, closing `M153b-01` — the half of "which tflw?" that a content hash cannot answer.**
+ *
+ * The line above resolves an entry and prints its sha, and every word of that output is true. What
+ * it cannot say is whether that program is *current with the tflw checkout sitting beside this
+ * one*, because a hash has nothing to be compared against. On 2026-08-25 this script graded a
+ * nine-day-old vendored build, correctly reported that it lacked a grammar feature, and the red was
+ * read as a statement about the branch under review. CI could never reproduce it — it refreshes the
+ * vendored copy on every run, so for CI the two are the same build by construction, and the failure
+ * mode exists only where a human works.
+ *
+ * The stamp comes from `tflw spec --json` (tflw `M154a`), which costs one extra spawn of a program
+ * this script is about to spawn once per corpus anyway.
+ *
+ * This script **reports** rather than refuses. Its job is to tell you whether a corpus parses, and
+ * against a stale build that answer is still a real answer about a real program — `resolveTflw`'s
+ * own docblock argues at length that grading the *released* build is the correct question here.
+ * What was missing is the sentence naming which build the answer is about. The coverage gate
+ * (`verify-construct-coverage.mjs`) refuses instead, because its ground truth *is* the manifest and
+ * a stale one gives a confidently wrong answer rather than an old one.
+ */
+const PROVENANCE = (() => {
+  try {
+    return gradeProvenance(readSpec(TFLW_BIN).build, siblingState());
+  } catch (e) {
+    // A build too old to have `tflw spec` is itself the strongest possible staleness signal, so
+    // this reports it as one rather than exiting — the corpora below still check fine against it.
+    return { state: 'stale', summary: `could not read a build stamp: ${e.message.split('\n')[0]}`, detail: '  This build predates `tflw spec` (M154a), which is itself evidence it is out of date.' };
+  }
+})();
+announceProvenance('check-acceptance', PROVENANCE);
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const acceptanceRoot = join(repoRoot, 'tflw-acceptance');
@@ -104,4 +137,10 @@ for (const root of roots) {
 }
 
 console.log(`\n${roots.length} corpora checked, ${failed} with problems.`);
+
+// Acceptance clause 3 — *a vendored build older than the visible tflw checkout cannot produce a
+// bare red*. Printed after the failures and not before, because the reader this is for is the one
+// looking at the last thing on screen; that is precisely who `M153b-01` caught out.
+if (failed > 0) process.stdout.write(stalenessBanner(PROVENANCE));
+
 process.exit(failed === 0 ? 0 : 1);
