@@ -133,6 +133,16 @@ jobs:
         run: npm run verify:perf-parity
         working-directory: testFlow-tests
 
+      # M154e step 5 (`D750`). The static half of the perf regression gate: the baseline covers every
+      # rung that has a co-runner to be compared against, and declares no band so wide it cannot
+      # fail. The *comparison* runs on the box, inside the scheduled run, because it needs a real
+      # measurement — but the baseline losing a rung is a document defect and is caught here for
+      # free. A rung that quietly drops out of the baseline is a rung nothing compares, which reads
+      # from the outside exactly like a rung with no regressions.
+      - name: The perf baseline covers every comparable rung
+        run: npm run verify:perf-baseline
+        working-directory: testFlow-tests
+
       # M138b (`M136a-02`). Static, seconds, and here for two reasons rather than one. The cheap
       # reason is that it is the same shape as the step above — no Docker, no .env, no Playwright.
       # The load-bearing one is that this is **the only job that checks out both repositories**, so

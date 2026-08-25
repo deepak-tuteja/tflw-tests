@@ -112,11 +112,33 @@ The fix is `npm run check:acceptance` at the repo root — parse + checker over 
 roots discovered rather than listed, no stack and no browsers needed. It runs as its own CI job.
 **Run it after any tflw upgrade**, and before assuming a rung still works.
 
-## What is still not checked — `k6/` and `artillery/`
+## What checks `k6/` and `artillery/` — and what still does not
 
-`check:acceptance` covers the `.tflw` third of this ladder and nothing else. There is no equivalent
-for the other two trees, and the cost of that is on record twice, both times on the one fixture that
-hardcodes a `productId`:
+**This section used to be titled "what is still *not* checked", and `M154e` changed the answer.**
+`check:acceptance` covers the `.tflw` third of this ladder and structurally cannot cover the rest:
+it discovers corpora by walking for a `tflw.config`, and JavaScript and YAML will never hold one.
+`verify-external-targets.mjs` walks the same roots and inherited the same blind spot, so **the host
+a k6 script or an Artillery scenario pointed at was fenced by nothing at all** — found while scoping
+`M154e`, and the more serious half of the two.
+
+The fix is not a better walk. `scripts/lib/perf-ladder.mjs` is a **declared inventory** — which
+rungs exist, in which runner, which fixture values they must agree on, and which k6 sub-metric each
+one is measured on — and `npm run verify:perf-parity` checks the filesystem against it. Five
+properties: every host is ours, every fixture copy equals the constant in
+`apiV2/src/load-admin/load-target.constants.ts`, every file under the three runner directories is
+rostered, every missing runner has a written reason, and every declared `k6Tag` really appears in
+the k6 file that is supposed to emit it.
+
+That last one exists because of `D749`: tflw's percentiles are **successful-only** (`SPEC` §12,
+`M89a`) and k6's bare `http_req_duration` is not, so the comparison must read
+`http_req_duration{name:<k6Tag>,expected_response:true}`. `../README.md` §M89 records that this
+exact mismatch made `M49`'s published 3.54% p95 gap a comparison of two different populations, held
+together only by a near-zero error rate — *"that was luck, not design."* The tag is never the rung's
+own name (`checkout-burst` measures `checkout`), so an extractor that guessed would have been wrong
+on all seven rungs.
+
+The cost of not having had this is on record twice, both times on the one fixture that hardcodes a
+`productId`:
 
 - **M48** (`../README.md`, "a methodology note on why k6's D/E re-run needed a full stack reset"): a
   k6 run collapsed to ~200/s at a **98% `http_req_failed` rate** after a stack reset regenerated the
@@ -126,12 +148,71 @@ hardcodes a `productId`:
   and Artillery copies were dead at the same moment, and a parity run would have compared two
   100 %-erroring rungs and called them equal.
 
-k6 and Artillery are not silent at *run* time — `http_req_failed` and `expect: statusCode` both
-scream. What none of the three has is any check *before* a run that its target still exists. Pinning
-the id closes the drift source; the asymmetry stays.
+The drift scan is the half with teeth: it looks for literals of each fixture's *shape* in every
+ladder file and refuses any that is not the value the constant defines, so a new rung that hardcodes
+last month's product id goes red on the day it lands whether or not anybody rostered it.
 
-Tracked as `B6-15` in tflw's launch review, where it is an explicit **withdrawal candidate at the
-1.0 final review**: these two trees were built to answer *"is tflw's load engine comparable to the
-incumbents?"*, M46–M49 answered it and applied a stop condition, and what remains is two hand-
-maintained fixture trees in languages this repo does not otherwise use. Retiring them — keeping
-`../README.md`'s measured numbers as the record — is likely cheaper than building checkers for them.
+`B6-15` remains an explicit **withdrawal candidate at the 1.0 final review** — these two trees were
+built to answer *"is tflw's load engine comparable to the incumbents?"*, M46–M49 answered it and
+applied a stop condition. What changed is only that the ladder is now checked rather than trusted.
+
+## The scheduled run on `fedora-box`
+
+`D727` puts arrival-curve grading on a scheduled box run rather than in CI: GitHub's shared runners
+cannot produce a trustworthy arrival curve and the box can. `D733` makes that run a **registered box
+tenant**, so `statsctl check` and `statsctl conflict --for` can see it and a forge render is never
+surprised by it.
+
+```sh
+npm run perf:conformance -- --dry-run              # what would run, and against which commit
+npm run perf:conformance -- --profile curve        # the C44-C50 arrival-curve tier only
+npm run perf:conformance -- --profile full         # curve + the three-runner ladder
+```
+
+Three things about it are decisions rather than details:
+
+- **It leases as `tflw:load:conformance`, class `tflw:load`** (`D746`). `D733` asked for a new
+  `tflw:perf` class; measured against the real table, `classify('tflw:perf')` returns `load-run`
+  (prefix `tflw:`, the union) whose `requires` is empty — silently dropping the `quiet` requirement
+  that is the only thing this run needs from the mutex, while still returning perfectly real
+  answers. `tflw:load` already declares `requires: ('quiet',)` and was declared in advance for
+  exactly this caller.
+- **It acquires through `boxlock.sh acquire`, never plain `flock`** (`D747`). The dashboard
+  identifies holders by walking /proc for `boxlock.sh acquire` processes, so a job that takes the
+  same lock directly is reported as `holder: null` / `stale_holder` *while it is genuinely running*
+  — observed live on 2026-08-25 (dashboard finding 196). Registering as a tenant is worthless if the
+  mutex cannot see the tenant.
+- **It measures `origin/main` in its own checkout** (`D748`), never `~/tflw-exec/testFlow-tests` —
+  that is the rsync target a Mac session maintains, so a gate pointed at it grades whatever was last
+  pushed there, attributable to no commit. The artifact records the sha it measured.
+
+Operating it, from the Mac:
+
+```sh
+ssh fedora-box '~/boxd/tenants/tflwperfctl.sh status'      # armed? when? what did the last run say?
+ssh fedora-box '~/boxd/tenants/tflwperfctl.sh preflight'   # never mutates; exit 75 means "not now"
+ssh fedora-box '~/boxd/tenants/tflwperfctl.sh start'       # ARM the timer — not "run it now"
+```
+
+`start`/`stop` arm and disarm the schedule rather than launching a run, deliberately: a mutating
+verb that kicked off a twenty-minute load run because someone clicked a dashboard button would be
+the worst available reading of the dashboard's start/stop carve-out. (That carve-out is numbered in
+`fedora-box-dashboard`'s own sequence, which is a **different namespace** from the `D<n>` used here:
+the **Notation** paragraph promises a bare `D<n>` resolves in tflw's `DECISIONS.md`, and at that
+same number tflw has an unrelated decision about active-scanner scope. So the dashboard's is spelled
+out rather than cited — `verify:provenance` caught the first draft of this paragraph citing it, and
+a reader following the number would have landed somewhere else entirely.)
+
+**The artifact judges itself** (`D750`). `perf-conformance.mjs` writes
+`~/tflw-perf/results/<stamp>.json` plus `latest.json`, and folds the comparison verdict *into* the
+artifact, so whatever reads it later sees the verdict without needing the baseline or the script.
+The bands are ratios of tflw to its co-runner **in the same run**, not absolute numbers: absolutes
+on this box move with thermal state, the 2.4 GHz link and whoever else holds the lease, so a gate on
+them is a flake generator until it is widened into vacuity. Two rules exist regardless of
+calibration — a rung with **no co-runner present is a failure, not a pass** (nothing was compared,
+so reporting "no regression" would be vacuous), and every rung's **error rate must stay under 1%**,
+which is the bound whose absence let a rung report PASS at a 100% error rate on 2026-08-05.
+
+`tflw-acceptance/perf/baseline.json` ships with `established: false` and every band `null`. **The
+first run in anger sets them, and that same run is what closes `B6-15`**, whose condition is
+verbatim *"reopens when the parity ladder is next run in anger"*.

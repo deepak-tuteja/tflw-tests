@@ -66,6 +66,7 @@ not a subset of the truth.
 npm run check:acceptance
 npm run verify:external-targets
 npm run verify:perf-parity
+npm run verify:perf-baseline
 npm run verify:contributing
 npm run verify:tflw-resolution
 npm run verify:provenance
@@ -119,6 +120,16 @@ xvfb-run -a npm run regression -- --group security-ui
   run time: the rung they sit in exists to measure a POST with zero capture or interpolation
   overhead, so importing the id would change what it measures, by a different amount in each of the
   three runners.
+- **`npm run verify:perf-baseline`** — the static half of the perf regression gate. Every rung with
+  a co-runner has a row in `tflw-acceptance/perf/baseline.json`, no row names a rung that does not
+  exist, and no band spans more than 3x. The *comparison* runs on `fedora-box` inside the scheduled
+  run (`npm run perf:conformance`), because a ratio needs a measurement; what is checked here is the
+  document. `D750` records why the bands are ratios of tflw to its co-runner **in the same run**
+  rather than absolute numbers — absolutes on that box move with thermal state, the 2.4 GHz link and
+  whoever else holds the lease, so a gate on them is a flake generator until it is widened into
+  vacuity. Until the ladder is next run in anger the bands are `null` and the gate says so out loud;
+  the rule with teeth from day one is the error-rate ceiling, which needs no calibration and is the
+  bound whose absence let a rung report PASS at a 100% error rate on 2026-08-05.
 - **`npm run verify:contributing`** — this document against `.github/workflows/`. It is in the set
   it guards, which is the point rather than an oversight.
 - **`npm run verify:tflw-resolution`** — **which tflw a script is grading is declared, printed, and

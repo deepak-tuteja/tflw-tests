@@ -1,0 +1,43 @@
+# The scheduled perf-conformance run — `M154e` step 4, testFlow PLAN_M154_DOGFOOD_CONFORMANCE.md.
+#
+# Armed and disarmed through the tenant control script rather than by hand:
+#     ~/boxd/tenants/tflwperfctl.sh start | stop | status | preflight
+#
+# TYPE=oneshot AND NO `Restart=`. A load run that failed should not be retried automatically: the
+# usual reason it fails is that the box was not quiet, and retrying immediately reproduces exactly
+# that condition. The timer's next firing is the retry.
+#
+# THE LEASE IS TAKEN BY THE PROCESS, NOT BY THE UNIT (`D747`). `perf-conformance.mjs` spawns the
+# real `boxlock.sh acquire` and holds its stdin open, so a `systemctl --user stop` — or an OOM kill,
+# or a reboot — closes that pipe and the kernel drops the flock. There is no stale-lock reaper here
+# for the same reason `boxlock.sh` has none. It must go through `boxlock.sh` and not take the flock
+# itself: the dashboard identifies holders by walking /proc for `boxlock.sh acquire`, so a job that
+# locks directly is reported as `holder: null` / `stale_holder` while it is genuinely running
+# (dashboard finding 196).
+
+[Unit]
+Description=tflw perf-conformance run (testFlow-tests, M154e)
+Documentation=https://github.com/deepak-tuteja/tflw-tests
+# Advisory only — the real coordination is the box mutex, which this unit takes at runtime. Named
+# so `systemctl --user list-dependencies` shows the relationship a reader would otherwise have to
+# infer from the lease label.
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/tflw-perf/checkout
+Environment=TFLW_PERF_PROFILE=full
+Environment=TFLW_PERF_RESULTS=%h/tflw-perf/results
+# `origin/main`, in this unit's own checkout, never the rsync target `scripts/exec.mjs` maintains
+# (`D748`). A scheduled gate pointed at the exec copy grades whatever a Mac session last pushed
+# there — arbitrarily stale, possibly mid-rsync, attributable to no commit.
+ExecStartPre=/usr/bin/git -C %h/tflw-perf/checkout fetch --quiet origin main
+ExecStartPre=/usr/bin/git -C %h/tflw-perf/checkout reset --hard --quiet origin/main
+ExecStart=/usr/bin/node scripts/perf-conformance.mjs --profile ${TFLW_PERF_PROFILE}
+# Long enough for the full ladder plus the lease wait, short enough that a wedged run does not sit
+# on the box until someone notices. The driver's own boxlock timeout (1800s) fires first in the
+# normal busy case, so hitting this one means the run itself hung.
+TimeoutStartSec=5400
+
+[Install]
+WantedBy=default.target

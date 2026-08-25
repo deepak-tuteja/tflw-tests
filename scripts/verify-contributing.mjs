@@ -97,6 +97,14 @@ const CLASSIFIED = [
   {
     wf: 'ci.yml',
     job: 'acceptance-check',
+    cmd: 'npm run verify:perf-baseline',
+    class: 'gate',
+    local: 'npm run verify:perf-baseline',
+    why: 'the perf regression baseline still covers every rung that has a co-runner, and declares no band so wide it cannot fail. The comparison itself runs on the box inside the scheduled run — but a rung quietly dropping out of the baseline is a document defect, and from the outside it reads exactly like a rung with no regressions',
+  },
+  {
+    wf: 'ci.yml',
+    job: 'acceptance-check',
     cmd: 'npm run verify:construct-coverage',
     class: 'gate',
     local: 'npm run verify:construct-coverage',
