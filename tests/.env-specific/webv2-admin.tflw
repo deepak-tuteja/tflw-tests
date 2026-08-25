@@ -257,3 +257,10 @@ test "the dashboard's Download orders CSV link exercises a real browser download
   open "/"
   download as file
     click text "Download orders CSV"
+  # `M154d` / `C38`: the line above says the step binds "the exact filename apiV2's own
+  # `Content-Disposition` sets", and until now nothing checked it. `download as` already goes red
+  # when no download event arrives, so the *mechanics* half was graded; the *binding* half was
+  # prose. `orders-export.csv` is set by `orders.controller.ts`'s `Content-Disposition` and appears
+  # nowhere in the console's markup — not in the link's text, not in its href — so a step that bound
+  # the anchor text, the URL's last segment, or nothing at all fails here and passes without it.
+  expect {file} equals "orders-export.csv"

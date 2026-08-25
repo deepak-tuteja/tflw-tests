@@ -565,6 +565,268 @@ if (['C13','C14','C15','C16','C17','C18','C19','C20','C21','C22'].some(wanted)) 
 }
 
 // =============================================================================
+// C23-C38 — the UI tier's real flows, graded out of one run each
+// =============================================================================
+//
+// Sixteen rows, two `tflw run` invocations. Every plant here lives in a suite file that existed
+// before this milestone, so the grading has a job the `.constructs/` plants do not: those files
+// are edited by people who have never read this roster, and a row whose test has been quietly
+// loosened is worse than no row. The static gate catches the *spelling* vanishing. What follows
+// catches the **assertion** vanishing while the spelling stays — a `double click` still there and
+// the `is hidden` after it flipped to `is visible`, a `select` still there and the count-0 case
+// deleted. Each block below therefore checks the shape of the known answer, not just its colour.
+
+const REAL_FLOW_IDS = ['C23', 'C24', 'C25', 'C26', 'C27', 'C28', 'C29', 'C30', 'C31', 'C32', 'C33', 'C34', 'C35', 'C36', 'C37'];
+
+if (REAL_FLOW_IDS.some(wanted)) {
+  console.log(`\nC23-C37 — the storefront's real flows\n  target: webV2 storefront + admin, via tests/mixed/storefront.tflw`);
+  const { report, output } = runCorpus(ROOT, ['tests/mixed/storefront.tflw']);
+  if (!report) {
+    for (const id of REAL_FLOW_IDS) {
+      if (!wanted(id)) continue;
+      fail(`${id} produced no report. Is the stack up (\`node cli.mjs start\`)?\n${output.trim().split('\n').slice(-12).join('\n')}`);
+      scores.get(id).skipped = 'no report';
+    }
+  } else {
+    /** One test's steps, with the three questions every plant below asks of them. */
+    const flow = (fragment) => {
+      const test = named(report, fragment);
+      const steps = stepsOf(test);
+      const find = (re) => steps.filter((s) => re.test(s.source));
+      return {
+        test,
+        steps,
+        find,
+        /** a step matching `re` exists and passed */
+        okStep: (re) => find(re).some((s) => s.ok),
+        /** the index of the first step matching `re`, or -1 */
+        at: (re) => steps.findIndex((s) => re.test(s.source)),
+      };
+    };
+    /** Recall is the same claim for every row: the flow it points at is still green. Stated once
+     *  per test rather than once per row, so a test that disappears fails every row that named it
+     *  rather than one of them. */
+    const flowIsGreen = (ids, f, fragment) => {
+      for (const id of ids) {
+        if (!wanted(id)) continue;
+        // A missing test is reported through `recall`, not through a bare `fail` beside it: two
+        // reports of one problem inflate the mismatch count and make a rename look like two bugs.
+        recall(id, f.test?.ok === true, f.test ? `"${fragment}…" is green (got ok=${f.test.ok})` : `"${fragment}…" is in the report at all — it was renamed or deleted`);
+      }
+    };
+
+    // --- C23, C36, C37: the second browser tab ------------------------------
+    const tabs = flow('receipt link genuinely opens a second browser tab');
+    flowIsGreen(['C23', 'C36', 'C37'], tabs, 'receipt link genuinely opens a second browser tab');
+    if (wanted('C23')) {
+      recall('C23', tabs.okStep(/^\s*open "\/orders\/\{orderId\}"/), 'the interpolated navigation ran and passed');
+      // The path is built from an id the test created three steps earlier, so the *source* keeping
+      // its braces is what makes this an interpolation plant rather than a literal one. A rewrite
+      // to a hard-coded order id would still pass every assertion in the test and grade nothing.
+      precision('C23', tabs.find(/^\s*open "\/orders\/\{orderId\}"/).length === 1, 'the path is still interpolated, not a hard-coded id');
+      precision('C23', tabs.at(/^\s*open "\/orders\/\{orderId\}"/) < tabs.at(/expect text "Order confirmed" is visible/), 'the heading is asserted after the navigation, not before it');
+    }
+    if (wanted('C36')) {
+      recall('C36', tabs.okStep(/^\s*switch to new tab\s*$/), '`switch to new tab` caught the popup');
+      recall('C36', tabs.okStep(/^\s*switch to tab 1\s*$/) && tabs.okStep(/^\s*switch to tab 2\s*$/), 'both numbered switches ran and passed');
+      // `switch to tab 1` is only graded by what is asserted after it, and the heading it asserts
+      // exists on tab 1 and not on the receipt PDF. Without that assertion sitting *between* the
+      // two numbered switches, a `switch to tab N` that stayed put would pass unnoticed.
+      const toOne = tabs.at(/^\s*switch to tab 1\s*$/);
+      const heading = tabs.steps.findIndex((s, i) => i > toOne && /expect text "Order confirmed" is visible/.test(s.source));
+      precision('C36', toOne !== -1 && heading !== -1 && heading < tabs.at(/^\s*switch to tab 2\s*$/), 'tab 1 is identified by a heading between the two numbered switches');
+    }
+    if (wanted('C37')) {
+      recall('C37', tabs.okStep(/^\s*close tab\s*$/), '`close tab` ran and passed');
+      const closed = tabs.at(/^\s*close tab\s*$/);
+      precision('C37', tabs.at(/^\s*switch to tab 2\s*$/) < closed, 'the close happens with tab 2 in front, so closing the wrong tab is observable');
+      precision('C37', tabs.steps.some((s, i) => i > closed && /expect text "Order confirmed" is visible/.test(s.source) && s.ok), 'an assertion that only holds on tab 1 runs after the close');
+    }
+
+    // --- C24, C25: two gestures, both graded by an absence --------------------
+    const gestures = flow('double click and right click are real');
+    flowIsGreen(['C24', 'C25'], gestures, 'double click and right click are real');
+    if (wanted('C24')) {
+      recall('C24', gestures.okStep(/^\s*double click button "Quick view"/), 'the double click ran and passed');
+      recall('C24', gestures.okStep(/expect button "Close" is hidden/), 'the modal the first click opened was closed by the second');
+      // `is hidden`, not `is visible`, is the entire plant. Someone tidying this test towards what
+      // a double click "obviously" does would flip it and delete the known answer in one keystroke.
+      precision('C24', gestures.find(/expect button "Close" is visible/).length === 0, 'nothing asserts the modal stayed open — that would be the opposite known answer');
+    }
+    if (wanted('C25')) {
+      recall('C25', gestures.okStep(/^\s*right click button "Add to cart"/), 'the right click ran and passed');
+      recall('C25', gestures.okStep(/expect text "Added 1 × Bulk Item 6 to your cart\." is hidden/), 'no click event was dispatched, so the toast never appeared');
+      // The negative only means something because the positive is proven elsewhere in the same
+      // file: an ordinary `click button "Add to cart"` really does raise this toast.
+      const positive = report.tests.some((t) => (t.steps ?? []).some((s) => /expect text "Added 1 × .* to your cart\." is visible/.test(s.source) && s.ok));
+      precision('C25', positive, 'an ordinary click on the same control raises the toast somewhere in this file — the absence is not an absence of everything');
+    }
+
+    // --- C26: the key ---------------------------------------------------------
+    const escape = flow('Quick View modal traps focus');
+    flowIsGreen(['C26'], escape, 'Quick View modal traps focus');
+    if (wanted('C26')) {
+      recall('C26', escape.okStep(/^\s*press "Escape"\s*$/), 'the key was pressed');
+      const pressed = escape.at(/^\s*press "Escape"\s*$/);
+      // **The step immediately before the key must prove the modal open**, and this is the whole
+      // repair `M154d` made here. Until 2026-08-25 the `press` sat after a successful add-to-cart,
+      // which `ProductQuickViewModal.tsx`'s `handleAdd` already closes — so the `is hidden` after
+      // it was satisfied by the add, the key asserted nothing, and deleting the line left the test
+      // green. A first-match search for "is visible" anywhere earlier would still pass on that old
+      // shape; adjacency is what does not.
+      precision('C26', pressed > 0 && /expect button "Close" is visible/.test(escape.steps[pressed - 1]?.source ?? ''), 'the step immediately before the key asserts the modal is OPEN');
+      precision('C26', escape.steps.some((s, i) => i > pressed && /expect button "Close" is hidden/.test(s.source) && s.ok), 'and the step after it asserts the modal is closed');
+    }
+
+    // --- C27: the dropdown ----------------------------------------------------
+    const select = flow('Category <select> really filters');
+    flowIsGreen(['C27'], select, 'Category <select> really filters');
+    if (wanted('C27')) {
+      recall('C27', select.find(/^\s*select ".*" from field "Category"/).every((s) => s.ok) && select.find(/^\s*select ".*" from field "Category"/).length >= 2, 'both selections ran and passed');
+      recall('C27', select.okStep(/has count 0/) && select.okStep(/has count 1/), 'the same search term yields 0 under one category and 1 under the other');
+      // The zero is the half a broken `select` survives without. Assert it is still there *and*
+      // still zero: `has count 0` rewritten to `has count 1` would leave two passing positives.
+      precision('C27', select.find(/has count 0/).length === 1, 'exactly one of the two counts is the negative case');
+    }
+
+    // --- C28, C29, C30: the checkbox and the words that read it ---------------
+    const check = flow("a11y-demo's accessible checkbox tick/untick");
+    flowIsGreen(['C28', 'C29', 'C30'], check, "a11y-demo's accessible checkbox tick/untick");
+    if (wanted('C28')) recall('C28', check.okStep(/^\s*tick field "Subscribe to updates"/), 'the tick ran and passed');
+    if (wanted('C29')) recall('C29', check.okStep(/^\s*untick field "Subscribe to updates"/), 'the untick ran and passed');
+    if (wanted('C30')) {
+      const states = check.find(/expect field "Subscribe to updates" (not )?is checked/);
+      recall('C30', states.length === 3 && states.every((s) => s.ok), `the subject is asserted in three states (got ${states.length})`);
+      recall('C30', states.filter((s) => /not is checked/.test(s.source)).length === 2, 'two of the three are negations, so a matcher stuck at true fails here');
+      // The order is the claim, not the count: unchecked -> tick -> checked -> untick -> unchecked.
+      // Three assertions in any other arrangement grade something else.
+      precision('C30', check.at(/expect field "Subscribe to updates" not is checked/) < check.at(/^\s*tick field/), 'the first negation runs before the tick');
+      precision('C30', check.at(/^\s*tick field/) < check.at(/expect field "Subscribe to updates" is checked/) && check.at(/expect field "Subscribe to updates" is checked/) < check.at(/^\s*untick field/), 'the positive sits between the tick and the untick');
+    }
+
+    // --- C31: the drag --------------------------------------------------------
+    const drag = flow('cart rows are drag-drop reorderable');
+    flowIsGreen(['C31'], drag, 'cart rows are drag-drop reorderable');
+    if (wanted('C31')) {
+      recall('C31', drag.okStep(/^\s*drag css "\.drag-handle/), 'the drag ran and passed');
+      const dragged = drag.at(/^\s*drag css "\.drag-handle/);
+      const after = drag.steps.filter((s, i) => i > dragged && /tr:nth-child\(\d\) th:text-is/.test(s.source));
+      recall('C31', after.length === 2 && after.every((s) => s.ok), `both rows are asserted by position after the drag (got ${after.length})`);
+      // One row would pass for a table that merely re-rendered; two rows in the *same* position
+      // would pass for a drag that did nothing. The pair has to disagree.
+      precision('C31', new Set(after.map((s) => (s.source.match(/nth-child\((\d)\)/) ?? [])[1])).size === 2, 'the two assertions name different positions');
+    }
+
+    // --- C32: the drop --------------------------------------------------------
+    const drop = flow("support page's drop-zone accepts a real file");
+    flowIsGreen(['C32'], drop, "support page's drop-zone accepts a real file");
+    if (wanted('C32')) {
+      recall('C32', drop.okStep(/^\s*drop file ".*sample\.csv" onto /), 'the drop ran and passed');
+      recall('C32', drop.okStep(/expect text "sample\.csv" is visible/), "the zone echoed the dropped file's own name back");
+      // The zone has no file input, so there is no `fill field` fallback that could stand in for a
+      // real DataTransfer. A test that grew one would grade the fallback instead of the step.
+      precision('C32', drop.find(/^\s*fill field ".*[Ff]ile/).length === 0, 'nothing fills a file input — the drop is the only way the file arrives');
+    }
+
+    // --- C33: the stub, and the near-miss beside it ---------------------------
+    const stub = flow("payment gateway's real fetch is stubbed");
+    flowIsGreen(['C33'], stub, "payment gateway's real fetch is stubbed");
+    if (wanted('C33')) {
+      const stubs = stub.find(/^\s*stub (GET|POST) "https:\/\/payments\.example\.test/);
+      recall('C33', stubs.length === 2 && stubs.every((s) => s.ok), `both stubs registered (got ${stubs.length})`);
+      recall('C33', stub.okStep(/expect status of request to .* with method "POST" equals 500/), 'the POST stub is what the widget got');
+      recall('C33', stub.okStep(/expect text "The payment gateway declined this card \(status 500\)\." is visible/), 'and its status surfaced through the app, not just through the report');
+      // The GET row is the near-miss. Without it, a stub that matched on URL alone would look
+      // correct; with it, that stub serves a 200 and the whole test goes green for the wrong
+      // reason — which is why the two rows must disagree on both method and status.
+      precision('C33', stubs.some((s) => /^\s*stub GET /.test(s.source) && /status 200/.test(s.source)), 'the GET near-miss is still there, still answering 200');
+      precision('C33', stubs.some((s) => /^\s*stub POST /.test(s.source) && /status 500/.test(s.source)), 'and the POST row still disagrees with it');
+    }
+
+    // --- C34: the visual baseline --------------------------------------------
+    const snap = flow('render fixture: a masked snapshot');
+    flowIsGreen(['C34'], snap, 'render fixture: a masked snapshot');
+    if (wanted('C34')) {
+      const shots = snap.find(/matches snapshot "render-fixture-/);
+      recall('C34', shots.length === 4 && shots.every((s) => s.ok), `four comparisons against two baselines (got ${shots.length})`);
+      recall('C34', shots.filter((s) => /not matches snapshot/.test(s.source)).length === 1, 'exactly one is a `not` — the unmasked baseline catching the real change');
+      // Two masked comparisons that bracket the same state change are what make the mask mean
+      // something. One of them alone passes for a mask that is ignored.
+      const masked = shots.filter((s) => /\bmask /.test(s.source));
+      precision('C34', masked.length === 2 && masked.every((s) => !/not matches/.test(s.source)), 'both masked comparisons are positive, on either side of the change the unmasked one catches');
+    }
+
+    // --- C35: the accessibility scanner, both directions ----------------------
+    const clean = flow('happy-path product and catalog pages have no accessibility violations');
+    const dirty = flow("a11y-demo's inaccessible section");
+    flowIsGreen(['C35'], clean, 'happy-path product and catalog pages have no accessibility violations');
+    if (wanted('C35')) {
+      recall('C35', dirty.test?.ok === true, dirty.test ? `"the a11y-demo's inaccessible section…" is green (got ok=${dirty.test.ok})` : '"the a11y-demo\'s inaccessible section…" is in the report at all — it was renamed or deleted');
+      recall('C35', clean.find(/expect page has no a11y violations/).length === 2 && clean.find(/expect page has no a11y violations/).every((s) => s.ok), 'the scanner reports two real pages clean');
+      const floors = dirty.find(/expect page not has no (minor |moderate |serious |critical )?a11y violations/);
+      recall('C35', floors.length === 5 && floors.every((s) => s.ok), `and five severity floors red on the demo page (got ${floors.length})`);
+      // `moderate` is the discriminating one and it is not obvious: **zero** violations on that
+      // page are tagged moderate — only serious and critical exist — so this line passes under
+      // floor semantics and fails under exact-match. Deleting it would leave four assertions that
+      // an exact-match implementation also passes.
+      precision('C35', floors.some((s) => /not has no moderate a11y violations/.test(s.source) && s.ok), 'the moderate floor — the one an exact-match implementation gets wrong — is still asserted');
+    }
+
+    // Precision, for every row at once: the evidence file still carries every flow these rows name.
+    //
+    // **The obvious check here — "the whole file is green" — was written first and then removed,
+    // and the reason is worth keeping.** `storefront.tflw`'s header declares a known, accepted
+    // flake: its reviews test submits alice's first-ever review of Bulk Item 1, so a *second* run
+    // against a still-live stack 409s on what should be the first submission. That is fine for the
+    // suite, which runs the file once per stack — but this grader runs it again, after
+    // `regression.mjs`'s `mixed` phase already has. A file-wide assertion would therefore import
+    // someone else's documented flake into this gate and go red on a build with nothing wrong with
+    // it. Each row's own test is asserted green by `flowIsGreen`; what is left to check is that no
+    // row is silently grading a test that has been renamed out from under it.
+    const flows = ['receipt link genuinely opens a second browser tab', 'double click and right click are real',
+      'Quick View modal traps focus', 'Category <select> really filters', "a11y-demo's accessible checkbox tick/untick",
+      'cart rows are drag-drop reorderable', "support page's drop-zone accepts a real file",
+      "payment gateway's real fetch is stubbed", 'render fixture: a masked snapshot',
+      'happy-path product and catalog pages have no accessibility violations', "a11y-demo's inaccessible section"];
+    const missing = flows.filter((f) => !named(report, f));
+    for (const id of REAL_FLOW_IDS) {
+      if (!wanted(id)) continue;
+      precision(id, missing.length === 0, `all 11 flows this batch names are still in the evidence file (missing: ${missing.join('; ') || 'none'})`);
+    }
+  }
+}
+
+// --- C38: the download, which needs the admin console's own env ---------------
+if (wanted('C38')) {
+  const plant = plantFor('step:download');
+  console.log(`\n${plant.id} — ${plant.title}\n  target: ${plant.target}`);
+  // Its own `tflw run`, and its own `--env`: `web` is one base URL per env (SPEC §3.2), so the
+  // admin console at :8091 cannot be reached from the env the storefront tests use. Same reason
+  // `regression.mjs` gives the console its own phase.
+  const { report, output } = runCorpus(ROOT, [
+    '--env', 'webv2Admin', plant.evidence.file,
+    '--only', "the dashboard's Download orders CSV link exercises a real browser download",
+  ]);
+  if (!report) {
+    fail(`C38 produced no report. Is the stack up (\`node cli.mjs start\`)?\n${output.trim().split('\n').slice(-12).join('\n')}`);
+    scores.get('C38').skipped = 'no report';
+  } else {
+    const test = named(report, 'Download orders CSV link');
+    const steps = stepsOf(test);
+    recall('C38', test?.ok === true, `the plant passed (got ok=${test?.ok})`);
+    recall('C38', steps.some((s) => /^\s*download as file\s*$/.test(s.source) && s.ok), 'a real download event fired off the link click');
+    recall('C38', steps.some((s) => /^\s*expect \{file\} equals "orders-export\.csv"/.test(s.source) && s.ok), "and the step bound the server's own filename");
+    // The literal is the plant. `orders-export.csv` is set by apiV2's `Content-Disposition` and
+    // appears nowhere in the console's markup — the link reads "Download orders CSV" and points at
+    // `/orders/export` — so a step binding the anchor text or the URL's last segment fails here.
+    // Loosening this to `contains "csv"` would pass for all three.
+    precision('C38', steps.filter((s) => /^\s*expect \{file\} /.test(s.source)).length === 1, 'exactly one assertion on the bound name');
+    precision('C38', steps.some((s) => /equals "orders-export\.csv"/.test(s.source)), 'and it is still an equality against the exact name, not a substring');
+    precision('C38', failingSteps(test).length === 0, `no step failed (got ${failingSteps(test).map((s) => `line ${s.line}: ${s.source.trim()}`).join('; ') || 'none'})`);
+  }
+}
+
+// =============================================================================
 // the table
 // =============================================================================
 

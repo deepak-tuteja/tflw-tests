@@ -63,6 +63,18 @@ test "the Quick View modal traps focus, adds to cart, and closes on Escape"
     fill field "Quantity" with "1"
     click button "Add to cart"
   expect text "Added 1 × Bulk Item 1 to your cart." is visible
+  # `M154d` / `C26`, and this is a repair rather than an addition. The `press "Escape"` used to sit
+  # directly here, followed by `expect button "Close" is hidden` — and that pair **asserted
+  # nothing**: `ProductQuickViewModal.tsx`'s `handleAdd` calls `onClose()` on a successful add, so
+  # the modal was already gone before the key was sent. Deleting the `press` line left the test
+  # green, which is how it was found (a generated probe removed the key and the test still passed).
+  # The line below records that closing so the sequence after it starts from a known state.
+  expect button "Close" is hidden
+  # Re-open it, and *now* press the key. The modal really does close on Escape —
+  # `handleKeyDown` has always had the branch — it had simply never been the thing under test.
+  within css "[aria-label='Bulk Item 1']"
+    click button "Quick view"
+  expect button "Close" is visible
   press "Escape"
   expect button "Close" is hidden
 

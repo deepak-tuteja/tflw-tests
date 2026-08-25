@@ -122,6 +122,22 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C20` | `click` (`step:click`) | ui | the readout starts at `none` and only a really-dispatched click ever changes it — six clicks, six different elements | a `click` that waits for a locator and never fires the event |
 | `C21` | `fill` (`step:fill`) | ui | read back from **both** inputs by id: the right one filled, the wrong one not | a `fill` that types into the wrong element, or into both |
 | `C22` | `has value` (`matcher:has-value`) | ui | `GLASGOW` on one input and `UNTOUCHED` on the other — a pair, so an unconditional true fails the second | a `has value` that always passes, or that reads the attribute instead of the property |
+| `C23` | `open` (`step:open`) | ui | `/orders/{orderId}` — the one path whose target the test creates first, so a dropped interpolation 404s and a no-op stays on the login page | an `open` that does not interpolate, or does not navigate |
+| `C24` | `double click` (`step:double`) | ui | the Quick View modal ends **hidden** — the second click lands on the backdrop the first one opened | a `double click` that is one click, or one synthetic gesture |
+| `C25` | `right click` (`step:right`) | ui | the add-to-cart toast never appears, because the secondary button dispatches `contextmenu` and never `click` | a `right click` implemented as `click` |
+| `C26` | `press` (`step:press`) | ui | the modal is asserted open on the step **immediately** before the key and closed on the step after — adjacency, after a repair | a `press` that types its key name instead of pressing it, and an assertion something else satisfies |
+| `C27` | `select` (`step:select`) | ui | one search term, two categories: `has count 0` under Books and `has count 1` under Electronics | a `select` that no-ops, or selects by index rather than by option text |
+| `C28` | `tick` (`step:tick`) | ui | `not is checked` before, `is checked` after, read off the control rather than off the click | a `tick` that clicks without settling, or asserts nothing about state |
+| `C29` | `untick` (`step:untick`) | ui | back to `not is checked`, from a state the previous assertion proved it was really in | an `untick` that no-ops on an already-checked control |
+| `C30` | `is checked` / `is visible` / `is hidden` (`matcher:state-word`) | ui | the same subject asserted in both states within one test, so neither a stuck answer nor a broken `not` survives | a state matcher stuck at one answer, or a broken `not` |
+| `C31` | `drag … to …` (`step:drag`) | ui | both cart rows asserted by name **and** by position after the drag, with the names read from the API first | a `drag` that fires no drop, or reorders something else |
+| `C32` | `drop file … onto …` (`step:drop`) | ui | `sample.csv` echoed back by a zone with no file input to fill and no click that would open one | a `drop` with an empty or missing file payload |
+| `C33` | `stub` (`step:stub`) | ui | two stubs on one URL that disagree — `GET` 200 `tok_wrong_method` against `POST` 500 — and the POST must win | a `stub` that ignores the method, or that never intercepts |
+| `C34` | `matches snapshot` (`matcher:matches-snapshot`) | ui | one state change, four assertions: unmasked catches it, masked absorbs the same one | a snapshot compare that always passes, and a `mask` clause that is decorative |
+| `C35` | `has no a11y violations` (`matcher:has-no-a11y-violations`) | ui | clean on the happy path, red on `/a11y-demo`, and `not has no **moderate**` passes although zero violations are tagged moderate | a scanner that never fires, and a severity filter that matches exactly instead of as a floor |
+| `C36` | `switch to new tab` / `switch to tab N` (`step:switch`) | ui | the popup wait goes red unaided; `switch to tab 1` is then graded by a heading that exists on tab 1 and not on the receipt PDF | a `switch to new tab` that misses the popup, and a `switch to tab N` that stays put |
+| `C37` | `close tab` (`step:close`) | ui | closing tab 2 leaves an assertion that only holds on tab 1 — so closing the wrong one, or none, both fail | a `close tab` that closes the wrong tab, or none, or does not restore focus |
+| `C38` | `download as` (`step:download`) | ui | the bound name is `orders-export.csv`, which comes from apiV2's `Content-Disposition` and appears nowhere in the markup | a `download as` that binds the wrong string, or the right one by coincidence |
 
 ### `C1` — the soft assertion records a failure and keeps going
 
@@ -456,6 +472,71 @@ naming **exactly two** matches, not a not-found and not a timeout. It is kept be
 row whose twenty-five pre-existing uses could not fail for the right reason — leaving its only proof
 in prose would repeat precisely that mistake. The same reasoning `C11` follows for `matches file`.
 
+### `C23`–`C38` — the UI tier's real flows
+
+**Targets.** The webV2 storefront and the admin console, unchanged. **Plants.**
+`tests/mixed/storefront.tflw` (fifteen rows) and `tests/.env-specific/webv2-admin.tflw` (one).
+
+Sixteen rows and **no new target-app surface at all** — the opposite of `C13`–`C22`, and the reason
+`D729` puts real flows first. Every construct here already had a flow that already went red for the
+right reason, built by `M40`, `M41`, `M43` and `M48`. What was missing was never the exercise. It was
+the **written-down known answer**, and in three cases (`C24`, `C25`, `C38`) the answer was sitting in
+a test comment that no gate read.
+
+**Exactly one assertion was added to the whole batch.** `download as file` ended
+`webv2-admin.tflw` with nothing after it, under a comment claiming the step binds "the exact filename
+apiV2's own `Content-Disposition` sets". The mechanics half was already graded — the step waits on a
+real `download` event and goes red unaided if the link merely navigates — but the *binding* half was
+prose. `expect {file} equals "orders-export.csv"` is now `C38`, and the literal is load-bearing: the
+link reads "Download orders CSV" and points at `/orders/export`, so a step that bound the anchor text
+or the URL's last segment fails an assertion that passes today.
+
+**Three of these known answers are an absence, and that is what makes them sharp:**
+
+| row | the answer, and why the negative is the strong form |
+|---|---|
+| `C24` | The Quick View modal ends **hidden**. Playwright resolves the target position once, so both clicks land on the same point; the first opens the modal, whose full-viewport backdrop then covers that point, and the second closes it. So `is hidden` passes only if two *separate* clicks hit a DOM that changed between them. A step that coalesced them into one gesture leaves the modal open. |
+| `C25` | The add-to-cart toast never appears, because browsers reserve the secondary button for `contextmenu` and dispatch no `click` at all. That makes the single likeliest regression — `right click` degenerating into `click` — the one thing this row catches. The absence is not an absence of everything: an ordinary click on the same control raises that toast elsewhere in the same file, and the grader checks it. |
+| `C35` | `not has no **moderate** a11y violations` passes although **zero** violations on `/a11y-demo` are tagged moderate — only serious and critical exist. It therefore holds under genuine floor semantics and fails under exact-match, which no other severity assertion in the file distinguishes. |
+
+**Evidence pointing outside `tests/.constructs/` is deliberate, and it carries a risk this ledger has
+to answer for.** A plant living in an ordinary suite file can be edited by work that has never heard
+of this roster — and the dangerous edit is not deleting the step, it is *loosening the assertion while
+the step stays*. The static gate would not notice `C24`'s `is hidden` flipped to `is visible`. So the
+acceptance grader checks the **shape** of each known answer, not just its colour: that `C24` asserts
+hidden and nothing asserts visible, that `C27` still has one count-0 case beside its count-1, that
+`C30`'s three state assertions still bracket the tick and the untick in that order, that `C33`'s GET
+near-miss still answers 200 while the POST row answers 500, that `C37`'s close still happens with
+tab 2 in front. `C3` set the precedent for evidence outside `.constructs/` by pointing at
+`tflw-acceptance/conformance/iterations.tflw`.
+
+**Every one of the sixteen was run in its failure direction**, on `fedora-box` against the same
+stack, before being rostered. A generated probe took one flipped copy of each real test — the
+opposite state word, a missing key, the count-0 case turned positive, the drag asserted not to have
+moved, `has no moderate` without its `not`, `equals "export"` for the download.
+
+**Fifteen went red. `C26` went green, and that is the finding of this batch.** The probe deleted
+`press "Escape"` from a test named *"…and closes on Escape"* and the test still passed, because
+`ProductQuickViewModal.tsx`'s `handleAdd` calls `onClose()` on a successful add — the modal was
+already gone before the key was ever sent. The `press` and the `expect button "Close" is hidden`
+after it had been sitting there since `M43` asserting nothing, and no gate could have said so:
+the step is present, the assertion is present, the test is green, and the *cause* is a line in a
+React component. It is exactly `D722`'s could-fail bar failing in the field, and it is the second
+time this arc has found one (`M154c`'s `check` at scale was the first).
+
+The repair is three lines in the same test rather than a new fixture: record the close the add
+already performed, re-open the modal, *then* press the key. `handleKeyDown` has always had the
+Escape branch — it had simply never been the thing under test. Re-probed after the repair, and the
+same deletion now goes red. `C26`'s grader assertion is **adjacency**, not presence: the step
+immediately before the key must prove the modal open, because a first-match search for "is visible"
+anywhere earlier would still pass on the old, vacuous shape.
+
+**Cost, for `D732`'s sake.** One `tflw run` of `tests/mixed/storefront.tflw` — 16 tests, **18.4 s** on
+the box — grades fifteen of the sixteen rows. `C38` needs its own run because `web` is one base URL
+per env (SPEC §3.2) and the admin console lives on its own port; that one is 0.5 s plus start-up. The
+per-construct cost of this batch is therefore roughly a second apiece, against `C13`–`C22`'s new page,
+new plant and new grader.
+
 ## Blocked plants (`D734`)
 
 A plant that goes red because tflw is genuinely broken **keeps its row**, gets a row in tflw's
@@ -463,9 +544,9 @@ ledger, and is marked `blocked-on:<row>` here — counted as *covered but curren
 known reason*, never deleted and never quietly moved to the ratchet. Without this convention, this
 ledger's successes and its bugs look identical.
 
-**None at present.** All twenty-two plants pass, measured on `fedora-box` 2026-08-25 — the first
+**None at present.** All thirty-eight plants pass, measured on `fedora-box` 2026-08-25 — the first
 three against tflw `5cba2da`, `C4`–`C12` against the `M154c` build that added the `declaration`
-family, and `C13`–`C22` against `M154c`'s `main`.
+family, and `C13`–`C38` against `M154c`'s `main`.
 
 `M154b-02` is deliberately **not** a `blocked-on` marking. `D734` reserves that for a plant that
 goes red for a known tflw defect, and `C2` is green; the defect sits beside the plant, not under it.
