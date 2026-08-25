@@ -786,6 +786,130 @@ export const PLANTS = [
     catches: 'a `download as` that binds the wrong string, or the right one by coincidence.',
     blockedOn: null,
   },
+
+  // ---------------------------------------------------------------------------------------------
+  // `M154d`, third artifact — the five constructs the UI tier had left, and the one it gave back.
+  //
+  // These are the expensive half, and the reason is uniform: each already had uses that assert
+  // nothing about the step's own effect. `hover` and `scroll to` land on a button on `/a11y-demo`
+  // and are never observed; `screenshot` writes an artifact nothing reads; `dismiss dialog` takes
+  // the SAME code branch as no arming at all. Unlike `C23`-`C38`, no amount of asserting harder on
+  // the existing pages closes them — the pages do not react, so a surface had to be built.
+  //
+  // `webV2/src/pages/StepFixturePage.tsx` is that surface, and the third harness page in this
+  // repository after `RenderFixturePage` (M45) and `LocatorFixturePage` (`C13`-`C22`). It is NOT
+  // built onto `/a11y-demo` where the existing uses live, and that is deliberate: `/a11y-demo` is
+  // `C35`'s axe-count target, and a hover tooltip plus a scroll sentinel are exactly the markup
+  // that moves an axe score. A plant that broke another plant to grade itself is not a plant.
+  //
+  // **`step:pause` was scoped into this batch and is deliberately NOT here.** `TF033`: "`pause` is
+  // only legal inside a workload-bearing `test`". It is `M67`'s per-iteration pacing, not a general
+  // wait, so no browser page can grade it and the fixture section built for it was deleted. It
+  // stays on the ratchet and belongs to `M154e`, where `D726` already grades workload shape against
+  // a server-observed arrival curve. The UI tier is 31 constructs, not 32 — found by writing the
+  // test and running `tflw check`, not by reading the manifest.
+  {
+    id: 'C39',
+    construct: 'step:hover',
+    family: 'step',
+    tier: 'ui',
+    title: 'the pointer arrives without clicking, and the page can tell which happened',
+    target: 'webV2 storefront — the step fixture page’s menu button, which records pointer events',
+    evidence: { file: 'tests/.constructs/step-observables.tflw', pattern: '^\\s*hover button "Open menu"', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'Both wrong answers are named rather than merely absent, which is what the one pre-existing ' +
+      'use could not do. `onMouseEnter` writes `hovered:menu` and `onClick` writes `clicked:menu` ' +
+      'to the same readout, so a `hover` that did nothing leaves `none` and one implemented as a ' +
+      'click reports `clicked:menu` — and the test then clicks the very same button to show that ' +
+      '`clicked:menu` is reachable, so the contrast is demonstrated rather than asserted. A ' +
+      'tooltip that is absent from the DOM until the pointer arrives is the same event observed a ' +
+      'second time, in the language’s own idiom, so the row does not rest on one `data-` attribute.',
+    catches: 'a `hover` that is a click, and a `hover` that is a no-op.',
+    blockedOn: null,
+  },
+  {
+    id: 'C40',
+    construct: 'step:scroll',
+    family: 'step',
+    tier: 'ui',
+    title: 'the viewport really moves, latched so nothing else can satisfy the assertion',
+    target: 'webV2 storefront — the step fixture page’s sentinel, below a 2400px spacer',
+    evidence: { file: 'tests/.constructs/step-observables.tflw', pattern: '^\\s*scroll to button "Bottom marker"', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'An `IntersectionObserver` latches on first intersection and never resets, so the readout ' +
+      'flips from `no` to `yes` only if something genuinely scrolled the sentinel into the real ' +
+      'viewport. Latching is load-bearing twice over: the assertion must not depend on the element ' +
+      'still being on screen when it runs, and — the trap this row exists to avoid — Playwright ' +
+      'visibility has NOTHING to do with the viewport, so `expect <the marker> is visible` passes ' +
+      'before any scrolling at all. A row written the obvious way would have graded nothing.',
+    catches: 'a `scroll to` that resolves the element and never scrolls, which visibility cannot see.',
+    blockedOn: null,
+  },
+  {
+    id: 'C41',
+    construct: 'step:screenshot',
+    family: 'step',
+    tier: 'ui',
+    title: 'the shot is taken at `evidence full`, is skipped below it, and says which',
+    target: 'webV2 storefront — the step fixture page, captured at two evidence levels',
+    evidence: { file: 'tests/.constructs/step-observables.tflw', pattern: '^\\s*screenshot "step-fixture-observables"', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      '**The only row in the roster whose known answer is a report fact, and it has to be.** ' +
+      '`interpreter.ts:3496` — "`screenshot` is an evidence step, never an assertion" — so the ' +
+      'step ALWAYS passes and no `.tflw` assertion can go red when it breaks. The grader runs the ' +
+      'plant twice: at `evidence full` the step reports `captured`, and at `headers-only` it ' +
+      'reports `not captured (evidence level)` while still passing. Words alone would be a weak ' +
+      'instrument, so the grader also decodes the base64 in `results.json` and reads the PNG’s own ' +
+      'IHDR — a real capture is 1280x720, the run’s actual viewport.',
+    catches: 'a step that reports a capture it did not make, and evidence gating that stopped working.',
+    blockedOn: null,
+  },
+  {
+    id: 'C42',
+    construct: 'config:key:viewport',
+    family: 'config',
+    tier: 'ui',
+    title: 'the configured window size is the one the browser actually gets',
+    target: 'webV2 storefront — the step fixture page’s window readout, under two configs',
+    evidence: { file: 'tests/.constructs/viewport/configured.tflw', pattern: '^\\s*expect css "#viewport-readout\\[data-size=.900x600.\\]" is visible', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'A pair across two configs, because one alone measures Playwright rather than tflw: the ' +
+      'root config sets no `viewport` and the page reads **1280x720** (Playwright’s own default, ' +
+      'confirmed by running it, not assumed); `tests/.constructs/viewport/tflw.config` sets ' +
+      '`viewport 900 600` and the same page reads **900x600**. The value differs from the default ' +
+      'in BOTH dimensions on purpose — a key read for width and dropped for height would pass a ' +
+      'plant that moved only one. The separate directory is not a preference: `viewport` is legal ' +
+      'only in `defaults` (`TF025`), which is project-wide, and declaring it at the root would ' +
+      'have re-laid-out the storefront underneath `C34`’s snapshot baselines and `C35`’s axe counts.',
+    catches: 'a `viewport` key that is parsed and never reaches `newContext`.',
+    blockedOn: null,
+  },
+  {
+    id: 'C43',
+    construct: 'step:dismiss',
+    family: 'step',
+    tier: 'ui',
+    title: 'dismissal is unobservable directly, so the plant grades the arming it overwrites',
+    target: 'webV2 admin console — the bulk out-of-stock delete’s two confirms',
+    evidence: { file: 'tests/.constructs/dialog-one-shot.tflw', pattern: '^\\s*dismiss dialog\\s*$', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'Closes `M154b-01`. `browser.ts:232` is `void (armed === \'accept\' ? dialog.accept() : ' +
+      'dialog.dismiss())`, so **`dismiss` and nothing-armed take the same branch** and the step is ' +
+      'genuinely indistinguishable from its absence by direct observation — which is why the two ' +
+      'uses elsewhere in this repository prove nothing and why the step sat on the ratchet WITH ' +
+      'uses. What it does that its absence cannot is overwrite a prior arming (a single slot, ' +
+      '`browser.ts:220`). So the plant arms `accept`, overwrites it with `dismiss`, and clicks ' +
+      'once with no dialog in between: a real `dismiss` leaves `cancelled`, a no-op leaves the ' +
+      'accept standing and produces `cancelled-final` — the state the preceding step in that same ' +
+      'test just demonstrated, so the wrong answer is reachable and not hypothetical.',
+    catches: 'a `dismiss dialog` that does not arm, which no direct observation can detect.',
+    blockedOn: null,
+  },
 ];
 
 export const PLANT_IDS = PLANTS.map((p) => p.id);
@@ -810,15 +934,17 @@ export const RATCHET = [
   'declaration:test', 'declaration:crawl', 'declaration:action', 'declaration:import',
   'declaration:use', 'declaration:before', 'declaration:tags', 'declaration:with-each',
   'declaration:as', 'declaration:concurrency',
-  // --- step (17) ---
-  // Six of these are the workhorses `D739` is about — `api` alone has 1139 occurrences — and five
-  // (`ramp`, `hold`, `step`, `spike`, `threshold`) are the perf tier's, due at `M154e`. The four
-  // that are genuinely un-plantable-as-written are `hover`, `scroll`, `screenshot` and `pause`:
-  // each has uses in the suite that assert nothing about the step's own effect, which is why
-  // `M154d`'s real-flow pass could not take them and a later one has to build the observable.
-  // `dismiss` is the fifth and is worse than un-plantable — see `M154b-01`.
+  // --- step (13) ---
+  // Six are the workhorses `D739` is about — `api` alone has 1139 occurrences. The rest are the
+  // perf tier's and due at `M154e`: `ramp`, `hold`, `step`, `spike`, `threshold`, `cleanup` — and
+  // now `pause` too, which is the one construct `M154d` handed BACK. It had been filed here as a
+  // browser step needing an observable, and it is not one: `TF033` says "`pause` is only legal
+  // inside a workload-bearing `test`", so it is `M67`'s per-iteration pacing and `D726`'s
+  // arrival-curve grading is what will close it. The four that really did need an observable built
+  // — `hover`, `scroll`, `screenshot`, and `dismiss`, which was worse than un-plantable
+  // (`M154b-01`) — are rostered as of `M154d`'s third artifact.
   'step:api', 'step:wait', 'step:expect', 'step:let', 'step:capture', 'step:log',
-  'step:hover', 'step:scroll', 'step:dismiss', 'step:screenshot', 'step:pause',
+  'step:pause',
   'step:ramp', 'step:hold', 'step:step', 'step:spike', 'step:threshold', 'step:cleanup',
   // --- matcher (11) ---
   'matcher:equals', 'matcher:contains', 'matcher:matches-regex', 'matcher:matches-subset',
@@ -832,12 +958,12 @@ export const RATCHET = [
   // --- locator (0) ---
   // The first family to empty, at `M154d`'s locator harness. The header stays so the seven
   // families read in manifest order and an emptied one is visibly empty rather than absent.
-  // --- config (24) ---
+  // --- config (23) ---
   'config:directive:defaults', 'config:directive:env', 'config:directive:session',
   'config:directive:require', 'config:directive:exclude', 'config:key:header', 'config:key:timeout',
   'config:key:workers', 'config:key:report', 'config:key:web', 'config:key:api', 'config:key:insecure',
   'config:key:cert', 'config:key:key', 'config:key:allow', 'config:key:authorized', 'config:key:evidence',
-  'config:key:redact', 'config:key:viewport', 'config:key:log', 'config:probe:mutating',
+  'config:key:redact', 'config:key:log', 'config:probe:mutating',
   'config:probe:oversized', 'config:probe:traversal', 'config:probe:ciphers',
   // --- diagnostic (66) ---
   'diagnostic:TF001', 'diagnostic:TF002', 'diagnostic:TF003', 'diagnostic:TF010', 'diagnostic:TF011',
@@ -888,7 +1014,7 @@ export const RATCHET = [
  * the unrostered remainder, and a remainder can only be honest about a denominator that has itself
  * just been corrected upwards.
  */
-export const RATCHET_CEILING = 140;
+export const RATCHET_CEILING = 135;
 
 /**
  * `CONSTRUCTS.md` carries one row per plant and prose a human reads; this asserts their id sets

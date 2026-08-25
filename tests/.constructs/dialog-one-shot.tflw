@@ -10,7 +10,9 @@
 #   `dismiss dialog` with an `accept dialog` on a single confirm. The `accept` half is real — the
 #   default is dismissal, so the delete cannot happen unless the step armed something. The `dismiss`
 #   half proves nothing at all: Playwright dismisses an unhandled dialog anyway, so that assertion
-#   holds identically whether or not `dismiss dialog` did anything. Filed as `M154b-01`.
+#   holds identically whether or not `dismiss dialog` did anything. Filed as `M154b-01`, and
+#   **closed by `C43`** at the end of this test: the step is unobservable *directly*, but it
+#   overwrites a prior arming, and that is observable.
 #
 # The target is `webV2/admin`'s bulk out-of-stock delete, whose form runs two `confirm()`s in one
 # short-circuited handler and records which one it stopped at. The plant asserts **two states of the
@@ -86,6 +88,28 @@ test "one `accept dialog` accepts exactly one dialog; with none armed the first 
   accept dialog
   click button "Delete 2 out-of-stock"
   expect css "#bulk-delete-state[data-state='cancelled-final']" is visible
+
+  # `M154d` / `C43` — THE OVERWRITE, and the answer to `M154b-01` filed in this file's own header.
+  #
+  # `dismiss dialog` is indistinguishable from its absence by direct observation: `browser.ts:232`
+  # is `void (armed === 'accept' ? dialog.accept() : dialog.dismiss())`, so *dismiss* and *nothing
+  # armed* take the same branch and produce the same state. That is why the two `dismiss dialog`
+  # uses elsewhere in this repository prove nothing, and why the step sat on the ratchet with uses.
+  #
+  # But the step does one thing its absence cannot: it **overwrites a prior arming**
+  # (`interpreter.ts:3407` assigns `browser.page.armedDialog = which`, and line 220 says the slot
+  # holds exactly one). So arm `accept`, overwrite it with `dismiss`, and click *once* — with no
+  # dialog in between to consume the first arming. A real `dismiss` leaves `cancelled`; a `dismiss`
+  # that did nothing leaves the accept standing and produces `cancelled-final`, which is the state
+  # the step immediately above this one just demonstrated. The wrong answer is named, and it is a
+  # state this very test has already reached, so the contrast is not hypothetical.
+  #
+  # The slot is empty entering this block — the click above consumed the accept on dialog #1 and
+  # dialog #2 re-cleared it — so `accept dialog` here really does arm, rather than inheriting.
+  accept dialog
+  dismiss dialog
+  click button "Delete 2 out-of-stock"
+  expect css "#bulk-delete-state[data-state='cancelled']" is visible
 
   # Neither state deleted anything, and this line would hold under both — which is why it is here as
   # a fence on the bulk route's blast radius and not as the claim about `accept dialog`.

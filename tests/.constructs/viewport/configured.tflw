@@ -1,0 +1,15 @@
+# `M154d` / `C42` — the configured half of the `viewport` plant. Run with this directory as cwd, so
+# that `tflw.config` beside it is the one tflw reads; see that file for why the key cannot live in
+# the root config.
+#
+# **This file is meant to pass, and only under its own config.** `verify-construct-acceptance.mjs`
+# drives it that way, the same as every other plant in `tests/.constructs/`.
+#
+# The pair is the row. Either half alone would be vacuous — a size assertion under the default
+# config would be measuring Playwright rather than tflw, which is the point `M154b`'s `C2` header
+# makes about its own control.
+
+@constructs @mixed
+test "the window is the size the config's viewport key asked for"
+  open "/step-fixture"
+  expect css "#viewport-readout[data-size='900x600']" is visible

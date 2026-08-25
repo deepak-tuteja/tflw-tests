@@ -148,15 +148,25 @@ if (wanted('C1')) {
 
 // =============================================================================
 // C2 — `accept dialog`: armed, and one-shot
+// C43 — `dismiss dialog`: the arming it overwrites (`M154d`, closes `M154b-01`)
 // =============================================================================
 
-if (wanted('C2')) {
+// **One corpus run, two rows, and that is not just thrift.** `C43`'s whole claim is a contrast
+// with the state `C2`'s last step produces — a no-op `dismiss` leaves the accept standing and
+// yields `cancelled-final` — so the two rows are assertions about the *same* sequence in the same
+// test. Running the file twice would grade the second row against a different execution of the
+// thing it is contrasting with, and this plant seeds products and logs into the console, so the
+// second run is not cheap either.
+if (wanted('C2') || wanted('C43')) {
   const plant = plantFor('step:accept');
+  const dismissPlant = plantFor('step:dismiss');
   console.log(`\n${plant.id} — ${plant.title}\n  target: ${plant.target}`);
+  if (wanted('C43')) console.log(`${dismissPlant.id} — ${dismissPlant.title}\n  target: ${dismissPlant.target}`);
   const { report, output } = runCorpus(ROOT, ['--env', 'webv2Admin', plant.evidence.file]);
   if (!report) {
     fail(`${plant.id} produced no report. Needs the stack, the admin console on :8091 and a browser.\n${output.trim().split('\n').slice(-12).join('\n')}`);
     scores.get('C2').skipped = 'no report';
+    if (wanted('C43')) scores.get('C43').skipped = 'no report';
   } else {
     const test = report.tests.find((t) => t.kind === 'functional');
     const steps = test?.steps ?? [];
@@ -176,6 +186,40 @@ if (wanted('C2')) {
 
     const failedSteps = steps.filter((s) => !s.ok);
     precision('C2', failedSteps.length === 0, `no step failed (got ${failedSteps.map((s) => `line ${s.line}: ${s.source}`).join('; ') || 'none'})`);
+
+    if (wanted('C43')) {
+      // The overwrite, graded by ADJACENCY rather than by presence — the same lesson `C26` cost
+      // this milestone. `dismiss dialog` only means anything here if it sits between an `accept
+      // dialog` and a click with NO dialog in between: the slot holds one arming
+      // (`browser.ts:220`) and any intervening dialog would consume the accept, at which point the
+      // `dismiss` is arming an empty slot and the row proves nothing again.
+      // Anchored on the DISMISSAL and read outwards, never on the first `accept dialog` — that
+      // one is `C2`'s arming, several steps earlier, and anchoring there is how this check failed
+      // on its first run. The same first-match trap `C26` cost this milestone, in a grader written
+      // after learning it.
+      const dismissed = steps.findIndex((st) => /^\s*dismiss dialog\s*$/.test(st.source));
+      const armed = dismissed > 0 && /^\s*accept dialog\s*$/.test(steps[dismissed - 1]?.source ?? '') ? dismissed - 1 : -1;
+      const clicked = steps.findIndex((st, i) => i > dismissed && /^\s*click button "Delete 2 out-of-stock"/.test(st.source));
+
+      recall('C43', dismissed > 0 && steps[dismissed]?.ok === true, 'the `dismiss dialog` step itself ran and passed');
+      // The state AFTER the overwrite, located by position rather than by substring: the plant's
+      // own control asserts `cancelled` too, three steps earlier, so a `.some()` over the file
+      // would be satisfied by a step that has nothing to do with this row.
+      const settled = steps.find((st, i) => i > clicked && st.source.includes('#bulk-delete-state'));
+      recall('C43', /data-state='cancelled'\]/.test(settled?.source ?? '') && settled?.ok === true,
+        `the click after the overwrite settled at 'cancelled' (got ${settled ? settled.source.trim() : 'no state assertion after it'})`);
+      // And the wrong answer is reachable in this very run — `cancelled-final` is what a no-op
+      // `dismiss` would have produced, and `C2`'s own step just produced it. Without this the row
+      // would be asserting that a state it never saw is different from one it did.
+      recall('C43', steps.some((st) => st.source.includes("data-state='cancelled-final'") && st.ok),
+        'the contrasting state `cancelled-final` was actually reached in this run, so the wrong answer is not hypothetical');
+
+      precision('C43', armed >= 0 && dismissed === armed + 1,
+        `the step immediately before the dismissal is \`accept dialog\` (armed@${armed}, dismissed@${dismissed})`);
+      precision('C43', clicked === dismissed + 1,
+        `the step immediately after it is the click, so no dialog consumed the arming in between (clicked@${clicked})`);
+      precision('C43', failedSteps.length === 0, 'no step failed');
+    }
   }
 }
 
@@ -823,6 +867,177 @@ if (wanted('C38')) {
     precision('C38', steps.filter((s) => /^\s*expect \{file\} /.test(s.source)).length === 1, 'exactly one assertion on the bound name');
     precision('C38', steps.some((s) => /equals "orders-export\.csv"/.test(s.source)), 'and it is still an equality against the exact name, not a substring');
     precision('C38', failingSteps(test).length === 0, `no step failed (got ${failingSteps(test).map((s) => `line ${s.line}: ${s.source.trim()}`).join('; ') || 'none'})`);
+  }
+}
+
+// =============================================================================
+// C39-C42 — hover, scroll to, screenshot, and the viewport key
+// =============================================================================
+
+// One corpus run serves `C39`, `C40`, `C41`'s positive half and `C42`'s control, because they are
+// four tests in one file against one fixture page. `C41`'s negative half and `C42`'s configured
+// half each need a run of their own — a different evidence level and a different `tflw.config`
+// respectively, neither of which is expressible inside a single invocation.
+const FIXTURE_IDS = ['C39', 'C40', 'C41', 'C42'];
+if (FIXTURE_IDS.some(wanted)) {
+  const hoverPlant = plantFor('step:hover');
+  for (const id of FIXTURE_IDS) {
+    if (!wanted(id)) continue;
+    const p = PLANTS.find((x) => x.id === id);
+    console.log(`\n${p.id} — ${p.title}\n  target: ${p.target}`);
+  }
+  const { report, output } = runCorpus(ROOT, [hoverPlant.evidence.file]);
+  if (!report) {
+    fail(`C39-C42 produced no report. Needs the stack, the storefront on :8090 and a browser.\n${output.trim().split('\n').slice(-12).join('\n')}`);
+    for (const id of FIXTURE_IDS) if (wanted(id)) scores.get(id).skipped = 'no report';
+  } else {
+    const named = (fragment) => report.tests.find((t) => t.name.includes(fragment));
+    const view = (fragment) => {
+      const test = named(fragment);
+      const steps = test?.steps ?? [];
+      return {
+        test,
+        steps,
+        at: (re) => steps.findIndex((st) => re.test(st.source)),
+        okStep: (re) => steps.some((st) => re.test(st.source) && st.ok),
+      };
+    };
+
+    // --- C39: hover -------------------------------------------------------------------------
+    if (wanted('C39')) {
+      const f = view('hover lands the pointer without clicking');
+      if (!f.test) {
+        recall('C39', false, 'the hover test is missing or was renamed — the roster names it, so a rename must update this grader');
+      } else {
+        recall('C39', f.okStep(/data-token='hovered:menu'/), 'the pointer arriving is observed');
+        recall('C39', f.okStep(/expect text "pointer-is-over-the-menu" is visible/), 'and observed a second way, by an element absent from the DOM until the pointer arrives');
+        recall('C39', f.test.ok === true, `the plant passed (got ok=${f.test.ok})`);
+
+        // The three-point ordering IS the row. `none` before the hover establishes the starting
+        // state, `hovered:menu` after it is the claim, and `clicked:menu` after the click is the
+        // named wrong answer being shown reachable. Drop the last and a `hover` implemented as a
+        // click passes; drop the first and a page that had always read `hovered:menu` passes.
+        const before = f.at(/data-token='none'/);
+        const hovered = f.at(/^\s*hover button "Open menu"/);
+        const observed = f.at(/data-token='hovered:menu'/);
+        const clicked = f.at(/^\s*click button "Open menu"/);
+        const clickObserved = f.at(/data-token='clicked:menu'/);
+        precision('C39', before >= 0 && before < hovered, `the starting state is asserted before the hover (none@${before}, hover@${hovered})`);
+        precision('C39', hovered >= 0 && observed === hovered + 1, `the pointer token is asserted immediately after the hover (observed@${observed})`);
+        precision('C39', clicked > observed && clickObserved > clicked, `the same button is then clicked and reports a different token (click@${clicked}, observed@${clickObserved})`);
+      }
+    }
+
+    // --- C40: scroll to ---------------------------------------------------------------------
+    if (wanted('C40')) {
+      const f = view('scroll to really moves the viewport');
+      if (!f.test) {
+        recall('C40', false, 'the scroll test is missing or was renamed');
+      } else {
+        recall('C40', f.okStep(/data-seen='no'/), 'the sentinel is unseen before the scroll');
+        recall('C40', f.okStep(/data-seen='yes'/), 'and latched seen after it');
+        recall('C40', f.test.ok === true, `the plant passed (got ok=${f.test.ok})`);
+
+        const unseen = f.at(/data-seen='no'/);
+        const scrolled = f.at(/^\s*scroll to button "Bottom marker"/);
+        const seen = f.at(/data-seen='yes'/);
+        precision('C40', unseen >= 0 && unseen < scrolled && scrolled < seen,
+          `the readout is asserted 'no' before the scroll and 'yes' after (no@${unseen}, scroll@${scrolled}, yes@${seen})`);
+        // The trap this row exists to avoid, asserted so a future edit cannot walk into it: an
+        // `is visible` on the marker itself would pass before any scrolling, because Playwright
+        // visibility is a bounding box and has nothing to do with the viewport.
+        precision('C40', !f.steps.some((st) => /expect button "Bottom marker" is visible/.test(st.source)),
+          'the row does not assert visibility of the off-screen marker, which would pass unscrolled');
+      }
+    }
+
+    // --- C41: screenshot, positive half -----------------------------------------------------
+    if (wanted('C41')) {
+      const f = view('screenshot captures at evidence full');
+      const shot = f.steps.find((st) => /^\s*screenshot "step-fixture-observables"/.test(st.source));
+      if (!f.test) {
+        recall('C41', false, 'the screenshot test is missing or was renamed');
+      } else {
+        recall('C41', report.evidenceLevel === 'full', `the run really was at evidence full (got ${report.evidenceLevel})`);
+        recall('C41', /captured$/.test(shot?.detail ?? ''), `the step reports a capture (got ${JSON.stringify(shot?.detail ?? null)})`);
+        // Words are not enough for this row — see the plant's header. Decode what the report
+        // actually carries and read the PNG's own IHDR.
+        const png = shot?.screenshot?.base64 ? Buffer.from(shot.screenshot.base64, 'base64') : null;
+        recall('C41', png !== null && png.length > 0 && png.subarray(1, 4).toString() === 'PNG',
+          `the report carries real PNG bytes (got ${png ? `${png.length} bytes, magic ${JSON.stringify(png.subarray(1, 4).toString())}` : 'no payload'})`);
+        const dims = png && png.length > 24 ? `${png.readUInt32BE(16)}x${png.readUInt32BE(20)}` : 'unreadable';
+        recall('C41', dims === '1280x720', `and the image is the size of the page that was open (got ${dims})`);
+        precision('C41', shot?.ok === true, 'the step passed, as an evidence step always must');
+      }
+    }
+
+    // --- C42: viewport, the unconfigured control --------------------------------------------
+    if (wanted('C42')) {
+      const f = view("the window starts at Playwright's own default");
+      if (!f.test) {
+        recall('C42', false, 'the default-viewport control is missing or was renamed');
+      } else {
+        recall('C42', f.okStep(/data-size='1280x720'/), 'with no `viewport` configured the window is Playwright’s own default');
+        recall('C42', f.test.ok === true, `the control passed (got ok=${f.test.ok})`);
+      }
+    }
+
+    for (const id of FIXTURE_IDS) {
+      if (!wanted(id)) continue;
+      const p = PLANTS.find((x) => x.id === id);
+      const f = view(id === 'C39' ? 'hover lands' : id === 'C40' ? 'scroll to really' : id === 'C41' ? 'screenshot captures' : "Playwright's own default");
+      precision(id, (f.test?.steps ?? []).every((st) => st.ok), `no step failed in ${p.construct}'s test`);
+    }
+  }
+}
+
+// C41's negative half — the same file, one evidence level down. `screenshot` still PASSES here;
+// what changes is what it says it did, and that it carries no payload. A row that only ever ran at
+// `evidence full` would not notice gating that had stopped working.
+if (wanted('C41')) {
+  const plant = plantFor('step:screenshot');
+  const { report, output } = runCorpus(ROOT, [
+    '--evidence', 'headers-only',
+    plant.evidence.file,
+    '--only', 'screenshot captures at evidence full and says so, and says so when it does not',
+  ]);
+  if (!report) {
+    fail(`C41's evidence-off run produced no report.\n${output.trim().split('\n').slice(-12).join('\n')}`);
+  } else {
+    const test = report.tests[0];
+    const shot = (test?.steps ?? []).find((st) => /^\s*screenshot "step-fixture-observables"/.test(st.source));
+    recall('C41', report.evidenceLevel === 'headers-only', `the second run really was below full (got ${report.evidenceLevel})`);
+    recall('C41', (shot?.detail ?? '').includes('not captured (evidence level)'),
+      `and the step says it did not capture (got ${JSON.stringify(shot?.detail ?? null)})`);
+    precision('C41', shot?.ok === true, 'the step still passes — it is evidence, never an assertion (interpreter.ts:3496)');
+    precision('C41', !shot?.screenshot, 'and carries no image payload');
+    precision('C41', test?.ok === true, `the test still passes at a lower evidence level (got ok=${test?.ok})`);
+  }
+}
+
+// C42's configured half — its own directory, its own `tflw.config`, because `viewport` is legal
+// only in `defaults` (`TF025`) and `defaults` is project-wide. cwd is the corpus, not ROOT: tflw
+// reads `join(cwd, 'tflw.config')` (`cli.ts:1106`) and never walks up from the test file.
+if (wanted('C42')) {
+  const plant = plantFor('config:key:viewport');
+  const corpus = path.join(ROOT, path.dirname(plant.evidence.file));
+  const { report, output } = runCorpus(corpus, [path.basename(plant.evidence.file)]);
+  if (!report) {
+    fail(`C42's configured run produced no report (cwd ${corpus}).\n${output.trim().split('\n').slice(-12).join('\n')}`);
+    scores.get('C42').skipped = 'no report';
+  } else {
+    const test = report.tests[0];
+    const steps = test?.steps ?? [];
+    recall('C42', steps.some((st) => /data-size='900x600'/.test(st.source) && st.ok),
+      'the configured size is what the browser actually got');
+    recall('C42', test?.ok === true, `the configured half passed (got ok=${test?.ok})`);
+    // Both dimensions, and the reason is in the plant's header: a key read for width and dropped
+    // for height would pass a plant whose two sizes shared one dimension.
+    const cfg = readFileSync(path.join(corpus, 'tflw.config'), 'utf8');
+    precision('C42', /^\s*viewport 900 600\s*$/m.test(cfg), 'the corpus config really declares `viewport 900 600`');
+    precision('C42', !/^\s*viewport /m.test(readFileSync(path.join(ROOT, 'tflw.config'), 'utf8')),
+      'and the ROOT config declares none, so the control is a genuine default rather than a second configured value');
+    precision('C42', steps.every((st) => st.ok), 'no step failed');
   }
 }
 

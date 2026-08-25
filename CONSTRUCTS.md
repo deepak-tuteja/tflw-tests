@@ -138,6 +138,11 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C36` | `switch to new tab` / `switch to tab N` (`step:switch`) | ui | the popup wait goes red unaided; `switch to tab 1` is then graded by a heading that exists on tab 1 and not on the receipt PDF | a `switch to new tab` that misses the popup, and a `switch to tab N` that stays put |
 | `C37` | `close tab` (`step:close`) | ui | closing tab 2 leaves an assertion that only holds on tab 1 — so closing the wrong one, or none, both fail | a `close tab` that closes the wrong tab, or none, or does not restore focus |
 | `C38` | `download as` (`step:download`) | ui | the bound name is `orders-export.csv`, which comes from apiV2's `Content-Disposition` and appears nowhere in the markup | a `download as` that binds the wrong string, or the right one by coincidence |
+| `C39` | `hover` (`step:hover`) | ui | `onMouseEnter` and `onClick` write **different** tokens to one readout, and the test clicks the same button to show the wrong answer is reachable | a `hover` that is a click, and a `hover` that is a no-op |
+| `C40` | `scroll to` (`step:scroll`) | ui | an `IntersectionObserver` below a 2400px spacer, latched — because Playwright visibility ignores the viewport, so `is visible` on the marker would pass unscrolled | a `scroll to` that resolves the element and never scrolls |
+| `C41` | `screenshot` (`step:screenshot`) | ui | graded from the **report**, not the run: `captured` at `evidence full`, `not captured (evidence level)` below it, and the PNG's own IHDR reads 1280x720 | a step that reports a capture it did not make, and evidence gating that stopped working |
+| `C42` | `viewport` (`config:key:viewport`) | ui | a pair across two configs — 1280x720 unconfigured, 900x600 under a corpus config that sets it; differing in **both** dimensions | a `viewport` key that is parsed and never reaches `newContext` |
+| `C43` | `dismiss dialog` (`step:dismiss`) | ui | the step is indistinguishable from its absence, so the plant grades the **arming it overwrites**: `accept` → `dismiss` → one click must leave `cancelled` | a `dismiss dialog` that does not arm, which no direct observation can detect |
 
 ### `C1` — the soft assertion records a failure and keeps going
 
