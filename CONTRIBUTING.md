@@ -114,7 +114,11 @@ xvfb-run -a npm run regression -- --group security-ui
   step above discovers corpora by walking for a `tflw.config`, so `perf/k6/`'s JavaScript and
   `perf/artillery/`'s YAML are not overlooked but ineligible. The fixture half exists because the
   shared product id has drifted twice with a comment in each file saying it must not — 98% k6
-  failure at `M48`, and on 2026-08-05 a 100% error rate reported as PASS.
+  failure at `M48`, and on 2026-08-05 a 100% error rate reported as PASS. `D744` records why the
+  three copies stay literal and are *checked* against the constant rather than resolved from it at
+  run time: the rung they sit in exists to measure a POST with zero capture or interpolation
+  overhead, so importing the id would change what it measures, by a different amount in each of the
+  three runners.
 - **`npm run verify:contributing`** — this document against `.github/workflows/`. It is in the set
   it guards, which is the point rather than an oversight.
 - **`npm run verify:tflw-resolution`** — **which tflw a script is grading is declared, printed, and

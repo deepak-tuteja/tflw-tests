@@ -557,7 +557,7 @@ Three of the four shapes had **zero** occurrences anywhere in this repository be
 refused it: *"`pause` is only legal inside a workload-bearing `test`"*.
 
 Every row is graded against `tflw-acceptance/conformance/arrival-server.mjs`'s recorded arrival
-**times**. That file's `M154e-D2` argues why the target is a zero-latency counter and **not** apiV2,
+**times**. That file's `D745` argues why the target is a zero-latency counter and **not** apiV2,
 which inverts `D726`'s placement in order to keep `D726`'s principle: in the closed model a VU
 issues its next request when the last one returned, so a shape graded against a real database
 measures the database's lock queue and calls it tflw's spawn schedule. In the open model the

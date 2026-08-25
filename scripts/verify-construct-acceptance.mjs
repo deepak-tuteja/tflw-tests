@@ -305,7 +305,7 @@ if (wanted('C3')) {
 // =============================================================================
 //
 // Everything here is graded against `arrival-server.mjs`'s recorded arrival *times*. See that
-// file's `M154e-D2` for why the target is a zero-latency counter rather than apiV2, which inverts
+// file's `D745` for why the target is a zero-latency counter rather than apiV2, which inverts
 // `D726`'s placement in order to keep `D726`'s principle: in the closed model a VU issues its next
 // request when the last one returned, so a shape graded against a real database measures the
 // database.

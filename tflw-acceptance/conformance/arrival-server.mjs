@@ -37,7 +37,7 @@
 // binned curve beside the counts. The counting endpoints are untouched and `C3` still grades
 // exactly what it graded before.
 //
-// **`M154e-D2` — the shape plants are graded against this server and NOT against apiV2, which is
+// **`D745` — the shape plants are graded against this server and NOT against apiV2, which is
 // the opposite of what `D726` says, and the reason is physics rather than convenience.**
 //
 // `D726` reads "generalize it into apiV2's `load-admin`", on the principle that *the generator is

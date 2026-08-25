@@ -913,7 +913,7 @@ export const PLANTS = [
   // --- M154e: the perf tier -------------------------------------------------------------------
   //
   // Every row here is graded against `arrival-server.mjs`'s recorded arrival TIMES rather than
-  // against tflw's report of what it did — `M154e-D2` in that file argues why the target is a
+  // against tflw's report of what it did — `D745` in that file argues why the target is a
   // zero-latency counter and not apiV2, which inverts `D726`'s placement to keep `D726`'s
   // principle. Three of the four shapes had zero occurrences anywhere in this repository; `ramp`
   // had uses and had never been checked against anything but its own report.

@@ -9,7 +9,7 @@
 # ## What makes these plants rather than uses
 #
 # Every one of them is graded against `arrival-server.mjs`'s recorded arrival times — see that
-# file's `M154e-D2` for why the target is a zero-latency counter and not apiV2, which is the
+# file's `D745` for why the target is a zero-latency counter and not apiV2, which is the
 # opposite of what `D726` says and is forced by `D726`'s own principle. The short version: in the
 # closed model a VU issues its next request when the last one returns, so grading a shape against a
 # real database measures Postgres's lock queue and calls it tflw's spawn schedule.

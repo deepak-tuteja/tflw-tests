@@ -30,7 +30,7 @@
 // stay in sync. They drifted anyway, twice, *with the warning in the file*. That is the whole
 // argument for a mechanical check and against a fourth comment.
 //
-// **`M154e-D1` — the copies stay literal and are asserted equal to the constant, rather than
+// **`D744` — the copies stay literal and are asserted equal to the constant, rather than
 // single-sourced at run time.** The obvious reading of `B6-15`'s "single-source the fixture id" is
 // an import, and it is refused for a measurement reason: `dogfood-post-uncontended` is the rung
 // that isolates *POST with a static body and zero capture or interpolation overhead*. Resolving the
@@ -70,7 +70,7 @@ export const FIXTURES = {
     pattern: /export const LOAD_HOT_PRODUCT_ID\s*=\s*'([^']+)'/,
     what: 'the pinned "Load Test Widget" row every POST rung adds to a cart',
     // The three copies `B6-15` is actually about. All three are hardcoded on purpose (see
-    // `M154e-D1`), and all three broke together on 2026-08-05.
+    // `D744`), and all three broke together on 2026-08-05.
     carriedBy: [
       'perf/tflw/dogfood-post-uncontended.tflw',
       'perf/k6/dogfood-post-uncontended.js',
