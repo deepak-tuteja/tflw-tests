@@ -113,6 +113,14 @@ const CLASSIFIED = [
   {
     wf: 'ci.yml',
     job: 'acceptance-check',
+    cmd: 'npm run verify:redaction:self-test',
+    class: 'gate',
+    local: 'npm run verify:redaction:self-test',
+    why: '`scripts/verify-redaction.mjs`\'s own guards, driven against synthetic fixtures (`M154g`, carrying `M154f-03`). The gate itself needs apiV2, a real `--env safetyRedaction` run and a direct ground-truth fetch, and runs as the `safety-redaction-check` regression phase — its guards need none of that. A contributor gate rather than ci-only because it is milliseconds and it is the thing that tells you a guard stopped discriminating, which is the one failure a green gate cannot report',
+  },
+  {
+    wf: 'ci.yml',
+    job: 'acceptance-check',
     cmd: 'npm run verify:contributing',
     class: 'gate',
     local: 'npm run verify:contributing',

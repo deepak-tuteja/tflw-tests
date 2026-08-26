@@ -1146,8 +1146,14 @@ export const PLANTS = [
       'the proof. None of the five values appears in any step\'s `request.body`, `response.bodyText` ' +
       'or printed `detail` across `report/results.json`. And the half that stops it being vacuous: ' +
       '`results.json` **and** `report.html` must each carry at least one `[redacted]` marker, because ' +
-      'a pattern that matched nothing would pass a leak check by having nothing left to leak.',
-    catches: 'a `redact` that stopped covering a step\'s printed `detail` (the upstream gap closed 2026-07-26), and a pattern that matches nothing while the leak check passes vacuously.',
+      'a pattern that matched nothing would pass a leak check by having nothing left to leak. ' +
+      '**And the half `M154g` added, because it was not true:** each of those three field kinds has ' +
+      'to be *present* in the run at all. The corpus was three `GET`s, so no step in any run carried ' +
+      'a `request.body` — a third of the surface this row names was asserted over an empty set, ' +
+      'under a closing line that claimed the whole request/response trace. A covered field now goes ' +
+      'out in a request body and at least one recorded request body must show a marker, so ' +
+      '`redactRequest` is proven to have fired rather than assumed silent.',
+    catches: 'a `redact` that stopped covering a step\'s printed `detail` (the upstream gap closed 2026-07-26) or stopped reaching `redactRequest`, a ground-truth value the endpoint renamed silently leaving the search, and a pattern that matches nothing while the leak check passes vacuously.',
     blockedOn: null,
   },
   {
