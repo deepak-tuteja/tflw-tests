@@ -191,6 +191,15 @@ xvfb-run -a npm run regression -- --group security-ui
   this repository's citations agrees with this repository's prose **in both directions** — a pin
   that has gone stale makes tflw's index publish entries nothing asks for, and this is the only
   place in either repository that can see both sides.
+
+  **This is one of the few gates that cannot run on fedora-box, and it now says so rather than
+  guessing.** Its corpus is `git ls-files '*.md'`, and `scripts/exec.mjs` copies files, not history
+  — the box's working tree has a `.git` skeleton with no index, so git answers *zero tracked files*
+  without failing. That answer used to make every check below vacuous in the same direction, and
+  the gate then reported tflw's entire pin as stale with a remedy attached: re-pin it. The remedy
+  was wrong, and following it would have discarded a correct pin to satisfy a tree that could not
+  read itself. A plausible finding with an actionable fix is more dangerous than a crash, so the
+  gate now checks its own input first and fails with the true reason. It still does **not** skip.
 - **`npm --prefix apiV2 run lint`** — eslint over the target app. **The prefix is not decoration:**
   a bare `npm test` at this repo's root is `tflw run`, a Docker-dependent suite of `.tflw` files, and
   it is a completely different thing from anything inside `apiV2/`.
