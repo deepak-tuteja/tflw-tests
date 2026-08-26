@@ -626,6 +626,16 @@ command-line flag**. As a config key, `evidence` had **zero occurrences in this 
 key the parser accepted and then dropped would have been invisible — which is exactly the defect
 `C42` was built to catch for `viewport`, and it was found the same way: by writing the plant.
 
+And it went red on its own PR, which is the part worth keeping (`M154f-02`). A plant record's
+`evidence.file` is read two ways: the coverage grader **greps** it for `evidence.pattern`, the
+acceptance driver **executes** it. Those agree only while every witness is itself a test file — and
+`C54` is the first plant whose witness is a *config*, so the driver handed `tflw.config` to `tflw
+run`, which refuses it by name. The failure surfaced as `skipped: no report`, not as a red row: a
+plant that can never run and a plant that ran and said nothing look identical in the summary. The
+two readings are now separate fields (`evidence.file` witnesses, `run` executes) and
+`assertAcceptancePlantsAreRunnable()` checks every `acceptance` plant before the first corpus
+starts, so the next config-key plant fails loudly instead of quietly abstaining.
+
 ### The three constructs this tier did **not** roster
 
 `config:probe:oversized`, `config:probe:traversal` and `matcher:has-no-input-handling-violations`

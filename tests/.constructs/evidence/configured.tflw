@@ -15,5 +15,5 @@
 @constructs @mixed
 test "a screenshot is captured because the config asked for full evidence"
   open "/step-fixture"
-  expect css "#step-readout" is visible
+  expect css "#pointer-readout[data-token='none']" is visible
   screenshot "evidence-key-configured"

@@ -1110,6 +1110,14 @@ export const PLANTS = [
     title: 'the evidence level set in a config does what the flag does',
     target: 'webV2 storefront — the same `screenshot` step as `C41`, under a config that sets the key instead of a command line that passes the flag',
     evidence: { file: 'tests/.constructs/evidence/tflw.config', pattern: '^\\s*evidence\\s+full\\s*$', min: 1 },
+    // `run` exists because of this plant, and the reason is worth the field. For every other
+    // `acceptance` plant `evidence.file` is a `.tflw`, so the driver could execute the same path
+    // the coverage grader greps. This construct is a **config key whose only witness is the config**
+    // — pointing `evidence.file` at `configured.tflw` would have hidden the finding that motivated
+    // the plant (`evidence` had zero occurrences as a key in this repository; every existing use is
+    // the `--evidence` flag). So the two readings are separated: `evidence.file` is where the
+    // construct is *witnessed*, `run` is what the acceptance driver *executes*.
+    run: 'configured.tflw',
     graders: ['acceptance', 'coverage'],
     knownAnswer:
       '`C41` proves the *level* changes what a `screenshot` step does; this proves the **key** is the ' +
@@ -1341,6 +1349,37 @@ export const RATCHET_CEILING = 120;
  * @param {string} markdown the contents of `CONSTRUCTS.md`
  * @param {(msg: string) => void} fail
  */
+/**
+ * `M154f-02`. The acceptance driver executes `run ?? basename(evidence.file)` inside the plant's
+ * corpus, while the coverage grader greps `evidence.file` for `evidence.pattern`. Those are two
+ * incompatible readings of one field whenever the witness is not itself a test file, and nothing
+ * checked that they agreed — `C54` shipped pointing the driver at a `tflw.config`, which `tflw run`
+ * refuses by name (*"`tflw.config` is not a `.tflw` test file"*).
+ *
+ * It is asserted here rather than fixed silently because the failure mode is a **skip**, not a
+ * throw: the block below `if (!report)` records `skipped: 'no report'` and moves on, so a plant that
+ * can never run reads in the summary as one that ran and answered nothing. That is `M141`'s vacuity
+ * class arriving through the back door, and the ratchet would have kept counting `C54` as rostered.
+ *
+ * @param {string} root repository root, so the runnable path can be checked on disk
+ * @param {(p: string) => boolean} exists
+ * @param {(msg: string) => void} fail
+ */
+export function assertAcceptancePlantsAreRunnable(root, exists, fail) {
+  for (const plant of plantsFor('acceptance')) {
+    const dir = plant.evidence.file.slice(0, plant.evidence.file.lastIndexOf('/'));
+    const target = plant.run ?? plant.evidence.file.slice(plant.evidence.file.lastIndexOf('/') + 1);
+    if (!target.endsWith('.tflw')) {
+      fail(`${plant.id} is graded by \`acceptance\`, which runs \`${target}\` as a test file, but that is not a \`.tflw\`. `
+        + `Give the plant a \`run\` naming the test file beside its evidence.`);
+      continue;
+    }
+    if (!exists(`${root}/${dir}/${target}`)) {
+      fail(`${plant.id}'s acceptance target \`${dir}/${target}\` does not exist on disk.`);
+    }
+  }
+}
+
 export function assertLedgerIds(markdown, fail) {
   const documented = new Set([...markdown.matchAll(/^\|\s*`(C\d+)`\s*\|/gm)].map((m) => m[1]));
   for (const id of PLANT_IDS) {

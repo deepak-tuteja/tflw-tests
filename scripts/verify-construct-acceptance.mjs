@@ -44,7 +44,7 @@ import { fileURLToPath } from 'node:url';
 
 import { resolveTflw } from './lib/tflw-bin.mjs';
 import { readSpec, siblingState, gradeProvenance, announceProvenance, stalenessBanner } from './lib/tflw-provenance.mjs';
-import { PLANTS, plantFor } from './lib/constructs.mjs';
+import { PLANTS, plantFor, plantsFor, assertAcceptancePlantsAreRunnable } from './lib/constructs.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const GATE = process.argv.includes('--gate');
@@ -61,6 +61,11 @@ const fail = (msg) => {
   console.log(`✗ ${msg}`);
 };
 const ok = (msg) => console.log(`  ✓ ${msg}`);
+
+// `M154f-02`. Checked before a single corpus runs, because the defect it catches is invisible
+// afterwards: a plant whose run target is not a `.tflw` produces no report, and `if (!report)`
+// records it as `skipped` rather than failing the id outright.
+assertAcceptancePlantsAreRunnable(ROOT, existsSync, fail);
 
 /** Per-plant tally, so the closing table can say which half of the bar each row met. */
 const scores = new Map(PLANTS.map((p) => [p.id, { recall: [], precision: [], skipped: null }]));
@@ -1296,7 +1301,9 @@ if (wanted('C42')) {
 if (wanted('C54')) {
   const plant = plantFor('config:key:evidence');
   const corpus = path.join(ROOT, path.dirname(plant.evidence.file));
-  const { report, output } = runCorpus(corpus, [path.basename(plant.evidence.file)]);
+  // `plant.run`, not `basename(plant.evidence.file)` — this plant's witness IS its config, so the
+  // two differ here and nowhere else. See the field's comment in `constructs.mjs`.
+  const { report, output } = runCorpus(corpus, [plant.run ?? path.basename(plant.evidence.file)]);
   if (!report) {
     fail(`C54's configured run produced no report (cwd ${corpus}).\n${output.trim().split('\n').slice(-12).join('\n')}`);
     scores.get('C54').skipped = 'no report';
@@ -1329,9 +1336,22 @@ if (wanted('C54')) {
 // =============================================================================
 
 console.log('\nper-plant precision and recall:\n');
+// `M154f-03`. Iterate the plants THIS gate grades, not every plant on the roster. Seven rows are
+// graded by reference under `D751` — `security`, `diagnostics`, `redaction` — and this driver never
+// runs them, so their tallies are empty by construction. Walking all of `PLANTS` printed them as
+// `✗ ... recall n/a precision n/a`: a red glyph that means *not my job*, sitting in a table whose
+// every other red glyph means *this plant stopped discriminating*. Worse, the closing line then
+// counted all 58 as having "produced exactly their known answers" — a claim about seven plants no
+// assertion in this file touched. `D722` says presence is not sufficient; the same rule applies to
+// a gate's own summary.
 for (const plant of PLANTS) {
   if (!wanted(plant.id)) {
     console.log(`  – ${plant.id} ${plant.construct} — not selected by --only`);
+    continue;
+  }
+  if (!plant.graders.includes('acceptance')) {
+    const elsewhere = plant.graders.filter((g) => g !== 'acceptance' && g !== 'coverage');
+    console.log(`  – ${plant.id} ${plant.construct.padEnd(14)} graded by \`${elsewhere.join('`, `')}\`, not here`);
     continue;
   }
   const s = scores.get(plant.id);
@@ -1343,9 +1363,25 @@ for (const plant of PLANTS) {
   console.log(`  ${clean ? '✓' : '✗'} ${plant.id} ${plant.construct.padEnd(14)} recall ${tally(s.recall)}  precision ${tally(s.precision)}${s.skipped ? `  (skipped: ${s.skipped})` : ''}${blocked}`);
 }
 
+// `M154f-03`, second half. A row printing `✗ ... n/a n/a` was only ever a glyph — `clean` went
+// false and `failures` did not move, so a plant this gate is supposed to grade could assert nothing
+// at all and the phase would still exit 0. That is `M141`'s vacuity class inside the gate that
+// exists to refuse it. An empty tally is now a mismatch, and it says so in the plant's own terms.
+for (const plant of plantsFor('acceptance')) {
+  if (!wanted(plant.id)) continue;
+  const s = scores.get(plant.id);
+  if (s.recall.length === 0 && s.precision.length === 0) {
+    fail(`${plant.id} (${plant.construct}) recorded no assertions at all${s.skipped ? ` (skipped: ${s.skipped})` : ''}. `
+      + `A plant this gate grades must produce its known answer or fail trying; asserting nothing is neither.`);
+  }
+}
+
+const graded = plantsFor('acceptance').filter((p) => wanted(p.id)).length;
+const delegated = PLANTS.filter((p) => wanted(p.id) && !p.graders.includes('acceptance')).length;
 console.log(
   failures === 0
-    ? `\n✓ construct acceptance: ${PLANTS.filter((p) => wanted(p.id)).length} plant(s) produced exactly their known answers.`
+    ? `\n✓ construct acceptance: ${graded} plant(s) produced exactly their known answers`
+      + `${delegated > 0 ? `; ${delegated} more are graded by their own gates and are not claimed here` : ''}.`
     : `\n✗ construct acceptance: ${failures} mismatch(es).`,
 );
 if (failures > 0) process.stdout.write(stalenessBanner(PROVENANCE));
