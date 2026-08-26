@@ -196,6 +196,22 @@ jobs:
         run: npm run verify:construct-coverage
         working-directory: testFlow-tests
 
+      # M154g (`M154f-03`). The negative test for `scripts/verify-redaction.mjs`'s own guards, and
+      # the reason it can live in this job at all: the gate it belongs to needs apiV2, a real
+      # `--env safetyRedaction` run and a direct fetch for ground truth, and it runs as the
+      # `safety-redaction-check` regression phase. Its *guards* need none of that, so they are
+      # driven here against synthetic fixtures — including the exact defect this milestone found
+      # live, a corpus whose steps carried no `request.body` at all while the closing line claimed
+      # the whole request/response trace was clean.
+      #
+      # `M154f`'s lesson was that a gate written and never failed is decoration: the recurrence
+      # guard for `M154f-04` passed a rung deliberately broken to test it. A negative test that
+      # lives in the file and runs in CI is that lesson made permanent, rather than a scratch copy
+      # described in a plan note.
+      - name: The redaction gate's own guards fire on the input they exist for
+        run: npm run verify:redaction:self-test
+        working-directory: testFlow-tests
+
   # Round 3 decision 16 (PLAN_CI.md, 2026-08-03 grill-me): the 30-phase sweep used to run
   # sequentially in one job (~34min). Split into a 4-leg GH Actions job matrix — real per-phase
   # timings pulled from run 30802717073 (2026-08-03) were greedy-LPT bin-packed into

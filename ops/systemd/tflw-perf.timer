@@ -11,7 +11,16 @@
 
 [Unit]
 Description=Fire the tflw perf-conformance run daily
-Requires=tflw-perf.service
+# NO `Requires=tflw-perf.service` HERE, AND THE ABSENCE IS THE POINT (`M124-03`, found on deploy).
+# `Requires=` in a *timer's* `[Unit]` is a start-time dependency on the unit itself, not a statement
+# that the service must exist: `systemctl --user enable --now tflw-perf.timer` pulls the service in
+# as a dependency and runs it **immediately**. Observed live 2026-08-26 on the first arm — arming
+# the schedule started a `--profile full` load run beside a resident 17 GiB llama-server with swap
+# exhausted, which is both a wrong measurement and precisely the outcome `tflwperfctl.sh`'s header
+# says a mutating verb must never cause ("a mutating verb that kicked off a 20-minute load run
+# because someone clicked a button in a dashboard would be the worst possible reading of `D20`").
+# The schedule relationship is `Unit=` in `[Timer]` below, and that is the only one wanted. A timer
+# that cannot arm without also firing has no arm verb at all.
 
 [Timer]
 OnCalendar=*-*-* 04:30:00

@@ -66,3 +66,23 @@ test "the same profile export is stable across two calls (deterministic PII, not
   expect status equals 200
   expect body.phone equals "{firstPhone}"
   expect body.address.postalCode equals "{firstPostal}"
+
+@auth @safety @api
+test "a redact-covered field sent in a REQUEST body is masked too — the arm this corpus never exercised"
+  # `M154g`, carrying `M154f-03`'s rule one gate over. `scripts/verify-redaction.mjs` walks every
+  # step's `request.body` and closes by claiming the whole "request/response trace" is clean — but
+  # until this test existed the corpus sent no request body at all, on any step, in any run: three
+  # `GET`s and nothing else. One third of the surface that grader names was asserted over an empty
+  # set. That is `M141`'s vacuity class arriving through the same door `M154f-03` closed in
+  # `verify-construct-acceptance.mjs`: a tally that silently shrinks under a summary line that does
+  # not. Measured, not guessed — an archived full-suite `results.json` carries 4809 steps with 932
+  # `request.body` fields, and this file's own 16 steps carry zero.
+  #
+  # The password is deliberately WRONG and deliberately a literal. The subject here is `body.email`
+  # on the request side — `redact` reaching `redactRequest`, SPEC §3.5 — and a 401 puts the real
+  # admin address into the trace without also writing a working credential into
+  # `report/results.json`, which this repo archives under `runs/`. `env(ADMIN_PW)` would prove
+  # exactly the same thing about redaction and leave a usable password in an artifact nothing masks.
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: "not-the-admin-password" }
+  expect status equals 401
+  log "the real admin address left this machine in a request body; redaction has to cover the request side, not just the response"

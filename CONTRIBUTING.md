@@ -71,6 +71,7 @@ npm run verify:contributing
 npm run verify:tflw-resolution
 npm run verify:provenance
 npm run verify:construct-coverage
+npm run verify:redaction:self-test
 ```
 
 **And when a tflw milestone assigns or changes a `TF0xx` diagnostic code**, before opening either
@@ -158,6 +159,18 @@ xvfb-run -a npm run regression -- --group security-ui
   exactly one, four of six workload shapes never executed by anything.**
   The plants themselves are graded by `npm run verify:construct-acceptance`, which needs the stack
   and a browser and runs as the `construct-acceptance` regression phase.
+- **`npm run verify:redaction:self-test`** — **the redaction gate's guards are held to the inputs
+  they exist for.** `scripts/verify-redaction.mjs` proves real PII never reaches
+  `report/results.json`, and it needs apiV2, a real `--env safetyRedaction` run and a direct
+  ground-truth fetch to do it — so it runs as the `safety-redaction-check` regression phase, not
+  here. Its *guards* need none of that: this drives them against synthetic reports and asserts each
+  one fires, and that none fires on the control (`M154g`, carrying `M154f-03`).
+  Why it exists: that gate could shrink its own ground-truth set silently, and one of the three
+  fields it claims to walk — `request.body` — **was never present in any run**, because the corpus
+  was three `GET`s. A third of the surface was asserted over an empty set under a closing line that
+  said the whole trace was clean. `M154f` had already caught a recurrence guard passing a case
+  deliberately broken to test it; a gate written and never failed is decoration, and this is the
+  cheapest place to keep that from being true again.
 - **`npm run verify:provenance`** — **nothing in this repository's prose points somewhere a reader
   cannot follow.** Three claims, checked as one because they are one claim from the reader's side.
   Eight markdown links pointed at `../testFlow/…`, and a relative link cannot climb above a
