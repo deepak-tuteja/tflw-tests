@@ -152,7 +152,11 @@ used to be the only evidence for: `mtls-rejection`, `safety-redaction-check`, `d
 `cli-flags-check`, `migrate-check`, `watch-check`, `safety-flags-check`, `check-diagnostics`,
 `pick-check`, `logging-check`, `report-overflow-check`, `ui-admin-check` (E2 + E3's own
 `orgs.tflw`), `webv2-admin-check` (pre-E3 housekeeping, + E3's own `orgs-mixed.tflw`) — 30 phases
-total, each on its own fresh Docker restart (`scripts/regression.mjs`; restarting every phase isn't
+total, plus `perf-ladder`, the one phase that is **local-only and never runs in CI**: the measured half of
+the perf gate, which needs `fedora-box`, k6 and exclusive use of the machine, and reports
+`⊘ skipped` anywhere else rather than a pass. Six of its eight rungs drive apiV2 and two drive a
+managed echo target it starts itself, so it takes the same fresh restart as everything else. Each
+phase runs on its own fresh Docker restart (`scripts/regression.mjs`; restarting every phase isn't
 optional — `unique(...)`'s counter resets per `tflw run` invocation but Postgres data doesn't, so
 chained phases on the same DB reproduce false collisions; `node cli.mjs stop`/`start` tears down
 and rebuilds **both** Postgres containers — apiV2's and inventory-service's own — every phase, same
@@ -166,7 +170,7 @@ script wins.
 `npm run regression:smoke` (`scripts/regression-smoke.mjs`, PLAN_CI.md decision 15) — one Docker
 restart, then `--tag smoke` (a mixed sample across all three layers) plus `demo-fail-check`/
 `cli-flags-check`/`check-diagnostics`, the cheapest restart-agnostic `*-check` phases. Not a
-replacement for the full 30-phase sweep above — reserve that for changes that touch `testFlow`
+replacement for the full sweep above — reserve that for changes that touch `testFlow`
 itself (a new tflw release is exactly the kind of cross-cutting change 30 independent phases exist
 to catch), or let CI catch it on push to `main`. Exits non-zero on any failure; archives its
 reports into `report-by-phase/` the same way the full sweep does.
