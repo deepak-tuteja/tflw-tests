@@ -59,7 +59,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
-import { RUNGS, FIXTURES, FIXTURE_SOURCE } from './lib/perf-ladder.mjs';
+import { RUNGS, FIXTURES, FIXTURE_SOURCE, TARGETS } from './lib/perf-ladder.mjs';
 import { resolveTflw } from './lib/tflw-bin.mjs';
 import { compare } from './verify-perf-baseline.mjs';
 
@@ -216,12 +216,36 @@ function readK6(summaryFile, subMetric) {
   const p95 = values['p(95)'] ?? values.p95;
   const reqs = need(metrics.http_reqs?.values?.count ?? metrics.http_reqs?.count,
                     'http_reqs count', summaryFile);
-  const seconds = need(doc.state?.testRunDurationMs, 'state.testRunDurationMs', summaryFile) / 1000;
+
+  // **`M154f-04` — read the rate k6 publishes rather than dividing by a field it stopped
+  // emitting.** This used to be `reqs / (doc.state.testRunDurationMs / 1000)`. k6 v2's
+  // `--summary-export` has no `state` block at all — the document is `{ root_group, metrics }` —
+  // so `need()` threw on every single rung and the whole k6 half of the ladder produced nothing.
+  // A counter's own `rate` is count-per-second over the run, which is the number that division was
+  // reconstructing, and it cannot be removed without removing the counter. The `state` path is
+  // kept as a fallback so an older k6 still works, but it is no longer the primary.
+  const rate = metrics.http_reqs?.values?.rate ?? metrics.http_reqs?.rate;
+  const stateSeconds = doc.state?.testRunDurationMs ? doc.state.testRunDurationMs / 1000 : null;
+  const rps = need(rate ?? (stateSeconds ? reqs / stateSeconds : undefined),
+                   'http_reqs rate (and no state.testRunDurationMs to reconstruct it from)',
+                   summaryFile);
+
+  // **`M154f-04` — and the error rate is read, not defaulted.** The previous expression ended in
+  // `?? 0`, and neither of the two keys it tried exists in k6 v2: a `Rate` metric exports
+  // `{ passes, fails, value }`, where `value` *is* the rate and `passes` counts the failures. So
+  // every k6 rung in every artifact recorded `errorRate: 0` — not measured, asserted. That is the
+  // one number `verify-perf-baseline.mjs` calls its calibration-free rule, and defaulting it is
+  // precisely what this file's own header forbids two screens above: "a comparison gate whose
+  // inputs quietly became null reports no regression forever".
+  const failed = need(metrics.http_req_failed, 'http_req_failed', summaryFile);
+  const errorRate = need(failed.values?.rate ?? failed.value ?? failed.rate,
+                         'http_req_failed rate/value', summaryFile);
+
   return {
     iterations: reqs,
-    errorRate: (metrics.http_req_failed?.values?.rate ?? metrics.http_req_failed?.rate ?? 0),
+    errorRate,
     p95: need(p95, `${key} p(95)`, summaryFile),
-    rps: reqs / seconds,
+    rps,
     population: subMetric,
   };
 }
@@ -252,55 +276,307 @@ function legCurve(root) {
  *  not installed is a **recorded absence** (`absent_runners` in the artifact), never a silently
  *  narrower comparison. */
 function legLadder(root, { rungFilter = null } = {}) {
-  const perf = path.join(root, 'tflw-acceptance/perf');
+  const acceptance = path.join(root, 'tflw-acceptance');
   const present = { tflw: true, k6: runnerPresent('k6'), artillery: runnerPresent('artillery') };
   const absent = Object.entries(present).filter(([, yes]) => !yes).map(([name]) => name);
 
   writeTflwEnv(root);
-  // Every mutating rung wants a reset first or it measures a database still carrying the last
-  // run's rows (perf/README.md). Done once per leg rather than per rung: the rungs are run back to
-  // back and a reset between them would itself be load on the target.
-  const reset = run('curl', ['-s', '-o', '/dev/null', '-w', '%{http_code}',
-                             '-X', 'POST', 'http://localhost:4001/v1/admin/load/reset',
-                             '-H', `Authorization: Bearer ${process.env.ADMIN_TOKEN ?? ''}`]);
 
-  const rungs = [];
-  for (const rung of RUNGS) {
-    if (rungFilter && !rungFilter.includes(rung.name)) continue;
-    const row = { name: rung.name, what: rung.what, runners: {}, skipped: {} };
+  const selected = RUNGS.filter((r) => !rungFilter || rungFilter.includes(r.name));
+  const needed = new Set(selected.map((r) => r.target));
 
-    for (const [runner, rel] of Object.entries(rung.impls)) {
-      if (!present[runner]) { row.skipped[runner] = 'not installed on this box'; continue; }
-      try {
-        row.runners[runner] = runOneRung(perf, runner, rel, rung);
-      } catch (error) {
-        row.runners[runner] = { error: error.message };
-      }
-    }
-    rungs.push(row);
+  // `M154f-05` — start the servers this leg owns. Only `echo` is `managed: 'driver'`; apiV2 is the
+  // Docker stack and is asserted, never started.
+  const servers = [];
+  for (const name of needed) {
+    const target = TARGETS[name];
+    if (target?.managed !== 'driver') continue;
+    servers.push(startManagedTarget(acceptance, name, target));
   }
-  return { ok: rungs.every((r) => Object.values(r.runners).every((m) => !m.error)),
-           reset_http: reset.stdout, absent_runners: absent, rungs };
+
+  try {
+    // `M154f-06` — the reset, authenticated in a way that actually works, and **gated**.
+    const reset = resetLoadTarget(root);
+
+    // `M154f-09` — what every target looked like before any load was applied. Everything after is
+    // judged against this rather than against an absolute, for `D750`'s reason: on this box an
+    // absolute latency bound is either a flake generator or vacuous, but a target that is ten times
+    // slower than it was ten minutes ago in the same run is not ambiguous.
+    const health = {};
+    for (const name of needed) health[name] = { before: probeTarget(name) };
+
+    const rungs = [];
+    for (const rung of selected) {
+      const row = { name: rung.name, what: rung.what, target: rung.target, runners: {}, skipped: {} };
+      row.health = { before: probeTarget(rung.target) };
+
+      for (const [runner, rel] of Object.entries(rung.impls)) {
+        if (!present[runner]) { row.skipped[runner] = 'not installed on this box'; continue; }
+        try {
+          row.runners[runner] = runOneRung(acceptance, runner, rel, rung);
+        } catch (error) {
+          row.runners[runner] = { error: error.message };
+        }
+      }
+
+      row.health.after = probeTarget(rung.target);
+      row.health.baseline = health[rung.target]?.before;
+      row.target_ok = judgeHealth(row.health, health[rung.target]?.before);
+      rungs.push(row);
+    }
+
+    for (const name of needed) health[name].after = probeTarget(name);
+
+    return {
+      // The leg passes only if every runner produced metrics **and** the reset worked **and** every
+      // rung left its target as healthy as it found it. Before `M154f` this was the first clause
+      // alone, which is why a run against a target spending 97% of its wall-clock in GC reported
+      // five clean rungs at a 0% error rate.
+      ok: rungs.every((r) => Object.values(r.runners).every((m) => !m.error))
+          && reset.ok
+          && rungs.every((r) => r.target_ok?.ok !== false),
+      reset,
+      reset_http: reset.http,      // kept: `tflwperfctl.sh status` and older artifacts read this key
+      health,
+      absent_runners: absent,
+      rungs,
+    };
+  } finally {
+    for (const s of servers) s.stop();
+  }
 }
 
-function runOneRung(perf, runner, rel, rung) {
+/** `M154f-06` — reset the load target, with a credential that works, and report whether it did.
+ *
+ * The old call sent `Authorization: Bearer ${process.env.ADMIN_TOKEN ?? ''}`. Two things were wrong
+ * with it and only the first is obvious. **No unit sets `ADMIN_TOKEN`**, so under systemd the header
+ * was the literal `Bearer ` and the endpoint answered 401. And **it could not have worked if one
+ * had been set**: `JWT_ACCESS_TTL` defaults to `5s` (docker-compose.yml), so any token minted early
+ * enough to be put in the environment is expired by the time the leg runs — measured on 2026-08-26
+ * as 201, then 401 six seconds later.
+ *
+ * `AnyAuthGuard` accepts HTTP Basic as well as a bearer token, and Basic has no expiry, so the fix
+ * is to stop minting anything. The credentials are read out of `apiV2/src/seed/seed.ts` — the file
+ * that creates the account — with the same env-then-literal precedence the app itself uses, so a
+ * box that overrides `ADMIN_PW` is followed rather than guessed at. Copying the literal into this
+ * file instead would be a fourth copy of a fixture that has already drifted twice (`D744`).
+ *
+ * And the result is **returned as a judgement, not as a number**. `reset_http` was recorded in every
+ * artifact and read by nothing: a failed reset means every mutating rung measured a database still
+ * holding the last run's rows, which is a wrong measurement rather than a missing one.
+ */
+const ADMIN_SEED_SOURCE = 'apiV2/src/seed/seed.ts';
+
+function adminCredentials(root) {
+  const file = path.join(root, ADMIN_SEED_SOURCE);
+  const src = readFileSync(file, 'utf8');
+  const seeded = (name) => {
+    // Anchored on `process.env.<NAME> ??` so `ORG_A_ADMIN_EMAIL` cannot satisfy `ADMIN_EMAIL`.
+    const m = src.match(new RegExp(`process\\.env\\.${name}\\s*\\?\\?\\s*'([^']+)'`));
+    if (!m) {
+      throw new Error(`${ADMIN_SEED_SOURCE} no longer defaults ${name} to a literal. The reset ` +
+                      `credential is read from the seed so it cannot drift from the account that ` +
+                      `is actually created; update this pattern rather than hardcoding a copy.`);
+    }
+    return m[1];
+  };
+  return {
+    email: process.env.ADMIN_EMAIL ?? seeded('ADMIN_EMAIL'),
+    password: process.env.ADMIN_PW ?? seeded('ADMIN_PW'),
+  };
+}
+
+function resetLoadTarget(root) {
+  const { email, password } = adminCredentials(root);
+  const r = run('curl', ['-s', '-o', '/dev/null', '-w', '%{http_code}', '--max-time', '60',
+                         '-X', 'POST', 'http://localhost:4001/v1/admin/load/reset',
+                         '-u', `${email}:${password}`]);
+  const http = (r.stdout ?? '').trim();
+  const ok = /^2\d\d$/.test(http);
+  return {
+    ok,
+    http,
+    as: email,
+    detail: ok ? null
+      : `POST /v1/admin/load/reset answered ${http || '(no response)'} as ${email}. Every mutating ` +
+        `rung after this one measured a database carrying the previous run's rows.`,
+  };
+}
+
+// ── `M154f-09` — the target is checked, not assumed ─────────────────────────────────────────────
+//
+// **What the ladder could not see.** Its two existing rules are `errorRate > 1%` and "a rung with
+// no co-runner is a failure". Both catch a target that is **down**. Neither catches one that is
+// **dying**, and those are different failures: a degraded target answers everything successfully
+// and only slowly, so the error rate stays at zero while every latency sample is poisoned.
+//
+// That is not hypothetical either. On 2026-08-26 apiV2 spent this leg heading for a heap OOM — the
+// GC log's `current mu = 0.027` says 97% of wall-clock went to garbage collection — and exited 139
+// during the run. All five completed rungs reported a **0% error rate**. `checkout-burst` came in
+// at p95 95 ms against the ~68-72 ms this box had recorded at `M46`-`M48`. Nothing flagged any of
+// it, and had the k6 half of the ladder been working that run would have written those numbers into
+// `baseline.json` as the **founding** band for every future comparison.
+//
+// So the assertion is a ratio inside one run, not an absolute: `D750`'s reasoning applies here for
+// the same reason it applies to the bands. The bound is deliberately loose — a target ten times
+// slower on a trivial health endpoint than it was minutes earlier is not a slow box, it is a broken
+// process — and both numbers ride along in the artifact so it can be tightened from data rather
+// than from taste.
+
+export const HEALTH_DEGRADATION_FACTOR = 5;
+
+/**
+ * **The bound is anchored on the leg's opening probe, not on the previous rung.**
+ *
+ * The first version of this check compared each rung's closing probe to its own opening one, and
+ * the run of 2026-08-26 proved that structurally cannot work: apiV2 leaked its way from a 2.2 ms
+ * health endpoint to a 144 ms one over eight rungs and then died of a heap OOM, while **every
+ * single rung reported `ok`** — ratios of 0.86, 0.97, 1.22, 0.99, 8.32, 0.78, 1.06, 4.17. Each step
+ * was small; the walk was 65x. A neighbour-anchored ratio is blind to monotone drift by
+ * construction, which is exactly the shape of failure a leaking target produces.
+ *
+ * So each rung is judged against **both**: the leg's opening baseline for that target (catches
+ * drift) and its own opening probe (catches a collapse inside one rung, which baseline-anchoring
+ * would miss if the baseline were already bad).
+ *
+ * **5x is measured, not chosen.** In that same run the health endpoint read 2.13-3.34 ms on every
+ * probe taken while the target was healthy — including during `dogfood-get-only`, which was serving
+ * 12,913 requests a second at the time. Legitimate load does not move this endpoint at all. The
+ * bound is therefore roughly twice the widest healthy reading observed under the ladder's heaviest
+ * rung, and the numbers it is derived from ride along in every artifact so the next person can
+ * check that claim rather than trust it.
+ */
+
+/** Median of three, because one sample of a sub-millisecond endpoint is mostly process-spawn noise.
+ *  `curl` rather than `fetch` so the probe and the reset share one mechanism and one timeout. */
+function probeTarget(name) {
+  const target = TARGETS[name];
+  if (!target?.health) return { ok: null, why: `no health endpoint declared for target ${name}` };
+  const samples = [];
+  let http = '';
+  for (let i = 0; i < 3; i += 1) {
+    const t0 = process.hrtime.bigint();
+    const r = run('curl', ['-s', '-o', '/dev/null', '-w', '%{http_code}', '--max-time', '10', target.health]);
+    samples.push(Number(process.hrtime.bigint() - t0) / 1e6);
+    http = (r.stdout ?? '').trim();
+    if (!/^2\d\d$/.test(http)) break;
+  }
+  samples.sort((a, b) => a - b);
+  return {
+    ok: /^2\d\d$/.test(http),
+    http,
+    ms: Math.round(samples[Math.floor(samples.length / 2)] * 100) / 100,
+  };
+}
+
+/** `{ ok }` plus, when not ok, the reason — so the artifact says *what* was wrong with the target
+ *  rather than only that something was. `baseline` is the leg's opening probe for this target. */
+function judgeHealth(health, baseline) {
+  const { before, after } = health;
+  if (before?.ok === null || after?.ok === null) return { ok: null, why: 'target has no health endpoint' };
+  if (before?.ok === false) {
+    return { ok: false, why: `the target was already unhealthy before this rung ran (health said ` +
+                             `${before.http || 'nothing'}), so its numbers describe a broken target.` };
+  }
+  if (after?.ok === false) {
+    return { ok: false, why: `the target stopped answering its health endpoint during this rung ` +
+                             `(${after.http || 'no response'}). It was healthy when the rung started, ` +
+                             `so the rung's own numbers were taken from a process that was failing.` };
+  }
+
+  const floor = (ms) => Math.max(ms, 0.5);        // a sub-ms endpoint must not make the ratio explode
+  const drift = baseline?.ok ? after.ms / floor(baseline.ms) : null;
+  const within = after.ms / floor(before.ms);
+  const out = { ok: true, ratio: Math.round(within * 100) / 100 };
+  if (drift !== null) out.drift = Math.round(drift * 100) / 100;
+
+  if (drift !== null && drift > HEALTH_DEGRADATION_FACTOR) {
+    return { ...out, ok: false,
+             why: `the target's health endpoint reads ${after.ms} ms, ${drift.toFixed(1)}x the ` +
+                  `${baseline.ms} ms it read when this leg started — past the ` +
+                  `${HEALTH_DEGRADATION_FACTOR}x bound. The rung's own step was only ` +
+                  `${within.toFixed(2)}x, which is the point: a target that degrades a little under ` +
+                  `every rung is invisible to a neighbour-anchored check and has still stopped being ` +
+                  `the target the earlier rungs were measured against.` };
+  }
+  if (within > HEALTH_DEGRADATION_FACTOR) {
+    return { ...out, ok: false,
+             why: `the target's health endpoint went from ${before.ms} ms to ${after.ms} ms across ` +
+                  `this one rung — ${within.toFixed(1)}x, past the ${HEALTH_DEGRADATION_FACTOR}x ` +
+                  `bound. A target that degrades this far under a rung answers every request ` +
+                  `successfully and slowly, so the error rate stays at 0% while every latency sample ` +
+                  `is poisoned.` };
+  }
+  return out;
+}
+
+/** `M154f-05` — start a `managed: 'driver'` target and hand back a stop. Waits for it to answer
+ *  rather than sleeping: the echo server binds in milliseconds, but "rather than sleeping" is the
+ *  difference between a flake and a failure on a loaded box. */
+function startManagedTarget(acceptance, name, target) {
+  const script = path.join(acceptance, target.script);
+  if (!existsSync(script)) {
+    throw new Error(`target \`${name}\` declares ${target.script}, which does not exist under ` +
+                    `tflw-acceptance/. The manifest and the tree disagree.`);
+  }
+  const child = spawn(process.execPath, [script, String(target.port)], {
+    cwd: path.dirname(script), stdio: 'ignore', detached: false,
+  });
+  const deadline = Date.now() + 15000;
+  let up = false;
+  while (Date.now() < deadline) {
+    if (probeTarget(name).ok) { up = true; break; }
+  }
+  if (!up) {
+    try { child.kill('SIGKILL'); } catch {}
+    throw new Error(`target \`${name}\` did not answer ${target.health} within 15s of starting ` +
+                    `${target.script}.`);
+  }
+  log(`started managed target ${name} (${target.script} on :${target.port})`);
+  return { name, stop: () => { try { child.kill('SIGTERM'); } catch {} } };
+}
+
+/** **`M154f-05` — the rung's own path decides where it runs, not the runner's name.**
+ *
+ * This used to be `path.basename(rel)` with a `cwd` derived from `runner`, which threw away the
+ * directory the manifest had just supplied. For five of seven rungs the two agreed and the bug was
+ * invisible; for `echo-get-only` and `echo-post-only`, whose tflw side deliberately lives under
+ * `perf/profile/` (its `why` says so, and says why), it looked for `perf/tflw/echo-get-only.tflw`
+ * and died `ENOENT`. Both were then reported as regressions, which is the correct outcome for the
+ * wrong reason: the rung had not regressed, the driver could not find it.
+ *
+ * `M154f-02` is the same bug — a path reduced to its basename and re-derived from something other
+ * than itself — in a different file, filed the same week. Worth one sentence here so the pair is
+ * findable from either end.
+ */
+function runOneRung(acceptance, runner, rel, rung) {
+  const cwd = path.join(acceptance, path.dirname(rel));
   const file = path.basename(rel);
+  if (!existsSync(path.join(cwd, file))) {
+    throw new Error(`${rel} does not exist under tflw-acceptance/. verify-perf-parity.mjs asserts ` +
+                    `every impl path, so this means the manifest and the tree drifted since it ran.`);
+  }
+
   if (runner === 'tflw') {
-    const cwd = path.join(perf, 'tflw');
     const report = path.join(cwd, 'report', 'results.json');
     rmSync(report, { force: true });          // the same guard runCorpus documents
     run(process.execPath, [TFLW_BIN, 'run', '--no-color', file], { cwd });
     return readTflw(report);
   }
   if (runner === 'k6') {
-    const cwd = path.join(perf, 'k6');
     const out = path.join(cwd, `.summary-${rung.name}.json`);
     rmSync(out, { force: true });
-    run('k6', ['run', '--quiet', `--summary-export=${out}`, file], { cwd });
-    return readK6(out, `name:${rung.k6Tag ?? rung.name},expected_response:true`);
+    const r = run('k6', ['run', '--quiet', `--summary-export=${out}`, file], { cwd });
+    if (!existsSync(out)) {
+      // k6 writes no summary at all when it rejects the script — an unsupported threshold
+      // aggregation exits 104 before a single request is made. Without this the failure surfaced as
+      // a bare ENOENT with no hint that k6 had an opinion about why.
+      throw new Error(`k6 wrote no summary for ${rel} (exit ${r.status}). k6 said: ` +
+                      `${((r.stderr ?? '') + (r.stdout ?? '')).trim().split('\n').slice(-3).join(' / ') || '(nothing)'}`);
+    }
+    return { ...readK6(out, `name:${rung.k6Tag ?? rung.name},expected_response:true`), exit: r.status };
   }
   if (runner === 'artillery') {
-    const cwd = path.join(perf, 'artillery');
     const out = path.join(cwd, `.report-${rung.name}.json`);
     rmSync(out, { force: true });
     run('artillery', ['run', '--output', out, file], { cwd });
@@ -544,14 +820,45 @@ async function main() {
   doc.compared_rungs = judged.checked;
   doc.uncomparable_rungs = judged.uncomparable;
 
-  doc.ok = !doc.error
-    && legs.every((name) => doc.legs[name]?.ok === true)   // every requested leg RAN and passed
-    && judged.regressions.length === 0;
+  // **`M154f-10` — a run that compared nothing does not get to say PASS.**
+  //
+  // Until the bands are set, every rung takes `compare()`'s un-established branch: pushed to
+  // `uncomparable` and `continue`d, with no regression raised. That is deliberate — an unset band is
+  // not a regression — but it meant `doc.ok` could be `true` with `compared_rungs: 0`, and it was:
+  // the 2026-08-26 re-run, with the k6 half repaired and all seven rungs producing metrics, printed
+  // `PASS — 0 rung(s) compared, 0 regression(s)`. Before the repair the accidental `no-peer`
+  // regressions had been holding the run red, so fixing the ladder is what *exposed* this rather
+  // than what caused it.
+  //
+  // A green that means "nothing was checked" is the precise thing this file's own gate exists to
+  // refuse, one level up: `verify-perf-baseline.mjs` calls reporting no-regression for an
+  // uncompared rung "the precise shape of a vacuous check", and then the run wrapping it said PASS
+  // for eight of them at once. So there are three verdicts rather than two, and the calibration run
+  // — which is *supposed* to compare nothing, because its job is to produce the numbers the bands
+  // are written from — reports `unjudged`. That is not a failure and reads as neither: it is a run
+  // that has produced data and not a verdict.
+  const ranTheLadder = (doc.legs.ladder?.rungs ?? []).length > 0;
+  const failed = Boolean(doc.error)
+    || !legs.every((name) => doc.legs[name]?.ok === true)   // every requested leg RAN and passed
+    || judged.regressions.length > 0;
+  doc.verdict = failed ? 'fail'
+              : (ranTheLadder && judged.checked === 0) ? 'unjudged'
+              : 'pass';
+  doc.ok = doc.verdict === 'pass';
+
   const file = writeArtifact(doc);
   for (const r of judged.regressions) log(`REGRESSION [${r.kind}] ${r.rung ?? '-'}: ${r.detail}`);
-  log(`${doc.ok ? 'PASS' : 'FAIL'} — ${judged.checked} rung(s) compared, ` +
+  if (doc.verdict === 'unjudged') {
+    log(`every rung ran and none could be compared: \`perf/baseline.json\` has no bands yet ` +
+        `(\`established: false\`). Write them from this artifact's ratios, then a later run has ` +
+        `something to judge against.`);
+  }
+  log(`${doc.verdict.toUpperCase()} — ${judged.checked} rung(s) compared, ` +
       `${judged.regressions.length} regression(s) — ${file}`);
-  return doc.ok ? 0 : 1;
+  // `unjudged` exits non-zero: a scheduled job whose exit code says "fine" when nothing was checked
+  // is the same silence as a timer that never fired, which is what `tflwperfctl.sh preflight`'s
+  // freshness check already exists to break.
+  return doc.verdict === 'pass' ? 0 : 1;
 }
 
 const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
@@ -563,5 +870,6 @@ if (invokedDirectly) {
 }
 
 export { acquireLease, writeTflwEnv, readTflw, readK6, need, runnerPresent, legCurve, legLadder, legFunctional, breakingSince,
+         adminCredentials, resetLoadTarget, probeTarget, judgeHealth, startManagedTarget, runOneRung,
          describeTree, writeArtifact, main,
          LEGS, PROFILES, CURVE_PLANTS, RESULTS, LEASE_LABEL, PROFILE, DRY, log, run, RUNGS, ROOT };

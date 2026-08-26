@@ -138,6 +138,39 @@ export const DRIFT_SCANNERS = [
 export const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0', 'host.docker.internal']);
 
 /**
+ * **`M154f-05` — the two servers this ladder measures against, declared rather than inferred.**
+ *
+ * The ladder has always had two targets: apiV2 in Docker, and the zero-latency `echo-server.mjs`
+ * the two `echo-*` rungs use as a runner-overhead floor. Nothing said so in machine-readable form.
+ * The tflw side of those rungs lives under `perf/profile/` and their `why` explains that in prose,
+ * which is exactly as much as a driver can act on: none. `perf-conformance.mjs` derived each
+ * rung's working directory from the *runner's* name instead of from the file it was given, so both
+ * echo rungs looked for `perf/tflw/echo-get-only.tflw`, died `ENOENT`, and were reported as
+ * regressions — and nothing had started the echo server either way.
+ *
+ * `managed` says who is responsible for the server being up:
+ *   `external`  the Docker stack. The driver asserts it is healthy and refuses to measure if not;
+ *               starting it is out of scope and would make a load run able to mutate the box.
+ *   `driver`    the driver starts it and stops it. `echo-server.mjs` is a 40-line stdlib script
+ *               with no state, so owning its lifecycle is cheap and leaving it to a human is how
+ *               the rung silently measured nothing for as long as it did.
+ */
+export const TARGETS = {
+  apiV2: {
+    what: 'the real dogfood target — NestJS + Postgres, in Docker',
+    health: 'http://localhost:4001/v1/health',
+    managed: 'external',
+  },
+  echo: {
+    what: 'the runner-overhead floor — perf/profile/echo-server.mjs, no database, no auth',
+    health: 'http://127.0.0.1:4099/products',
+    managed: 'driver',
+    script: 'perf/profile/echo-server.mjs',
+    port: 4099,
+  },
+};
+
+/**
  * One row per rung. `impls` maps a runner to its file, relative to `tflw-acceptance/`.
  *
  * A runner absent from `impls` is a **recorded** absence, and `why` must say so — the ladder is
@@ -155,6 +188,24 @@ export const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0', 
  * near-zero error rate. Declared here, and `verify-perf-parity.mjs` proves each tag really appears
  * in the file it names, so a renamed tag is a red gate rather than a silently absent sub-metric.
  *
+ * **`M154f-04` — a tag is necessary and not sufficient: the sub-metric also has to be
+ * *materialised*.** k6 emits a tagged sub-metric into `--summary-export` only when a
+ * **threshold** names it. Tagging a request creates the tag; it does not create the metric. Every
+ * k6 rung therefore carries a `thresholds` entry naming exactly the key the driver reads, and for
+ * six of the seven that entry is `min>=0` — an always-true bound whose only job is to bring the
+ * metric into existence. That is deliberate and it is not `M141`'s vacuity: a vacuous *check* is
+ * one that claims to judge and cannot fail, whereas this claims nothing. Judging is `D750`'s job
+ * and lives in `verify-perf-baseline.mjs`, which compares runners against each other in the same
+ * run precisely because an absolute bound on this box is either a flake generator or, once
+ * widened enough to stop flaking, meaningless. `checkout-burst` keeps its real `p(95)<250`
+ * because it had one already.
+ *
+ * This cost a whole ladder run to find. On 2026-08-26 six of seven k6 rungs produced no comparable
+ * metric at all, the run compared **zero** rungs, and every static gate was green throughout —
+ * `verify-perf-parity.mjs` proved the tags were tagged and nothing proved they were readable.
+ * That gate now also requires the threshold, so the next rung that ships without one is red on the
+ * day it lands rather than at the next run in anger.
+ *
  * `fixtures` lists which of `FIXTURES` every implementation of this rung must carry verbatim. A
  * rung that does not use a fixture lists none; the gate then only checks its hosts and its roster
  * membership.
@@ -162,6 +213,7 @@ export const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0', 
 export const RUNGS = [
   {
     name: 'checkout-burst',
+    target: 'apiV2',
     k6Tag: 'checkout',
     what: 'the contended rung — every VU races the one hot product row through a real Postgres row lock',
     impls: {
@@ -172,6 +224,7 @@ export const RUNGS = [
   },
   {
     name: 'dogfood-get-only',
+    target: 'apiV2',
     k6Tag: 'health',
     what: 'the read rung — GET with no body, no capture',
     impls: {
@@ -182,6 +235,7 @@ export const RUNGS = [
   },
   {
     name: 'dogfood-post-uncontended',
+    target: 'apiV2',
     k6Tag: 'cart-add',
     what: 'the write rung with zero interpolation overhead — the one the drifting id broke twice',
     impls: {
@@ -192,6 +246,7 @@ export const RUNGS = [
   },
   {
     name: 'search-read',
+    target: 'apiV2',
     k6Tag: 'search',
     what: 'catalog search under load',
     impls: {
@@ -202,6 +257,7 @@ export const RUNGS = [
   },
   {
     name: 'ticket-write',
+    target: 'apiV2',
     k6Tag: 'ticket-create',
     what: 'the rate-limited + uniquely-constrained write path',
     impls: {
@@ -212,6 +268,7 @@ export const RUNGS = [
   },
   {
     name: 'echo-get-only',
+    target: 'echo',
     k6Tag: 'products',
     what: 'the runner-overhead floor: a local echo server, no database, no auth',
     impls: {
@@ -223,6 +280,7 @@ export const RUNGS = [
   },
   {
     name: 'echo-post-only',
+    target: 'echo',
     k6Tag: 'orders',
     what: 'the same floor, with a body',
     impls: {
@@ -234,6 +292,7 @@ export const RUNGS = [
   },
   {
     name: 'generator-saturation-demo',
+    target: 'apiV2',
     what: 'a demonstration that the generator, not the target, is the ceiling at high rates',
     impls: {
       tflw: 'perf/tflw/generator-saturation-demo.tflw',
