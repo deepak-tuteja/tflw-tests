@@ -5,9 +5,12 @@
 // way every time (M21). M25 adds two more phases (mtls-rejection, safety-redaction-check)
 // matching what CI needs per PLAN_CI.md decision 8. E5 (PLAN_ENTERPRISE_REGRESSION.md) adds the
 // LAYER_TAGS axis (`--tag api`/`--tag ui`/`--tag mixed`, alone-phases only, no smoke cross — see
-// LAYER_TAGS's own comment below for why). Current total: 30 phases — PHASES below is the source
-// of truth for the exact count, not this comment; don't let this number drift the way README.md's
-// once did (fixed in E2a).
+// LAYER_TAGS's own comment below for why). `M154h` adds `perf-ladder` (`D758`), the first phase in
+// this file that deliberately does not run in CI. Current total: 31 phases — **30 grouped, which is
+// what CI's four legs run, plus one `localOnly`** — and PHASES below is the source of truth for the
+// exact count, not this comment; don't let this number drift the way README.md's once did (fixed in
+// E2a). Everything else in this repository that says "30-phase sweep" is naming the grouped sweep
+// and stays true; only this file counts the array.
 //
 // Every phase gets its own fresh Docker restart first. Necessary, not just cautious: `unique(...)`
 // resets its counter each `tflw run` invocation, but Postgres data persists across invocations —
@@ -235,6 +238,50 @@ const PHASES = [
     name: 'construct-acceptance',
     cmd: 'node scripts/verify-construct-acceptance.mjs --gate',
   },
+  // `M154h` (`D758`, `D761`). The perf ladder, measured — and the **only** phase in this file that
+  // deliberately does not run in CI.
+  //
+  // It is here because the schedule that used to own this question is gone. `D733` put the measured
+  // perf gate on a nightly systemd timer; `D754` disarmed it, on evidence that the box was asleep or
+  // powered off at 04:30 on all three measured nights, and deferred the automated shape to publish.
+  // Disarming it closed a job that never ran — but it also left the underlying gap exactly where it
+  // was: a perf regression introduced on a branch is invisible until somebody remembers to measure,
+  // and "remembers to" is the failure mode this whole file exists to replace.
+  //
+  // CI is not the place, and that is a measurement result rather than a preference (`D750`): the
+  // bands are ratios of tflw to k6 *within one run*, calibrated on this box under a whole-box lease,
+  // and a shared GitHub runner produces neither the exclusivity nor the neighbours those ratios were
+  // taken against. What CI keeps is the static half it can actually answer — `verify:perf-parity`
+  // and `verify:perf-baseline` already run in `acceptance-check`, guarding that the ladder's
+  // declaration stays coherent. The split is not new here; this phase is the other half of it
+  // finally having a home.
+  //
+  // `localOnly` is a real marker read by the partition guard below, not a comment. A phase that is
+  // in no group is normally an error in this file — the check exists because a silently-ungrouped
+  // phase is a phase CI never runs while four legs go green. This one is ungrouped **on purpose**,
+  // so it says so in a field the guard can see; the guard then asserts the converse, that a
+  // `localOnly` phase never appears in a group. Exempting it silently would have disabled the
+  // invariant for every future phase that forgot.
+  //
+  // **It takes the ordinary fresh restart, and the first draft of this phase did not.** That draft
+  // stopped the stack instead, reasoning that the ladder drives its own managed echo target on :4099
+  // and that an idle apiV2 is only background load on a measurement whose lease class declares
+  // `requires: quiet`. Both halves of that sentence are true and the conclusion was wrong: **six of
+  // the ladder's eight rungs target apiV2** (`checkout-burst`, `dogfood-get-only`,
+  // `dogfood-post-uncontended`, `search-read`, `ticket-write`, `generator-saturation-demo`) and only
+  // the two `echo-*` rungs use the managed target. Stopping the stack would have failed their
+  // pre-flight health check and reddened the phase every time — not subtly, but it would have
+  // reddened it for a reason that reads like a perf failure. Caught by running it and reading the
+  // per-rung `health` block, which is exactly what that block is for.
+  {
+    name: 'perf-ladder',
+    cmd: 'node scripts/perf-conformance.mjs --profile sweep --in-sweep',
+    localOnly: true,
+    // perf-conformance exits 3 for "this machine is not the box" (no boxlock.sh, no k6). Rendered
+    // as `⊘ skipped`, never as a pass: a contributor sweeping on a laptop must not read a green
+    // summary line as evidence the perf gate ran.
+    skipCode: 3,
+  },
 ];
 
 // PLAN_CI.md decision 16 (Round 3, 2026-08-03 grill-me): duration-balanced static groups for a
@@ -285,14 +332,25 @@ const PHASE_GROUPS = {
 // That is this pair of repos' oldest recurring failure shape (see testFlow's M127: an empty shard
 // is an error, not an early return), and the cheapest place to make it impossible is here, where
 // the two lists are both in scope.
+//
+// `M154h`/`D761` adds the one exception this check has ever had, and adds it as a *declaration*
+// rather than as a hole. `perf-ladder` is ungrouped deliberately — CI genuinely cannot judge it
+// (`D750`) — so it carries `localOnly: true`, the guard skips it from the ungrouped complaint by
+// name, and asserts the converse instead: a `localOnly` phase that turns up inside a group means
+// somebody has quietly put a four-minute box measurement onto a GitHub runner, which fails in a way
+// that reads as a perf regression. The invariant stays live for every other phase, which is the
+// whole reason to spell the exception out instead of loosening the rule.
 {
   const grouped = Object.values(PHASE_GROUPS).flat();
   const names = PHASES.map((p) => p.name);
-  const ungrouped = names.filter((n) => !grouped.includes(n));
+  const localOnly = PHASES.filter((p) => p.localOnly).map((p) => p.name);
+  const ungrouped = names.filter((n) => !grouped.includes(n) && !localOnly.includes(n));
   const unknown = grouped.filter((n) => !names.includes(n));
   const duplicated = grouped.filter((n, i) => grouped.indexOf(n) !== i);
+  const smuggled = localOnly.filter((n) => grouped.includes(n));
   const problems = [
     ...ungrouped.map((n) => `phase "${n}" is in no group — CI would never run it`),
+    ...smuggled.map((n) => `phase "${n}" is localOnly but sits in a group — CI would run it`),
     ...unknown.map((n) => `group entry "${n}" matches no phase`),
     ...duplicated.map((n) => `phase "${n}" appears in more than one group`),
   ];
@@ -324,15 +382,25 @@ for (const phase of activePhases) {
   try {
     run(cmd);
     results.push({ ...phase, ok: true });
-  } catch {
-    results.push({ ...phase, ok: false });
+  } catch (error) {
+    // `skipCode` (`D761`): a phase may declare one exit code that means "not applicable on this
+    // machine" — distinct from both green and red, because the only other options are lying about
+    // coverage or reddening a sweep for a machine the phase was never meant to grade.
+    const skipped = phase.skipCode !== undefined && error?.status === phase.skipCode;
+    results.push({ ...phase, ok: skipped, skipped });
   } finally {
     archivePhaseReport(phase.name);
   }
 }
 
 console.log('\n=== regression summary ===');
-for (const r of results) console.log(`${r.ok ? '✓' : '✗'} ${r.name}`);
+for (const r of results) console.log(`${r.skipped ? '⊘' : r.ok ? '✓' : '✗'} ${r.name}${r.skipped ? ' (skipped — not the box)' : ''}`);
+
+const skippedPhases = results.filter((r) => r.skipped);
+if (skippedPhases.length > 0) {
+  console.log(`\n${skippedPhases.length} phase(s) skipped: ${skippedPhases.map((r) => r.name).join(', ')}.`);
+  console.log('A skipped phase measured NOTHING. It is not a pass, and the sweep below does not count it as one.');
+}
 
 const failed = results.filter((r) => !r.ok);
 if (failed.length > 0) {
@@ -369,4 +437,5 @@ if (contradictory.length > 0) {
   process.exit(1);
 }
 
-console.log(`\nAll ${results.length} phases passed.`);
+const measured = results.length - skippedPhases.length;
+console.log(`\nAll ${measured} phases passed${skippedPhases.length > 0 ? ` (${skippedPhases.length} skipped)` : ''}.`);

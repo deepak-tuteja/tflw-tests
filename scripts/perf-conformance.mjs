@@ -92,12 +92,77 @@ const PROFILE = arg('profile', 'full');
 const NO_LEASE = argv.includes('--no-lease');
 const DRY = argv.includes('--dry-run');
 
+// `D758` — `--in-sweep`: this run is a **phase of the regression sweep**, not a run of its own.
+//
+// The nightly timer is disarmed (`D754`) and the automated shape is deferred to publish. What that
+// left open is the thing the schedule was for in the first place: a perf regression introduced
+// during development is invisible until somebody remembers to measure. CI cannot close it — a
+// shared GitHub runner cannot produce a number this ladder's bands mean anything against, and
+// `D750` put the *static* half there instead (`verify:perf-parity`, `verify:perf-baseline`). So the
+// measured half rides the one thing that already runs on the box, on demand, every time the suite
+// is swept: `npm run regression`.
+//
+// Three things change under this flag and each is a claim that would otherwise be false — the
+// lease is inherited rather than re-taken (`D759`), the artifact lands in its own series rather
+// than over `latest.json` (`RESULTS_DIR` below), and a machine that is not the box **skips loudly
+// with exit 3** rather than failing or, worse, measuring.
+const IN_SWEEP = argv.includes('--in-sweep');
+
+/** Where the artifact lands.
+ *
+ *  An in-sweep run grades a **working tree** — usually dirty, on whatever branch the developer is
+ *  on — where every other run of this script grades a checkout reset to `origin/main` (`D748`). Both
+ *  are legitimate; what must not happen is the first being read as the second. `latest.json` is what
+ *  `tflwperfctl.sh status` reports as the box's perf state and what the tenant registry surfaces, so
+ *  a WIP number written there is indistinguishable from a graded one to every reader downstream —
+ *  the same shape as a timer that never fired. In-sweep artifacts get their own directory and never
+ *  touch `latest.json`. */
+const RESULTS_DIR = IN_SWEEP ? path.join(RESULTS, 'sweep') : RESULTS;
+
 const log = (...m) => console.log(`[perf-conformance]`, ...m);
 
 // ── the lease (D747) ────────────────────────────────────────────────────────────────────────────
 
+/**
+ * `D759` — inside the sweep the lease is **inherited, not re-taken, and not waived.**
+ *
+ * `scripts/exec.mjs` already holds the whole-box lock as `tflw:<label>` for the entire sweep, and
+ * holds it the same way this file does (`D747`): an open stdin that dies with the driver. `boxlock.sh`
+ * is a whole-box mutex and is **not reentrant**, so a phase calling `acquire` inside that would wait
+ * out its own parent and fail EX_TEMPFAIL after the timeout. That deadlock is the *correct* behaviour
+ * of a correct mutex — there is nothing to fix in the lock, only something to stop asking of it.
+ *
+ * `--no-lease` is the available escape and it is the wrong one, for a reason worth stating rather
+ * than assuming: it logs "the numbers are not trustworthy" and records no holder, and both would be
+ * **false** here. The box genuinely is exclusive; the holder is one frame up. Writing "untrusted"
+ * into an artifact that was in fact measured under exclusivity corrupts the series in the direction
+ * nobody checks — downward, where a reader discounts a real regression.
+ *
+ * So this verifies the inheritance instead of assuming it. `boxlock.sh status` must name a holder;
+ * if it says `free`, the parent lease is gone, the box is open to a forge render mid-ladder, and
+ * the run refuses. An unverified inheritance claim would be `--no-lease` with better manners.
+ */
+function inheritLease() {
+  if (!existsSync(BOXLOCK)) {
+    throw new Error(
+      `--in-sweep needs ${BOXLOCK} to confirm the sweep's lease is held, and it is not there.`);
+  }
+  const probe = run(BOXLOCK, ['status']);
+  const status = (probe.stdout ?? '').trim();
+  if (!status.startsWith('held by:')) {
+    throw new Error(
+      `--in-sweep inherits the sweep's box lease, and \`boxlock.sh status\` reports "${status}". ` +
+      `Nothing holds the box, so nothing keeps a forge render off it for the next four minutes. ` +
+      `Run the sweep through \`scripts/exec.mjs\` (which takes the lock), or run this script on its ` +
+      `own without --in-sweep so it takes its own.`);
+  }
+  log(`lease INHERITED from the sweep — ${status}`);
+  return { release: () => {}, leased: true, inherited: status.replace(/^held by:\s*/, '') };
+}
+
 /** Spawn the real `boxlock.sh acquire` and resolve once it prints READY. Returns a release fn. */
 function acquireLease(timeoutS = 1800) {
+  if (IN_SWEEP) return inheritLease();
   if (NO_LEASE) {
     log('running WITHOUT a lease (--no-lease) — the numbers are not trustworthy');
     return { release: () => {}, leased: false };
@@ -732,6 +797,18 @@ const PROFILES = {
   ladder: ['ladder'],
   functional: ['functional'],
   full: ['curve', 'ladder', 'functional'],
+  // `D760` — the sweep runs `sweep`, not `full`, and the omission is `curve`.
+  //
+  // `full` is what the disarmed unit ran, and it is the right profile for a run whose whole purpose
+  // is the measurement. As a *phase* the arithmetic is different: the sweep already costs ~30 phases
+  // each paying a Docker restart, and `curve` is the breaking-point search — the longest leg, the
+  // most sensitive to a neighbour, and the one whose answer moves least between two commits on a
+  // branch. `ladder` is the leg that catches a regression (7 rungs, ratio bands, ~4 min measured)
+  // and `functional` is 55s and proves the perf constructs still work at all. Adding those two to a
+  // sweep is a cost a developer will keep paying; adding the breaking-point search is one they will
+  // start skipping, and a gate that gets skipped is worth less than a smaller gate that does not.
+  // `--profile full` remains exactly as available as it was for the deliberate, on-demand run.
+  sweep: ['ladder', 'functional'],
 };
 
 // ── the artifact ────────────────────────────────────────────────────────────────────────────────
@@ -752,14 +829,18 @@ function describeTree(root) {
 }
 
 function writeArtifact(doc) {
-  mkdirSync(RESULTS, { recursive: true });
+  mkdirSync(RESULTS_DIR, { recursive: true });
   const stamp = new Date(doc.ts * 1000).toISOString().replace(/[:.]/g, '-');
-  const file = path.join(RESULTS, `${stamp}.json`);
+  const file = path.join(RESULTS_DIR, `${stamp}.json`);
   const body = `${JSON.stringify(doc, null, 2)}\n`;
   writeFileSync(file, body);
   // `latest.json` is a full copy rather than a symlink: `tflwperfctl.sh` reads it over a path that
   // may not exist yet, and a dangling symlink reports as a *parse* failure rather than as absence.
-  writeFileSync(path.join(RESULTS, 'latest.json'), body);
+  //
+  // An in-sweep run writes its artifact and stops there (`D758`): it is judged, it is kept, and it
+  // is deliberately not promoted, because `latest.json` answers "what is the box's perf state" and
+  // a dirty branch tree is not an answer to that question.
+  if (!IN_SWEEP) writeFileSync(path.join(RESULTS, 'latest.json'), body);
   return file;
 }
 
@@ -768,6 +849,28 @@ function writeArtifact(doc) {
 async function main() {
   const legs = PROFILES[PROFILE];
   if (!legs) throw new Error(`no profile named ${PROFILE}; have ${Object.keys(PROFILES).join(', ')}`);
+
+  // **Exit 3 is SKIPPED, and it is a third verdict for the same reason the run itself has three.**
+  //
+  // `npm run regression` is CONTRIBUTING's documented local command and it is not only ever run on
+  // the box — a contributor sweeps on a laptop with no `boxlock.sh` and no k6. Two of the three ways
+  // to handle that are wrong. Failing turns a perfectly good sweep red for a machine the phase was
+  // never meant to grade. Passing quietly is worse, and is this pair of repos' oldest recurring
+  // defect: the phase reads green in the summary and nobody learns the perf gate has not run on
+  // anything for a month. So it exits 3, prints why, and `regression.mjs` renders it as `⊘ skipped`
+  // — present in the summary, counted separately, and impossible to mistake for a measurement.
+  if (IN_SWEEP) {
+    const missing = [];
+    if (!existsSync(BOXLOCK)) missing.push(`no boxlock.sh at ${BOXLOCK}`);
+    if (!runnerPresent('k6')) missing.push('k6 is not on PATH');
+    if (missing.length > 0) {
+      log(`SKIPPED — ${missing.join('; ')}.`);
+      log(`This phase measures on fedora-box only: the ladder's bands are ratios taken under a ` +
+          `whole-box lease (\`D750\`), and a number from anywhere else is not comparable to them. ` +
+          `Sweep through \`node scripts/exec.mjs exec -- npm run regression\` to include it.`);
+      return 3;
+    }
+  }
 
   const doc = {
     v: 1,
@@ -791,6 +894,7 @@ async function main() {
   }
 
   const lease = await acquireLease();
+  if (lease.inherited) doc.lease = `inherited:${lease.inherited}`;
   try {
     for (const name of legs) {
       log(`leg: ${name}`);
@@ -808,7 +912,7 @@ async function main() {
     doc.legs.__crashed = { ok: false, at: Object.keys(doc.legs).length, message: error.message };
   } finally {
     lease.release();
-    log('lease released');
+    log(lease.inherited ? 'lease stays with the sweep' : 'lease released');
   }
 
   // The comparison happens here rather than in a separate pass so the artifact is self-judging:

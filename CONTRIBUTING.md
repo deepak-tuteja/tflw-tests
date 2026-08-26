@@ -123,9 +123,12 @@ xvfb-run -a npm run regression -- --group security-ui
   three runners.
 - **`npm run verify:perf-baseline`** — the static half of the perf regression gate. Every rung with
   a co-runner has a row in `tflw-acceptance/perf/baseline.json`, no row names a rung that does not
-  exist, and no band spans more than 3x. The *comparison* runs on `fedora-box` inside the scheduled
-  run (`npm run perf:conformance`), because a ratio needs a measurement; what is checked here is the
-  document. `D750` records why the bands are ratios of tflw to its co-runner **in the same run**
+  exist, and no band spans more than 3x. The *comparison* runs on `fedora-box`, because a ratio
+  needs a measurement; what is checked here is the document. **It is no longer a scheduled run.**
+  `D733` put the measurement on a nightly timer, and that timer is disarmed — the box was asleep or
+  powered off at 04:30 on all three nights measured, so the job would have fired 0 of 3 times, and
+  `Persistent=false` meant each miss was skipped in silence. The measurement now rides the sweep as
+  its `perf-ladder` phase, and can still be run alone with `npm run perf:conformance`. `D750` records why the bands are ratios of tflw to its co-runner **in the same run**
   rather than absolute numbers — absolutes on that box move with thermal state, the 2.4 GHz link and
   whoever else holds the lease, so a gate on them is a flake generator until it is widened into
   vacuity. Until the ladder is next run in anger the bands are `null` and the gate says so out loud;
@@ -226,7 +229,8 @@ users see. That is the stronger check of the two, and it was already the only on
 If apiV2 ever stops being a target and starts being something whose internals other code depends on,
 this decision expires. That is the condition; it is deliberately not tied to a milestone number.
 - **`xvfb-run -a npm run regression`** — the 30-phase sweep, each phase on its own fresh Docker
-  restart. Restarting is not optional: `unique(...)`'s counter resets per `tflw run` while Postgres
+  restart — **plus one 31st phase that runs only off CI**, see `perf-ladder` below. Restarting is
+  not optional: `unique(...)`'s counter resets per `tflw run` while Postgres
   data does not, so chained phases on one database reproduce false collisions. `xvfb-run -a` is not
   optional either — the `watch-check` phase spawns a real `tflw watch`, which always forces a headed
   browser.
@@ -234,6 +238,18 @@ this decision expires. That is the condition; it is deliberately not tied to a m
   authoritative list, and `PHASE_GROUPS` is already held to it by a partition guard that exits 1 on
   an ungrouped, unknown or duplicated phase. A copy of that list in prose would be a copy with no
   guard — in the document whose entire subject is copies with no guards.
+  **`perf-ladder` is the one phase CI never runs.** It is the *measured* half of the perf
+  gate — the ladder's seven rungs plus the functional leg, `node scripts/perf-conformance.mjs
+  --profile sweep --in-sweep` — and it needs what a GitHub runner cannot give it: `fedora-box`, k6,
+  and exclusive use of the machine. The bands it is judged against are ratios of tflw to its
+  co-runner taken under a whole-box lease (`D750`), so a number from a shared runner is not
+  comparable to them at all. On any other machine the phase prints its reason and reports
+  `⊘ skipped` — never a pass, because a green line that measured nothing is how a perf gate goes a
+  month without running and nobody notices. To include it, sweep through the box:
+  `node scripts/exec.mjs exec -- npm run regression`, which takes the box lock the phase then
+  inherits rather than deadlocking against. It measures your working tree, dirty or not, and writes to
+  `~/tflw-perf/results/sweep/` rather than over the `latest.json` that reports the box's own state.
+
   For a fast local pass there is `npm run regression:smoke`: one Docker restart, `--tag smoke` plus
   the cheapest restart-agnostic checks. It is **not** a substitute for the sweep and is not a gate.
 
