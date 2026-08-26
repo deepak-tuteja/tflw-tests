@@ -192,6 +192,14 @@ test "cart rows are drag-drop reorderable, verified row by row"
   checkout()
 
 @mixed
+# KNOWN INTERMITTENT (`M154h-01`). This failed once on CI — 2026-08-26, PR #46's first core leg,
+# `FAIL 322/323 · seed 187458591` — on the SECOND assertion only, after waiting out its settle
+# timeout, and a re-run of the same commit went green. The mechanism is not diagnosed and no fix is
+# guessed here. What is worth knowing before you touch it: this is the only test covering the
+# duplicate-409 path, and the only review test aimed at a product it does not create. Its sibling in
+# `tests/ui/storefront/review-submission.tflw` makes a `unique(...)` product in `before` precisely so
+# it can never depend on a product's own "already reviewed" state. If it flakes for you, capture the
+# run rather than retrying past it.
 test "reviews: a first submission succeeds, a duplicate 409s through the shadow-DOM rating widget"
   root("Bulk Item 1")
   within css "[aria-label='Bulk Item 1']"
