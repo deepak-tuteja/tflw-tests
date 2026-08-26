@@ -236,6 +236,39 @@ This section lives here, in the repo where the failure actually happens, and tfl
 [`CONTRIBUTING.md`](https://github.com/deepak-tuteja/tflw/blob/main/CONTRIBUTING.md) points at it rather than repeating it. Two homes
 for one command become one correct home and one stale one.
 
+### `BREAKING:`, and the scheduled run that reads it (`M154f`)
+
+**Two things changed here, and neither of them is enforcement.** "Nothing automatic catches this"
+above was true for nine milestones and is now half-true, which is worth stating precisely rather
+than quietly editing.
+
+*A tflw commit that changes what this repository's corpus or gates will accept says `BREAKING:` in
+its message.* A new `TF0xx` code, a renamed field in a consumed artifact, a construct added to or
+removed from the manifest, a grammar change. Nothing checks that you wrote it — that is the
+complaint `M124-03` makes about the pre-push-hook shape, and it applies to a convention just as
+much.
+
+What reads it is the box's nightly `perf-conformance` run, whose **functional leg** packs tflw from
+its live `origin/main` into its own checkout and runs the four gates whose ground truth is that
+binary: `verify-check-diagnostics.mjs` (the code seam), `verify-construct-coverage.mjs` (the
+manifest seam), `check-acceptance.mjs` (the grammar seam) and `verify-artifact-contract.mjs` (the
+consumed-artifact seam — `M136c-01`, where a renamed SARIF field left every code in place, every
+gate green, and eleven entries broken).
+
+When that leg goes red, the artifact names the tflw commits since the last measured sha that
+declared themselves `BREAKING`. So the convention is not a gate; it is **attribution**. `M124-03`'s
+objection to a scheduled sibling run was that it *"catches it late and blames the wrong commit"* —
+late is real and unfixable from here, since a tflw push cannot block on a repository it does not
+know about, but the blame half is what the marker buys back.
+
+**A red with no `BREAKING` commit behind it is not a failure of the convention.** It is the more
+interesting case — an unintended break — and it is exactly the one a hook reading labels would have
+missed. The command at the top of this section is still the enforcement, and it still answers in
+seconds before any PR exists.
+
+**The pre-push hook half stays refused.** A hook is an untracked file in one person's `.git/`; a
+guarantee that lives there is a guarantee for one machine.
+
 ## Merge order, when a change spans both repos
 
 **tflw first, then here, chained.** Two independent reasons, and they point the same way:

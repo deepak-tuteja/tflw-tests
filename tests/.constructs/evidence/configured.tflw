@@ -1,0 +1,19 @@
+# `M154f` / `C54` — the configured half of the `evidence` plant. Run with this directory as cwd so
+# that the `tflw.config` beside it is the one tflw reads, and with **no `--evidence` flag**, which is
+# the entire point: the level has to arrive from the key or not at all.
+#
+# **This file cannot fail on its own and is not supposed to.** `interpreter.ts` is explicit that
+# `screenshot` is an evidence step and never an assertion, so a run that turned evidence down must
+# not start failing because of it — which means no assertion in this file can go red when the key
+# stops working. The known answer is a **report** fact, read by `verify-construct-acceptance.mjs`
+# out of `report/results.json`: the step's own reported detail says `captured`, and the base64 it
+# carries decodes to a PNG whose IHDR reads 1280x720.
+#
+# The `expect` below is here so the file is a well-formed test that reaches the step, not because it
+# grades anything about evidence.
+
+@constructs @mixed
+test "a screenshot is captured because the config asked for full evidence"
+  open "/step-fixture"
+  expect css "#pointer-readout[data-token='none']" is visible
+  screenshot "evidence-key-configured"

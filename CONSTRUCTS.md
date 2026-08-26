@@ -150,6 +150,14 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C48` | `cleanup` (`step:cleanup`) | workload | a marker path sees exactly 8 — one per iteration of the test that opts in, **none** from its sibling that omits the line | teardown running under load unasked (`D26`), and an opt-in that is a no-op |
 | `C49` | `threshold` (`step:threshold`) | workload | the same request, the same path, every assertion green — and the test bounded at 10ms is **red** while the one bounded at 5000ms is green | a verdict computed from the steps rather than the aggregate metrics |
 | `C50` | `pause` (`step:pause`) | workload | gaps ≥200ms against a <50ms control on an identical path, **and** a reported p50 under 50ms because the column is pause-excluded | a `pause` that is a no-op, and a build that stopped subtracting pacing from duration |
+| `C51` | `probe ciphers` (`config:probe:ciphers`) | security | a granted/withheld pair on one rule, against a host that **negotiates a modern suite** — granted, `sec/tls-weak-cipher` fires and names the suites tflw could not offer; withheld, it is silent and the passing assertion carries `judged only the suite this host gave` | a `probe ciphers` that opens no second handshake, and an opt-in honoured where it was not granted |
+| `C52` | `probe mutating` (`config:probe:mutating`) | security | two verbs, one probe set, one variable: the `DELETE` is `4 probed — 1 inconclusive, 3 refused` and yields no verdict, the idempotent `PUT` is `4 probed — 2 leaked, 1 inconclusive, 1 refused` and finds the leak | a `probe mutating` that sends nothing while the assertion stays green, and a destructive verb scored as a verdict |
+| `C53` | `authorized target` (`config:key:authorized`) | security | three refusals and their three silences before anything is sent — `TF060` on a base the affirmation does not name, `TF065` on a public target with no command-line affirmation, `TF066` on one naming an origin the run never scans | a scan reaching a host nobody affirmed, and an affirmation accepted for an origin the run never touches |
+| `C54` | `evidence` (`config:key:evidence`) | security | the same `screenshot` step, no `--evidence` anywhere: `captured` with a 1280x720 IHDR under a config that sets `evidence full`, `not captured (evidence level)` under one that sets nothing | an `evidence` key parsed and never reaching the runtime — `C42`'s defect one key over |
+| `C55` | `redact` (`config:key:redact`) | security | five PII values fetched **directly from apiV2**, present in no step's `request.body`, `response.bodyText` or `detail`; and `[redacted]` in both `results.json` and `report.html`, so a pattern matching nothing cannot pass by having nothing to leak | a `redact` that stopped covering printed `detail`, and a vacuously-passing leak check |
+| `C56` | `crawl` (`declaration:crawl`) | security | graded by finding **provenance** — each plant reached *via* the crawl — and by the SPA the fetching spider cannot walk, asserted as a named decline with count 1 rather than a silent zero | a crawl that walks the logged-out shell and calls it the surface (tflw `M137f-01`), and a blind spot reported as a zero |
+| `C57` | `has no … security violations` (`matcher:has-no-security-violations`) | security | every ledger row names what must fire **and** what is in play at that floor and must be silent; plus `D445` precision (`baseline ∪ plants`, nothing elsewhere) and the `scanCoverage` census that makes silence sufficient | a rule that stops firing, a rule that fires where it should not, and a floor read as a band |
+| `C58` | `has no authorization violations` (`matcher:has-no-authorization-violations`) | security | probe sets graded as four numbers, over one human declared three times — cookie+`csrf from` completes, bearer completes, cookie without the clause is `inconclusive` | a probe set silently emptied until nobody can answer, and a destructive verb scored as a verdict |
 
 ### `C1` — the soft assertion records a failure and keeps going
 
@@ -582,6 +590,73 @@ prose contradicts its generated manifest table twelve lines further down the sam
 against tflw; `C48` grades the implemented construct. This is the failure mode `D734` was written
 for, arriving from the direction nobody expected — not a plant red for a real defect, but a plant
 that would have been *confidently wrong* had it been written from the manifest as `D723` intends.
+
+### `C51`–`C58` — the security tier, rostered by reference
+
+**Not one of these eight rows added an assertion.** That is the milestone, and it is worth being
+explicit about why it is not a shortcut.
+
+The pentest arc built three graders that already state these constructs' known answers, and state
+them as *data* rather than as prose: `verify-security-acceptance.mjs`'s `LEDGER`, `DECLINES` and
+`APPLICABILITY_PROBES` tables, `verify-redaction.mjs`'s ground-truth fetch, and
+`verify-check-diagnostics.mjs`'s per-code fixtures. Those tables are more exact than a plant row
+could be — a `LEDGER` row names the rules that must fire *and* the rules that are in play at that
+floor and must stay silent, which is a claim about a rule that produced nothing, and no roster row
+has ever managed to say that. Writing eight new plants would have produced a second, weaker copy of
+an assertion that already runs on every sweep.
+
+So the fold is `D724`'s move one axis over: cite, do not duplicate. `D752` is what stops that from
+being a promise — the reference is checked in both directions, so a roster row cannot name a known
+answer no grader states, and a grader table cannot quietly stop answering a construct the roster
+says it answers.
+
+**`C52` is narrower than it looks, and the reason is worth reading before trusting any row here.**
+The obvious known answer for `probe mutating` is the granted/withheld contrast: the same `DELETE`
+comes back *probed and answered* under a target that grants the opt-in and *`4 not probed`* under one
+that does not, each decline naming the missing word. That contrast is graded, exactly, and it lives
+in this script's **ungated** half — `D493` drew the gate line above `APPLICABILITY_PROBES`, so the
+withheld half asserts and exits non-zero and runs only when somebody types the command. So the row
+claims what the gated half proves instead: two verbs under the same four principals, differing only
+in whether the verb destroys what it touches. Filed as `M154f-01`.
+
+**The one new plant is `C54`, and it exists because the census was measuring the wrong thing.**
+`evidence` looked well covered — four files mention it, and `C41` already grades what the *level*
+does to a `screenshot` step. But every one of those uses sets the level with the **`--evidence`
+command-line flag**. As a config key, `evidence` had **zero occurrences in this repository**, so a
+key the parser accepted and then dropped would have been invisible — which is exactly the defect
+`C42` was built to catch for `viewport`, and it was found the same way: by writing the plant.
+
+And it went red on its own PR, which is the part worth keeping (`M154f-02`). A plant record's
+`evidence.file` is read two ways: the coverage grader **greps** it for `evidence.pattern`, the
+acceptance driver **executes** it. Those agree only while every witness is itself a test file — and
+`C54` is the first plant whose witness is a *config*, so the driver handed `tflw.config` to `tflw
+run`, which refuses it by name. The failure surfaced as `skipped: no report`, not as a red row: a
+plant that can never run and a plant that ran and said nothing look identical in the summary. The
+two readings are now separate fields (`evidence.file` witnesses, `run` executes) and
+`assertAcceptancePlantsAreRunnable()` checks every `acceptance` plant before the first corpus
+starts, so the next config-key plant fails loudly instead of quietly abstaining.
+
+### The three constructs this tier did **not** roster
+
+`config:probe:oversized`, `config:probe:traversal` and `matcher:has-no-input-handling-violations`
+are Tier 3, and they stay on the ratchet.
+
+Their grader, `scripts/verify-input-acceptance.mjs`, is not missing and not weak: it states its
+ledger rows in full, grades the three states apart — including the two *different* reasons a rule
+can be not-applicable, which Tier 1's grader cannot distinguish — asserts them, and exits non-zero.
+It runs in **no automated pass**. Neither `regression.mjs` nor CI carries it, deliberately: a Tier 3
+assertion costs an order of magnitude more requests than a Tier 2 one (`D380`), and that price was
+judged too high for every PR.
+
+A row pointing at a gate nothing runs reads as evidence while nothing evaluates it. That is
+`M141`'s vacuity class wearing a roster row, and this repository already has the rule that refuses
+it — `verify-construct-coverage.mjs` fails any plant whose graders are all ungated, in as many
+words: *"that is `M137e-01` recurring in a new ledger"*. Rostering these three would have required
+either lying about the grader or switching that check off.
+
+**They roster when the Tier 3 grader runs on something that reports.** A condition, not a milestone
+number, per the rule `M131` set: the milestone that gives an expensive grader a scheduled home is
+the one that closes them, whichever milestone that turns out to be.
 
 ## Blocked plants (`D734`)
 

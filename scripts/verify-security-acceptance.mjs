@@ -49,6 +49,26 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveTflw } from './lib/tflw-bin.mjs';
 import { GRADERS, PLANTS, PLANT_IDS, isPlantFinding, plantsFor } from './lib/plants.mjs';
+import { plantsFor as constructPlantsFor } from './lib/constructs.mjs';
+
+/**
+ * **`D752` — the construct index, checked in both directions.**
+ *
+ * `M154f` rosters five of this repository's security constructs in `CONSTRUCTS.md` **by reference**
+ * to this script rather than by writing new plants, because the tables below already state their
+ * known answers and state them more exactly than a plant row could. `D724` made the same call for
+ * `VULNS.md` one axis over: cite, do not duplicate.
+ *
+ * A citation is worth nothing on its own. The two ways it rots are opposite and both silent — a
+ * roster row naming a known answer this script stopped asserting, and this script answering a
+ * construct nobody rostered — so the check runs both ways, and it runs on what this **run** actually
+ * graded rather than on what the tables declare. A table row that is never matched to an assertion
+ * has already failed above; a construct whose only row is such a table row would otherwise be
+ * rostered on the strength of a line of data nothing reached.
+ */
+const isAuthzKind = (row) => row.kind === 'authz';
+const CONSTRUCTS_ANSWERED = new Set();
+const answers = (...ids) => { for (const id of ids) if (id) CONSTRUCTS_ANSWERED.add(id); };
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const corpus = join(repoRoot, 'tflw-acceptance', 'security');
@@ -149,6 +169,8 @@ const LEDGER = [
     // offered nor refused — and the rule says so. The day this stack's OpenSSL changes, this
     // expectation is what notices.
     note: ['could not offer'],
+    // `D752` — `C51`'s granted half.
+    constructs: ['config:probe:ciphers'],
   },
 
   // --- secureLocal (https://localhost:8443) ---
@@ -163,7 +185,7 @@ const LEDGER = [
   // negotiated suite and nothing else — and says so in a note on a line that passes. That sentence is
   // the difference between "the cipher rule ran and this host is clean" and "the cipher rule ran and
   // asked half its question", and it is graded here because the assertion is green either way.
-  { env: 'secureLocal', test: 'sec/csp-missing and sec/x-frame-options fire on a bare document (V4)', floor: 'serious', fires: ['sec/hsts-missing', 'sec/csp-missing'], silent: ['sec/tls-version-old', 'sec/tls-weak-cipher'], note: ['judged only the suite this host gave'] },
+  { env: 'secureLocal', test: 'sec/csp-missing and sec/x-frame-options fire on a bare document (V4)', floor: 'serious', fires: ['sec/hsts-missing', 'sec/csp-missing'], silent: ['sec/tls-version-old', 'sec/tls-weak-cipher'], note: ['judged only the suite this host gave'], constructs: ['config:probe:ciphers'] },
   { env: 'secureLocal', test: 'sec/csp-missing and sec/x-frame-options fire on a bare document (V4)', floor: 'moderate', fires: ['sec/hsts-missing', 'sec/csp-missing', 'sec/x-frame-options', 'sec/nosniff-missing'] },
   { env: 'secureLocal', test: 'sec/hsts-missing fires on every TLS response the sidecar serves', floor: 'serious', fires: ['sec/hsts-missing'] },
   // `minor` is the *lowest* rank, so a `minor` floor narrows nothing — the whole pack is in play and
@@ -237,7 +259,7 @@ const LEDGER = [
   // `shopper` supplies the token and joins the refusals, which is the third alice arriving at the
   // same answer `shopperBearer` already gave. The count that matters here is still `inconclusive: 1`
   // being a *declaration's* consequence rather than the engine's.
-  { env: 'secureLocal', kind: 'authz', test: 'probe mutating puts a DELETE in the probe set, and a replay cannot judge it (V8)', floor: null, fires: [], probes: { total: 4, inconclusive: 1, refused: 3 } },
+  { env: 'secureLocal', kind: 'authz', test: 'probe mutating puts a DELETE in the probe set, and a replay cannot judge it (V8)', floor: null, fires: [], probes: { total: 4, inconclusive: 1, refused: 3 }, constructs: ['config:probe:mutating'] },
   // **M132b (D356) — the positive `probe mutating` shipped without.** Until this row existed the
   // opt-in's acceptance evidence was "the request was probed" and never "the leak was found", which
   // is a control whose positive cannot occur. `leaked: 1` is `shopperBearer` receiving `peer`'s order
@@ -254,7 +276,7 @@ const LEDGER = [
   // the third (`shopperNoCsrf`) still cannot be. Before the milestone this row's `inconclusive: 1` and
   // its `leaked: 1` were the same human differing by transport, which was a true observation about
   // enforcement and a confusing one about authorization; the pair now differs by *declaration*.
-  { env: 'secureLocal', kind: 'authz', test: 'probe mutating finds the leak on an idempotent PUT, which a DELETE cannot show (V9)', floor: 'critical', fires: ['sec/authz-object-leak'], probes: { total: 4, leaked: 2, inconclusive: 1, refused: 1 } },
+  { env: 'secureLocal', kind: 'authz', test: 'probe mutating finds the leak on an idempotent PUT, which a DELETE cannot show (V9)', floor: 'critical', fires: ['sec/authz-object-leak'], probes: { total: 4, leaked: 2, inconclusive: 1, refused: 1 }, constructs: ['config:probe:mutating'] },
 
   // --- Tier 4's CSRF half, `csrf.tflw` under secureLocal (M137b, D434/D457) ------------------------
   //
@@ -669,6 +691,7 @@ const V16_RULES = Object.keys(V16.rules).filter((r) => !V16.arrivedWith.includes
 const SPIDER_RULES = Object.keys(V16.rules);
 
 function gradeSpider(report) {
+  answers('declaration:crawl'); // `D752` — `C56`, the spider half of the walk
   const tests = report.tests ?? [];
   const consoleCrawl = tests.find((t) => t.kind === 'crawl' && t.name === SPIDER_CRAWLS.console);
   const spaCrawl = tests.find((t) => t.kind === 'crawl' && t.name === SPIDER_CRAWLS.spa);
@@ -866,6 +889,7 @@ const partitionDeclines = (declines) => {
 const API_CRAWL = 'the documented surface, walked as a non-owner';
 
 function gradeCrawl(report) {
+  answers('declaration:crawl'); // `D752` — `C56`, the API-surface half of the walk
   const crawl = (report.tests ?? []).find((t) => t.kind === 'crawl' && t.name === API_CRAWL);
   if (!crawl) {
     fail(`[plaintext] no crawl named "${API_CRAWL}" in the report — \`crawl.tflw\` did not run, and everything below would pass vacuously`);
@@ -1323,6 +1347,12 @@ for (const env of ['secureLocal', 'plaintext', 'offeringTls']) {
       continue;
     }
     const step = list.shift();
+    // `D752`. Recorded here rather than off the table, because *here* is where a declared row has
+    // been matched to an assertion this run actually produced. The matcher family is derived from
+    // `kind` rather than tagged per row: a hand-tagged list of twenty rows is one more thing that
+    // can drift, and `kind` is already the field that decides which pack grades the row.
+    answers(isAuthzKind(row) ? 'matcher:has-no-authorization-violations' : 'matcher:has-no-security-violations');
+    answers(...(row.constructs ?? []));
     const isAuthz = row.kind === 'authz';
     const pool = isAuthz ? seenAuthz : seen;
     // **The tier the step actually is, versus the tier the ledger says it is.** Both tiers write the
@@ -1649,6 +1679,50 @@ for (const plant of plantsFor('security')) {
     continue;
   }
   console.log(`  ✓ ${plant.id} positive — ${found.length} finding(s) on its ${plant.subject}, every ledger rule present at its stated severity (${wanted.map(([r, sev]) => `${r} ${sev}`).join(', ')})`);
+}
+
+// --- D752: the construct index, both directions ------------------------------
+//
+// Inside the gated half deliberately. A cross-check that only ran when somebody typed the command
+// would be a claim about a claim, and this whole mechanism exists so that `CONSTRUCTS.md`'s five
+// security rows are not that.
+{
+  const rostered = constructPlantsFor('security');
+  const rosteredIds = new Set(rostered.map((p) => p.construct));
+
+  // Direction 1 — the roster points at something this run did not do. The failure mode is a row that
+  // reads as evidence after the assertion behind it was deleted, renamed or moved to the ungated
+  // half, which is exactly what `M154f-01` records happening to `probe mutating`'s other half.
+  for (const plant of rostered) {
+    if (!CONSTRUCTS_ANSWERED.has(plant.construct)) {
+      fail(
+        `${plant.id} rosters \`${plant.construct}\` against this script (CONSTRUCTS.md), and nothing in this run answered it.\n` +
+          '    A roster row is a claim that a known answer was checked. Either the assertion that answered it\n' +
+          '    was removed or renamed, or it moved below the `--gate` line — and a row pointing below that line\n' +
+          '    is a row nothing evaluates. Restore the assertion, or move the construct back to `RATCHET`.',
+      );
+    }
+  }
+
+  // Direction 2 — this script answers a construct no roster row names. Harmless on its own and worth
+  // failing anyway: the roster's whole claim is that it is complete for what it covers, and an
+  // unindexed answer is evidence nobody can find. It is also how a construct silently gets graded
+  // twice, once here and once by a plant somebody wrote because the coverage was not visible.
+  for (const id of CONSTRUCTS_ANSWERED) {
+    if (!rosteredIds.has(id)) {
+      fail(
+        `this run answered \`${id}\` and no row in CONSTRUCTS.md names it against this script.\n` +
+          '    Add the row (`D724`/`D752`), or drop the claim from the table that made it.',
+      );
+    }
+  }
+
+  if (failures === 0) {
+    console.log(
+      `\n✓ D752 — the construct index resolves both ways: ${rostered.length} rostered construct(s) ` +
+        `(${rostered.map((p) => p.id).join(', ')}), ${CONSTRUCTS_ANSWERED.size} answered by this run, no drift`,
+    );
+  }
 }
 
 // --- the gate stops here (M139-5, D493) --------------------------------------

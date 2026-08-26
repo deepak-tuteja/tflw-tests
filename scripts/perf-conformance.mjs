@@ -67,6 +67,10 @@ const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const HOME = os.homedir();
 
 const LEASE_LABEL = 'tflw:load:conformance';       // D746
+/** The tflw checkout `M154f`'s functional leg packs from. `../testFlow` is the layout every human
+ *  here works in; the box keeps its two checkouts side by side under `~/tflw-perf/` and the unit
+ *  overrides this. Named rather than derived so the artifact can record where the sha came from. */
+const TFLW_CHECKOUT = process.env.TFLW_PERF_TFLW_CHECKOUT ?? path.join(ROOT, '..', 'testFlow');
 const BOXLOCK = process.env.TFLW_PERF_BOXLOCK ?? path.join(HOME, 'tflw-exec/bin/boxlock.sh');
 const RESULTS = process.env.TFLW_PERF_RESULTS ?? path.join(HOME, 'tflw-perf/results');
 const ARRIVAL_PORT = 4507;
@@ -315,8 +319,144 @@ function runOneRung(perf, runner, rel, rung) {
   throw new Error(`no runner named ${runner}`);
 }
 
-const LEGS = { curve: legCurve, ladder: legLadder };
-const PROFILES = { curve: ['curve'], ladder: ['ladder'], full: ['curve', 'ladder'] };
+/** `M154f` / `M124-03` — the cross-repo seam, on a schedule.
+ *
+ * ## What this leg is for, and what it is not
+ *
+ * `testFlow-tests` CI packs tflw from its live `origin/main`, unpinned and deliberately so. That
+ * makes the two repositories a linked pair: a breaking change pushed to tflw and not to this one
+ * reddens this one until the second push lands. The rule has been kept **by a person remembering**
+ * since `M85`, mitigated by a sentence in `CONTRIBUTING.md` and nothing else. `M124-03` filed that,
+ * and named both plausible fixes along with what is wrong with each: a scheduled sibling run
+ * catches it late and blames the wrong commit, a labelled-change hook catches only what somebody
+ * labelled.
+ *
+ * The row was right about both, and this leg is the first option with the second one's information
+ * folded in rather than instead of it. It catches late — that is real and unfixable from here,
+ * because tflw's push cannot block on a repository it does not know about. What it does not do is
+ * blame the wrong commit: `breaking` below lists the tflw commits between the last measured sha and
+ * this one that declared themselves breaking, so a red arrives with its own suspects attached.
+ *
+ * **The pre-push hook half stays refused**, on `D14` grounds. A hook is an untracked file in one
+ * person's `.git/`; a guarantee that lives there is a guarantee for one machine, and this ledger
+ * has a row (`M136a-02`) about exactly that class of promise.
+ *
+ * ## Why it rides on the perf timer rather than getting its own
+ *
+ * It is four static gates and seconds of work — no Docker, no browser, no load. A second timer
+ * would be a second thing to deploy, a second tenant to register and a second lease to reason
+ * about, all for a job whose cost is a rounding error against the leg it rides beside. It also
+ * wants the *same* property the perf run wants: to be the only thing that reports about the seam
+ * between these two repositories.
+ *
+ * ## Why these four gates and not the whole suite
+ *
+ * Each one's ground truth **is** the tflw binary, which is precisely what makes it a cross-repo
+ * seam rather than a test:
+ *
+ *   check-diagnostics    the code-assignment seam — a `TF0xx` that reaches tflw `main` with no
+ *                        fixture here. `M130-07`'s subject, and the seam `M85` was about
+ *   construct-coverage   the manifest seam — a construct shipped with nowhere to be graded
+ *   check-acceptance     the grammar seam — a corpus that no longer parses
+ *   artifact-contract    the consumed-artifact seam — `M136c-01`, where a renamed SARIF field left
+ *                        every code in place, every gate green, and eleven entries broken
+ *
+ * The rest of the suite grades apiV2, and apiV2 does not move when tflw does.
+ */
+function legFunctional(root, { tflwCheckout } = {}) {
+  const cli = tflwCheckout ? path.join(tflwCheckout, 'packages', 'cli') : null;
+  const env = { ...process.env, ...(cli ? { TFLW_SIBLING_CLI: cli } : {}) };
+
+  // Pack tflw's `main` into this checkout first — without it the gates below grade whatever tarball
+  // happens to be vendored, which is the `M153b-01` failure mode and would make this leg report a
+  // confident wrong answer rather than an old one.
+  const refresh = run(process.execPath, [path.join(root, 'scripts/refresh-tflw.mjs')], { cwd: root, env });
+  if (refresh.status !== 0) {
+    return {
+      ok: false,
+      stage: 'refresh',
+      exit: refresh.status,
+      output: `${refresh.stdout ?? ''}${refresh.stderr ?? ''}`.trim().split('\n').slice(-30).join('\n'),
+      tflw: tflwCheckout ? describeTree(tflwCheckout) : null,
+      gates: {},
+      breaking: [],
+    };
+  }
+
+  const GATES = {
+    'check-diagnostics': 'scripts/verify-check-diagnostics.mjs',
+    'construct-coverage': 'scripts/verify-construct-coverage.mjs',
+    'check-acceptance': 'scripts/check-acceptance.mjs',
+    'artifact-contract': 'scripts/verify-artifact-contract.mjs',
+  };
+
+  const gates = {};
+  for (const [name, rel] of Object.entries(GATES)) {
+    const r = run(process.execPath, [path.join(root, rel)], { cwd: root, env });
+    gates[name] = {
+      ok: r.status === 0,
+      exit: r.status,
+      // Kept whole on failure for the same reason the curve leg keeps its bins: the useful half of
+      // a cross-repo red is *which* code or construct, and a pass/fail bit throws that away.
+      output: r.status === 0 ? null : `${r.stdout ?? ''}${r.stderr ?? ''}`.trim().split('\n').slice(-40).join('\n'),
+    };
+  }
+
+  const tree = tflwCheckout ? describeTree(tflwCheckout) : null;
+  return {
+    ok: Object.values(gates).every((g) => g.ok),
+    gates,
+    tflw: tree,
+    breaking: tflwCheckout ? breakingSince(tflwCheckout) : [],
+  };
+}
+
+/** `M124-03`'s `BREAKING` convention, read rather than enforced.
+ *
+ * The convention is one line in `CONTRIBUTING.md`: a tflw commit that changes what this repository's
+ * corpus or gates will accept says `BREAKING:` in its message. Nothing forces it — that was the
+ * complaint about the hook shape and it applies here too — so this is deliberately **not** a gate on
+ * the convention. It is a lookup performed when the answer is wanted: the leg goes red, and the
+ * report names which of the tflw commits since the last measured sha said they would do this.
+ *
+ * A red with no `BREAKING` commit behind it is not a failure of the convention, and must not read as
+ * one. It is the more interesting case — an *unintended* break — and it is the one a labelled-change
+ * hook would have missed entirely.
+ */
+function breakingSince(tflwCheckout) {
+  const last = readLastMeasuredTflwSha();
+  if (!last) return [];
+  const r = run('git', ['-C', tflwCheckout, 'log', '--format=%h%x09%s', `${last}..HEAD`]);
+  if (r.status !== 0) return [];
+  return r.stdout
+    .split('\n')
+    .filter((l) => /\bBREAKING\b/.test(l))
+    .map((l) => {
+      const [sha, ...rest] = l.split('\t');
+      return { sha, subject: rest.join('\t') };
+    });
+}
+
+/** The tflw sha the previous artifact measured, or `null` on the first run / an unreadable file.
+ *  `null` means "no range to ask about", which is why `breakingSince` returns an empty list rather
+ *  than guessing at a range. */
+function readLastMeasuredTflwSha() {
+  const latest = path.join(RESULTS, 'latest.json');
+  if (!existsSync(latest)) return null;
+  try {
+    return JSON.parse(readFileSync(latest, 'utf8'))?.legs?.functional?.tflw?.sha ?? null;
+  } catch {
+    return null;
+  }
+}
+
+const LEGS = { curve: legCurve, ladder: legLadder, functional: legFunctional };
+const PROFILES = {
+  curve: ['curve'],
+  ladder: ['ladder'],
+  functional: ['functional'],
+  full: ['curve', 'ladder', 'functional'],
+};
 
 // ── the artifact ────────────────────────────────────────────────────────────────────────────────
 
@@ -378,7 +518,7 @@ async function main() {
   try {
     for (const name of legs) {
       log(`leg: ${name}`);
-      const result = LEGS[name](ROOT);
+      const result = LEGS[name](ROOT, { tflwCheckout: TFLW_CHECKOUT });
       doc.legs[name] = result;
       if (result.absent_runners) doc.absent_runners = result.absent_runners;
     }
@@ -422,6 +562,6 @@ if (invokedDirectly) {
   });
 }
 
-export { acquireLease, writeTflwEnv, readTflw, readK6, need, runnerPresent, legCurve, legLadder,
+export { acquireLease, writeTflwEnv, readTflw, readK6, need, runnerPresent, legCurve, legLadder, legFunctional, breakingSince,
          describeTree, writeArtifact, main,
          LEGS, PROFILES, CURVE_PLANTS, RESULTS, LEASE_LABEL, PROFILE, DRY, log, run, RUNGS, ROOT };

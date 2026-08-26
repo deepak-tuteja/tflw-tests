@@ -9,7 +9,16 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const CLI_DIR = path.join(ROOT, '..', 'testFlow', 'packages', 'cli');
+/**
+ * The sibling checkout's CLI package. `../testFlow` is the layout every human here works in and
+ * stays the default, but it is an *assumption about the filesystem* and it is wrong on the box:
+ * `M154f`'s functional leg keeps its two checkouts under `~/tflw-perf/` with names of its own, and
+ * a hard-coded `..` would have made the scheduled cross-repo gate silently pack the wrong tree — or,
+ * more likely, exit 1 at 04:30 with nobody reading it. An env override rather than an argument
+ * because the callers that need it are a systemd unit and a driver script, neither of which owns
+ * this script's argv.
+ */
+const CLI_DIR = process.env.TFLW_SIBLING_CLI ?? path.join(ROOT, '..', 'testFlow', 'packages', 'cli');
 const VENDOR_DIR = path.join(ROOT, 'vendor');
 const PKG_PATH = path.join(ROOT, 'package.json');
 const LOCK_PATH = path.join(ROOT, 'package-lock.json');
