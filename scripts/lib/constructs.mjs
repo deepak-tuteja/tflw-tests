@@ -1220,10 +1220,79 @@ export const PLANTS = [
 
 ];
 
+/**
+ * Rosters that cover a whole manifest **family** by citing the gate that already grades it, rather
+ * than by one hand-written row per construct (`D751`). `M154g` step 1.
+ *
+ * A row here is a **rule, not a list** (`D763`). It names a family and a grader; membership is
+ * whatever `tflw spec --json` says is in that family on the day the gate runs, so the set cannot go
+ * stale the way a transcribed list of sixty-six ids would. `expandReferenceRosters()` below is the
+ * only thing that turns it into ids, and it does so against the manifest.
+ *
+ * Three conditions, all three required, and they are `D751`'s — checked by
+ * `verify-construct-coverage.mjs` rather than trusted: the cited grader is **tracked**, it is
+ * **gated** (a row citing a script nothing runs is `M137e-01` wearing a roster row), and it derives
+ * its expected set **from the manifest** rather than from a constant of its own.
+ *
+ * That third condition is what this list buys and it is also what it costs. Because membership is
+ * derived, a diagnostic code that ships tomorrow is rostered here the moment it appears in the
+ * manifest — the coverage gate will *not* go red for it. The anti-regression duty moves, whole, to
+ * the cited grader: `verify-check-diagnostics.mjs` demands a fixture for every code the installed
+ * bundle assigns and fails without one, which is a stronger red than "this id is on neither list"
+ * and is documented in that script's header as a breaking change for this repository's `main`. A
+ * family may be rostered this way only where that is true of its grader.
+ */
+export const REFERENCE_ROSTERS = [
+  {
+    id: 'C59',
+    family: 'diagnostic',
+    grader: 'diagnostics',
+    tier: 'check',
+    title: 'every code tflw assigns is proved against a real `tflw check`, and the expected set is read out of tflw',
+    target:
+      'tests/.checkonly/ (test dialect), CONFIG_FIXTURES (config dialect), and five generated-config ' +
+      'fixtures — each run through the installed CLI, not simulated',
+    knownAnswer:
+      'Each code has a fixture that provokes it and the run asserts the code actually appears in ' +
+      "`tflw check`'s output, several of them alongside the silence they must not break — `TF051` " +
+      'fires at exactly the declared number of sites, `TF057`/`TF058` are each other’s negative ' +
+      'control, `TF060`/`TF065`/`TF066` each name their repair and each leave the security test ' +
+      'alone. Completeness is not a claim this ledger makes: `assignedCodes()` reads the assigned ' +
+      "list out of the **installed bundle's own §17 manifest**, so a code tflw ships without a " +
+      'fixture here is red on the day it merges, and a fixture naming a code tflw retired is red too.',
+    catches:
+      'a diagnostic that stops firing, a fixture kept for a code that no longer exists, and — the ' +
+      'reason the family is rostered by reference at all — sixty-six hand-written rows going stale ' +
+      'silently while reading as evidence.',
+    blockedOn: null,
+  },
+];
+
 export const PLANT_IDS = PLANTS.map((p) => p.id);
 export const COVERED_CONSTRUCTS = PLANTS.map((p) => p.construct);
 export const plantsFor = (grader) => PLANTS.filter((p) => p.graders.includes(grader));
 export const plantFor = (construct) => PLANTS.find((p) => p.construct === construct) ?? null;
+export const REFERENCE_ROSTER_IDS = REFERENCE_ROSTERS.map((r) => r.id);
+
+/**
+ * Turn every `REFERENCE_ROSTERS` row into the construct ids it covers, against a manifest.
+ *
+ * Only `shipped` constructs are claimed: `D731`/`D736` keep a `planned` construct out of the
+ * covered set so it lands in the coverage gate's unaccounted bucket, exactly as it would for a
+ * hand-written plant. A family that expands to **nothing** is returned as an empty list rather than
+ * skipped, because that is the interesting failure — a family renamed in tflw leaves a roster row
+ * that reads like sixty-six graded constructs and covers zero.
+ *
+ * @param {Array<{id: string, family: string, status: string}>} manifestConstructs `tflw spec --json`'s `constructs`
+ * @returns {Map<string, string[]>} roster id -> the construct ids it covers
+ */
+export const expandReferenceRosters = (manifestConstructs) =>
+  new Map(
+    REFERENCE_ROSTERS.map((roster) => [
+      roster.id,
+      manifestConstructs.filter((c) => c.family === roster.family && c.status === 'shipped').map((c) => c.id),
+    ]),
+  );
 
 /**
  * Every construct tflw ships that has no row above. Measured against `tflw spec --json` at
@@ -1287,26 +1356,30 @@ export const RATCHET = [
   'config:key:cert', 'config:key:key', 'config:key:allow',
   'config:key:log',
   'config:probe:oversized', 'config:probe:traversal',
-  // --- diagnostic (66) ---
-  'diagnostic:TF001', 'diagnostic:TF002', 'diagnostic:TF003', 'diagnostic:TF010', 'diagnostic:TF011',
-  'diagnostic:TF012', 'diagnostic:TF013', 'diagnostic:TF014', 'diagnostic:TF015', 'diagnostic:TF016',
-  'diagnostic:TF020', 'diagnostic:TF021', 'diagnostic:TF022', 'diagnostic:TF023', 'diagnostic:TF024',
-  'diagnostic:TF025', 'diagnostic:TF026', 'diagnostic:TF027', 'diagnostic:TF028', 'diagnostic:TF029',
-  'diagnostic:TF030', 'diagnostic:TF031', 'diagnostic:TF032', 'diagnostic:TF033', 'diagnostic:TF034',
-  'diagnostic:TF035', 'diagnostic:TF036', 'diagnostic:TF037', 'diagnostic:TF038', 'diagnostic:TF039',
-  'diagnostic:TF040', 'diagnostic:TF041', 'diagnostic:TF042', 'diagnostic:TF043', 'diagnostic:TF044',
-  'diagnostic:TF045', 'diagnostic:TF046', 'diagnostic:TF047', 'diagnostic:TF048', 'diagnostic:TF049',
-  'diagnostic:TF050', 'diagnostic:TF051', 'diagnostic:TF052', 'diagnostic:TF053', 'diagnostic:TF054',
-  'diagnostic:TF055', 'diagnostic:TF056', 'diagnostic:TF057', 'diagnostic:TF058', 'diagnostic:TF059',
-  'diagnostic:TF060', 'diagnostic:TF061', 'diagnostic:TF062', 'diagnostic:TF063', 'diagnostic:TF064',
-  'diagnostic:TF065', 'diagnostic:TF066', 'diagnostic:TF067', 'diagnostic:TF068', 'diagnostic:TF070',
-  'diagnostic:TF071', 'diagnostic:TF072', 'diagnostic:TF073', 'diagnostic:TF074', 'diagnostic:TF075',
-  'diagnostic:TF076',
+  // --- diagnostic (0) ---
+  // Emptied at `M154g` step 1, and by a **rule** rather than by sixty-six rows: `C59` in
+  // `REFERENCE_ROSTERS` rosters the whole family by citing `verify-check-diagnostics.mjs`, which
+  // reads the assigned-code list out of the installed bundle's own §17 manifest and fails when a
+  // code has no fixture (`D751`, `D763`). The ids are not transcribed here or anywhere else — the
+  // coverage gate expands the family against `tflw spec --json` on the day it runs, so this heading
+  // stays at zero even when tflw assigns its sixty-seventh code. The header stays for the same
+  // reason `locator` kept one: an emptied family should read as empty, not as absent.
 ];
 
 /**
  * `RATCHET.length` must not exceed this (`D740`). Lower it as milestones roster constructs; raising
  * it is the edit this pin exists to make loud.
+ *
+ * **`120` -> `54` at `M154g` step 1, and it is the largest single drop this pin will ever see.**
+ * Sixty-six of the hundred and twenty were the diagnostic family, and not one of them gained an
+ * assertion: `verify-check-diagnostics.mjs` had been proving every one of them against a real `tflw
+ * check` since `M49`, and against a list read out of tflw's own manifest since `M86`. What was
+ * missing was the *claim*, which is `D739`'s cheap end taken to its limit — and `D751` says the
+ * claim is a citation rather than sixty-six restatements of somebody else's enforced completeness.
+ *
+ * The number to read this against is not the drop, it is what is left: **54**, and they are the
+ * expensive end. Twelve generators that need an observable built before presence proves anything,
+ * eighteen config constructs, nine matchers, nine declarations and the six workhorse steps.
  *
  * `140` is the whole manifest (178 constructs) minus the thirty-eight plants rostered so far, and
  * acceptance clause 5 is that it reaches 0. **The clause named `M154f` and now names `M154g`** — not
@@ -1344,7 +1417,7 @@ export const RATCHET = [
  * the unrostered remainder, and a remainder can only be honest about a denominator that has itself
  * just been corrected upwards.
  */
-export const RATCHET_CEILING = 120;
+export const RATCHET_CEILING = 54;
 
 /**
  * `CONSTRUCTS.md` carries one row per plant and prose a human reads; this asserts their id sets
@@ -1388,10 +1461,14 @@ export function assertAcceptancePlantsAreRunnable(root, exists, fail) {
 
 export function assertLedgerIds(markdown, fail) {
   const documented = new Set([...markdown.matchAll(/^\|\s*`(C\d+)`\s*\|/gm)].map((m) => m[1]));
-  for (const id of PLANT_IDS) {
-    if (!documented.has(id)) fail(`${id} is a plant in scripts/lib/constructs.mjs with no row in CONSTRUCTS.md`);
+  // A reference roster (`C59`, `D763`) is a row in this file and a row in the markdown exactly like
+  // a plant, and it is checked here for the same reason: the markdown is where a human reads what
+  // the citation claims, and a citation nobody can find is the failure this ledger keeps having.
+  const rostered = [...PLANT_IDS, ...REFERENCE_ROSTER_IDS];
+  for (const id of rostered) {
+    if (!documented.has(id)) fail(`${id} is rostered in scripts/lib/constructs.mjs with no row in CONSTRUCTS.md`);
   }
   for (const id of documented) {
-    if (!PLANT_IDS.includes(id)) fail(`CONSTRUCTS.md has a row for ${id}, which is not a plant in scripts/lib/constructs.mjs`);
+    if (!rostered.includes(id)) fail(`CONSTRUCTS.md has a row for ${id}, which is rostered nowhere in scripts/lib/constructs.mjs`);
   }
 }

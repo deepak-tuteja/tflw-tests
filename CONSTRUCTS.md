@@ -44,6 +44,14 @@ A construct is **rostered** when a row below states its known answer and a plant
 produce a red. Presence is necessary and not sufficient (`D722`): a construct that appears in a file
 and is never asserted about proves that it parses, which is not what this ledger is for.
 
+**A row may cite a gate instead of carrying its own plant (`D751`), and one such row may cover a
+whole family (`D763`).** That is a narrowing of *no row without a plant*, not an exception to it:
+the plant still exists, it is just somebody else's and it is better than the one this ledger would
+have written. Three conditions, all three machine-checked rather than promised — the cited gate is
+tracked, it is **gated**, and it derives its expected set from tflw's manifest rather than from a
+list of its own. `C51`–`C58` cite three such gates one construct at a time; `C59` cites one for
+sixty-six at once.
+
 Everything not rostered is on the **ratchet** in
 [`scripts/lib/constructs.mjs`](scripts/lib/constructs.mjs), which may only shrink.
 
@@ -158,6 +166,7 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C56` | `crawl` (`declaration:crawl`) | security | graded by finding **provenance** — each plant reached *via* the crawl — and by the SPA the fetching spider cannot walk, asserted as a named decline with count 1 rather than a silent zero | a crawl that walks the logged-out shell and calls it the surface (tflw `M137f-01`), and a blind spot reported as a zero |
 | `C57` | `has no … security violations` (`matcher:has-no-security-violations`) | security | every ledger row names what must fire **and** what is in play at that floor and must be silent; plus `D445` precision (`baseline ∪ plants`, nothing elsewhere) and the `scanCoverage` census that makes silence sufficient | a rule that stops firing, a rule that fires where it should not, and a floor read as a band |
 | `C58` | `has no authorization violations` (`matcher:has-no-authorization-violations`) | security | probe sets graded as four numbers, over one human declared three times — cookie+`csrf from` completes, bearer completes, cookie without the clause is `inconclusive` | a probe set silently emptied until nobody can answer, and a destructive verb scored as a verdict |
+| `C59` | **the whole `diagnostic` family — 66 codes** (`diagnostic:TF001`…, by rule not by list) | check | every code the installed tflw assigns is provoked by a fixture and asserted to appear in real `tflw check` output, several against the silence they must not break; and the expected set is read out of **tflw's own §17 manifest**, so a code that ships without a fixture here is red on the day it merges | a diagnostic that stops firing, a fixture kept for a retired code, and 66 hand-written rows going stale silently while reading as evidence |
 
 ### `C1` — the soft assertion records a failure and keeps going
 
@@ -635,6 +644,47 @@ plant that can never run and a plant that ran and said nothing look identical in
 two readings are now separate fields (`evidence.file` witnesses, `run` executes) and
 `assertAcceptancePlantsAreRunnable()` checks every `acceptance` plant before the first corpus
 starts, so the next config-key plant fails loudly instead of quietly abstaining.
+
+### `C59` — the diagnostic family, rostered by a rule rather than by a list
+
+**Sixty-six constructs, one row, and no new assertion — the largest single move this ledger will
+ever make, and the one most worth reading sceptically.**
+
+The proof was already here and it is older than this milestone. `scripts/verify-check-diagnostics.mjs`
+has run every assigned `TF0xx` code through a real `tflw check` since `M49`, and since a drift
+closure on 2026-08-04 it reads the *expected* list out of the installed bundle's own §17 manifest —
+so the completeness claim is enforced by the binary under test rather than by anything anybody
+maintains here. That closure is worth knowing before trusting this row: the script's summary line
+had claimed *all* assigned codes for a year while counting **its own fixtures**, and three codes had
+no fixture at all when somebody finally compared the two numbers. Its header states
+the consequence plainly: a tflw milestone that assigns a code is **a breaking change for this
+repository's `main` with no additive path**, and the fixture has to land in the companion PR.
+
+Sixty-six hand-written rows would have restated that as sixty-six claims *nothing* enforces. The
+roster would have got longer while the evidence got weaker, which is the failure this whole ledger
+was opened to stop.
+
+**What the row costs, stated rather than buried.** Membership is a rule evaluated against
+`tflw spec --json`, not a list — so when tflw assigns its sixty-seventh code, the coverage gate does
+**not** go red for it. It is rostered the moment it appears in the manifest. The anti-regression
+duty moves, whole, to the cited gate, which demands a fixture for that code and fails without one:
+a stronger red than *this id is on neither list*, arriving in the same CI run. A family may only be
+rostered this way where that is true of its grader, and it is checked rather than assumed.
+
+**The citation is checked from both ends, on what the run actually did (`D752`).** Inside the
+diagnostics gate: every construct `C59` claims must have been seen emitted by a real `tflw check` in
+**that run** — not merely present in a fixture table — and every code that run proved must lie
+inside the family the roster names. The second direction is a genuine cross-check rather than
+bookkeeping, because the two sides read the bundle by different means: `assignedCodes()` greps the
+§17 manifest for `code:` literals, while the family comes from the emitted construct list. If those
+ever disagree, this is where it surfaces.
+
+All four failure directions were run before this row was written: the family renamed upstream (the
+row covers nothing and 66 constructs fall to unaccounted), the citation moved to another grader (the
+diagnostics gate reports that nothing rosters what it proves), the cited gate made ungated
+(`M137e-01`'s rule fires — *a row pointing at a gate nobody runs reads as evidence while nothing
+evaluates it*), and one code's fixture deleted (`C59` names `TF001` beside the completeness check's
+own red).
 
 ### The three constructs this tier did **not** roster
 
