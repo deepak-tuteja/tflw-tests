@@ -125,10 +125,11 @@ xvfb-run -a npm run regression -- --group security-ui
   a co-runner has a row in `tflw-acceptance/perf/baseline.json`, no row names a rung that does not
   exist, and no band spans more than 3x. The *comparison* runs on `fedora-box`, because a ratio
   needs a measurement; what is checked here is the document. **It is no longer a scheduled run.**
-  `D733` put the measurement on a nightly timer, and that timer is disarmed — the box was asleep or
-  powered off at 04:30 on all three nights measured, so the job would have fired 0 of 3 times, and
-  `Persistent=false` meant each miss was skipped in silence. The measurement now rides the sweep as
-  its `perf-ladder` phase, and can still be run alone with `npm run perf:conformance`. `D750` records why the bands are ratios of tflw to its co-runner **in the same run**
+  `D733` put the measurement on a nightly timer, and that timer is disarmed (`D754`) — the box was
+  asleep or powered off at 04:30 on all three nights measured, so the job would have fired 0 of 3
+  times, and `Persistent=false` meant each miss was skipped in silence. The measurement now rides
+  the sweep as its `perf-ladder` phase (`D758`), and can still be run alone with
+  `npm run perf:conformance`. `D750` records why the bands are ratios of tflw to its co-runner **in the same run**
   rather than absolute numbers — absolutes on that box move with thermal state, the 2.4 GHz link and
   whoever else holds the lease, so a gate on them is a flake generator until it is widened into
   vacuity. Until the ladder is next run in anger the bands are `null` and the gate says so out loud;
@@ -229,16 +230,20 @@ this decision expires. That is the condition; it is deliberately not tied to a m
   authoritative list, and `PHASE_GROUPS` is already held to it by a partition guard that exits 1 on
   an ungrouped, unknown or duplicated phase. A copy of that list in prose would be a copy with no
   guard — in the document whose entire subject is copies with no guards.
-  **`perf-ladder` is the one phase CI never runs.** It is the *measured* half of the perf
+  **`perf-ladder` is the one phase CI never runs** (`D758`). It is the *measured* half of the perf
   gate — the ladder's seven rungs plus the functional leg, `node scripts/perf-conformance.mjs
   --profile sweep --in-sweep` — and it needs what a GitHub runner cannot give it: `fedora-box`, k6,
   and exclusive use of the machine. The bands it is judged against are ratios of tflw to its
   co-runner taken under a whole-box lease (`D750`), so a number from a shared runner is not
-  comparable to them at all. On any other machine the phase prints its reason and reports
-  `⊘ skipped` — never a pass, because a green line that measured nothing is how a perf gate goes a
-  month without running and nobody notices. To include it, sweep through the box:
-  `node scripts/exec.mjs exec -- npm run regression`, which takes the box lock the phase then
-  inherits rather than deadlocking against. It measures your working tree, dirty or not, and writes to
+  comparable to them at all. The breaking-point `curve` tier is deliberately left out of the phase
+  (`D760`): it is the longest leg and the one most sensitive to a neighbour, and a gate people start
+  skipping is worth less than a smaller gate they keep running. On any other machine the phase prints
+  its reason and reports `⊘ skipped` — never a pass (`D761`), because a green line that measured
+  nothing is how a perf gate goes a month without running and nobody notices. To include it, sweep
+  through the box: `node scripts/exec.mjs exec -- npm run regression`, which takes the box lock the
+  phase then inherits rather than deadlocking against — `boxlock.sh` is a whole-box mutex and is not
+  reentrant, so the phase *verifies* the inherited lease instead of taking a second one or waiving it
+  (`D759`). It measures your working tree, dirty or not, and writes to
   `~/tflw-perf/results/sweep/` rather than over the `latest.json` that reports the box's own state.
 
   For a fast local pass there is `npm run regression:smoke`: one Docker restart, `--tag smoke` plus
@@ -265,7 +270,7 @@ This section lives here, in the repo where the failure actually happens, and tfl
 [`CONTRIBUTING.md`](https://github.com/deepak-tuteja/tflw/blob/main/CONTRIBUTING.md) points at it rather than repeating it. Two homes
 for one command become one correct home and one stale one.
 
-### `BREAKING:`, and the scheduled run that reads it (`M154f`)
+### `BREAKING:`, and the box run that reads it (`M154f`)
 
 **Two things changed here, and neither of them is enforcement.** "Nothing automatic catches this"
 above was true for nine milestones and is now half-true, which is worth stating precisely rather
@@ -277,7 +282,8 @@ removed from the manifest, a grammar change. Nothing checks that you wrote it �
 complaint `M124-03` makes about the pre-push-hook shape, and it applies to a convention just as
 much.
 
-What reads it is the box's nightly `perf-conformance` run, whose **functional leg** packs tflw from
+What reads it is the box's `perf-conformance` run — **on demand or as the sweep's `perf-ladder`
+phase, no longer nightly** (`D754`, `D758`) — whose **functional leg** packs tflw from
 its live `origin/main` into its own checkout and runs the four gates whose ground truth is that
 binary: `verify-check-diagnostics.mjs` (the code seam), `verify-construct-coverage.mjs` (the
 manifest seam), `check-acceptance.mjs` (the grammar seam) and `verify-artifact-contract.mjs` (the
@@ -288,7 +294,11 @@ When that leg goes red, the artifact names the tflw commits since the last measu
 declared themselves `BREAKING`. So the convention is not a gate; it is **attribution**. `M124-03`'s
 objection to a scheduled sibling run was that it *"catches it late and blames the wrong commit"* —
 late is real and unfixable from here, since a tflw push cannot block on a repository it does not
-know about, but the blame half is what the marker buys back.
+know about, but the blame half is what the marker buys back. `M124-03` itself is **open again**
+(`D757`): it was closed on the timer's deployment, the timer never ran, and *deployed* was the wrong
+condition — *ran* was. It is now deferred against **publish**, because the choice between a
+late-but-automatic catch and a marker that catches only what someone labelled is guesswork until
+there is a published artifact for a sibling to break against.
 
 **A red with no `BREAKING` commit behind it is not a failure of the convention.** It is the more
 interesting case — an unintended break — and it is exactly the one a hook reading labels would have
