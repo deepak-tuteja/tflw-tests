@@ -9,6 +9,15 @@ const BASE_URL = 'http://127.0.0.1:4099';
 const BODY = JSON.stringify({ items: [{ productId: 'prod_1', quantity: 1 }] });
 
 export const options = {
+  // `M154f-04` — **this is a metric declaration, not a check.** k6 materialises a tagged
+  // sub-metric only when a threshold names it, so without this line the
+  // `http_req_duration{name:orders,expected_response:true}` that
+  // `scripts/perf-conformance.mjs` reads is simply absent from `--summary-export` and the rung
+  // contributes nothing to compare. The bound is deliberately always-true; judging belongs to
+  // `verify-perf-baseline.mjs` (`D750`). Full rationale in `scripts/lib/perf-ladder.mjs`.
+  thresholds: {
+    'http_req_duration{name:orders,expected_response:true}': ['min>=0'],
+  },
   scenarios: {
     echo_post_only: {
       executor: 'ramping-vus',
