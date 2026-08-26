@@ -37,7 +37,7 @@
 // split `M139-5`/`D493` made in the security grader, for the same reason: a script that both
 // asserts and reports has one exit status for two jobs.
 
-import { readFileSync, rmSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -1328,6 +1328,98 @@ if (wanted('C54')) {
       'and the ROOT config declares no level, so the control is a genuine default rather than a second configured value');
     precision('C54', !/^\s*viewport\s/m.test(cfg), 'and declares no `viewport`, so the IHDR check above grades this key and not that one');
     precision('C54', test?.ok === true, `the configured half passed (got ok=${test?.ok})`);
+  }
+}
+
+// =============================================================================
+// C60-C66 — the seven matchers that carry this suite's API assertions, and the
+// twelve `not` lines that are the only thing standing between them and vacuity
+// =============================================================================
+//
+// `M154g` step 2. One plant, one run, seven rows — and then the run again with every `not` removed.
+//
+// **The second run is the point.** `matchers-explained.tflw` has exercised all seven of these for a
+// dozen milestones with assertions that are all positive, so a matcher stuck at `true` passes every
+// one of them; `D722` calls that presence, not a known answer. The plant answers with pairs. But a
+// pair written down is still only a claim that the negative half discriminates, and this gate is in
+// the business of refusing claims — so it *mutates the plant* and demands the reds.
+//
+// The mutation is mechanical and total: every `expect <subject> not <matcher>` line becomes
+// `check <subject> <matcher>` — `not` dropped so the assertion inverts, `expect` softened to `check`
+// so one red does not abort the test and hide the eleven behind it. Every one of the twelve must
+// then fail. If a future edit adds a `not` line that does not discriminate, this run stays green
+// where it should not, and the count assertion below is what catches the transformation missing it.
+const MATCHER_ROWS = [
+  { id: 'C60', construct: 'matcher:equals', name: 'equals is exact', negatives: ['not equals "Known-Answer"', 'not equals "known-answer "', 'not equals 4'] },
+  { id: 'C61', construct: 'matcher:contains', name: 'contains is substring on a string', negatives: ['not contains "own ans"', 'not contains "plan"'] },
+  { id: 'C62', construct: 'matcher:matches-regex', name: 'matches is a regular expression', negatives: ['not matches "^eur$"'] },
+  { id: 'C63', construct: 'matcher:matches-subset', name: 'matches subset ignores the keys', negatives: ['not matches subset { label: "known-answer", price: 41 }'] },
+  { id: 'C64', construct: 'matcher:matches-schema', name: 'matches schema validates against', negatives: ['not matches schema "ProductResponseDto"'] },
+  { id: 'C65', construct: 'matcher:greater-less-than', name: 'greater than and less than are strict', negatives: ['not is greater than 42', 'not is less than 42'] },
+  { id: 'C66', construct: 'matcher:has-count', name: 'has count is an exact length', negatives: ['not has count 1', 'not has count 3'] },
+];
+
+if (MATCHER_ROWS.some((r) => wanted(r.id))) {
+  const plant = plantFor('matcher:equals');
+  console.log(`\nC60-C66 — seven matchers, twelve discriminating negatives\n  target: ${plant.target}`);
+  const { report, output } = runCorpus(ROOT, [plant.evidence.file]);
+  if (!report) {
+    for (const row of MATCHER_ROWS) {
+      if (!wanted(row.id)) continue;
+      fail(`${row.id} produced no report. Is the stack up (\`node cli.mjs start\`)?\n${output.trim().split('\n').slice(-12).join('\n')}`);
+      scores.get(row.id).skipped = 'no report';
+    }
+  } else {
+    for (const row of MATCHER_ROWS) {
+      if (!wanted(row.id)) continue;
+      const test = named(report, row.name);
+      recall(row.id, test?.ok === true, `the pair held (got ok=${test?.ok})`);
+      for (const neg of row.negatives) {
+        const step = stepsOf(test).find((st) => st.source.includes(neg));
+        recall(row.id, step?.ok === true, `\`${neg}\` is in the plant and held (got ${step ? `ok=${step.ok}` : 'no such step'})`);
+      }
+      // Precision: no negative was quietly dropped in an edit. The count, not the presence — a row
+      // that lost one of its three `not` lines still passes every assertion above.
+      const nots = stepsOf(test).filter((st) => /\bnot\b/.test(st.source)).length;
+      precision(row.id, nots === row.negatives.length, `${row.negatives.length} negative(s) in the test and no more (got ${nots})`);
+    }
+
+    // The mutation control. Written beside the plant with a leading dot so tflw's own discovery
+    // cannot pick it up, run by explicit path, and removed in `finally` — a leftover would be a
+    // permanently-failing file in a directory the bare sweep does not walk, which is the quiet kind.
+    const src = readFileSync(path.join(ROOT, plant.evidence.file), 'utf8');
+    const control = path.join(ROOT, 'tests', '.constructs', '.discrimination-control.tflw');
+    let flipped = 0;
+    const mutated = src
+      .split('\n')
+      .map((ln) => {
+        const m = /^(\s*)expect (.*?) not (.*)$/.exec(ln);
+        if (!m) return ln;
+        flipped += 1;
+        return `${m[1]}check ${m[2]} ${m[3]}`;
+      })
+      .join('\n');
+    const expected = MATCHER_ROWS.reduce((n, r) => n + r.negatives.length, 0);
+    try {
+      writeFileSync(control, mutated);
+      const { report: ctl, output: ctlOut } = runCorpus(ROOT, ['tests/.constructs/.discrimination-control.tflw']);
+      // `flipped` is asserted against the roster's own arithmetic rather than against a literal, so
+      // adding a negative to the plant without adding it to `MATCHER_ROWS` is red here and not later.
+      precision('C60', flipped === expected,
+        `the control inverted every negative in the plant (${flipped} flipped, ${expected} rostered across C60-C66)`);
+      if (!ctl) {
+        fail(`the C60-C66 mutation control produced no report.\n${ctlOut.trim().split('\n').slice(-12).join('\n')}`);
+      } else {
+        const softs = functionalTests(ctl).flatMap((t) => stepsOf(t)).filter((st) => st.kind === 'check');
+        const survived = softs.filter((st) => st.ok).map((st) => st.source.trim());
+        recall('C60', softs.length === expected, `all ${expected} inverted assertions ran (got ${softs.length}) — a `
+          + 'hard `expect` here would abort each test at its first red and hide the rest');
+        recall('C60', survived.length === 0,
+          `every one of them failed, so no negative in the plant is decoration (survived: ${survived.join('; ') || 'none'})`);
+      }
+    } finally {
+      rmSync(control, { force: true });
+    }
   }
 }
 

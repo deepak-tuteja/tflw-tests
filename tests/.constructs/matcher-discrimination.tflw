@@ -1,0 +1,118 @@
+# `M154g` step 2 / `C60`-`C66` — the known-answer plant for the seven matchers that carry this
+# suite's API assertions and, until now, had no row saying what they are.
+#
+# **This file is meant to pass**, and every test below is a *pair*: one assertion that must hold and
+# one that must not. The pair is the claim. `matchers-explained.tflw` has exercised all seven of
+# these for a dozen milestones and it is a good file, but every assertion in it is positive — so a
+# matcher that returned `true` unconditionally passes the lot, and so does one that compares
+# stringified JSON with `includes`. That is `D722`'s vacuity in its purest form: 1581 uses of
+# `equals` and not one of them can tell a working matcher from a broken one.
+#
+# The target is `GET /v1/soft-check/known-answer`, `C1`'s frozen constant. Nothing here is seeded,
+# computed or shared with another test, so every expected value below is a literal this file can
+# name — `B6-15`'s rule, and the reason a near-miss can be chosen *by construction* rather than
+# hoped for:
+#
+#     label     "known-answer"        price     42
+#     currency  "EUR"                 truthy    4          falsy  2
+#     inStock   true                  tags      ["plant", "soft-assertion"]
+#
+# Note `price` is 42 and `truthy` is 4. That is not a coincidence in the fixture, it is the
+# near-miss: an `equals` implemented as a prefix or `startsWith` comparison — a real and boring way
+# to write one — passes `42 equals 4`. So does `contains`. Both are named below.
+#
+# Each `not` here is doing work no positive assertion can do. A matcher stuck at `true` fails every
+# `not` line; a matcher stuck at `false` fails every positive one; and the near-misses are chosen so
+# that the *plausible wrong implementations*, not merely the broken ones, land on the `not`.
+
+@constructs @matchers
+test "equals is exact, and is not a prefix comparison"
+  api GET /soft-check/known-answer
+  expect status equals 200
+
+  expect body.label equals "known-answer"
+  # Case. An `equals` folding case passes this as written and fails the `not`.
+  expect body.label not equals "Known-Answer"
+  # Whitespace, which every trimming implementation gets wrong in the same direction.
+  expect body.label not equals "known-answer "
+  expect body.price equals 42
+  # The near-miss the fixture was built for: `42` against `4`. A prefix or `startsWith` comparison
+  # says these are equal, and passes every other `equals` in this repository.
+  expect body.price not equals 4
+
+@constructs @matchers
+test "contains is substring on a string and membership on an array, and the two are different"
+  api GET /soft-check/known-answer
+  expect status equals 200
+
+  # String subject: a genuine substring, taken from the middle so an implementation anchored at
+  # either end fails it.
+  expect body.label contains "own-ans"
+  expect body.label not contains "own ans"
+
+  # Array subject: `contains` is *element membership*, not substring. `"plan"` is a substring of the
+  # element `"plant"` and of the JSON text of the whole array, and it is not an element — so an
+  # implementation that stringified the array and searched it passes the line above and fails here.
+  expect body.tags contains "plant"
+  expect body.tags not contains "plan"
+
+@constructs @matchers
+test "matches is a regular expression, not a substring search"
+  api GET /soft-check/known-answer
+  expect status equals 200
+
+  expect body.label matches "^known-[a-z]+$"
+  # Alternation is the discriminator. A `matches` implemented as `String.includes` passes every
+  # regex in this repository that happens to be a literal — `"json"`, `"nginx"`, `"Secure"` — and
+  # fails this line, because no field here contains the eight characters `EUR|USD`.
+  expect body.currency matches "EUR|USD"
+  # And the regex is applied case-sensitively.
+  expect body.currency not matches "^eur$"
+
+@constructs @matchers
+test "matches subset ignores the keys it was not given, and fails on one wrong value"
+  api GET /soft-check/known-answer
+  expect status equals 200
+
+  # Two of seven keys. A `matches subset` implemented as deep equality fails this line, which is
+  # the reason the matcher exists at all.
+  expect body matches subset { label: "known-answer", price: 42 }
+  # One key right, one key off by one. A subset that only checked *presence* of the listed keys —
+  # or that stopped at the first match — passes this, and it must not.
+  expect body not matches subset { label: "known-answer", price: 41 }
+
+@constructs @matchers
+test "matches schema validates against the API's own document, and rejects a document it does not fit"
+  api GET /soft-check/known-answer
+  expect status equals 200
+
+  expect body matches schema "SoftCheckAnswerDto" from "http://localhost:4001/openapi.json"
+  # The negative half, and it is the half that means something: a schema matcher that resolved the
+  # `$ref` to nothing, or that treated "no errors reported" as "valid", passes the line above
+  # against literally any body. `ProductResponseDto` is a different shape in the same document —
+  # and it is the one `matchers-explained.tflw` asserts *positively* against a product, so the pair
+  # of files together shows the matcher discriminating in both directions on one schema.
+  expect body not matches schema "ProductResponseDto" from "http://localhost:4001/openapi.json"
+
+@constructs @matchers
+test "greater than and less than are strict at the boundary"
+  api GET /soft-check/known-answer
+  expect status equals 200
+
+  expect body.price is greater than 41
+  # The boundary itself. `>=` masquerading as `>` passes the line above and fails this one, and no
+  # other use of this matcher in the repository sits close enough to its bound to notice.
+  expect body.price not is greater than 42
+  expect body.price is less than 43
+  expect body.price not is less than 42
+
+@constructs @matchers
+test "has count is an exact length, not a lower bound"
+  api GET /soft-check/known-answer
+  expect status equals 200
+
+  expect body.tags has count 2
+  # Both directions off by one. A `has count` implemented as `length >= N` passes `1`; one
+  # implemented as truthiness passes everything.
+  expect body.tags not has count 1
+  expect body.tags not has count 3

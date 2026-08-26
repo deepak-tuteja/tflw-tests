@@ -1218,6 +1218,138 @@ export const PLANTS = [
     blockedOn: null,
   },
 
+  {
+    id: 'C60',
+    construct: 'matcher:equals',
+    family: 'matcher',
+    tier: 'api',
+    title: '`equals` is exact, and is not a prefix comparison',
+    target: 'tests/.constructs/matcher-discrimination.tflw against `GET /v1/soft-check/known-answer` — `C1`\'s frozen constant, so every expected value is a literal',
+    evidence: { file: 'tests/.constructs/matcher-discrimination.tflw', pattern: '^\\s*expect body\\.\\S+ not equals ', min: 3 },
+    graders: ['acceptance'],
+    knownAnswer:
+      '`body.price` is `42` and `body.truthy` is `4`, so `expect body.price not equals 4` is the ' +
+      'assertion an `equals` written as a prefix or `startsWith` comparison fails — and that ' +
+      'implementation passes all 1581 other uses of `equals` in this repository. Two more `not` ' +
+      'lines pin the two remaining cheap mistakes: folding case (`"Known-Answer"`) and trimming ' +
+      'whitespace (`"known-answer "`). Every negative was run with its `not` dropped and every one ' +
+      'of them went red, so none of them is decoration.',
+    catches: 'an `equals` that folds case, trims, or compares prefixes — none of which any positive ' +
+      'assertion in this suite can see.',
+    blockedOn: null,
+  },
+  {
+    id: 'C61',
+    construct: 'matcher:contains',
+    family: 'matcher',
+    tier: 'api',
+    title: '`contains` is substring on a string and membership on an array, and the two are different',
+    target: 'tests/.constructs/matcher-discrimination.tflw against `GET /v1/soft-check/known-answer` — `C1`\'s frozen constant, so every expected value is a literal',
+    evidence: { file: 'tests/.constructs/matcher-discrimination.tflw', pattern: '^\\s*expect body\\.\\S+ not contains ', min: 2 },
+    graders: ['acceptance'],
+    knownAnswer:
+      '`"plan"` is a substring of the element `"plant"` and of the JSON text of the whole array, ' +
+      'and it is not an element of it — so `expect body.tags not contains "plan"` is red for an ' +
+      'implementation that stringified the array and searched it, which is the ordinary way to get ' +
+      'this wrong. The string half is asserted from the middle of the value (`"own-ans"`), so an ' +
+      'implementation anchored at either end fails it.',
+    catches: 'a `contains` that searches a stringified array instead of its elements, and one anchored at ' +
+      'either end of a string.',
+    blockedOn: null,
+  },
+  {
+    id: 'C62',
+    construct: 'matcher:matches-regex',
+    family: 'matcher',
+    tier: 'api',
+    title: '`matches` is a regular expression, not a substring search',
+    target: 'tests/.constructs/matcher-discrimination.tflw against `GET /v1/soft-check/known-answer` — `C1`\'s frozen constant, so every expected value is a literal',
+    evidence: { file: 'tests/.constructs/matcher-discrimination.tflw', pattern: '^\\s*expect body\\.\\S+ matches "EUR\\|USD"', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'Every `matches` in this repository is a literal — `"json"`, `"nginx"`, `"Secure"`, ' +
+      '`"session="` — so `String.includes` passes all 31 of them. `expect body.currency matches ' +
+      '"EUR|USD"` is the one assertion that separates the two: no field in the payload contains ' +
+      'those eight characters, so a substring implementation goes red. `not matches "^eur$"` adds ' +
+      'case-sensitivity, and `^known-[a-z]+$` adds anchoring.',
+    catches: 'a `matches` implemented as a substring search, which every existing use in this suite is ' +
+      'blind to.',
+    blockedOn: null,
+  },
+  {
+    id: 'C63',
+    construct: 'matcher:matches-subset',
+    family: 'matcher',
+    tier: 'api',
+    title: '`matches subset` ignores the keys it was not given, and fails on one wrong value',
+    target: 'tests/.constructs/matcher-discrimination.tflw against `GET /v1/soft-check/known-answer` — `C1`\'s frozen constant, so every expected value is a literal',
+    evidence: { file: 'tests/.constructs/matcher-discrimination.tflw', pattern: '^\\s*expect body not matches subset ', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'Two keys of seven are listed, so a `matches subset` implemented as deep equality is red on ' +
+      'the positive — that is the matcher\'s whole reason to exist. The negative names the same two ' +
+      'keys with `price` off by one, so an implementation that checked only that the listed keys ' +
+      'were *present*, or that stopped at the first match, is red on it. The pair is the claim; ' +
+      'either alone is satisfied by a wrong implementation.',
+    catches: 'a subset that is really equality, and a subset that checks presence rather than value.',
+    blockedOn: null,
+  },
+  {
+    id: 'C64',
+    construct: 'matcher:matches-schema',
+    family: 'matcher',
+    tier: 'api',
+    title: '`matches schema` validates against the API\'s own document, and rejects a document the body ' +
+      'does not fit',
+    target: 'tests/.constructs/matcher-discrimination.tflw against `GET /v1/soft-check/known-answer` — `C1`\'s frozen constant, so every expected value is a literal',
+    evidence: { file: 'tests/.constructs/matcher-discrimination.tflw', pattern: '^\\s*expect body not matches schema "ProductResponseDto"', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'The positive validates the frozen payload against `SoftCheckAnswerDto` out of apiV2\'s live ' +
+      '`/openapi.json`. The negative points the *same* matcher at `ProductResponseDto` in the same ' +
+      'document and demands a rejection — which is the half that means anything, because a matcher ' +
+      'that resolved the `$ref` to nothing, or that read "no errors reported" as "valid", passes ' +
+      'the positive against literally any body. `matchers-explained.tflw` asserts ' +
+      '`ProductResponseDto` *positively* against a real product, so across the two files one schema ' +
+      'is shown discriminating in both directions.',
+    catches: 'a schema matcher that validates nothing and reports success — the failure mode a ' +
+      'positive-only assertion cannot distinguish from a pass.',
+    blockedOn: null,
+  },
+  {
+    id: 'C65',
+    construct: 'matcher:greater-less-than',
+    family: 'matcher',
+    tier: 'api',
+    title: '`is greater than` and `is less than` are strict at the boundary',
+    target: 'tests/.constructs/matcher-discrimination.tflw against `GET /v1/soft-check/known-answer` — `C1`\'s frozen constant, so every expected value is a literal',
+    evidence: { file: 'tests/.constructs/matcher-discrimination.tflw', pattern: '^\\s*expect body\\.\\S+ not is (greater|less) than ', min: 2 },
+    graders: ['acceptance'],
+    knownAnswer:
+      '`body.price` is `42`, and all four assertions sit on the boundary: `> 41` and `not > 42`, `< ' +
+      '43` and `not < 42`. `>=` masquerading as `>` passes the two positives and is red on the two ' +
+      'negatives. No other use of this matcher in the repository sits within one of its bound — `is ' +
+      'greater than 0`, `is less than 5000ms` — so none of them could ever notice.',
+    catches: 'a comparison that is inclusive where the language says it is strict, in either direction.',
+    blockedOn: null,
+  },
+  {
+    id: 'C66',
+    construct: 'matcher:has-count',
+    family: 'matcher',
+    tier: 'api',
+    title: '`has count` is an exact length, not a lower bound',
+    target: 'tests/.constructs/matcher-discrimination.tflw against `GET /v1/soft-check/known-answer` — `C1`\'s frozen constant, so every expected value is a literal',
+    evidence: { file: 'tests/.constructs/matcher-discrimination.tflw', pattern: '^\\s*expect body\\.\\S+ not has count ', min: 2 },
+    graders: ['acceptance'],
+    knownAnswer:
+      '`body.tags` has two elements, and the two negatives are one either side: `not has count 1` ' +
+      'is red for an implementation written as `length >= N`, and `not has count 3` is red for one ' +
+      'written as `length <= N`. A `has count` that returned true for anything fails both. The ' +
+      'positive alone distinguishes none of the three.',
+    catches: 'a `has count` that is a lower bound, an upper bound, or not a count at all.',
+    blockedOn: null,
+  },
 ];
 
 /**
@@ -1302,7 +1434,7 @@ export const expandReferenceRosters = (manifestConstructs) =>
  * exercised*. `step:api` sits here with 1139 occurrences behind it.
  */
 export const RATCHET = [
-  // --- declaration (10) ---
+  // --- declaration (9) ---
   // The family `M154a` missed and `M154c`/`D742` added; `declaration:after` and `declaration:retry`
   // are rostered above, so ten of the twelve land here. Five of these are `test`-header clauses
   // rather than top-level words, and three of those five (`tags`, `with-each`, `concurrency`) are
@@ -1326,7 +1458,12 @@ export const RATCHET = [
   // not one: `TF033` says "`pause` is only legal inside a workload-bearing `test`", so it is
   // `M67`'s per-iteration pacing and its known answer is an inter-arrival gap.
   'step:api', 'step:wait', 'step:expect', 'step:let', 'step:capture', 'step:log',
-  // --- matcher (9) ---
+  // --- matcher (2) ---
+  // Eight of the nine left at `M154g` step 2 (`C60`-`C66`), on one plant whose every assertion is a
+  // *pair*: `tests/.constructs/matcher-discrimination.tflw`. The eighth, `matcher:was-made`, is a
+  // browser-network assertion and does not belong in an API fixture — it rosters with the UI work,
+  // not here. What remains is one row, and it is a condition rather than a backlog item.
+  //
   // Tier 1 and Tier 2 left at `M154f` (`C57`, `C58`). **`matcher:has-no-input-handling-violations`
   // stays**, and it is the milestone's finding rather than an oversight: Tier 3's grader
   // (`verify-input-acceptance.mjs`) states its known answers in full, asserts them, and exits
@@ -1335,9 +1472,7 @@ export const RATCHET = [
   // judged too high for every-PR. So it can fail and nothing would notice, which is exactly what a
   // roster row must not be built on. **Rosters when the Tier 3 grader runs on something that
   // reports** — a condition, not a milestone number (`M131`).
-  'matcher:equals', 'matcher:contains', 'matcher:matches-regex', 'matcher:matches-subset',
-  'matcher:matches-schema', 'matcher:greater-less-than', 'matcher:has-count', 'matcher:was-made',
-  'matcher:has-no-input-handling-violations',
+  'matcher:was-made', 'matcher:has-no-input-handling-violations',
   // --- generator (12) ---
   'generator:unique-prefix', 'generator:unique-email', 'generator:unique-number', 'generator:unique-like',
   'generator:unique-uuid', 'generator:random-number', 'generator:random-date', 'generator:random-of',
@@ -1370,16 +1505,30 @@ export const RATCHET = [
  * `RATCHET.length` must not exceed this (`D740`). Lower it as milestones roster constructs; raising
  * it is the edit this pin exists to make loud.
  *
+ * **`54` -> `47` at `M154g` step 2, and this one is the opposite kind of drop: seven rows, one new
+ * fixture, and every assertion in it a *pair*.** The seven matchers had 1581 + 50 + 31 + 44 + 14 +
+ * 43 + 62 uses between them and not one of those uses could tell a working matcher from a broken
+ * one, because every one of them is positive. `tests/.constructs/matcher-discrimination.tflw` adds
+ * twelve `not` lines against `C1`'s frozen payload, each aimed at a *plausible* wrong
+ * implementation rather than at a broken one — prefix comparison, substring-over-stringified-array,
+ * `String.includes` for a regex, subset-as-equality, a schema matcher that validates nothing,
+ * `>=` for `>`, `length >= N` for a count. All twelve were then run with the `not` dropped, and all
+ * twelve went red. That control is what makes the row an assertion rather than a hope, and it is
+ * cheap enough that step 3 and step 4 should both do it.
+ *
  * **`120` -> `54` at `M154g` step 1, and it is the largest single drop this pin will ever see.**
  * Sixty-six of the hundred and twenty were the diagnostic family, and not one of them gained an
  * assertion: `verify-check-diagnostics.mjs` had been proving every one of them against a real `tflw
- * check` since `M49`, and against a list read out of tflw's own manifest since `M86`. What was
+ * check` since `M49`, and against a list read out of tflw's own manifest since the drift closure
+ * of 2026-08-04, which found three assigned codes with no fixture at all. What was
  * missing was the *claim*, which is `D739`'s cheap end taken to its limit — and `D751` says the
  * claim is a citation rather than sixty-six restatements of somebody else's enforced completeness.
  *
  * The number to read this against is not the drop, it is what is left: **54**, and they are the
  * expensive end. Twelve generators that need an observable built before presence proves anything,
- * eighteen config constructs, nine matchers, nine declarations and the six workhorse steps.
+ * eighteen config constructs, nine matchers, nine declarations and the six workhorse steps.  Seven of
+ * the nine matchers went in step 2; the two that remain are there for stated reasons, not for lack
+ * of a turn.
  *
  * `140` is the whole manifest (178 constructs) minus the thirty-eight plants rostered so far, and
  * acceptance clause 5 is that it reaches 0. **The clause named `M154f` and now names `M154g`** — not
@@ -1417,7 +1566,7 @@ export const RATCHET = [
  * the unrostered remainder, and a remainder can only be honest about a denominator that has itself
  * just been corrected upwards.
  */
-export const RATCHET_CEILING = 54;
+export const RATCHET_CEILING = 47;
 
 /**
  * `CONSTRUCTS.md` carries one row per plant and prose a human reads; this asserts their id sets

@@ -167,6 +167,13 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C57` | `has no … security violations` (`matcher:has-no-security-violations`) | security | every ledger row names what must fire **and** what is in play at that floor and must be silent; plus `D445` precision (`baseline ∪ plants`, nothing elsewhere) and the `scanCoverage` census that makes silence sufficient | a rule that stops firing, a rule that fires where it should not, and a floor read as a band |
 | `C58` | `has no authorization violations` (`matcher:has-no-authorization-violations`) | security | probe sets graded as four numbers, over one human declared three times — cookie+`csrf from` completes, bearer completes, cookie without the clause is `inconclusive` | a probe set silently emptied until nobody can answer, and a destructive verb scored as a verdict |
 | `C59` | **the whole `diagnostic` family — 66 codes** (`diagnostic:TF001`…, by rule not by list) | check | every code the installed tflw assigns is provoked by a fixture and asserted to appear in real `tflw check` output, several against the silence they must not break; and the expected set is read out of **tflw's own §17 manifest**, so a code that ships without a fixture here is red on the day it merges | a diagnostic that stops firing, a fixture kept for a retired code, and 66 hand-written rows going stale silently while reading as evidence |
+| `C60` | `equals` (`matcher:equals`) | api | `body.price` is `42` and `body.truthy` is `4`, so `not equals 4` is red for an `equals` written as a prefix comparison — the implementation that passes all 1581 other uses here; plus case (`"Known-Answer"`) and whitespace (`"known-answer "`) | an `equals` that folds case, trims, or compares prefixes |
+| `C61` | `contains` (`matcher:contains`) | api | `"plan"` is a substring of the element `"plant"` and not an element of `body.tags`, so `not contains "plan"` is red for an implementation that searched the stringified array; the string half is asserted from the middle of the value | a `contains` that searches stringified JSON, and one anchored at either end |
+| `C62` | `matches "<regex>"` (`matcher:matches-regex`) | api | every one of the 31 existing uses is a literal, so `String.includes` passes them all — `matches "EUR|USD"` is the one assertion that separates a regex engine from a substring search; `not matches "^eur$"` adds case, `^known-[a-z]+$` adds anchoring | a `matches` implemented as a substring search |
+| `C63` | `matches subset {…}` (`matcher:matches-subset`) | api | two keys of seven, so deep equality is red on the positive; the same two keys with `price` off by one, so presence-only or stop-at-first-match is red on the negative | a subset that is really equality, and one that checks presence rather than value |
+| `C64` | `matches schema "…" from "…"` (`matcher:matches-schema`) | api | the frozen payload validates against `SoftCheckAnswerDto` out of apiV2's live `/openapi.json`, and is **rejected** by `ProductResponseDto` in the same document — the half that a matcher validating nothing cannot fake | a schema matcher that reports success without validating |
+| `C65` | `is greater than` / `is less than` (`matcher:greater-less-than`) | api | all four assertions sit on the boundary of `body.price` = 42 — `> 41`, `not > 42`, `< 43`, `not < 42` — so `>=` masquerading as `>` is red in both directions; no existing use sits within one of its bound | a comparison that is inclusive where the language says strict |
+| `C66` | `has count <n>` (`matcher:has-count`) | api | `body.tags` has two elements and the negatives are one either side: `not has count 1` catches `length >= N`, `not has count 3` catches `length <= N` | a `has count` that is a lower bound, an upper bound, or not a count |
 
 ### `C1` — the soft assertion records a failure and keeps going
 
@@ -685,6 +692,56 @@ diagnostics gate reports that nothing rosters what it proves), the cited gate ma
 (`M137e-01`'s rule fires — *a row pointing at a gate nobody runs reads as evidence while nothing
 evaluates it*), and one code's fixture deleted (`C59` names `TF001` beside the completeness check's
 own red).
+
+### `C60`–`C66` — seven matchers, and the twelve `not` lines that make 1825 uses mean something
+
+**The evidence was already everywhere and it proved nothing.** `equals` is used 1581 times in this
+repository, `has count` 62, `contains` 50, `matches` 31, `matches subset` 44, `is greater/less than`
+43, `matches schema` 14. Every single one of those uses is *positive*. A matcher that returned
+`true` unconditionally passes all 1825 of them, and so does one that compared stringified JSON with
+`includes` — which is `D722`'s vacuity in its purest form and the exact reason presence was rejected
+as a coverage bar.
+
+`tests/.constructs/matcher-discrimination.tflw` answers in **pairs**, against `C1`'s frozen payload
+so every expected value is a literal the file can name. What makes the pairs worth writing down is
+not the polarity — it is that each negative is aimed at a *plausible* implementation rather than a
+broken one:
+
+| matcher | the negative | the implementation it is red for |
+|---|---|---|
+| `equals` | `body.price not equals 4` | a prefix or `startsWith` comparison — `42` against `4` |
+| `contains` | `body.tags not contains "plan"` | searching the array's stringified JSON instead of its elements |
+| `matches` | `body.currency matches "EUR\|USD"` | `String.includes`, which passes all 31 existing uses because every one is a literal |
+| `matches subset` | `not matches subset { …, price: 41 }` | checking that the listed keys are *present* rather than equal |
+| `matches schema` | `not matches schema "ProductResponseDto"` | reading "no errors reported" as "valid" |
+| `is greater than` | `not is greater than 42` | `>=` wearing `>`'s name |
+| `has count` | `not has count 1` / `not has count 3` | `length >= N`, and `length <= N` |
+
+**The negatives are not taken on trust.** `verify-construct-acceptance.mjs` runs the plant, and then
+runs it again with every `not` mechanically removed and every `expect` softened to `check` — so one
+red cannot abort a test and hide the rest — and demands that **all twelve fail**. Measured
+2026-08-27 on `fedora-box`: twelve inverted, twelve red. A negative that stopped discriminating
+would survive that run, and surviving is what the gate refuses.
+
+**And the near-miss value itself is pinned, not just its presence.** `MATCHER_ROWS` in the grader
+names each negative by its exact source text, so weakening `not equals 4` to `not equals 999` —
+which is still a true assertion, still non-vacuous, and still passes the mutation control — is red
+on the plant's own recall. That was run rather than reasoned: the weakened plant produced
+`✗ C60 recall — \`not equals 4\` is in the plant and held (got no such step)`. Deleting a negative
+outright produces four independent reds across two rows.
+
+**What is not claimed.** These rows say the matcher discriminates on the payload the plant names.
+They say nothing about the matcher's behaviour on types the payload has no instance of — `contains`
+on a number, `has count` on `body bytes`, `matches subset` on a nested array — and `tests/.gaps/`
+already holds the standing record of where quantifying stops working. The pair is a floor under
+1825 uses, not a specification.
+
+**`matcher:was-made` is not here, and the reason is the file it would go in.** It is a
+browser-network assertion — `expect request to "…" with method "POST" was made` — and its two live
+uses are in `tests/mixed/storefront.tflw`. A pair for it needs a page that issues a request and a
+path that is never requested, which is UI-tier work in a UI fixture; putting it in an API plant
+would be filing it where nobody looking for it would look. It stays on the ratchet with a reason
+rather than a turn.
 
 ### The three constructs this tier did **not** roster
 
