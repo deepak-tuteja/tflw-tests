@@ -1,36 +1,80 @@
 {
   "_what": "The perf ladder's regression baseline — M154e step 5, see scripts/verify-perf-baseline.mjs.",
-  "_bands": "Ratios of tflw to its co-runner in the SAME run (D750), never absolute numbers: absolutes on this box move with thermal state, the 2.4 GHz link and whoever else holds the lease. null means not yet measured.",
-  "_establishing": "The first scheduled box run records observed ratios in its artifact; a human promotes them here and flips `established`. That run is also what closes B6-15, whose condition is \"reopens when the parity ladder is next run in anger\".",
-  "established": false,
+  "_bands": "Ratios of tflw to its co-runner in the SAME run (D750), never absolute numbers: absolutes on this box move with thermal state, the 2.4 GHz link and whoever else holds the lease. A null band is NOT 'unmeasured' — every rung here was measured. It means the derivation declined to draw one, and _notes says why for each.",
+  "_establishing": "Established 2026-08-26, closing B6-15 (\"reopens when the parity ladder is next run in anger\"). Derived by scripts/derive-perf-bands.mjs from the runs in _sources, all committed under founding-runs/ so these bands can be re-derived rather than taken on trust. Contribution is per-rung, not per-run: the apiV2 rungs rest on the two clean runs, and the echo-* rungs on three, because the third run's apiV2 died while its stateless echo target stayed healthy. Re-derive as more runs accumulate — n=2 cannot estimate variance, so the half-width is floored at 25% rather than computed.",
+  "established": true,
   "rungs": {
     "checkout-burst": {
-      "rpsRatio": null,
-      "p95Ratio": null
+      "rpsRatio": {
+        "min": 0.387,
+        "max": 0.605
+      },
+      "p95Ratio": {
+        "min": 1.072,
+        "max": 1.675
+      }
     },
     "dogfood-get-only": {
-      "rpsRatio": null,
+      "rpsRatio": {
+        "min": 0.858,
+        "max": 1.341
+      },
       "p95Ratio": null
     },
     "dogfood-post-uncontended": {
-      "rpsRatio": null,
-      "p95Ratio": null
+      "rpsRatio": {
+        "min": 0.784,
+        "max": 1.225
+      },
+      "p95Ratio": {
+        "min": 0.833,
+        "max": 1.302
+      }
     },
     "search-read": {
-      "rpsRatio": null,
-      "p95Ratio": null
+      "rpsRatio": {
+        "min": 0.808,
+        "max": 1.263
+      },
+      "p95Ratio": {
+        "min": 0.781,
+        "max": 1.271
+      }
     },
     "ticket-write": {
-      "rpsRatio": null,
-      "p95Ratio": null
+      "rpsRatio": {
+        "min": 0.81,
+        "max": 1.266
+      },
+      "p95Ratio": {
+        "min": 0.826,
+        "max": 1.29
+      }
     },
     "echo-get-only": {
-      "rpsRatio": null,
+      "rpsRatio": {
+        "min": 0.336,
+        "max": 0.609
+      },
       "p95Ratio": null
     },
     "echo-post-only": {
-      "rpsRatio": null,
+      "rpsRatio": {
+        "min": 0.301,
+        "max": 0.548
+      },
       "p95Ratio": null
     }
+  },
+  "_method": "Bands drawn by scripts/derive-perf-bands.mjs from 3 clean runs: geometric centre, half-width max(observed spread ^ 0.5 * 1.2, 1.25) capped at 1.7. Re-derive rather than hand-editing.",
+  "_sources": [
+    "founding-runs/2026-08-26T10-29-43-000Z.json",
+    "founding-runs/2026-08-26T11-20-50-000Z.json",
+    "founding-runs/2026-08-26T10-23-37-000Z.json"
+  ],
+  "_notes": {
+    "dogfood-get-only.p95Ratio": "not banded: tflw reported a p95 of 3/3 ms, so its +/-0.5 ms integer-reporting quantum is 17% of the reading — over the 10% share at which a band would fail on rounding rather than on behaviour (M154f-12).",
+    "echo-get-only.p95Ratio": "not banded: tflw reported a p95 of 1/1/1 ms, so its +/-0.5 ms integer-reporting quantum is 50% of the reading — over the 10% share at which a band would fail on rounding rather than on behaviour (M154f-12).",
+    "echo-post-only.p95Ratio": "not banded: tflw reported a p95 of 1/1/1 ms, so its +/-0.5 ms integer-reporting quantum is 50% of the reading — over the 10% share at which a band would fail on rounding rather than on behaviour (M154f-12)."
   }
 }

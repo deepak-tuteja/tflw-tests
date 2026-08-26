@@ -25,7 +25,10 @@
 //
 // **A rung with no co-runner present is a failure, not a pass.** If k6 and Artillery are both
 // absent there is no comparison to make, and reporting "no regression" for a rung nothing was
-// compared against is the precise shape of a vacuous check.
+// compared against is the precise shape of a vacuous check. The one exception is a rung the
+// *manifest* declares single-runner — `generator-saturation-demo` is a claim about tflw's own
+// generator and a counterpart would measure a different program — and `M154f-07` is the row for
+// having demanded a peer from it anyway.
 //
 // ## The half that has teeth before anything is calibrated
 //
@@ -37,6 +40,16 @@
 // declared no `threshold` at all (tflw `TF033`/`M60`) — the single most expensive thing this ladder
 // has ever failed to notice. An error-rate ceiling is robust to every box condition that makes the
 // latency numbers untrustworthy, so it is the one bound worth asserting before any baseline exists.
+//
+// `M154f-09` adds the second uncalibrated rule, and it exists because the first one has a blind
+// spot that took a real incident to see: **an error-rate ceiling catches a target that is down, and
+// says nothing about one that is dying.** A degraded target answers every request successfully and
+// only slowly, so the error rate sits at 0% while every latency sample is poisoned. On 2026-08-26
+// apiV2 ran this ladder while spending 97% of its wall-clock in garbage collection and then exited
+// 139; all five completed rungs reported a 0% error rate and nothing objected. So the driver now
+// probes each target's health before and after every rung and the run is judged on whether the
+// target survived — `target-health` below. Like the bands, it is a ratio inside one run rather than
+// an absolute, for `D750`'s reason.
 
 import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
@@ -87,9 +100,36 @@ export function compare(artifact, baseline = readBaseline()) {
 
   if (!ladder) return { regressions, checked, uncomparable };
 
+  // `M154f-06` — a reset that did not happen is a wrong measurement, not a missing one: every
+  // mutating rung after it ran against a database still carrying the previous run's rows. The
+  // driver recorded `reset_http` in every artifact from the start and nothing ever read it.
+  if (ladder.reset && ladder.reset.ok === false) {
+    regressions.push({ kind: 'reset', rung: null, detail: ladder.reset.detail });
+  }
+
+  // `M154f-07` — the rungs the manifest says can be compared at all. `generator-saturation-demo` is
+  // tflw-only **by construction** — it is a claim about tflw's own generator, so a k6 counterpart
+  // would measure a different program and answer nothing — and this file already knows that: it
+  // defines `comparableRungs()` and uses it in the static half. `compare()` walked the artifact's
+  // rungs unfiltered, so it demanded a co-runner from the one rung that can never have one and
+  // reported a permanent regression. A gate that is red for a reason no change can fix is a gate
+  // people learn to read past, which is the same failure class as one that cannot fail at all.
+  const comparable = new Set(comparableRungs().map((r) => r.name));
+
   for (const row of ladder.rungs ?? []) {
     const runners = row.runners ?? {};
     const tflw = runners.tflw;
+
+    // `M154f-09` — the target is judged **first**, before anything about the runners. When the
+    // target is down the runners fail too, and reporting their failure first blames the wrong
+    // thing: the 10-23-37 run said `no workload test in report/results.json — did the rung run at
+    // all?` for three rungs whose actual cause was an apiV2 that had OOMed twenty seconds before
+    // the run started. The runner's failure is a symptom and is still reported; it is just no
+    // longer the first thing the reader sees.
+    if (row.target_ok && row.target_ok.ok === false) {
+      regressions.push({ kind: 'target-health', rung: row.name, detail: row.target_ok.why });
+    }
+
     if (!tflw || tflw.error) {
       regressions.push({ kind: 'rung-failed', rung: row.name,
                          detail: tflw?.error ?? 'the tflw side did not produce metrics' });
@@ -110,8 +150,13 @@ export function compare(artifact, baseline = readBaseline()) {
                : runners.artillery && !runners.artillery.error ? ['artillery', runners.artillery]
                : null;
     if (!peer) {
-      // Not silently skipped — see the header. No comparison happened, so the rung is unjudged.
       uncomparable.push(row.name);
+      if (!comparable.has(row.name)) {
+        // Single-runner by declaration (`M154f-07`). Unjudged and recorded as such, but not a
+        // regression: there is no co-runner to be missing.
+        continue;
+      }
+      // Not silently skipped — see the header. No comparison happened, so the rung is unjudged.
       regressions.push({
         kind: 'no-peer', rung: row.name,
         detail: `no co-runner produced metrics for this rung (skipped: ` +

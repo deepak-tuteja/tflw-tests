@@ -13,6 +13,15 @@ import { check } from 'k6';
 const BASE_URL = 'http://localhost:4001/v1';
 
 export const options = {
+  // `M154f-04` — **this is a metric declaration, not a check.** k6 materialises a tagged
+  // sub-metric only when a threshold names it, so without this line the
+  // `http_req_duration{name:search,expected_response:true}` that
+  // `scripts/perf-conformance.mjs` reads is simply absent from `--summary-export` and the rung
+  // contributes nothing to compare. The bound is deliberately always-true; judging belongs to
+  // `verify-perf-baseline.mjs` (`D750`). Full rationale in `scripts/lib/perf-ladder.mjs`.
+  thresholds: {
+    'http_req_duration{name:search,expected_response:true}': ['min>=0'],
+  },
   scenarios: {
     search_read: {
       executor: 'ramping-vus',

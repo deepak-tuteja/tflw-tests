@@ -35,7 +35,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { FIXTURE_SOURCE, FIXTURES, DRIFT_SCANNERS, LOCAL_HOSTS, RUNGS, NON_RUNG_FILES } from './lib/perf-ladder.mjs';
+import { FIXTURE_SOURCE, FIXTURES, DRIFT_SCANNERS, LOCAL_HOSTS, RUNGS, TARGETS, NON_RUNG_FILES } from './lib/perf-ladder.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const acceptanceRoot = join(repoRoot, 'tflw-acceptance');
@@ -89,6 +89,14 @@ function checkHosts(rel, src) {
 const sources = new Map();
 
 for (const rung of RUNGS) {
+  // `M154f-05` — every rung says which server it measures against. The driver uses this to decide
+  // what to health-check and what to start; an unknown or missing target means it would silently
+  // fall back to a default, which is how both echo rungs came to be run against the wrong path.
+  if (!rung.target) {
+    fail(`rung \`${rung.name}\`: no \`target\`. Say which server it measures against — one of ${Object.keys(TARGETS).join(', ')}.`);
+  } else if (!TARGETS[rung.target]) {
+    fail(`rung \`${rung.name}\`: target \`${rung.target}\` is on no entry of TARGETS (have: ${Object.keys(TARGETS).join(', ')}).`);
+  }
   const present = RUNNERS.filter((r) => rung.impls[r]);
   if (present.length === 0) fail(`rung \`${rung.name}\`: no implementations at all.`);
   if (present.length < RUNNERS.length && !rung.why) {
@@ -168,6 +176,37 @@ for (const rung of RUNGS) {
   if (!tagged.test(src)) {
     const present = [...src.matchAll(/name:\s*['"`]([^'"`]+)['"`]/g)].map((m) => m[1]);
     fail(`rung \`${rung.name}\` declares k6Tag \`${rung.k6Tag}\`, but \`tflw-acceptance/${rel}\` tags no request with that name (it tags: ${present.join(', ') || 'nothing'}). The scheduled run reads \`http_req_duration{name:${rung.k6Tag},expected_response:true}\`, which would be silently absent — and comparing against the bare metric instead is the M89 population bug this ladder has already paid for once.`);
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// 5b — `M154f-04` — and the sub-metric is actually materialised.
+//
+// A tag is necessary and not sufficient. k6 writes a tagged sub-metric into `--summary-export`
+// only when a **threshold** names it, so a rung can tag every request correctly, pass check 5
+// above, run clean, and still export nothing the comparison can read. That is not hypothetical:
+// on 2026-08-26 six of seven k6 rungs did exactly this, the scheduled run compared **zero** rungs,
+// and this gate was green the whole time — it had proved the tags were tagged and nothing had
+// proved they were readable.
+//
+// The key is matched literally against the one `perf-conformance.mjs` reads, because a threshold
+// on `http_req_duration{name:foo}` materialises a *different* sub-metric than the
+// `expected_response:true` one the population contract requires (`D749`), and accepting the
+// former here would re-open the M89 population bug through the back door.
+// ---------------------------------------------------------------------------------------------
+for (const rung of RUNGS) {
+  const rel = rung.impls?.k6;
+  if (!rel || !rung.k6Tag) continue;
+  const src = sources.get(rel);
+  if (src === undefined) continue;
+  const key = `http_req_duration{name:${rung.k6Tag},expected_response:true}`;
+  // Matched in **key position** — a quoted string followed by `:` — and not as a substring of the
+  // file. The first draft of this check used `src.includes(key)` and passed a deliberately broken
+  // rung, because the explanatory comment above each `thresholds` block quotes the very key it is
+  // explaining. A gate satisfied by its own documentation is worse than no gate.
+  const declared = [...src.matchAll(/['"`](http_req_duration\{[^'"`]*\})['"`]\s*:/g)].map((m) => m[1]);
+  if (!declared.includes(key)) {
+    fail(`rung \`${rung.name}\`: \`tflw-acceptance/${rel}\` declares no threshold on \`${key}\`, so k6 never materialises that sub-metric and \`--summary-export\` will not contain it. The rung would run clean and contribute nothing to compare. ${declared.length ? `It thresholds: ${declared.join(', ')}.` : 'It declares no http_req_duration threshold at all.'} An always-true bound (\`min>=0\`) is the right one here — see the k6Tag note in scripts/lib/perf-ladder.mjs for why that is a declaration and not a vacuous check.`);
   }
 }
 

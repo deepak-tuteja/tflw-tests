@@ -12,6 +12,15 @@ const LOAD_USER_EMAIL = __ENV.LOAD_USER_EMAIL || 'load@example.com';
 const LOAD_USER_PW = __ENV.LOAD_USER_PW || 'load-pw-123';
 
 export const options = {
+  // `M154f-04` — **this is a metric declaration, not a check.** k6 materialises a tagged
+  // sub-metric only when a threshold names it, so without this line the
+  // `http_req_duration{name:health,expected_response:true}` that
+  // `scripts/perf-conformance.mjs` reads is simply absent from `--summary-export` and the rung
+  // contributes nothing to compare. The bound is deliberately always-true; judging belongs to
+  // `verify-perf-baseline.mjs` (`D750`). Full rationale in `scripts/lib/perf-ladder.mjs`.
+  thresholds: {
+    'http_req_duration{name:health,expected_response:true}': ['min>=0'],
+  },
   scenarios: {
     dogfood_get_only: {
       executor: 'ramping-vus',
