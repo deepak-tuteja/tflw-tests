@@ -156,12 +156,46 @@ last month's product id goes red on the day it lands whether or not anybody rost
 built to answer *"is tflw's load engine comparable to the incumbents?"*, M46–M49 answered it and
 applied a stop condition. What changed is only that the ladder is now checked rather than trusted.
 
-## The scheduled run on `fedora-box`
+## The run on `fedora-box` — on demand, and as a phase of the sweep
 
-`D727` puts arrival-curve grading on a scheduled box run rather than in CI: GitHub's shared runners
-cannot produce a trustworthy arrival curve and the box can. `D733` makes that run a **registered box
+**The schedule is disarmed, and this section is written in the order the design actually moved.**
+
+`D727` puts arrival-curve grading on a box run rather than in CI: GitHub's shared runners cannot
+produce a trustworthy arrival curve and the box can. `D733` makes that run a **registered box
 tenant**, so `statsctl check` and `statsctl conflict --for` can see it and a forge render is never
-surprised by it.
+surprised by it. Both still hold. What no longer holds is the *nightly timer* `D733` also asked for.
+
+**`D754` disarmed it, on measurement rather than taste.** The box was suspended or powered off at
+04:30 on all three nights the timer could have fired — 0 of 3 — and `Persistent=false` makes a
+missed run a silent skip rather than a catch-up. A regression net that never runs and never says so
+is worse than no net, because the plan claims one exists. The units, both checkouts and the
+`tflwperf` tenant row stay **installed and inert**: `D733` is not reversed, and a scheduled run as a
+registered tenant is still the right end state.
+
+**The obvious replacement was scoped and rejected before any code** (`D755`): an auto-triggered
+daytime run that notifies, waits for explicit approval, and offers to delay. Selectivity, not
+notification, is the hard part — this run needs a quiet box, a quiet box during working hours is one
+nobody is using, and the prompt would mostly read *"may I kill what you are doing, in order to
+measure something?"*. Its kill list is also the eviction clause wearing consent, and the box's
+registry decided conflicts are **refused, not auto-evicted**. `D756` declines to reopen
+`fedora-box-dashboard` to carry the notification: its freeze names one reopening trigger and this is
+not it, and the tenant script's own header already calls a dashboard button that launches a
+twenty-minute load run the worst available reading of that carve-out.
+
+**What replaced it has no trigger at all** (`D758`): the measured gate is now a phase of the
+regression sweep — `perf-ladder`, `node scripts/perf-conformance.mjs --profile sweep --in-sweep` —
+so it rides a command a developer already runs on purpose before pushing. Inside the sweep the box
+lease is **inherited from `exec.mjs`, verified, and neither re-taken nor waived** (`D759`);
+`boxlock.sh` is a whole-box mutex and is not reentrant, so a second `acquire` would deadlock against
+its own parent, while `--no-lease` would stamp *"not trustworthy"* onto a run that genuinely was
+exclusive. The phase runs a `sweep` profile — `ladder` + `functional`, omitting the breaking-point
+`curve` (`D760`) — and off the box it exits 3 and is rendered `⊘ skipped`, never a pass (`D761`).
+Its artifacts land in `~/tflw-perf/results/sweep/` and never touch `latest.json`, because an
+in-sweep run grades a dirty working tree while every other run grades a checkout reset to
+`origin/main`.
+
+**Unattendedness is deferred, not delivered.** `M124-03` is re-deferred against **publish** (`D757`)
+rather than left closed on a timer that never fired.
 
 ```sh
 npm run perf:conformance -- --dry-run              # what would run, and against which commit
@@ -194,7 +228,9 @@ ssh fedora-box '~/boxd/tenants/tflwperfctl.sh preflight'   # never mutates; exit
 ssh fedora-box '~/boxd/tenants/tflwperfctl.sh start'       # ARM the timer — not "run it now"
 ```
 
-`start`/`stop` arm and disarm the schedule rather than launching a run, deliberately: a mutating
+`start`/`stop` arm and disarm the schedule rather than launching a run, deliberately — and since
+`D754` the schedule stays disarmed, so `start` is the verb nobody should be reaching for today: a
+mutating
 verb that kicked off a twenty-minute load run because someone clicked a dashboard button would be
 the worst available reading of the dashboard's start/stop carve-out. (That carve-out is numbered in
 `fedora-box-dashboard`'s own sequence, which is a **different namespace** from the `D<n>` used here:
