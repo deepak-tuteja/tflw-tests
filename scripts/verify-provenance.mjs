@@ -155,13 +155,60 @@ export function citationsLoose(text) {
   return ids;
 }
 
+// `M154i` — this gate's corpus IS `git ls-files`, and an empty answer is not an empty repository.
+//
+// WHAT WENT WRONG, because the shape of it matters more than the fix. Run this file in a tree that
+// rsync carried but git did not — `~/tflw-exec/testFlow-tests` on fedora-box, whose `.git` is a
+// skeleton with no index and no HEAD — and `git ls-files` returns **zero paths without failing**.
+// Every conclusion below is then vacuous, and all of them vacuous in the same direction: nothing
+// links out of the repository because nothing was read, nothing is undeclared because nothing cites
+// anything, and every identifier in tflw's pin is "stale" because this repository now appears to
+// cite none of them.
+//
+// The gate reported exactly that — 250-odd identifiers listed, with a remedy attached: *re-pin it*.
+// The remedy was confidently wrong, and following it would have destroyed a correct pin to satisfy
+// a tree that could not read itself. That is worse than a crash. A crash is legibly the
+// environment; a plausible finding with an actionable fix is how a false red gets acted on, and
+// this one was acted on to the extent of being reported twice as a real defect in tflw's pin.
+//
+// This file already knows the rule and applies it one branch over, where the sibling checkout is
+// missing: *a guard that passes when the thing it guards is missing is green about nothing*
+// (`M131-03`). The same sentence was always true of its own input. So git must answer, and the
+// answer must not be empty.
+//
+// Neither case is a skip. This gate does not skip — CI's own comment gives the reason, that the
+// tflw-first merge order deliberately leaves this repository's `main` red in the window between the
+// two merges. The verdict does not change here. Only the reason does, from a false one to a true
+// one.
 function tracked() {
-  const out = execFileSync('git', ['ls-files', '*.md'], { cwd: ROOT, encoding: 'utf8' });
-  return out.split('\n').filter(Boolean).map((path) => ({ path, text: readFileSync(join(ROOT, path), 'utf8') }));
+  let out;
+  try {
+    // `stdio` pipes git's stderr instead of letting it through: the message below quotes it, and
+    // printing it twice reads like two problems.
+    out = execFileSync('git', ['ls-files', '*.md'], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  } catch (e) {
+    const detail = String(e.stderr || e.message).split('\n')[0].trim();
+    return { error: `git could not list this repository's tracked files (${detail})` };
+  }
+  const paths = out.split('\n').filter(Boolean);
+  if (paths.length === 0) return { error: 'git lists no tracked markdown file at all in this tree' };
+  return { files: paths.map((path) => ({ path, text: readFileSync(join(ROOT, path), 'utf8') })) };
 }
 
 function main() {
-  const files = tracked();
+  const corpus = tracked();
+  if (corpus.error) {
+    console.error(
+      `\u2717 ${corpus.error}.\n` +
+      `  This gate's corpus is \`git ls-files '*.md'\`, so an empty answer does not make it pass —\n` +
+      `  it makes it report tflw's ENTIRE pin as stale and tell you to re-pin it, which would\n` +
+      `  discard a correct pin to satisfy a tree that cannot read itself.\n` +
+      `  Run it in a real checkout. An rsync'd working tree is not one: \`scripts/exec.mjs\` copies\n` +
+      `  files, not history, so this is one of the few gates that cannot run on the box.`,
+    );
+    return 1;
+  }
+  const files = corpus.files;
   const problems = [];
 
   // --- 1. links out of the repository ---------------------------------------------------------
