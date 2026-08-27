@@ -180,6 +180,10 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C70` | `let` (`step:let`) | api | `let tag = random string 8` used as a label twice: bound-once leaves the server holding **one** label marked twice, re-evaluated-at-use leaves **two** marked once, and every assertion about status is green either way. With a literal on the right-hand side the two implementations are indistinguishable | a `let` that is a macro over its source expression rather than a binding of its value |
 | `C71` | `log` (`step:log`) | api | graded from `results.json`, since `log` is never an assertion: `kind: log`, `level: warn`, `destination: both`, and a detail reading `c71 observed c71logged` — the captured `{subject}` resolved | a log line that never reaches the report, loses its level, or is stored unexpanded |
 | `C72` | `wait until api` (`step:wait`) | api | `c72settles` answers 503 twice then 200, and three independent readings agree on **3**: the plant's in-band `expect body.attempt equals 3`, the report's own `passed after 3 attempts`, and the server's attempt counter. The first two prove it re-issued; only the third proves it stopped | a `wait` that issues one request behind a long timeout, and one that keeps polling after its condition holds |
+| `C73` | `test` (`declaration:test`) | api | three declarations, **three** verdicts under their three declared names, and the third one **passes** although the first two failed. Graded on the meant-to-fail plant deliberately: in a green file "the next test still ran" is not a claim about anything | a runner that reports per file rather than per test, and one that abandons a file at its first failing test |
+| `C74` | `import` (`declaration:import`) | api | the imported file offers an `action` **and** a `test`, and both mark the server. After the run, `c74action` has arrived once and `c74importedtest` has never arrived — the action is what makes the absence mean *excluded* rather than *never loaded* | an `import` that registers the imported file's tests, and one that quietly imports nothing at all |
+| `C75` | `with each` (`declaration:with-each`) | api | three rows → **three** reported tests with three interpolated names, and three distinct labels at one each. Aimed at a wrong implementation that is not broken: rows looped inside one reported test pass every existing use here and differ only in the summary | a `with each` that reports its rows as one test, runs a row twice, or does not interpolate the row into the name |
+| `C76` | `@tag` (`declaration:tags`) | api | four runs of one file compared against the arrival counter — unfiltered, `--tag c76alpha`, `--tag c76beta`, `--tag c76alpha,c76beta` — and what carries the row is what is **absent** from runs 2 and 3. `--exclude-tag` is run too, and must come back `unknown flag` | a `--tag` that filters nothing, filters everything, or reads only the first tag on a declaration |
 
 ### `C1` — the soft assertion records a failure and keeps going
 
@@ -822,6 +826,75 @@ between a capture and its use.
 has a real discriminating pair in `tests/api/catalog/http-protocol-corners.tflw` — the same product
 fetched with and without the clause, 200 against 302 plus its `location` — and `timeout <dur>` has
 no plant at all. The row states the contract those 1139 uses could not: one step, one request.
+
+### `C73`–`C76` — the four declarations that decide which tests exist
+
+`test`, `import`, `with each` and `@tag` answer a question that is settled *before* any step runs:
+which tests are there, and which of them will execute. Every one of them is used constantly here,
+and in each case the shape of this suite is what hides the effect.
+
+**`@tag` is the clearest.** Every file under `tests/` carries tags, and a `--tag` that silently
+matched everything would leave the entire suite green — because the suite's ordinary runs are
+unfiltered. The construct is exercised thousands of times and its effect has never once been
+observed. So the plant is built as the partition it describes: three tests, three labels, three
+tag-sets, run four times, compared against the arrival counter.
+
+| run | expected to arrive | rules out |
+|---|---|---|
+| unfiltered | `c76alpha` `c76beta` `c76both` | a filter that is on by default |
+| `--tag c76alpha` | `c76alpha` `c76both` — **not** `c76beta` | a `--tag` that matches everything |
+| `--tag c76beta` | `c76beta` `c76both` — **not** `c76alpha` | a `--tag` reading only a declaration's first tag |
+| `--tag c76alpha,c76beta` | all three | a comma-list treated as one literal tag |
+
+The load-bearing readings are the two absences. Runs 1 and 4 are satisfied by a `--tag` that filters
+nothing at all, and run 2 alone is satisfied by one that reads only the first tag on each
+declaration — it is run 3, the exact complement, that leaves no such implementation standing.
+
+That last claim was **run, not argued**. Dropping `@c76beta` from the both-tagged test builds
+exactly the first-tag-only implementation, and the gate goes red on **one** assertion — run 3 —
+while run 2 stays green. A plant whose stated reason for an extra case can be demonstrated by
+removing it is worth more than one whose extra case is merely defended.
+
+`c76both` is expected in **all four** because `--tag` selects a test carrying *any* listed tag, not
+one tagged exclusively. And the row states the negative too: there is no exclusion flag, so the
+grader runs `--exclude-tag` and requires `unknown flag` back. That negative is why this row exists
+at all — reading the manifest to write it is what found tflw's `M154g-03`, where
+`declaration:tags`'s own summary advertised an `--exclude-tag` that has never existed, contradicting
+`SPEC` §4.1 in the same breath.
+
+**`import` is the one whose existing uses prove the wrong half.** There are many imports in this
+suite and every one of them is load-bearing in a single direction: a file imports a shared action,
+calls it, the call works. That demonstrates the action arrived. The manifest's actual claim is a
+negative — *"its tests never run"* — and no positive use can reach it.
+
+The two halves need each other, and that is the whole design of the pair. `imported-suite.tflw`
+offers an `action` **and** a `test`, and both mark the server. On its own, "no imported test ran" is
+satisfied by an import that failed silently, or resolved to nothing, or did nothing whatever. The
+action arriving is what makes the absence mean *excluded* rather than *never loaded*. The imported
+test is deliberately a **passing** one, for the same reason: a test that never runs and a test that
+runs and fails are different claims, and a failing import-test would also turn the run red, which is
+the wrong signal entirely.
+
+**`with each` is aimed at an implementation that is not broken.** Rows executed in a loop inside a
+single reported test would satisfy every existing use in this repository — the requests all go out,
+the expectations all hold — and would differ only in the summary saying one test passed instead of
+three. So the row's value is spent on a label the server counts, and two surfaces are read that
+disagree only under that implementation: `results.json` must carry three tests from the file with
+three distinct interpolated names, and the counter must hold three distinct labels at one each. The
+in-band `expect body.count equals 1` covers the opposite direction — a row executed twice, which
+changes no test count at all.
+
+**`test` is graded on the file that fails.** Three declarations must produce three verdicts under
+their three declared names, and the third must **pass** although the first two failed. Count alone
+is not enough: a runner that reports per file and one that abandons a file at its first failing test
+both produce one verdict, so the third test's *verdict* is asserted and not merely its presence. In
+a file where everything passes, "the next test still ran" is not a claim about anything — which is
+why this row rides `hard-stop-semantics.tflw`, and costs no run of its own.
+
+**What is not claimed.** `import`'s cycle and path-resolution behaviour, and `with each from
+"<file.csv>"` — the CSV spelling has real uses elsewhere and its own failure modes, and the table
+spelling is what these three rows observe. The four `@tag` runs cost four corpus executions of three
+one-step tests, which is the most expensive plant in this file and still under a second.
 
 ### The three constructs this tier did **not** roster
 

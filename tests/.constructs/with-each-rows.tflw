@@ -1,0 +1,31 @@
+# `M154g` / `C75` — the known-answer plant for `with each`. **This file is meant to pass.**
+#
+# `with each` is used across this suite and its uses do demonstrate that *something* iterates. What
+# none of them can state is the manifest's actual claim, which is about **reporting**: *"run one
+# copy of the test per row, each reporting as its own test"*. A table whose rows were run in a loop
+# inside a single reported test would satisfy every existing assertion — the requests all go out,
+# the expectations all hold, and the summary says one more test passed instead of three.
+#
+# So the row's value is spent on a label the server counts, and the grader reads two surfaces that
+# disagree under that wrong implementation: `report/results.json` must carry **three** tests from
+# this file with three distinct interpolated names, and the arrival counter must hold three distinct
+# labels at one each.
+#
+# `expect body.count equals 1` is the in-band half of the same claim: a row executed twice would
+# answer 2 here without changing the number of reported tests at all.
+
+before file
+  api POST /lifecycle/reset
+  expect status equals 200
+
+@constructs @datatables
+with each
+  | row     |
+  | "alpha" |
+  | "beta"  |
+  | "gamma" |
+test "one reported test per row — this is row {row}"
+  api POST /lifecycle/mark body { label: "c75{row}" }
+  expect status equals 200
+  expect body.label equals "c75{row}"
+  expect body.count equals 1

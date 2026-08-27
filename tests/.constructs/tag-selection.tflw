@@ -1,0 +1,44 @@
+# `M154g` / `C76` — the known-answer plant for `@tags`. **This file is meant to pass**, in every
+# selection the grader runs it under.
+#
+# Tags are everywhere in this suite — every file here carries them — and a tag that selected nothing
+# would leave all of it green, because the suite's ordinary runs are unfiltered. Presence is the
+# purest case of `D739`: the construct is used constantly and its *effect* is never observed.
+#
+# The effect is a partition, so the plant is built as one. Three tests, three labels, three
+# tag-sets, and the grader runs the file four times and compares what the server received:
+#
+#   (no flag)                   alpha beta both     nothing is filtered out by default
+#   --tag c76alpha              alpha       both    and beta is ABSENT — the discriminating half
+#   --tag c76beta                     beta  both    the complement, so neither run is a coincidence
+#   --tag c76alpha,c76beta      alpha beta both     OR across a comma-separated list
+#
+# The third run matters as much as the second: a `--tag` that silently matched everything passes the
+# first and fourth, and a `--tag` that matched only the first-listed tag of each test would pass the
+# second while failing the third.
+#
+# `c76both` carries both tags and is expected in all four, which is what makes this a partition
+# rather than three disjoint filters — `--tag` selects a test carrying *any* listed tag, never only
+# the ones tagged exclusively.
+
+# Reset here rather than in the grader, so each of the four runs starts from zero on its own and
+# the counts the grader reads are always that run's alone. `before file` is not tag-filtered — it
+# belongs to the file, not to a test — so it runs under every selection below.
+before file
+  api POST /lifecycle/reset
+  expect status equals 200
+
+@constructs @c76alpha
+test "carries c76alpha only"
+  api POST /lifecycle/mark body { label: "c76alpha" }
+  expect status equals 200
+
+@constructs @c76beta
+test "carries c76beta only"
+  api POST /lifecycle/mark body { label: "c76beta" }
+  expect status equals 200
+
+@constructs @c76alpha @c76beta
+test "carries both, so every selection above reaches it"
+  api POST /lifecycle/mark body { label: "c76both" }
+  expect status equals 200

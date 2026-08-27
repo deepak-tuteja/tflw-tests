@@ -1,0 +1,24 @@
+# `M154g` / `C74` — the file the *other* file imports. **Never run directly.**
+#
+# It holds one of each thing a `.tflw` file can offer an importer, so the importer can prove which
+# of them crosses: an `action`, which `SPEC` §8 says does, and a `test`, which the manifest says
+# does not — *"pull in another suite's `action`s; its tests never run (`buildRegistry` takes only
+# actions)"*.
+#
+# Both mark the server. That is the whole design: after the importer runs, the arrival counter says
+# which half arrived, and it says it about a real execution rather than about a report's shape.
+
+action c74 marks imported()
+  api POST /lifecycle/mark body { label: "c74action" }
+  expect status equals 200
+  capture body.count as arrivals
+  give arrivals
+
+# Deliberately a *passing* test, and deliberately one that would be trivially visible if it ran: it
+# marks a label the importer's grader looks for and must not find. A test that never runs and a test
+# that runs and fails are different claims, and only the counter can tell them apart — a failing
+# import test would also leave the run red, which is the wrong signal for "it did not run".
+@constructs @imported
+test "this test lives in an imported file, and must never appear in any run"
+  api POST /lifecycle/mark body { label: "c74importedtest" }
+  expect status equals 200
