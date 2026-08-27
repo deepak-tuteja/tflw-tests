@@ -1,0 +1,24 @@
+# `M154g` / `C74` — the known-answer plant for `import`. **This file is meant to pass.**
+#
+# `import` appears throughout this suite and every one of those uses is load-bearing in the same
+# single direction: the file imports a shared action, calls it, and the call works. That proves the
+# action crossed. It says nothing whatever about the manifest's actual claim, which is a *negative*
+# — that the imported file's **tests never run**.
+#
+# The two halves need each other. On its own, "no imported test ran" is satisfied by an `import`
+# that did nothing at all, or by one that failed silently, or by a path that resolved to nothing.
+# So the same imported file also exports an action, and this file calls it: the action arriving is
+# what makes the test's absence mean *excluded* rather than *never loaded*.
+
+import "./imported-suite.tflw"
+
+before file
+  api POST /lifecycle/reset
+  expect status equals 200
+
+@constructs @imports
+test "an imported file's `action` crosses, and is callable here"
+  # If this is `0` or the call errors, the import did not happen, and the grader's absence check
+  # below would be passing for the wrong reason.
+  let count = c74 marks imported()
+  expect {count} equals 1

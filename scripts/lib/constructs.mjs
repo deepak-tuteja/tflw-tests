@@ -1466,6 +1466,97 @@ export const PLANTS = [
     catches: 'a `wait` that issues one request behind a long timeout, and one that does not stop polling once its condition is met.',
     blockedOn: null,
   },
+  // --- `M154g` step 2c: the four declarations that decide which tests exist ------------------
+  //
+  // `test`, `import`, `with each` and `@tag` are the constructs that answer, before a single step
+  // runs, *which tests are there and which of them will execute*. Every one of them is used
+  // constantly here and every one of those uses observes something else: the suite's ordinary runs
+  // are unfiltered, so a `@tag` that selected nothing leaves the whole suite green.
+  {
+    id: 'C73',
+    construct: 'declaration:test',
+    family: 'declaration',
+    tier: 'api',
+    title: '`test` is the unit of *reporting* and of *isolation* — N declarations, N verdicts, and one failure does not end the file',
+    target: 'tests/.constructs/hard-stop-semantics.tflw, graded out of `report/results.json` — the same run `C68` and `C69` already pay for',
+    evidence: { file: 'tests/.constructs/hard-stop-semantics.tflw', pattern: '^test "', min: 3 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'Three `test` declarations produce **three** reported tests carrying their three declared ' +
+      'names in declaration order, and the third one **passes** although the first two failed. ' +
+      'Both halves are needed and neither is observable in an ordinary green file. A runner that ' +
+      'reported a file as one unit produces one verdict, and so does one that abandoned the file at ' +
+      'its first failing test — the two wrong implementations are indistinguishable from each other ' +
+      'by count alone, which is why the third test\'s *verdict* is asserted and not just its ' +
+      'presence. Graded on the meant-to-fail plant on purpose: in a file where everything passes, ' +
+      '"the next test still ran" is not a claim about anything.',
+    catches: 'a runner that reports per file rather than per test, and one that stops a file at its first failing test.',
+    blockedOn: null,
+  },
+  {
+    id: 'C74',
+    construct: 'declaration:import',
+    family: 'declaration',
+    tier: 'api',
+    title: '`import` brings actions across and leaves tests behind',
+    target: 'tests/.constructs/import-brings-actions-only.tflw + tests/.constructs/imported-suite.tflw, against `POST /v1/lifecycle/mark`',
+    evidence: { file: 'tests/.constructs/import-brings-actions-only.tflw', pattern: '^import "\\./imported-suite\\.tflw"', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'The manifest\'s claim is a negative — *"pull in another suite\'s `action`s; its tests never ' +
+      'run"* — and every existing `import` in this repository proves only the positive half, ' +
+      'because a file that imports a shared action and calls it demonstrates that the action ' +
+      'arrived and nothing else. The imported file here offers **both**: an action that marks ' +
+      '`c74action` and a test that marks `c74importedtest`. After the importer runs, the report ' +
+      'carries exactly **one** test and none of it from the imported file, the server has **never ' +
+      'seen** `c74importedtest`, and it has seen `c74action` exactly once. That third reading is ' +
+      'what makes the absence mean *excluded* rather than *never loaded* — without it, an `import` ' +
+      'that silently resolved to nothing passes.',
+    catches: 'an `import` that registers the imported file\'s tests, and — via the action — one that quietly imports nothing at all.',
+    blockedOn: null,
+  },
+  {
+    id: 'C75',
+    construct: 'declaration:with-each',
+    family: 'declaration',
+    tier: 'api',
+    title: '`with each` reports one test per row, not one test that loops',
+    target: 'tests/.constructs/with-each-rows.tflw against `POST /v1/lifecycle/mark`, the row value spent on the label',
+    evidence: { file: 'tests/.constructs/with-each-rows.tflw', pattern: '^\\s*\\| "(alpha|beta|gamma)" +\\|', min: 3 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'Three rows produce **three** reported tests from this file, with three distinct names each ' +
+      'carrying its own row value interpolated, and the server holds three distinct labels at one ' +
+      'each. The wrong implementation this is aimed at is not a broken one: a `with each` that ran ' +
+      'its rows in a loop inside a *single* reported test satisfies every existing use in this ' +
+      'suite — the requests all go out and the expectations all hold — and differs only in the ' +
+      'summary saying one test passed instead of three. The in-band `expect body.count equals 1` ' +
+      'covers the other direction, a row executed twice, which changes no test count at all.',
+    catches: 'a `with each` that reports its rows as one test, one that runs a row twice, and one that does not interpolate the row into the name.',
+    blockedOn: null,
+  },
+  {
+    id: 'C76',
+    construct: 'declaration:tags',
+    family: 'declaration',
+    tier: 'api',
+    title: '`@tag` partitions a run — and the partition is proved by what is ABSENT',
+    target: 'tests/.constructs/tag-selection.tflw, run four times under four selections and compared against the arrival counter',
+    evidence: { file: 'tests/.constructs/tag-selection.tflw', pattern: '^@constructs @c76alpha @c76beta$', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'Three tests, three labels, three tag-sets, four runs. Unfiltered leaves all three labels; ' +
+      '`--tag c76alpha` leaves `c76alpha` and `c76both` and **not** `c76beta`; `--tag c76beta` is ' +
+      'the exact complement; `--tag c76alpha,c76beta` leaves all three, which is the OR the manifest ' +
+      'claims. Each run rules out a different wrong answer that the others pass: a `--tag` matching ' +
+      'everything passes runs 1 and 4, and one matching only a test\'s first-listed tag passes run ' +
+      '2 while failing run 3. `c76both` is expected in **all four**, because `--tag` selects a test ' +
+      'carrying *any* listed tag rather than one tagged exclusively. The row also states the ' +
+      'negative the manifest used to get wrong (tflw `M154g-03`): there is no exclusion flag, and ' +
+      'the grader proves it by running `--exclude-tag` and requiring `unknown flag` back.',
+    catches: 'a `--tag` that filters nothing, filters everything, or reads only the first tag on a declaration.',
+    blockedOn: null,
+  },
 ];
 
 /**
@@ -1550,7 +1641,7 @@ export const expandReferenceRosters = (manifestConstructs) =>
  * exercised*. `step:api` sits here with 1139 occurrences behind it.
  */
 export const RATCHET = [
-  // --- declaration (9) ---
+  // --- declaration (5) ---
   // The family `M154a` missed and `M154c`/`D742` added; `declaration:after` and `declaration:retry`
   // are rostered above, so ten of the twelve land here. Five of these are `test`-header clauses
   // rather than top-level words, and three of those five (`tags`, `with-each`, `concurrency`) are
@@ -1558,9 +1649,24 @@ export const RATCHET = [
   // `parallel`/`sequential`. Read them as ids, never as keywords (`M154a`, `spec-data.ts`).
   //
   // `declaration:crawl` left at `M154f` — `C56`, graded by finding provenance and by the one origin
-  // the fetching spider cannot walk. Nine remain.
-  'declaration:test', 'declaration:action', 'declaration:import',
-  'declaration:use', 'declaration:before', 'declaration:tags', 'declaration:with-each',
+  // the fetching spider cannot walk.
+  //
+  // `M154g` step 2c took the four that decide **which tests exist**: `test`, `import`, `with-each`
+  // and `tags` (`C73`-`C76`). The five that remain are all about **scope and identity** rather than
+  // selection, and they split cleanly. `action`, `use` and `before` each have an observable and are
+  // step 2d's subject: an action's own response scope (`FU-12`), a JS helper's exports becoming
+  // callable, and bare-`before`-per-test against `before file`-per-file. `as` has one too — this
+  // suite already runs the discriminating pair in `tests/examples/sessions-explained.tflw`, where
+  // the same request answers 200 under `as admin` and 401 with no clause at all.
+  //
+  // **`declaration:concurrency` is the one with no observable, and it is a condition rather than a
+  // backlog item.** Telling `parallel` from `sequential` means proving two tests did or did not
+  // overlap *in time*, and nothing in apiV2 records that: the arrival counter every plant above
+  // leans on counts arrivals and not their concurrency, so both settings leave it identical. It
+  // needs a server-side overlap watermark — an endpoint that holds a request open and reports the
+  // high-water mark of simultaneous holders — which is real target surface, not a roster row.
+  // **Rosters when apiV2 has one.**
+  'declaration:action', 'declaration:use', 'declaration:before',
   'declaration:as', 'declaration:concurrency',
   // --- step (0) ---
   // Empty as of `M154g` step 2b. The last six were the workhorses `D739` is about — `api` with 1139
@@ -1624,6 +1730,23 @@ export const RATCHET = [
  * `RATCHET.length` must not exceed this (`D740`). Lower it as milestones roster constructs; raising
  * it is the edit this pin exists to make loud.
  *
+ * **`41` -> `37` at `M154g` step 2c: the four declarations that decide which tests exist.** `test`,
+ * `import`, `with each` and `@tag` answer, before a step runs, *which tests are there and which of
+ * them execute* — and each is a case where the suite's own shape hides the effect. Every existing
+ * `import` proves an action arrived and none proves the manifest's actual claim, which is the
+ * negative: the imported file's tests never run. Every ordinary run of this suite is unfiltered, so
+ * a `@tag` that selected nothing would leave all of it green. `with each` is used widely and the
+ * wrong implementation it is aimed at is not a broken one — rows run in a loop inside one reported
+ * test pass every existing assertion and differ only in the summary. And `test` is graded on the
+ * meant-to-fail plant on purpose, because in a green file "the next test still ran" claims nothing.
+ *
+ * The five declarations left are about **scope and identity** rather than selection. `action`,
+ * `use`, `before` and `as` all have observables and are step 2d. `declaration:concurrency` does
+ * not, and stays on a stated condition: `parallel` against `sequential` is a claim about two tests
+ * overlapping *in time*, and the arrival counter these plants lean on counts arrivals rather than
+ * their concurrency, so both settings leave it identical. It needs a server-side overlap watermark
+ * in apiV2 — real target surface, not a roster row.
+ *
  * **`47` -> `41` at `M154g` step 2b, and the `step` family is now empty.** The six workhorses are
  * `D739`'s cheap end at its most extreme — 1139 occurrences behind `api`, 1692 behind `expect`, 523
  * behind `capture`, and no evidence at all for any of the three, because every one of those uses
@@ -1654,11 +1777,11 @@ export const RATCHET = [
  * missing was the *claim*, which is `D739`'s cheap end taken to its limit — and `D751` says the
  * claim is a citation rather than sixty-six restatements of somebody else's enforced completeness.
  *
- * The number to read this against is not the drop, it is what is left: **41** as of step 2b, and
+ * The number to read this against is not the drop, it is what is left: **37** as of step 2c, and
  * they are the expensive end. Twelve generators that need an observable built before presence proves
- * anything, eighteen config constructs, nine declarations, and two matchers. Seven of the nine
- * matchers went in step 2 and all six steps went in step 2b; what remains in those two families is
- * there for stated reasons, not for lack of a turn.
+ * anything, eighteen config constructs, five declarations, and two matchers. Seven of the nine
+ * matchers went in step 2, all six steps in step 2b and four of the nine declarations in step 2c;
+ * what remains in those three families is there for stated reasons, not for lack of a turn.
  *
  * `140` is the whole manifest (178 constructs) minus the thirty-eight plants rostered so far, and
  * acceptance clause 5 is that it reaches 0. **The clause named `M154f` and now names `M154g`** — not
@@ -1696,7 +1819,7 @@ export const RATCHET = [
  * the unrostered remainder, and a remainder can only be honest about a denominator that has itself
  * just been corrected upwards.
  */
-export const RATCHET_CEILING = 41;
+export const RATCHET_CEILING = 37;
 
 /**
  * `CONSTRUCTS.md` carries one row per plant and prose a human reads; this asserts their id sets
