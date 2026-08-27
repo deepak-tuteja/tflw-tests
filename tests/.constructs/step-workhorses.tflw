@@ -1,0 +1,99 @@
+# `M154g` step 2b / `C67`, `C70`, `C71`, `C72` — the known-answer plant for four of the six step
+# keywords the whole suite is written in.
+#
+# **This file is meant to pass.** Its siblings `hard-stop-semantics.tflw` (`C68`, `C69`) carry the
+# two claims that can only be shown by a step going red.
+#
+# ## Why the most-used constructs in the language were the least proved
+#
+# `api` appears 1139 times in this repository, `expect` 1692, `capture` 523. Not one of those uses
+# is evidence for the construct itself, and the reason is the same every time: they are all
+# *instruments*, pointed at something else. A test that creates a product and asserts its price is
+# evidence about the price. It says nothing about `api` that would change if `api` fired the request
+# twice, and nothing about `capture` that would change if `capture` re-read the response lazily
+# instead of binding it — because in the ordinary shape of a test, nothing happens between the
+# capture and its use.
+#
+# So the claims below are not "this keyword works". They are the specific, checkable sentences
+# `tflw spec --json` states about each one, each paired with the wrong implementation it excludes:
+#
+#   `api`      "issue **one** HTTP request"          vs. a step that fires twice, or retries silently
+#   `let`      "bind a value … for later steps"      vs. a name re-evaluated at each interpolation
+#   `log`      "into the run log **and the report**" vs. a line that only ever reached stdout
+#   `wait`     "**re-issue** … until it passes"      vs. a single request with a generous timeout
+#
+# ## The observable is the server's own counter, not the test's verdict
+#
+# Every claim here is settled by `apiV2/src/lifecycle/`, the same counter module `C4` and `C5` use:
+# `POST /v1/lifecycle/mark` returns the number of times that label has been marked, and
+# `GET /v1/lifecycle/counts` lets the grader assert the **complement** — that nothing was marked
+# beyond what this file declares. That matters more here than anywhere else in the roster, because
+# the failure mode being excluded for `api` is an *extra* request, and an extra request is invisible
+# to every assertion that only looks at the last response.
+#
+# `POST /v1/lifecycle/attempt` answers 503 until a per-key attempt number and 200 from then on;
+# `c72settles` is configured to settle on attempt **3**, which is `C72`'s whole known answer.
+
+before file
+  # Fixed labels need a clean slate, exactly as `C4`'s plant does — the grader reads these counters
+  # back by name, so a leftover count from a previous run would read as a duplicate request.
+  api POST /lifecycle/reset
+  expect status equals 200
+
+@constructs @workhorses
+test "one `api` step issues exactly one request, and the server is the one that says so"
+  # The response carries the server's own arrival count for this label, so the first request
+  # asserting `1` is not a tautology: an `api` that fired twice would return `2` here, and an `api`
+  # that silently retried an idempotent-looking POST would return more.
+  api POST /lifecycle/mark body { label: "c67once" }
+  expect status equals 200
+  expect body.count equals 1
+
+  # And the counter really is live — without this second step, `count: 1` is equally consistent with
+  # a server that always answers `1`, which would make the assertion above prove nothing.
+  api POST /lifecycle/mark body { label: "c67once" }
+  expect status equals 200
+  expect body.count equals 2
+
+@constructs @workhorses
+test "`let` binds its value once — two interpolations of one name are the same value"
+  # `random string 8` is the point. A literal would pass this test under either implementation, so
+  # it could not tell "bind, then interpolate the binding" from "re-evaluate the expression at each
+  # `{tag}`". Under the second reading the two marks below carry *different* labels and both come
+  # back `count: 1`.
+  let tag = random string 8
+  api POST /lifecycle/mark body { label: "c70-{tag}" }
+  expect status equals 200
+  expect body.count equals 1
+
+  api POST /lifecycle/mark body { label: "c70-{tag}" }
+  expect status equals 200
+  expect body.count equals 2
+
+@constructs @workhorses
+test "`log` writes one authored line into the report, interpolated, at the level it was given"
+  # Nothing in this test can assert the log line — `log` is not an assertion and never fails, the
+  # same shape as `screenshot` in `C41`. The known answer is read out of `report/results.json` by
+  # the grader: one `log` step, level `warn`, and the message with `{subject}` **resolved**. A `log`
+  # that reached stdout and not the report leaves nothing there to find; one that stored the raw
+  # source line leaves `{subject}` unexpanded.
+  api POST /lifecycle/mark body { label: "c71logged" }
+  expect status equals 200
+  capture body.label as subject
+  log warn "c71 observed {subject}"
+
+@constructs @workhorses
+test "`wait until api` re-issues the request until its condition holds, then stops"
+  # `c72settles` answers 503 on attempts 1 and 2 and 200 on attempt 3. A `wait` that issued a single
+  # request would see `settled: false` and time out; the assertion after the block pins the exact
+  # attempt the successful response came from, so "it re-issued" is a number and not an inference.
+  wait until api POST /lifecycle/attempt body { key: "c72settles" }
+    expect body.settled equals true
+  expect body.attempt equals 3
+
+  # The other half, and the one a passing wait cannot show on its own: it stopped. The grader reads
+  # `attempts.c72settles` back and requires exactly 3 — a `wait` that kept polling out its budget
+  # after the condition held would leave a larger number here and still be green.
+  api GET /lifecycle/counts
+  expect status equals 200
+  expect body.attempts.c72settles equals 3

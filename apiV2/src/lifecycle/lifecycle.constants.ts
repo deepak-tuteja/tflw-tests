@@ -36,6 +36,13 @@ export const LIFECYCLE_KEYS = {
   settles: 'c4-settles',
   /** Answers 200 on attempt 4 — one past it. The budget-exhausted control. */
   exhausts: 'c4-exhausts',
+  /** `C72`'s poll target: answers 200 on attempt 3, so a `wait until api` that issued **one**
+   *  request sees a 503 and a `wait` that re-issued sees `attempt: 3`. The number is the known
+   *  answer — it is asserted in-band by the plant and read back by the grader, which is what
+   *  separates "the wait passed" from "the wait re-issued". Distinct from `c4-settles` despite the
+   *  identical threshold: the two plants run as separate corpora with a `reset` each, and sharing a
+   *  key would make one plant's stray-key precision check depend on the other's. */
+  polls: 'c72settles',
 } as const;
 
 /** The attempt on which each `C4` key starts answering 200. The pair pins the budget from both
@@ -44,6 +51,7 @@ export const LIFECYCLE_KEYS = {
 export const LIFECYCLE_SUCCEEDS_ON: Readonly<Record<string, number>> = {
   [LIFECYCLE_KEYS.settles]: 3,
   [LIFECYCLE_KEYS.exhausts]: 4,
+  [LIFECYCLE_KEYS.polls]: 3,
 };
 
 /** The labels the plants mark, and the count each must reach.

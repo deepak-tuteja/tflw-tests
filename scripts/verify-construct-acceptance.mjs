@@ -1424,6 +1424,152 @@ if (MATCHER_ROWS.some((r) => wanted(r.id))) {
 }
 
 // =============================================================================
+// C67, C70, C71, C72 — the workhorse steps, graded against a server-side arrival counter
+// =============================================================================
+//
+// Same sharp edge as C4/C5 and for the same reason: these two corpora reset `/v1/lifecycle/*` in
+// their `before file`, so each one's counts must be read back before the next runs.
+//
+// The corpus-level precision claim is the one worth reading. `step-workhorses.tflw` declares five
+// marks — two for `c67once`, two for `c70-{tag}`, one for `c71logged` — and the grader asserts the
+// total is exactly five. That single number is `step:api`'s contract at file scope: any step that
+// issued a request it was not asked to issue moves it, and no assertion inside the file could.
+
+const WORKHORSE_IDS = ['C67', 'C70', 'C71', 'C72'];
+if (WORKHORSE_IDS.some((id) => wanted(id))) {
+  const plant = plantFor('step:api');
+  console.log(`\n${plant.id}, C70, C71, C72 — the workhorse steps\n  target: ${plant.target}`);
+  const { report, output } = runCorpus(ROOT, [plant.evidence.file]);
+  const counts = await lifecycleCounts();
+  if (!report || !counts) {
+    fail(`${plant.id} produced no ${report ? 'lifecycle counts' : 'report'}. Is the stack up (\`node cli.mjs start\`)?\n${output.trim().split('\n').slice(-12).join('\n')}`);
+    for (const id of WORKHORSE_IDS) scores.get(id).skipped = report ? 'no lifecycle counts' : 'no report';
+  } else {
+    const marks = counts.marks ?? {};
+    const attempts = counts.attempts ?? {};
+
+    // --- C67 `api` -----------------------------------------------------------
+    const once = named(report, 'exactly one request');
+    const apiSteps = stepsOf(once).filter((st) => st.kind === 'api');
+    recall('C67', marks['c67once'] === 2, `\`c67once\` arrived exactly twice for two \`api\` steps (got ${marks['c67once'] ?? 0}) — one step, one request`);
+    recall('C67', apiSteps.length === 2 && apiSteps.every((st) => st.ok), `both \`api\` steps are in the report and both passed (got ${apiSteps.length})`);
+    recall('C67', once?.ok === true, `the in-band assertions on the server's own count passed (got ok=${once?.ok}) — \`count: 1\` then \`count: 2\``);
+
+    // Precision, and the assertion this whole plant exists for: the file declares five marks, so
+    // five is what the server must have seen. An extra request anywhere in the corpus — a silent
+    // retry, a duplicated send, a preflight — lands here and nowhere else.
+    const totalMarks = Object.values(marks).reduce((n, v) => n + v, 0);
+    precision('C67', totalMarks === 5, `the corpus issued exactly the five marks it declares (got ${totalMarks}: ${JSON.stringify(marks)})`);
+    const strayLabels = Object.keys(marks).filter((k) => k !== 'c67once' && k !== 'c71logged' && !/^c70-/.test(k));
+    precision('C67', strayLabels.length === 0, `no label was marked beyond the three the plant declares (stray: ${strayLabels.join(', ') || 'none'})`);
+
+    // --- C70 `let` -----------------------------------------------------------
+    const bound = named(report, 'binds its value once');
+    const c70Labels = Object.keys(marks).filter((k) => /^c70-/.test(k));
+    recall('C70', c70Labels.length === 1, `the two interpolations of \`{tag}\` produced ONE label (got ${c70Labels.length}: ${c70Labels.join(', ') || 'none'}) — two would mean \`let\` re-evaluates at each use`);
+    recall('C70', marks[c70Labels[0]] === 2, `and that one label was marked twice (got ${marks[c70Labels[0]] ?? 0})`);
+    const letStep = stepsOf(bound).find((st) => st.kind === 'let');
+    recall('C70', /^tag = "[A-Za-z0-9]{8}" \(random\)$/.test(String(letStep?.detail ?? '')), `the binding is a fresh 8-character random string, per the report (got ${JSON.stringify(letStep?.detail ?? null)}) — a literal could not tell the two implementations apart`);
+    precision('C70', stepsOf(bound).filter((st) => st.kind === 'api').length === 2, `the test made exactly two requests (got ${stepsOf(bound).filter((st) => st.kind === 'api').length})`);
+
+    // --- C71 `log` -----------------------------------------------------------
+    // `log` never fails, so like C41's `screenshot` there is nothing here a verdict can grade. The
+    // known answer is the shape of the step in the report.
+    const logged = named(report, 'writes one authored line');
+    const logSteps = functionalTests(report).flatMap((t) => stepsOf(t)).filter((st) => st.kind === 'log');
+    const logStep = stepsOf(logged).find((st) => st.kind === 'log');
+    recall('C71', logStep !== undefined, `the \`log\` step reached \`report/results.json\` at all — a line that only went to stdout leaves nothing here`);
+    recall('C71', String(logStep?.detail ?? '') === 'c71 observed c71logged', `its message is interpolated, not stored as source (got ${JSON.stringify(logStep?.detail ?? null)}) — \`{subject}\` is a capture from the step above`);
+    recall('C71', logStep?.level === 'warn', `the authored level survived into the report (got ${JSON.stringify(logStep?.level ?? null)}) — a dropped level reports the default`);
+    recall('C71', logStep?.destination === 'both', `and it is recorded as reaching both the run log and the report (got ${JSON.stringify(logStep?.destination ?? null)})`);
+    precision('C71', logSteps.length === 1, `exactly one \`log\` step in the whole corpus (got ${logSteps.length})`);
+
+    // --- C72 `wait` ----------------------------------------------------------
+    // Three readings of one number. The first two prove it re-issued; only the third proves it
+    // stopped, which is the half a passing wait cannot show about itself.
+    const waited = named(report, 're-issues the request');
+    const waitStep = stepsOf(waited).find((st) => st.kind === 'wait');
+    recall('C72', attempts['c72settles'] === 3, `\`c72settles\` was attempted exactly 3 times (got ${attempts['c72settles'] ?? 0}) — fewer means the wait never re-issued, more means it did not stop when its condition held`);
+    recall('C72', /passed after 3 attempts/.test(String(waitStep?.detail ?? '')), `tflw's own report agrees it took 3 attempts (got ${JSON.stringify(waitStep?.detail ?? null)}) — a disagreement between this and the count above is a more interesting defect than either being wrong alone`);
+    recall('C72', waited?.ok === true, `and the in-band \`expect body.attempt equals 3\` passed (got ok=${waited?.ok})`);
+    const strayAttempts = Object.keys(attempts).filter((k) => k !== 'c72settles');
+    precision('C72', strayAttempts.length === 0, `no key was attempted beyond the one the plant declares (stray: ${strayAttempts.join(', ') || 'none'})`);
+  }
+}
+
+// =============================================================================
+// C68, C69 — `expect` and `capture`: the contracts about what does not happen next
+// =============================================================================
+//
+// This corpus is **meant to fail**, the same way `retry-attempt-budget.tflw` is. Two of its three
+// tests must end red, and the known answer is a label the server never sees.
+//
+// An absence is a weak observation, so it is made twice. The plant marks immediately *before* the
+// step that must fail, which rules out a test that never started; and the grader then re-runs the
+// file with the failing `expect` softened to `check` and requires the absent label to **appear**.
+// That control is the same instrument step 2 introduced, pointed the other way: there the mutation
+// had to make passing assertions fail, here it has to make a missing arrival happen.
+
+if (wanted('C68') || wanted('C69')) {
+  const plant = plantFor('step:expect');
+  console.log(`\n${plant.id}, C69 — the hard-stop contracts\n  target: ${plant.target}`);
+  const { report, output } = runCorpus(ROOT, [plant.evidence.file]);
+  const counts = await lifecycleCounts();
+  if (!report || !counts) {
+    fail(`${plant.id} produced no ${report ? 'lifecycle counts' : 'report'}. Is the stack up (\`node cli.mjs start\`)?\n${output.trim().split('\n').slice(-12).join('\n')}`);
+    scores.get('C68').skipped = report ? 'no lifecycle counts' : 'no report';
+    scores.get('C69').skipped = report ? 'no lifecycle counts' : 'no report';
+  } else {
+    const marks = counts.marks ?? {};
+
+    // --- C68 `expect` --------------------------------------------------------
+    const halts = named(report, 'ends the test at once');
+    const haltSteps = stepsOf(halts);
+    recall('C68', marks['c68before'] === 1, `the test reached the step before the failing \`expect\` (got ${marks['c68before'] ?? 0}) — this is what makes the absence below a fact about \`expect\``);
+    recall('C68', marks['c68after'] === undefined, `and never reached the step after it (got ${marks['c68after'] ?? 'absent'}) — under \`check\` semantics this label would be at 1, which is the single number separating the two constructs`);
+    recall('C68', halts?.ok === false, `the test's own verdict is FAIL (got ok=${halts?.ok})`);
+    recall('C68', haltSteps.at(-1)?.kind === 'expect' && haltSteps.at(-1)?.ok === false, `the report's step list ends at the failing \`expect\` (ends at ${haltSteps.at(-1)?.kind}, ok=${haltSteps.at(-1)?.ok})`);
+    precision('C68', haltSteps.length === 3, `exactly three steps were recorded, not the four the file contains (got ${haltSteps.length})`);
+    precision('C68', failingSteps(halts).length === 1, `exactly one step failed (got ${failingSteps(halts).length}) — a hard assertion that kept going would record more`);
+
+    // --- C69 `capture` -------------------------------------------------------
+    const nothing = named(report, 'resolves to nothing');
+    const nothingSteps = stepsOf(nothing);
+    const captureStep = nothingSteps.find((st) => st.kind === 'capture');
+    recall('C69', captureStep?.ok === false, `the \`capture\` step itself failed (got ok=${captureStep?.ok}) — the contract is that the step fails, not that some later interpolation looks odd`);
+    recall('C69', /nothing to capture/.test(String(captureStep?.detail ?? '')), `and said why (got ${JSON.stringify(String(captureStep?.detail ?? '').slice(0, 60))})`);
+    recall('C69', marks['c69before'] === 1 && marks['c69after'] === undefined, `the step before it ran and the step after it did not (before=${marks['c69before'] ?? 0}, after=${marks['c69after'] ?? 'absent'})`);
+    precision('C69', nothingSteps.length === 3, `exactly three steps were recorded, not the four the file contains (got ${nothingSteps.length})`);
+
+    // The half `tflw spec --json` does not state: a capture binds a value, not a live reference.
+    const bindsValue = named(report, 'not a live reference');
+    recall('C69', bindsValue?.ok === true, `the capture survived a second request unchanged (got ok=${bindsValue?.ok}) — a lazy read against "the response in scope" answers \`c69second\` here`);
+    precision('C69', marks['c69bound'] === 1 && marks['c69second'] === 1, `both of that test's requests arrived exactly once (bound=${marks['c69bound'] ?? 0}, second=${marks['c69second'] ?? 0})`);
+
+    // --- the control: soften the `expect` and the absent label must appear ----
+    const src = readFileSync(path.join(ROOT, plant.evidence.file), 'utf8');
+    const control = path.join(ROOT, 'tests', '.constructs', '.hard-stop-control.tflw');
+    const mutated = src.replace(
+      /^(\s*)expect (body\.label equals "not-the-label-the-server-echoed")$/m,
+      (_m, indent, rest) => `${indent}check ${rest}`,
+    );
+    try {
+      const softened = mutated !== src;
+      precision('C68', softened, 'the control mutation found the assertion it softens — if this fails the two readings below prove nothing');
+      writeFileSync(control, mutated);
+      runCorpus(ROOT, ['tests/.constructs/.hard-stop-control.tflw']);
+      const ctl = (await lifecycleCounts()) ?? {};
+      const ctlMarks = ctl.marks ?? {};
+      recall('C68', ctlMarks['c68after'] === 1, `with the same assertion written as \`check\`, the step after it DOES run (got ${ctlMarks['c68after'] ?? 'absent'}) — so the absence above is caused by \`expect\`, not by the assertion being false`);
+      // And the capture negative is untouched by that mutation, so its absence must survive it.
+      recall('C69', ctlMarks['c69after'] === undefined, `while \`c69after\` is still absent in the control (got ${ctlMarks['c69after'] ?? 'absent'}) — the softening was scoped to one line`);
+    } finally {
+      rmSync(control, { force: true });
+    }
+  }
+}
+
+// =============================================================================
 // the table
 // =============================================================================
 
