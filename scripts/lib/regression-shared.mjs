@@ -27,7 +27,21 @@ export function slug(name) {
 // forces a headed browser. That failing run is the LAST thing the phase writes, so `report/`'s
 // junit.xml ends up holding one deliberately-failed testcase — an implementation detail of a proof,
 // not a suite result. `✓ watch-check` and a red `merge-reports` in the same run is the signature.
-const JUNIT_EXCLUDED_PHASES = new Set(['demo-fail-check', 'watch-check']);
+//
+// construct-acceptance joined at `M154g` step 2, and this one had been latent since `M154b`. The
+// phase has ALWAYS run meant-to-fail corpora — `C1`'s soft-check plant records two failed rows on
+// purpose, `C4`'s second test must exhaust its retry budget — and which of them survives into
+// `report/` is decided by nothing more principled than **which plant block happens to run last**.
+// That ordering was benign until step 2 ended the phase with a mutation control: a copy of
+// `matcher-discrimination.tflw` with every `not` dropped, run to prove all twelve negatives really
+// go red. Seven deliberately-failed testcases, written last, archived, and reported by
+// `merge-reports` three jobs away from anything naming them.
+//
+// So the exclusion is not a workaround for step 2's control — it is the correct classification of a
+// phase whose plants include by-design failures by construction. Its verdict has never come from
+// `junit.xml`: `verify-construct-acceptance.mjs --gate` asserts every plant's known answer and
+// exits non-zero, which is the thing regression.mjs reads.
+const JUNIT_EXCLUDED_PHASES = new Set(['demo-fail-check', 'watch-check', 'construct-acceptance']);
 
 /**
  * Phases that reported success while leaving a failing `junit.xml` in the archive — see the caller
