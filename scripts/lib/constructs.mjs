@@ -1350,6 +1350,122 @@ export const PLANTS = [
     catches: 'a `has count` that is a lower bound, an upper bound, or not a count at all.',
     blockedOn: null,
   },
+  {
+    id: 'C67',
+    construct: 'step:api',
+    family: 'step',
+    tier: 'api',
+    title: 'one `api` step issues exactly one request',
+    target: 'tests/.constructs/step-workhorses.tflw against `POST /v1/lifecycle/mark` — the same counter module `C4` and `C5` read back, so the observable is the server\'s own arrival count',
+    evidence: { file: 'tests/.constructs/step-workhorses.tflw', pattern: 'label: "c67once"', min: 2 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'The server answers each mark with its own arrival count for that label, so the numbers are ' +
+      'the claim: the first `api` step against `c67once` comes back `count: 1`, the second `count: ' +
+      '2`, and the grader reads `marks.c67once == 2` back with no other label from this test. An ' +
+      '`api` that fired twice, retried silently, or sent a preflight nobody asked for moves those ' +
+      'numbers and **nothing else in this repository would notice** — all 1139 existing uses assert ' +
+      'on the last response, and a duplicate request leaves the last response identical.',
+    catches: 'a step that issues more than one request per `api` line, in any of the ways that leave the final response unchanged.',
+    blockedOn: null,
+  },
+  {
+    id: 'C68',
+    construct: 'step:expect',
+    family: 'step',
+    tier: 'api',
+    title: '`expect` fails the test immediately — the step after it never runs',
+    target: 'tests/.constructs/hard-stop-semantics.tflw, a file meant to fail; graded from the report\'s truncated step list and from a marked label that must be absent server-side',
+    evidence: { file: 'tests/.constructs/hard-stop-semantics.tflw', pattern: 'label: "c68after"', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'The test marks `c68before`, fails one `expect`, then marks `c68after`. The known answer is ' +
+      '`marks.c68before == 1` with `c68after` **absent**, and a report whose step list ends at the ' +
+      'failing `expect`. `C1` is deliberately the same shape built on `check` and proves the ' +
+      'opposite — that the step after it ran — so the two rows together pin the single difference ' +
+      'between the language\'s hard and soft assertion. All 1692 uses of `expect` are blind to it, ' +
+      'because in the ordinary shape of a test the assertion is the last thing that happens.',
+    catches: '`expect` degrading into `check`: recording its failure and carrying on.',
+    blockedOn: null,
+  },
+  {
+    id: 'C69',
+    construct: 'step:capture',
+    family: 'step',
+    tier: 'api',
+    title: '`capture` fails on nothing to capture, and binds the value rather than a live reference',
+    target: 'tests/.constructs/hard-stop-semantics.tflw — one failing test for the contract `tflw spec` states, and one passing test for the half that contract does not mention',
+    evidence: { file: 'tests/.constructs/hard-stop-semantics.tflw', pattern: '^\\s*capture body\\.thereIsNoSuchField as missing', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'Two halves, and the second is not in the manifest. The stated contract — "a capture that ' +
+      'resolves to nothing fails the step rather than binding `undefined`" — is graded as a ' +
+      '`capture` step with `ok: false` and a `c69after` mark that never arrives. The unstated one ' +
+      'is that a capture binds **at capture time**: the third test captures, issues another ' +
+      'request, and then asserts the first value, which a lazy read against "the response in scope" ' +
+      'would answer `c69second`. Not one of the 523 existing captures can see that, because none of ' +
+      'them issues a request between a capture and its use.',
+    catches: 'a capture that binds `undefined` silently, and one that re-reads the response at use time instead of at capture time.',
+    blockedOn: null,
+  },
+  {
+    id: 'C70',
+    construct: 'step:let',
+    family: 'step',
+    tier: 'api',
+    title: '`let` binds once — a name is not re-evaluated at each interpolation',
+    target: 'tests/.constructs/step-workhorses.tflw against `POST /v1/lifecycle/mark`, with the bound value used as the label so the server can count how many distinct ones it saw',
+    evidence: { file: 'tests/.constructs/step-workhorses.tflw', pattern: 'label: "c70-\\{tag\\}"', min: 2 },
+    graders: ['acceptance'],
+    knownAnswer:
+      '`let tag = random string 8`, then two marks against `c70-{tag}`. Bound-once answers `count: ' +
+      '1` then `count: 2` and leaves the server holding **one** label; re-evaluated-at-use answers ' +
+      '`count: 1` twice and leaves **two**, while every assertion about status stays green. The ' +
+      'generator is load-bearing rather than decorative: with a literal on the right-hand side the ' +
+      'two implementations are indistinguishable, which is what makes the existing uses of `let` no ' +
+      'evidence at all.',
+    catches: 'a `let` that is a macro over its source expression rather than a binding of its value.',
+    blockedOn: null,
+  },
+  {
+    id: 'C71',
+    construct: 'step:log',
+    family: 'step',
+    tier: 'api',
+    title: '`log` reaches the report, interpolated, at the level it was given',
+    target: 'tests/.constructs/step-workhorses.tflw — graded out of `report/results.json`, because `log` is never an assertion and so cannot be graded from a verdict',
+    evidence: { file: 'tests/.constructs/step-workhorses.tflw', pattern: '^\\s*log warn "c71 observed \\{subject\\}"', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'The step arrives in `report/results.json` as `kind: log`, `level: warn`, `destination: ' +
+      'both`, with its detail reading `c71 observed c71logged` — the captured `{subject}` resolved. ' +
+      'Three wrong implementations, one reading each: a `log` that only reached stdout leaves ' +
+      'nothing in the report, one that stored its source line leaves `{subject}` unexpanded, and ' +
+      'one that dropped the level reports the default. Like `C41`\'s `screenshot` this is a fact ' +
+      'about the report rather than a test outcome, and the same weaker instrument — it grades what ' +
+      'tflw says it did.',
+    catches: 'a log line that never reaches the report, loses its level, or is stored unexpanded.',
+    blockedOn: null,
+  },
+  {
+    id: 'C72',
+    construct: 'step:wait',
+    family: 'step',
+    tier: 'api',
+    title: '`wait until api` re-issues until its condition holds, and stops when it does',
+    target: 'tests/.constructs/step-workhorses.tflw against `POST /v1/lifecycle/attempt`, whose `c72settles` key answers 503 on attempts 1 and 2 and 200 on attempt 3',
+    evidence: { file: 'tests/.constructs/step-workhorses.tflw', pattern: '^\\s*wait until api POST /lifecycle/attempt', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'Three independent readings of the same number, which is what makes the row worth having. The ' +
+      'plant asserts `body.attempt equals 3` in-band; the report\'s own step detail reads `passed ' +
+      'after 3 attempts`; and the grader reads `attempts.c72settles == 3` back off the server. The ' +
+      'first two prove it **re-issued** — a single request with a generous timeout sees `settled: ' +
+      'false` and dies — and the third proves it **stopped**, which the first two cannot: a wait ' +
+      'that kept polling its budget out after the condition held is green on both of them.',
+    catches: 'a `wait` that issues one request behind a long timeout, and one that does not stop polling once its condition is met.',
+    blockedOn: null,
+  },
 ];
 
 /**
@@ -1446,18 +1562,21 @@ export const RATCHET = [
   'declaration:test', 'declaration:action', 'declaration:import',
   'declaration:use', 'declaration:before', 'declaration:tags', 'declaration:with-each',
   'declaration:as', 'declaration:concurrency',
-  // --- step (6) ---
-  // What is left here are the workhorses `D739` is about — `api` alone has 1139 occurrences, and
-  // `expect` 1692. A `RATCHET` entry says only that no row in `CONSTRUCTS.md` states their known
-  // answer; for these six the evidence already exists and it is the claim that is missing, which is
-  // the cheap end of `D739`'s two very different costs.
+  // --- step (0) ---
+  // Empty as of `M154g` step 2b. The last six were the workhorses `D739` is about — `api` with 1139
+  // occurrences behind it, `expect` with 1692 — and they are the clearest case the distinction was
+  // written for: a `RATCHET` entry says *no row states their known answer*, never *never exercised*.
+  // The evidence was everywhere and the claim was nowhere, because every one of those uses points
+  // the construct at something else. `C67`-`C72` state the four things `tflw spec --json` says about
+  // them that an ordinary test cannot observe: that one `api` step is one request, that `expect`
+  // ends the test where `check` does not, that `capture` binds a value rather than a reference, and
+  // that `wait` re-issues and then stops.
   //
-  // The seven that used to sit under this heading are rostered as of `M154e`: `ramp`, `hold`,
-  // `step`, `spike`, `threshold` and `cleanup` — the perf tier — plus `pause`, the one construct
-  // `M154d` handed BACK. It had been filed here as a browser step needing an observable, and it is
-  // not one: `TF033` says "`pause` is only legal inside a workload-bearing `test`", so it is
-  // `M67`'s per-iteration pacing and its known answer is an inter-arrival gap.
-  'step:api', 'step:wait', 'step:expect', 'step:let', 'step:capture', 'step:log',
+  // Before that, `M154e` took `ramp`, `hold`, `step`, `spike`, `threshold` and `cleanup` — the perf
+  // tier — plus `pause`, the one construct `M154d` handed BACK. It had been filed here as a browser
+  // step needing an observable, and it is not one: `TF033` says "`pause` is only legal inside a
+  // workload-bearing `test`", so it is `M67`'s per-iteration pacing and its known answer is an
+  // inter-arrival gap.
   // --- matcher (2) ---
   // Eight of the nine left at `M154g` step 2 (`C60`-`C66`), on one plant whose every assertion is a
   // *pair*: `tests/.constructs/matcher-discrimination.tflw`. The eighth, `matcher:was-made`, is a
@@ -1505,6 +1624,17 @@ export const RATCHET = [
  * `RATCHET.length` must not exceed this (`D740`). Lower it as milestones roster constructs; raising
  * it is the edit this pin exists to make loud.
  *
+ * **`47` -> `41` at `M154g` step 2b, and the `step` family is now empty.** The six workhorses are
+ * `D739`'s cheap end at its most extreme — 1139 occurrences behind `api`, 1692 behind `expect`, 523
+ * behind `capture`, and no evidence at all for any of the three, because every one of those uses
+ * points the construct at something else. A test that creates a product and asserts its price says
+ * nothing that would change if `api` fired the request twice. Two fixtures state what an ordinary
+ * test structurally cannot: `step-workhorses.tflw` reads a server-side arrival counter, so *one
+ * step, one request* becomes a number, and `hard-stop-semantics.tflw` is meant to fail, so
+ * `expect`'s "immediately" becomes a marked label that must be **absent**. That last one is the
+ * pair to `C1` — `check` records and continues, `expect` stops, and until now nothing here could
+ * tell the two constructs apart.
+ *
  * **`54` -> `47` at `M154g` step 2, and this one is the opposite kind of drop: seven rows, one new
  * fixture, and every assertion in it a *pair*.** The seven matchers had 1581 + 50 + 31 + 44 + 14 +
  * 43 + 62 uses between them and not one of those uses could tell a working matcher from a broken
@@ -1524,11 +1654,11 @@ export const RATCHET = [
  * missing was the *claim*, which is `D739`'s cheap end taken to its limit — and `D751` says the
  * claim is a citation rather than sixty-six restatements of somebody else's enforced completeness.
  *
- * The number to read this against is not the drop, it is what is left: **54**, and they are the
- * expensive end. Twelve generators that need an observable built before presence proves anything,
- * eighteen config constructs, nine matchers, nine declarations and the six workhorse steps.  Seven of
- * the nine matchers went in step 2; the two that remain are there for stated reasons, not for lack
- * of a turn.
+ * The number to read this against is not the drop, it is what is left: **41** as of step 2b, and
+ * they are the expensive end. Twelve generators that need an observable built before presence proves
+ * anything, eighteen config constructs, nine declarations, and two matchers. Seven of the nine
+ * matchers went in step 2 and all six steps went in step 2b; what remains in those two families is
+ * there for stated reasons, not for lack of a turn.
  *
  * `140` is the whole manifest (178 constructs) minus the thirty-eight plants rostered so far, and
  * acceptance clause 5 is that it reaches 0. **The clause named `M154f` and now names `M154g`** — not
@@ -1566,7 +1696,7 @@ export const RATCHET = [
  * the unrostered remainder, and a remainder can only be honest about a denominator that has itself
  * just been corrected upwards.
  */
-export const RATCHET_CEILING = 47;
+export const RATCHET_CEILING = 41;
 
 /**
  * `CONSTRUCTS.md` carries one row per plant and prose a human reads; this asserts their id sets

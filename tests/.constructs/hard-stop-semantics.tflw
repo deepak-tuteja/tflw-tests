@@ -1,0 +1,75 @@
+# `M154g` step 2b / `C68`, `C69` — the known-answer plant for `expect` and `capture`, the two step
+# keywords whose contracts are about **what does not happen next**.
+#
+# **This file is meant to fail**, in the same deliberate way `retry-attempt-budget.tflw` is: two of
+# its three tests must end red, and a run in which they pass is the regression. It lives under
+# `tests/.constructs/`, a dot-directory `tflw run` does not discover, so the suite stays green while
+# the grader runs this file by name.
+#
+# ## Two contracts stated by `tflw spec --json`, neither of them ever observed here
+#
+#   `expect`   "hard assertion — … fails the test **immediately**"
+#   `capture`  "a capture that resolves to nothing **fails the step** rather than binding `undefined`"
+#
+# Both are claims about a step that comes *after*, and that is exactly why 1692 uses of `expect` and
+# 523 of `capture` cannot prove either. In the ordinary shape of a test the assertion is the last
+# interesting thing that happens, so an `expect` that recorded its failure and carried on would look
+# identical, and a `capture` that bound `undefined` would surface — if at all — as some later
+# assertion failing for an unrelated-looking reason.
+#
+# `C1` is the other side of this pair and the reason it is worth stating as a number: `check` is
+# specified to record a failure **and keep going**, and its plant proves the step after it ran. If
+# `expect` and `check` were the same construct wearing two names, `C1` would still be green and this
+# file would be the only thing that noticed.
+#
+# ## The known answer is a marked label that must be absent
+#
+# Each failing test marks `POST /v1/lifecycle/mark` immediately before the step that must fail, and
+# again immediately after it. The claim is that the grader finds the *before* label and **not** the
+# *after* one. An absence is a weak observation on its own, which is what the leading mark is for:
+# `c68before` at 1 proves the test really ran and really reached the failing step, so `c68after`
+# being missing is a fact about `expect` rather than about a test that never started.
+
+before file
+  api POST /lifecycle/reset
+  expect status equals 200
+
+@constructs @workhorses
+test "a failing `expect` ends the test at once — the step after it never runs"
+  api POST /lifecycle/mark body { label: "c68before" }
+  expect status equals 200
+
+  # Deliberately false. `body.label` is `c68before`, echoed by the server.
+  expect body.label equals "not-the-label-the-server-echoed"
+
+  # Must never be reached. Under `check` semantics it would be, and `counts.marks` would carry
+  # `c68after: 1` — which is the single number separating the two constructs.
+  api POST /lifecycle/mark body { label: "c68after" }
+
+@constructs @workhorses
+test "a `capture` that resolves to nothing fails the step rather than binding undefined"
+  api POST /lifecycle/mark body { label: "c69before" }
+  expect status equals 200
+
+  # `thereIsNoSuchField` is not in the payload — `mark` answers `{ label, count }` and nothing else.
+  # The contract is that this **step** fails. The alternative implementation binds `undefined` and
+  # says nothing, and every consequence of that shows up later, somewhere else, as a confusing
+  # interpolation of the empty string.
+  capture body.thereIsNoSuchField as missing
+
+  api POST /lifecycle/mark body { label: "c69after" }
+
+@constructs @workhorses
+test "`capture` binds the value it read, not a live reference to the current response"
+  # The passing half of `C69`, and the direction the negative above cannot reach. A `capture`
+  # implemented as a lazy read against "the response in scope" would answer `c69second` on the last
+  # line — every existing use in this repository would still be green, because none of them issues
+  # another request between a capture and its use.
+  api POST /lifecycle/mark body { label: "c69bound" }
+  expect status equals 200
+  capture body.label as first
+
+  api POST /lifecycle/mark body { label: "c69second" }
+  expect status equals 200
+
+  expect {first} equals "c69bound"
