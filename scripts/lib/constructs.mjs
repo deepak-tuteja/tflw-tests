@@ -1557,6 +1557,98 @@ export const PLANTS = [
     catches: 'a `--tag` that filters nothing, filters everything, or reads only the first tag on a declaration.',
     blockedOn: null,
   },
+  {
+    id: 'C77',
+    construct: 'declaration:action',
+    family: 'declaration',
+    tier: 'api',
+    title: "an `action` gets its own response scope — `give` is the only thing that crosses back (`FU-12`)",
+    target: 'tests/.constructs/action-response-scope.tflw, against `POST /v1/lifecycle/mark`',
+    evidence: { file: 'tests/.constructs/action-response-scope.tflw', pattern: '^action c77 marks inside\\(label\\)$', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'The caller marks `c77outer`, calls an action which marks `c77inner`, and then asserts on ' +
+      '`body` again — and reads its own response, not the action\'s, although the action\'s request ' +
+      'was strictly later. The manifest joins two claims with a "so", and the 51 existing `action` ' +
+      'declarations in this repository observe only the first: a call is followed by an assertion ' +
+      'on the value it gave, never by an assertion on `body`, so an action that published its ' +
+      'response into the caller\'s scope is invisible in every one of them. The grader also ' +
+      'requires the server to have seen `c77inner` exactly once, which is what stops the negative ' +
+      'from being satisfied by an action that never ran at all.',
+    catches: 'an `action` whose response leaks into the caller\'s scope, and — via the mark — one whose body never executed.',
+    blockedOn: null,
+  },
+  {
+    id: 'C78',
+    construct: 'declaration:use',
+    family: 'declaration',
+    tier: 'api',
+    title: '`use` makes a JS export callable — and makes `TF037` undecidable for the whole file',
+    target: 'tests/.constructs/use-js-helper.tflw at runtime, plus the `tflw check` pair check-unknown-call-{without,with}-use.tflw',
+    evidence: { file: 'tests/.constructs/use-js-helper.tflw', pattern: '^use "\\.\\./helpers/c78-digest\\.ts"$', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'Two claims in one sentence, needing two instruments. The export answers `c78-51f2ab95` for ' +
+      '`"conformance"` — a 31-based rolling hash in hex, and the DSL has no arithmetic, no loop ' +
+      'over code points and no hex formatting, so no `use` that imported nothing can produce it. ' +
+      'The second claim is a negative about the **checker** and cannot be observed by running ' +
+      'anything: two files identical but for one `use` line make the same bogus call, and ' +
+      '`tflw check` reports `TF037` on the one without and stays silent on the one with. The ' +
+      'control is load-bearing — "no `TF037` here" is equally satisfied by a checker that never ' +
+      'emits `TF037` at all. Nineteen files already `use` a helper and not one of them states ' +
+      'either half: they sleep, paginate or sign, so a `use` resolving to nothing would surface, ' +
+      'if at all, as some later step failing for an unrelated-looking reason.',
+    catches: 'a `use` that imports nothing, one whose call returns the argument unchanged, and a checker that "improves" `TF037` by peeking at a module it must not execute.',
+    blockedOn: null,
+  },
+  {
+    id: 'C79',
+    construct: 'declaration:before',
+    family: 'declaration',
+    tier: 'api',
+    title: 'bare `before` runs per test and shares its scope; `before file` runs once and is sealed off from every test',
+    target: 'tests/.constructs/before-scopes.tflw against the arrival counter, plus check-before-file-scope-isolated.tflw under `tflw check`',
+    evidence: { file: 'tests/.constructs/before-scopes.tflw', pattern: '^before file$', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'Four claims in one manifest sentence; ~90 uses in this repository observe one of them. Both ' +
+      'hooks mark, and after a three-test run the server holds `c79file` at **1** and `c79each` at ' +
+      '**3** — the cardinality half, which no existing file states, because a `before file` that ' +
+      'ran before every test would reset the database more often and leave every one of them just ' +
+      'as green. The shared-scope half rides the same request: bare `before` captures the count it ' +
+      'just caused and each test asserts its own ordinal, 1, 2, 3, which is one line carrying two ' +
+      'claims — the binding is visible inside the test body, and it was re-evaluated rather than ' +
+      'reused. The fourth claim cannot be written as a running test at all: a file that reads a ' +
+      '`before file` binding from a test does not compile, so the observation is `TF030` and the ' +
+      'fixture is a file that must fail to check. Its twin does exactly the same capture from a ' +
+      'bare `before` and passes, which keeps the refusal a fact about `before` rather than about ' +
+      '`capture`.',
+    catches: 'a `before file` that runs per test, a bare `before` that runs once per file, a hook whose bindings are invisible to the test, and a `before file` whose scope leaks into one.',
+    blockedOn: null,
+  },
+  {
+    id: 'C80',
+    construct: 'declaration:as',
+    family: 'declaration',
+    tier: 'api',
+    title: '`as <session>` is what makes the request authorized — the same GET is 200 with it and 401 without',
+    target: 'tests/examples/sessions-explained.tflw, graded out of report/results.json — an existing file, no new fixture',
+    evidence: { file: 'tests/examples/sessions-explained.tflw', pattern: '^test ".*" as admin$', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'The only row in this tier that needed no fixture written, and saying so is the point: the ' +
+      'discriminating pair was **already running**. `GET /orders/all` answers 200 in a test ' +
+      'declared `as admin` and 401 in a test with no clause, in the same file, in the same run, ' +
+      'against the same path — so the clause and nothing else is what moved the status. The grader ' +
+      'reads both verdicts out of the report and additionally requires the two tests to have ' +
+      'issued the **same** request, because two tests that merely disagree about a status code are ' +
+      'not a pair. A third test, `as admin, shopper`, covers the manifest\'s "one or more": both ' +
+      'sessions\' contributions land, later-listed winning a conflict. What this row adds over the ' +
+      'file is the *statement* — `M154a` counted this file as evidence of `as` and never asked ' +
+      'what it proved (`D722`).',
+    catches: 'an `as` clause that applies no credential, and one that authorizes every test in the file whether it opted in or not.',
+    blockedOn: null,
+  },
 ];
 
 /**
@@ -1641,23 +1733,20 @@ export const expandReferenceRosters = (manifestConstructs) =>
  * exercised*. `step:api` sits here with 1139 occurrences behind it.
  */
 export const RATCHET = [
-  // --- declaration (5) ---
-  // The family `M154a` missed and `M154c`/`D742` added; `declaration:after` and `declaration:retry`
-  // are rostered above, so ten of the twelve land here. Five of these are `test`-header clauses
-  // rather than top-level words, and three of those five (`tags`, `with-each`, `concurrency`) are
-  // manifest ids for constructs the language spells differently — `@…`, `with each`, and
-  // `parallel`/`sequential`. Read them as ids, never as keywords (`M154a`, `spec-data.ts`).
+  // --- declaration (1) ---
+  // The family `M154a` missed and `M154c`/`D742` added: twelve constructs, of which `after` and
+  // `retry` were rostered above, `crawl` left at `M154f` (`C56`), the four that decide **which
+  // tests exist** left at `M154g` step 2c (`C73`-`C76`), and the four about **scope and identity**
+  // left at step 2d — an action's own response scope (`C77`, `FU-12`), a JS helper's exports
+  // becoming callable together with the `TF037` undecidability one `use` line buys (`C78`), bare
+  // `before` against `before file` in both cardinality and scope (`C79`), and `as` (`C80`), which
+  // needed no fixture at all because the discriminating pair was already running in
+  // `tests/examples/sessions-explained.tflw`.
   //
-  // `declaration:crawl` left at `M154f` — `C56`, graded by finding provenance and by the one origin
-  // the fetching spider cannot walk.
-  //
-  // `M154g` step 2c took the four that decide **which tests exist**: `test`, `import`, `with-each`
-  // and `tags` (`C73`-`C76`). The five that remain are all about **scope and identity** rather than
-  // selection, and they split cleanly. `action`, `use` and `before` each have an observable and are
-  // step 2d's subject: an action's own response scope (`FU-12`), a JS helper's exports becoming
-  // callable, and bare-`before`-per-test against `before file`-per-file. `as` has one too — this
-  // suite already runs the discriminating pair in `tests/examples/sessions-explained.tflw`, where
-  // the same request answers 200 under `as admin` and 401 with no clause at all.
+  // Five of the original twelve are `test`-header clauses rather than top-level words, and three of
+  // those five (`tags`, `with-each`, `concurrency`) are manifest ids for constructs the language
+  // spells differently — `@…`, `with each`, and `parallel`/`sequential`. Read them as ids, never as
+  // keywords (`M154a`, `spec-data.ts`).
   //
   // **`declaration:concurrency` is the one with no observable, and it is a condition rather than a
   // backlog item.** Telling `parallel` from `sequential` means proving two tests did or did not
@@ -1666,8 +1755,7 @@ export const RATCHET = [
   // needs a server-side overlap watermark — an endpoint that holds a request open and reports the
   // high-water mark of simultaneous holders — which is real target surface, not a roster row.
   // **Rosters when apiV2 has one.**
-  'declaration:action', 'declaration:use', 'declaration:before',
-  'declaration:as', 'declaration:concurrency',
+  'declaration:concurrency',
   // --- step (0) ---
   // Empty as of `M154g` step 2b. The last six were the workhorses `D739` is about — `api` with 1139
   // occurrences behind it, `expect` with 1692 — and they are the clearest case the distinction was
@@ -1727,7 +1815,23 @@ export const RATCHET = [
 ];
 
 /**
- * `RATCHET.length` must not exceed this (`D740`). Lower it as milestones roster constructs; raising
+
+ * **`M154g` step 2d took the last four `declaration` rows that had an observable, 37 -> 33**, and
+ * the family is down to a single entry. Three of the four needed a fixture and one did not: `as`
+ * (`C80`) is graded off `tests/examples/sessions-explained.tflw`, which has been running the
+ * discriminating pair — the same `GET /orders/all` at 200 under `as admin` and 401 with no clause
+ * — since long before this milestone existed. That is `D722` in one row: the construct was present,
+ * exercised and *already discriminating*, and it sat on the ratchet anyway because nothing had
+ * written down what the pair proved. A ratchet entry is a missing sentence at least as often as it
+ * is missing coverage.
+ *
+ * Two of the four are also the first rows in this tier graded by `tflw check` rather than by a run.
+ * `C78`'s second half and `C79`'s fourth claim are both **negatives about the checker** — one `use`
+ * makes `TF037` undecidable, and a `before file` binding is unreadable from a test — and neither
+ * can be observed by executing anything, because the files that would state them do not compile.
+ * Each therefore ships with a control whose diff is one line, since "the diagnostic stayed quiet"
+ * is otherwise satisfied by a checker that never emits it at all.
+ * * `RATCHET.length` must not exceed this (`D740`). Lower it as milestones roster constructs; raising
  * it is the edit this pin exists to make loud.
  *
  * **`41` -> `37` at `M154g` step 2c: the four declarations that decide which tests exist.** `test`,
@@ -1819,7 +1923,7 @@ export const RATCHET = [
  * the unrostered remainder, and a remainder can only be honest about a denominator that has itself
  * just been corrected upwards.
  */
-export const RATCHET_CEILING = 37;
+export const RATCHET_CEILING = 33;
 
 /**
  * `CONSTRUCTS.md` carries one row per plant and prose a human reads; this asserts their id sets

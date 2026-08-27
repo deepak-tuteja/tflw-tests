@@ -1,0 +1,32 @@
+# `M154g` step 2d / `C78` — `declaration:use`, the runtime half.
+#
+# The manifest: "the JS escape hatch — a helper module whose exports become callable; one `use`
+# makes `TF037` undecidable for the file, because exports cannot be enumerated without importing".
+#
+# Two claims, and they need two different instruments. This file is the first: an export really
+# does become callable, and it really does return **its** value rather than something tflw computed.
+# `c78 digest` returns a 31-based rolling hash in hex — no arithmetic, no loop over code points and
+# no hex formatting exists in the DSL, so the constant below cannot be produced by a `use` that
+# imported nothing, resolved to a stub, or silently returned the argument it was handed.
+#
+# The second claim is a *negative about the checker* and cannot be observed by running anything at
+# all; it lives in the pair `check-unknown-call-{without,with}-use.tflw`, whose whole diff is the
+# one `use` line.
+#
+# The mark is the third reading, as everywhere else in this tier: it proves the helper was invoked
+# from inside a step rather than the expectation passing for some unrelated reason.
+
+use "../helpers/c78-digest.ts"
+
+before file
+  api POST /lifecycle/reset
+  expect status equals 200
+
+@constructs @declarations
+test "a `use`d module's export is callable, and answers with a value the DSL cannot compute"
+  let digest = c78 digest("conformance")
+  expect {digest} equals "c78-51f2ab95"
+
+  api POST /lifecycle/mark body { label: "{digest}" }
+  expect status equals 200
+  expect body.label equals "c78-51f2ab95"

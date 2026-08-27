@@ -103,6 +103,21 @@ function runCorpus(cwd, args) {
   return { report: JSON.parse(readFileSync(reportFile, 'utf8')), output };
 }
 
+// `M154g` step 2d. Two of this tier's rows are graded by what `tflw check` **refuses**, not by what
+// a run does: `C78`'s undecidability claim and `C79`'s scope-isolation claim are both negatives
+// about the checker, and the files that would state them by running do not compile. Nothing is
+// spawned against a stack here, so these legs grade identically with the stack down — which is
+// also how they get dry-run while the box is busy.
+function runCheck(args) {
+  const r = spawnSync(process.execPath, [TFLW_BIN, 'check', '--no-color', ...args], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    shell: false,
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  return `${r.stdout ?? ''}${r.stderr ?? ''}`;
+}
+
 const wanted = (id) => (ONLY === null || ONLY.has(id));
 
 // =============================================================================
@@ -561,16 +576,52 @@ if (wanted('C50')) {
 const LIFECYCLE_COUNTS = 'http://localhost:4001/v1/lifecycle/counts';
 
 /** Read the server's own record of what happened. Returns null (rather than throwing) so a stack
- *  that is down is reported as a skip against the plant, not as a crash in the grader. */
+ *  that is down is reported as a skip against the plant, not as a crash in the grader.
+ *
+ *  **It also records WHY, in `lifecycleFailure`, and that is not decoration.** On 2026-08-27 the
+ *  box sweep's `construct-acceptance` phase went red with `C67`/`C70`/`C71`/`C72` all reporting
+ *  "produced no lifecycle counts. Is the stack up?" — while the tflw run immediately above them had
+ *  just passed 4/4 against that same host, and three consecutive re-runs minutes later were green.
+ *  The stack was up; the message was a diagnosis this function had not made, and the bare `catch {}`
+ *  had thrown away the evidence that would have identified the real one.
+ *
+ *  Naming the error found it on the very next full run: **`UND_ERR_SOCKET`** — undici reusing a
+ *  pooled keep-alive connection the server had already closed. `C67` is where it lands because the
+ *  workhorse block is the first `/v1/lifecycle/*` read after `C60`-`C66`, seven matcher plants that
+ *  touch the counter not at all, so the pooled socket has been idle long enough to be reaped. The
+ *  four ids that failed are exactly the four that share that one run.
+ *
+ *  So the retry below is **narrow on purpose**: one repeat, only for a socket-level error, never for
+ *  an HTTP status, and it says in the output that it happened. A blanket retry would have hidden the
+ *  original flake as effectively as the bare `catch` did, and "the counter answered on the second
+ *  ask" is a different fact from "the counter answered" — which a plant grading an arrival count has
+ *  no business blurring. A non-2xx still fails immediately: that would be the target app misbehaving,
+ *  which is a finding rather than a connection artifact. Filed as `M154g-04`. */
+let lifecycleFailure = null;
+const SOCKET_ERRORS = new Set(['UND_ERR_SOCKET', 'ECONNRESET', 'EPIPE']);
 async function lifecycleCounts() {
-  try {
-    const r = await fetch(LIFECYCLE_COUNTS);
-    if (!r.ok) return null;
-    return await r.json();
-  } catch {
-    return null;
+  lifecycleFailure = null;
+  for (const attempt of [1, 2]) {
+    try {
+      const r = await fetch(LIFECYCLE_COUNTS, { headers: { connection: 'close' } });
+      if (!r.ok) {
+        lifecycleFailure = `${LIFECYCLE_COUNTS} answered HTTP ${r.status}`;
+        return null;
+      }
+      const body = await r.json();
+      if (attempt === 2) console.log(`  ! ${LIFECYCLE_COUNTS} answered only on a second ask, after ${lifecycleFailure} (M154g-04)`);
+      return body;
+    } catch (err) {
+      const code = err?.cause?.code ?? err?.code ?? err?.name ?? 'error';
+      lifecycleFailure = `${LIFECYCLE_COUNTS} — ${code}: ${err?.message ?? String(err)}`;
+      if (attempt === 2 || !SOCKET_ERRORS.has(code)) return null;
+    }
   }
+  return null;
 }
+/** The skip line every plant prints when the counter did not answer. Says which of the two
+ *  questions actually failed, rather than asserting the stack is down. */
+const lifecycleSkipReason = () => (lifecycleFailure ? `no lifecycle counts — ${lifecycleFailure}` : 'no lifecycle counts');
 
 const functionalTests = (report) => (report?.tests ?? []).filter((t) => t.kind === 'functional');
 /** Find one test by a distinctive fragment of its name.
@@ -591,8 +642,8 @@ if (wanted('C4')) {
   const { report, output } = runCorpus(ROOT, [plant.evidence.file]);
   const counts = await lifecycleCounts();
   if (!report || !counts) {
-    fail(`${plant.id} produced no ${report ? 'lifecycle counts' : 'report'}. Is the stack up (\`node cli.mjs start\`)?\n${output.trim().split('\n').slice(-12).join('\n')}`);
-    scores.get('C4').skipped = report ? 'no lifecycle counts' : 'no report';
+    fail(`${plant.id} produced no ${report ? lifecycleSkipReason() : 'report'}. Is the stack up (\`node cli.mjs start\`)?\n${output.trim().split('\n').slice(-12).join('\n')}`);
+    scores.get('C4').skipped = report ? lifecycleSkipReason() : 'no report';
   } else {
     const tests = functionalTests(report);
     const settled = named(report, 'the third one settles');
@@ -628,7 +679,7 @@ if (wanted('C5')) {
   const counts = await lifecycleCounts();
   if (!report || !counts) {
     fail(`${plant.id} produced no ${report ? 'lifecycle counts' : 'report'}.\n${output.trim().split('\n').slice(-12).join('\n')}`);
-    scores.get('C5').skipped = report ? 'no lifecycle counts' : 'no report';
+    scores.get('C5').skipped = report ? lifecycleSkipReason() : 'no report';
   } else {
     const tests = functionalTests(report);
     const fileMarks = counts.marks?.['c5-after-file'] ?? 0;
@@ -1442,8 +1493,8 @@ if (WORKHORSE_IDS.some((id) => wanted(id))) {
   const { report, output } = runCorpus(ROOT, [plant.evidence.file]);
   const counts = await lifecycleCounts();
   if (!report || !counts) {
-    fail(`${plant.id} produced no ${report ? 'lifecycle counts' : 'report'}. Is the stack up (\`node cli.mjs start\`)?\n${output.trim().split('\n').slice(-12).join('\n')}`);
-    for (const id of WORKHORSE_IDS) scores.get(id).skipped = report ? 'no lifecycle counts' : 'no report';
+    fail(`${plant.id} produced no ${report ? lifecycleSkipReason() : 'report'}. Is the stack up (\`node cli.mjs start\`)?\n${output.trim().split('\n').slice(-12).join('\n')}`);
+    for (const id of WORKHORSE_IDS) scores.get(id).skipped = report ? lifecycleSkipReason() : 'no report';
   } else {
     const marks = counts.marks ?? {};
     const attempts = counts.attempts ?? {};
@@ -1517,11 +1568,11 @@ if (HARD_STOP_IDS.some((id) => wanted(id))) {
   const { report, output } = runCorpus(ROOT, [plant.evidence.file]);
   const counts = await lifecycleCounts();
   if (!report || !counts) {
-    fail(`${plant.id} produced no ${report ? 'lifecycle counts' : 'report'}. Is the stack up (\`node cli.mjs start\`)?\n${output.trim().split('\n').slice(-12).join('\n')}`);
+    fail(`${plant.id} produced no ${report ? lifecycleSkipReason() : 'report'}. Is the stack up (\`node cli.mjs start\`)?\n${output.trim().split('\n').slice(-12).join('\n')}`);
     // `C73` rides this same run (below), so it is skipped from here too — otherwise it reports
     // "recorded no assertions at all" with no reason attached, which reads as a bug in the gate
     // rather than as a stack that is down.
-    for (const id of HARD_STOP_IDS) scores.get(id).skipped = report ? 'no lifecycle counts' : 'no report';
+    for (const id of HARD_STOP_IDS) scores.get(id).skipped = report ? lifecycleSkipReason() : 'no report';
   } else {
     const marks = counts.marks ?? {};
 
@@ -1629,8 +1680,8 @@ if (wanted('C74')) {
   const { report, output } = runCorpus(ROOT, [plant.evidence.file]);
   const counts = await lifecycleCounts();
   if (!report || !counts) {
-    fail(`${plant.id} produced no ${report ? 'lifecycle counts' : 'report'}. Is the stack up (\`node cli.mjs start\`)?\n${output.trim().split('\n').slice(-12).join('\n')}`);
-    scores.get('C74').skipped = report ? 'no lifecycle counts' : 'no report';
+    fail(`${plant.id} produced no ${report ? lifecycleSkipReason() : 'report'}. Is the stack up (\`node cli.mjs start\`)?\n${output.trim().split('\n').slice(-12).join('\n')}`);
+    scores.get('C74').skipped = report ? lifecycleSkipReason() : 'no report';
   } else {
     const marks = counts.marks ?? {};
     const reported = functionalTests(report);
@@ -1659,8 +1710,8 @@ if (wanted('C75')) {
   const { report, output } = runCorpus(ROOT, [plant.evidence.file]);
   const counts = await lifecycleCounts();
   if (!report || !counts) {
-    fail(`${plant.id} produced no ${report ? 'lifecycle counts' : 'report'}. Is the stack up (\`node cli.mjs start\`)?\n${output.trim().split('\n').slice(-12).join('\n')}`);
-    scores.get('C75').skipped = report ? 'no lifecycle counts' : 'no report';
+    fail(`${plant.id} produced no ${report ? lifecycleSkipReason() : 'report'}. Is the stack up (\`node cli.mjs start\`)?\n${output.trim().split('\n').slice(-12).join('\n')}`);
+    scores.get('C75').skipped = report ? lifecycleSkipReason() : 'no report';
   } else {
     const marks = counts.marks ?? {};
     const reported = functionalTests(report);
@@ -1746,6 +1797,145 @@ if (wanted('C76')) {
 }
 
 // =============================================================================
+// C77-C80 — `M154g` step 2d: the four `declaration` rows about scope and identity
+// =============================================================================
+
+if (wanted('C77')) {
+  const plant = plantFor('declaration:action');
+  console.log(`\n${plant.id} — ${plant.title}\n  target: ${plant.target}`);
+  const { report, output } = runCorpus(ROOT, [plant.evidence.file]);
+  const counts = await lifecycleCounts();
+  if (!report || !counts) {
+    fail(`${plant.id} produced no ${report ? lifecycleSkipReason() : 'report'}. Is the stack up (\`node cli.mjs start\`)?\n${output.trim().split('\n').slice(-12).join('\n')}`);
+    scores.get('C77').skipped = report ? lifecycleSkipReason() : 'no report';
+  } else {
+    const marks = counts.marks ?? {};
+    const reported = functionalTests(report);
+
+    // The third reading, and it comes first for the same reason it does in `C74`: without it the
+    // scope assertion below is satisfied by an action that never executed a single step.
+    recall('C77', marks['c77inner'] === 1, `the action's own request went out exactly once (got ${marks['c77inner'] ?? 'absent'}) — otherwise the caller's \`body\` surviving is a fact about nothing`);
+    recall('C77', marks['c77outer'] === 1, `and the caller's did too (got ${marks['c77outer'] ?? 'absent'}), so both responses really existed and the later one is the action's`);
+
+    // `FU-12` itself. Both directions are in-band, so the verdict carries them — but the two are
+    // named separately here, because a green test would otherwise report one fact where the
+    // manifest makes two claims.
+    recall('C77', reported.length === 1 && reported[0]?.ok === true, `the test passed (got ${reported.length} test(s), ok=${reported[0]?.ok}): \`give\` carried a value out AND the caller still read its own response afterwards`);
+    const steps = stepsOf(reported[0]);
+    const bad = failingSteps(reported[0]);
+    precision('C77', bad.length === 0, `no step failed (got ${bad.length}: ${JSON.stringify(bad.map((s) => s.name ?? s.kind))})`);
+    precision('C77', steps.length >= 6, `and the test really ran its body rather than short-circuiting (got ${steps.length} steps)`);
+    const stray = Object.keys(marks).filter((k) => k !== 'c77inner' && k !== 'c77outer');
+    precision('C77', stray.length === 0, `the corpus issued exactly the two marks it declares (stray: ${stray.join(', ') || 'none'})`);
+  }
+}
+
+// `use` is the one construct in this tier whose contract is half runtime and half checker, so it is
+// graded twice. The `tflw check` pair runs first and needs no stack at all.
+if (wanted('C78')) {
+  const plant = plantFor('declaration:use');
+  console.log(`\n${plant.id} — ${plant.title}\n  target: ${plant.target}`);
+
+  const WITHOUT = 'tests/.constructs/check-unknown-call-without-use.tflw';
+  const WITH = 'tests/.constructs/check-unknown-call-with-use.tflw';
+  const withoutOut = runCheck([WITHOUT]);
+  const withOut = runCheck([WITH]);
+
+  // The control, and it is load-bearing: "no TF037 on the file with `use`" is equally satisfied by
+  // a checker that never emits TF037, which is precisely the regression this pair exists to catch.
+  recall('C78', /TF037/.test(withoutOut), `with the world closed, the same bogus call is a \`TF037\` (got: ${withoutOut.trim().split('\n')[0] || 'clean'})`);
+  recall('C78', !/TF037/.test(withOut), `and one \`use\` line silences it (got: ${withOut.trim().split('\n')[0] || 'clean'}) — exports cannot be enumerated without importing, and the checker never executes what it checks`);
+  precision('C78', !/TF04[03]/.test(withOut), `the \`use\`d module is real and resolvable, so the silence is undecidability rather than a file the checker gave up on (got: ${withOut.trim().split('\n')[0] || 'clean'})`);
+
+  // And the pair really is a pair: one line of difference, or the comparison is between two
+  // unrelated files that happen to disagree.
+  const strip = (f) => readFileSync(path.join(ROOT, f), 'utf8').split('\n').filter((l) => !l.startsWith('#') && l.trim() !== '');
+  const diff = strip(WITH).filter((l) => !strip(WITHOUT).includes(l));
+  precision('C78', diff.length === 1 && diff[0].startsWith('use '), `the two fixtures differ by exactly the \`use\` line and nothing else (got ${JSON.stringify(diff)})`);
+
+  const { report, output } = runCorpus(ROOT, [plant.evidence.file]);
+  const counts = await lifecycleCounts();
+  if (!report || !counts) {
+    fail(`${plant.id} produced no ${report ? lifecycleSkipReason() : 'report'}. Is the stack up (\`node cli.mjs start\`)?\n${output.trim().split('\n').slice(-12).join('\n')}`);
+    scores.get('C78').skipped = report ? lifecycleSkipReason() : 'no report';
+  } else {
+    const marks = counts.marks ?? {};
+    const reported = functionalTests(report);
+    recall('C78', reported.length === 1 && reported[0]?.ok === true, `the export is callable and answered the DSL's expectation (got ${reported.length} test(s), ok=${reported[0]?.ok})`);
+    recall('C78', marks['c78-51f2ab95'] === 1, `and the value it returned reached the server verbatim (got ${Object.keys(marks).join(', ') || 'no marks'}) — a hash the DSL has no arithmetic to compute`);
+  }
+}
+
+if (wanted('C79')) {
+  const plant = plantFor('declaration:before');
+  console.log(`\n${plant.id} — ${plant.title}\n  target: ${plant.target}`);
+
+  // The claim no running file can make: `before file`'s scope is sealed off from every test.
+  const isolated = runCheck(['tests/.constructs/check-before-file-scope-isolated.tflw']);
+  recall('C79', /TF030/.test(isolated), `a test that reads a \`before file\` binding does not compile (got: ${isolated.trim().split('\n')[0] || 'clean'})`);
+
+  const { report, output } = runCorpus(ROOT, [plant.evidence.file]);
+  const counts = await lifecycleCounts();
+  if (!report || !counts) {
+    fail(`${plant.id} produced no ${report ? lifecycleSkipReason() : 'report'}. Is the stack up (\`node cli.mjs start\`)?\n${output.trim().split('\n').slice(-12).join('\n')}`);
+    scores.get('C79').skipped = report ? lifecycleSkipReason() : 'no report';
+  } else {
+    const marks = counts.marks ?? {};
+    const reported = functionalTests(report);
+
+    // Cardinality: the half ~90 existing `before file` uses cannot state, because a hook that ran
+    // too often would leave all of them green.
+    recall('C79', marks['c79file'] === 1, `\`before file\` ran exactly once for the whole file (got ${marks['c79file'] ?? 'absent'}) across ${reported.length} test(s)`);
+    recall('C79', marks['c79each'] === 3, `bare \`before\` ran once per test (got ${marks['c79each'] ?? 'absent'}, want 3)`);
+
+    // Scope: asserted in-band as three ordinals, so the verdicts carry it. A `before` that ran once
+    // per file and shared its scope leaves all three asserting 1 and only the first passing — which
+    // is why the *count* of passing tests is the thing read here, not merely that some passed.
+    recall('C79', reported.length === 3 && reported.every((t) => t.ok === true), `all three tests passed (got ${reported.filter((t) => t.ok).length}/${reported.length}): each read the binding its own \`before\` made, one ordinal apart`);
+    const total = Object.values(marks).reduce((n, v) => n + v, 0);
+    precision('C79', total === 4, `the corpus issued exactly the four marks it declares — one file-scoped, three test-scoped (got ${total}: ${JSON.stringify(marks)})`);
+    precision('C79', !/TF030/.test(output), `and the sibling file's identical capture from a *bare* \`before\` was accepted, so the refusal above is about \`before file\` rather than about \`capture\``);
+  }
+}
+
+// The one row in this tier with no fixture of its own. Grading an existing file is the point, not a
+// shortcut: `M154a` already counted `sessions-explained.tflw` as evidence of `as` and never asked
+// what it proved, which is `D722` exactly.
+if (wanted('C80')) {
+  const plant = plantFor('declaration:as');
+  console.log(`\n${plant.id} — ${plant.title}\n  target: ${plant.target}`);
+  const { report, output } = runCorpus(ROOT, [plant.evidence.file]);
+  // This row grades an existing file rather than a fixture of its own, so it never reads the
+  // arrival counter — but it still needs the same liveness guard the other three get, and for a
+  // sharper reason. With the stack down a report IS produced: every test fails at its first
+  // request, `ok` is false everywhere, and grading it yields five confident red assertions saying
+  // `as admin` did not authorize anything. That is a stack-down message wearing a conformance
+  // failure's clothes, which is the one output this whole tier exists to refuse. `lifecycleCounts()`
+  // is used here purely as the liveness probe, never as evidence.
+  const alive = await lifecycleCounts();
+  if (!report || !alive) {
+    fail(`${plant.id} produced no ${report ? lifecycleSkipReason() : 'report'}. Is the stack up (\`node cli.mjs start\`)?\n${output.trim().split('\n').slice(-12).join('\n')}`);
+    scores.get('C80').skipped = report ? lifecycleSkipReason() : 'no report';
+  } else {
+    const authorized = named(report, 'opting into `as admin` starts every api step');
+    const anonymous = named(report, 'no `as <session>` clause is anonymous');
+    const both = named(report, 'as admin, shopper opts into both at once');
+
+    recall('C80', authorized?.ok === true, `the test declared \`as admin\` got its 200 (ok=${authorized?.ok}) — no Authorization header is written anywhere in it`);
+    recall('C80', anonymous?.ok === true, `and the test with no clause got its 401 (ok=${anonymous?.ok}), which is the same assertion pointed the other way`);
+    recall('C80', both?.ok === true, `\`as admin, shopper\` merged both sessions' contributions onto one test (ok=${both?.ok}) — the manifest's "one or more"`);
+
+    // Two tests disagreeing about a status code are not a pair. Matched on the step's `source` —
+    // the line as written — because that is what makes "the same request" checkable rather than
+    // asserted: both tests must literally contain `api GET /orders/all`.
+    const REQUEST = 'api GET /orders/all';
+    const issues = (test) => stepsOf(test).some((s) => (s.source ?? '').trim() === REQUEST);
+    precision('C80', issues(authorized) && issues(anonymous), `both verdicts came from the same request, \`${REQUEST}\` (authorized: ${issues(authorized)}, anonymous: ${issues(anonymous)}) — so the \`as\` clause is the only difference between them`);
+    precision('C80', failingSteps(authorized).length === 0 && failingSteps(anonymous).length === 0, `and neither reached its verdict through a failing step (${failingSteps(authorized).length} / ${failingSteps(anonymous).length})`);
+  }
+}
+
+// =============================================================================
 // the table
 // =============================================================================
 
@@ -1770,7 +1960,14 @@ for (const plant of PLANTS) {
   }
   const s = scores.get(plant.id);
   const tally = (xs) => (xs.length === 0 ? 'n/a' : `${xs.filter(Boolean).length}/${xs.length}`);
-  const clean = s.recall.every(Boolean) && s.precision.every(Boolean) && s.recall.length > 0;
+  // `M154g` step 2d. `!s.skipped` is the newest clause and it was unreachable until this step: a
+  // plant either graded or it did not, so a skip meant an empty tally and `recall.length > 0`
+  // already caught it. `C78` and `C79` are the first plants graded by BOTH a `tflw check` pair and
+  // a run, so a skipped runtime half can now sit beside a green static half — and the row printed
+  // `✓ … (skipped: no report)`, a tick on a plant that never produced its known answer. Found by
+  // mutating `before-scopes.tflw` into a file that does not parse; the gate still exited non-zero
+  // via `fail()`, so this was a lying glyph rather than a hole, which is the kind that survives.
+  const clean = s.recall.every(Boolean) && s.precision.every(Boolean) && s.recall.length > 0 && !s.skipped;
   // `D734` — a plant red for a *known* tflw defect keeps its row and says which. Absence of any
   // `blockedOn` is not the same as absence of defects; it is the claim that none is known.
   const blocked = plant.blockedOn ? `  [blocked-on:${plant.blockedOn}]` : '';
