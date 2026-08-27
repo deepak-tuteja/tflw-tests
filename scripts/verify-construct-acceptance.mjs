@@ -1936,6 +1936,192 @@ if (wanted('C80')) {
 }
 
 // =============================================================================
+// C81-C91 — `M154g` step 3: eleven of the twelve `generator` rows
+// =============================================================================
+//
+// One plant, four runs, and the four runs are the point. Everything this family promises is a
+// statement about a *relationship between values* — distinct from each other, identical across a
+// seed, moving with a clock — and a `.tflw` file can hold at most one run's worth of values and
+// cannot do arithmetic on them. So the plant states shape and the grader states everything else:
+//
+//   A  --seed 4242 --now 2026-07-06     the reference run
+//   B  --seed 4242 --now 2026-07-06     same seed, same clock  -> every `random` value repeats
+//   C  --seed 9999 --now 2026-07-06     same clock, new seed   -> the seeded values move
+//   D  --seed 4242 --now 2027-07-06     same seed, new clock   -> only the clock-derived ones move
+//
+// D is not redundant with C. `SPEC` §7.5 makes two separate promises — one run seed and one run
+// clock — and C alone cannot tell them apart, because a `random date` derived purely from the seed
+// would satisfy it. D is the run that separates them: under it `random date in past` must move and
+// `random string 12` must not.
+const GENERATOR_IDS = ['C81', 'C82', 'C83', 'C84', 'C85', 'C86', 'C87', 'C88', 'C89', 'C90', 'C91'];
+
+if (GENERATOR_IDS.some((id) => wanted(id))) {
+  const plant = plantFor('generator:unique-prefix');
+  console.log(`\nC81-C91 — the generator family\n  target: ${plant.target}`);
+
+  // ---- the check-time half: SPEC §7.3's generator-operand table -------------------------------
+  // No stack, so it grades identically while the box is busy — the same property `C78`/`C79` have.
+  // The subject is not "TF054 fires" (that is `C59`'s job, by rule) but "**this generator** refuses
+  // **this operand**", which is a different sentence about a different construct.
+  const OPERANDS = 'tests/.checkonly/invalid-literal-operand.tflw';
+  const operandOut = runCheck([OPERANDS]);
+  const refuses = (src) =>
+    new RegExp(`error\\[TF054\\]: \`${src.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\``).test(operandOut);
+
+  // ---- the run half ---------------------------------------------------------------------------
+  const NOW = '2026-07-06T00:00:00.000Z';
+  const LATER = '2027-07-06T00:00:00.000Z';
+  const decode = (marks) => {
+    const single = {};
+    const retried = {};
+    for (const [key, n] of Object.entries(marks ?? {})) {
+      const parts = key.split('|');
+      // The value is base64 and may itself contain a `|`, so everything after the fixed fields is
+      // rejoined rather than indexed. `random password` is why: it guarantees a symbol class.
+      if (parts[0] === 'g3' && parts.length >= 4) {
+        single[`${parts[1]}#${parts[2]}`] = Buffer.from(parts.slice(3).join('|'), 'base64').toString('utf8');
+      } else if (parts[0] === 'g3r' && parts.length >= 3) {
+        (retried[parts[1]] ??= []).push({
+          value: Buffer.from(parts.slice(2).join('|'), 'base64').toString('utf8'),
+          count: n,
+        });
+      }
+    }
+    return { single, retried };
+  };
+  const runOnce = async (seed, now) => {
+    const { report, output } = runCorpus(ROOT, [plant.evidence.file, '--seed', String(seed), '--now', now]);
+    const counts = await lifecycleCounts();
+    return { report, output, counts, ...decode(counts?.marks) };
+  };
+
+  const A = await runOnce(4242, NOW);
+  const B = A.report && A.counts ? await runOnce(4242, NOW) : null;
+  const C = B?.report && B?.counts ? await runOnce(9999, NOW) : null;
+  const D = C?.report && C?.counts ? await runOnce(4242, LATER) : null;
+
+  if (!A.report || !A.counts || !D?.report || !D?.counts) {
+    const why = !A.report ? 'report' : lifecycleSkipReason();
+    fail(`C81-C91 produced no ${why}. Is the stack up (\`node cli.mjs start\`)?\n${(D?.output ?? A.output).trim().split('\n').slice(-12).join('\n')}`);
+    for (const id of GENERATOR_IDS) scores.get(id).skipped = !A.report ? 'no report' : lifecycleSkipReason();
+  } else {
+    const v = A.single;
+    const trio = (ctor) => [1, 2, 3].map((i) => v[`${ctor}#${i}`]);
+    const distinct = (xs) => xs.every((x) => x !== undefined) && new Set(xs).size === xs.length;
+    const consecutive = (ns) => ns.every((n, i) => Number.isInteger(n) && (i === 0 || n === ns[i - 1] + 1));
+    const same = (slot, other) => other.single[slot] !== undefined && other.single[slot] === v[slot];
+    const moved = (slot, other) => other.single[slot] !== undefined && other.single[slot] !== v[slot];
+    const passed = (fragment) => named(A.report, fragment)?.ok === true;
+
+    // --- the `unique` group, and the counter underneath all of it ------------------------------
+
+    const prefixes = trio('unique-prefix');
+    const pIdx = prefixes.map((s) => Number(String(s).slice('W3-Widget-'.length)));
+    recall('C81', prefixes.every((s) => /^W3-Widget-\d+$/.test(String(s))), `the literal prefix survives and something was appended to it (${prefixes.join(', ')})`);
+    recall('C81', distinct(prefixes) && consecutive(pIdx), `three draws are three **consecutive** counter values (${pIdx.join(', ')}) — this construct's distinctness is ordering, not entropy, and no site in this repository says so`);
+    recall('C81', same('unique-prefix#1', B) && same('unique-prefix#1', C) && same('unique-prefix#1', D), `and the counter restarts at the same place under every seed and clock (${B.single['unique-prefix#1']} / ${C.single['unique-prefix#1']} / ${D.single['unique-prefix#1']}), which is the exact opposite of the \`random\` group below`);
+    const retriedPrefix = A.retried['unique-prefix'] ?? [];
+    recall('C81', retriedPrefix.length === 3 && retriedPrefix.every((e) => e.count === 1), `across a retried test's three attempts the counter kept advancing — three distinct values, each marked once (${JSON.stringify(retriedPrefix.map((e) => e.value))}). \`SPEC\` §7.2 states this in bold and nothing here has ever observed it: \`retry-and-flake.tflw\` retries against a \`random\` key, which is the opposite promise`);
+    precision('C81', passed('keeps the prefix'), `the plant's own test for it passed`);
+
+    const emails = trio('unique-email');
+    const eIdx = emails.map((s) => Number(/^user(\d+)@/.exec(String(s))?.[1]));
+    recall('C82', emails.every((s) => /^user\d+@example\.test$/.test(String(s))), `every draw is an address on one reserved domain (${emails.join(', ')})`);
+    recall('C82', distinct(emails) && consecutive(eIdx), `three consecutive counter values again (${eIdx.join(', ')})`);
+    recall('C82', eIdx[0] === pIdx[2] + 1, `and it is the **same** counter \`unique("…")\` uses: the test above drew ${pIdx.join('/')}, so the first address here is user${eIdx[0]}. That is the sentence a reader of this suite most needs — two \`unique\` values are distinct because of ordering across the whole run, not because each construct has its own sequence`);
+    recall('C82', same('unique-email#1', C), `and it too is seed-independent (${C.single['unique-email#1']})`);
+    precision('C82', passed('is an address'), `the plant's own test for it passed`);
+
+    const numbers = trio('unique-number');
+    const nIdx = numbers.map((s) => Number(s));
+    recall('C83', numbers.every((s) => /^\d+$/.test(String(s))), `digits only (${numbers.join(', ')})`);
+    recall('C83', distinct(numbers) && consecutive(nIdx), `three consecutive values (${nIdx.join(', ')})`);
+    recall('C83', nIdx[0] === eIdx[2] + 1, `and this construct **is** the counter, unwrapped: it continues from user${eIdx[2]} at ${nIdx[0]}. It has no other site in the repository, so this row and its plant are its entire evidence`);
+    precision('C83', passed('is the counter itself'), `the plant's own test for it passed`);
+
+    const uuids = trio('unique-uuid');
+    const V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+    const tail = (s) => Number.parseInt(String(s).slice(-8), 16);
+    const uIdx = uuids.map(tail);
+    recall('C84', uuids.every((s) => V4.test(String(s))), `v4-shaped (${uuids.join(', ')})`);
+    recall('C84', distinct(uuids) && consecutive(uIdx), `and the last eight hex digits are the counter, not entropy — ${uuids.map((s) => String(s).slice(-8)).join(', ')} is ${uIdx.join(', ')}. That is what makes distinctness a guarantee instead of 122 bits of luck, and it is the whole difference from \`random uuid\``);
+    recall('C84', uIdx[0] - nIdx[2] === 4, `the counter jumped ${nIdx[2]} -> ${uIdx[0]}, so **three ticks went missing** between the two tests — the three \`unique like\` draws, which advance the counter and then fill their pattern from the seeded stream instead. That gap is \`M154g-07\`'s evidence and the reason \`generator:unique-like\` has no row here`);
+    recall('C84', same('unique-uuid#1', C) === false && tail(C.single['unique-uuid#1']) === uIdx[0], `under a different seed the uuid changes but its counter digits do not (${C.single['unique-uuid#1']}) — the two halves of this construct have different sources, and only the counter half carries the guarantee`);
+    precision('C84', passed('carries the counter in its last eight'), `the plant's own test for it passed`);
+
+    // --- the `random` group: one seed, one clock, and the operand table -------------------------
+
+    const n = Number(v['random-number#1']);
+    recall('C85', Number.isInteger(n) && n >= 1 && n <= 100, `\`random number 1 to 100\` returned an integer inside its inclusive range (${n})`);
+    recall('C85', same('random-number#1', B) && same('random-decimal#1', B), `both forms repeat exactly under the same seed (${B.single['random-number#1']}, ${B.single['random-decimal#1']}) — the claim no single run can make`);
+    // The seed-sensitivity claim is made on the decimal alone and that is deliberate: `random
+    // number 1 to 100` has a 1-in-100 chance of drawing the same integer under a different seed,
+    // and a gate that flakes one run in a hundred is worse than one that asserts less.
+    recall('C85', moved('random-decimal#1', C), `and a different seed moves them (${C.single['random-decimal#1']}); asserted on the decimal, whose range makes a coincidence impossible, rather than on the 1-in-100 integer`);
+    recall('C85', same('random-number#1', D) && same('random-decimal#1', D), `while the run *clock* moves neither (${D.single['random-number#1']}, ${D.single['random-decimal#1']}) — the seed and the clock are two promises, not one`);
+    recall('C85', refuses('random number 5 to 1') && refuses('random decimal 5 to 1'), `and an empty range is refused in the source, in both forms (\`SPEC\` §7.3's operand table, via ${OPERANDS})`);
+    precision('C85', passed('inclusive range'), `the plant's own test for it passed`);
+
+    const ms = (slot, run) => Date.parse(String((run ?? A).single[slot]));
+    const nowMs = Date.parse(NOW);
+    recall('C86', ms('random-date-past#1') < nowMs && ms('random-date-future#1') > nowMs, `\`in past\` and \`in future\` straddle the instant \`--now\` pinned (${v['random-date-past#1']} < ${NOW} < ${v['random-date-future#1']})`);
+    recall('C86', ms('random-date-between#1') <= nowMs && ms('random-date-between#1') >= nowMs - 10 * 86400000, `and \`between today - 10 days and today\` landed inside its window (${v['random-date-between#1']})`);
+    recall('C86', same('random-date-past#1', B) && same('random-date-future#1', B), `seed and clock together replay the exact instants (${B.single['random-date-past#1']})`);
+    recall('C86', moved('random-date-past#1', C), `a different seed moves them (${C.single['random-date-past#1']})`);
+    recall('C86', moved('random-date-past#1', D) && Math.abs(ms('random-date-past#1', D) - ms('random-date-past#1') - 365 * 86400000) < 3 * 86400000, `and so does a different **clock**, by about the year it was moved (${D.single['random-date-past#1']}) — the run that separates \`--now\` from \`--seed\`, which nothing else in this repository does`);
+    recall('C86', refuses('random date between today and today - 10 days') && refuses('random date between'), `both refusals are in the source: bounds the wrong way round, and a quoted string that is never a date on any run`);
+    precision('C86', passed('respects the run clock'), `the plant's own test for it passed`);
+
+    const picks = trio('random-of');
+    recall('C87', picks.every((s) => ['red', 'blue', 'green'].includes(String(s))), `every draw is an element of the inline list (${picks.join(', ')})`);
+    recall('C87', new Set(picks).size > 1, `and the three draws are not one element repeated (${picks.join(', ')}) — the shape a generator that always returns the head would produce, and the one a single draw cannot exclude`);
+    recall('C87', [1, 2, 3].every((i) => same(`random-of#${i}`, B)), `the sequence repeats under the same seed (${[1, 2, 3].map((i) => B.single[`random-of#${i}`]).join(', ')})`);
+    precision('C87', passed('picks from the list'), `the plant's own test for it passed`);
+
+    const s12 = String(v['random-string#1']);
+    recall('C88', /^[A-Za-z0-9]{12}$/.test(s12), `\`random string 12\` is twelve alphanumerics (${s12})`);
+    recall('C88', same('random-string#1', B) && moved('random-string#1', C) && same('random-string#1', D), `it repeats under one seed, moves under another, and ignores the clock (${B.single['random-string#1']} / ${C.single['random-string#1']} / ${D.single['random-string#1']})`);
+    const retriedString = A.retried['random-string'] ?? [];
+    recall('C88', retriedString.length === 1 && retriedString[0].count === 3, `and inside a retried test it **replays**: one value marked three times (${JSON.stringify(retriedString)}). Paired with \`C81\`'s three-distinct, this is \`SPEC\` §7.2/§7.3's opposite promises observed in one test — \`random\` is what an idempotency key must come from, \`unique\` is what it must not`);
+    recall('C88', refuses('random string -3') && !refuses('random string 0'), `a negative length is refused in the source and \`0\` deliberately is not — the asymmetry the operand table keeps rather than flattens, and the half that would be invisible without a control in a file that reports`);
+    precision('C88', passed('alphanumerics'), `the plant's own test for it passed`);
+
+    const like = String(v['random-like#1']);
+    recall('C89', /^SKU-\d{4}-[A-Za-z]{2}$/.test(like), `\`#\` filled with digits and \`?\` with letters — two alphabets, which a length check cannot tell apart (${like})`);
+    recall('C89', same('random-like#1', B) && moved('random-like#1', C), `seed-reproducible (${B.single['random-like#1']} / ${C.single['random-like#1']})`);
+    precision('C89', passed('with a digit and'), `the plant's own test for it passed`);
+
+    const ru = String(v['random-uuid#1']);
+    recall('C90', V4.test(ru), `v4-shaped (${ru})`);
+    recall('C90', same('random-uuid#1', B) && moved('random-uuid#1', C), `seed-reproducible, unlike a uuid drawn from the platform's entropy (${B.single['random-uuid#1']} / ${C.single['random-uuid#1']})`);
+    recall('C90', tail(C.single['random-uuid#1']) !== tail(v['random-uuid#1']), `and its last eight digits move with the seed (${String(v['random-uuid#1']).slice(-8)} -> ${String(C.single['random-uuid#1']).slice(-8)}) where \`unique uuid\`'s did not. That pair is the entire documented difference between the two constructs, and it is stated nowhere else`);
+    precision('C90', passed('luck rather than a counter'), `the plant's own test for it passed`);
+
+    const pw = String(v['random-password#1']);
+    const classes = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/];
+    recall('C91', pw.length === 16 && String(v['random-password-default#1']).length === 12, `the requested length is honoured and the default is 12 (${pw.length}, ${String(v['random-password-default#1']).length})`);
+    recall('C91', classes.every((re) => re.test(pw)), `and all four character classes are present (${pw}) — the validation policy this construct exists for, which no site in this repository asserts`);
+    recall('C91', same('random-password#1', B) && moved('random-password#1', C), `seed-reproducible (${B.single['random-password#1']} / ${C.single['random-password#1']})`);
+    recall('C91', refuses('random password 2'), `and a length too short to carry those four classes is refused in the source`);
+    precision('C91', passed('length it was asked for'), `the plant's own test for it passed`);
+
+    // --- shared precision: the run produced these values and nothing else ----------------------
+    const red = functionalTests(A.report).filter((t) => !t.ok);
+    const declared = new Set([
+      ...['unique-prefix', 'unique-email', 'unique-number', 'unique-like', 'unique-uuid', 'random-of'].flatMap((c) => [1, 2, 3].map((i) => `${c}#${i}`)),
+      'random-number#1', 'random-decimal#1', 'random-date-past#1', 'random-date-future#1',
+      'random-date-between#1', 'random-string#1', 'random-like#1', 'random-uuid#1',
+      'random-password#1', 'random-password-default#1',
+    ]);
+    const stray = Object.keys(v).filter((k) => !declared.has(k));
+    const missing = [...declared].filter((k) => v[k] === undefined);
+    for (const id of GENERATOR_IDS) {
+      precision(id, red.length === 0 && stray.length === 0 && missing.length === 0, `the corpus went green and produced exactly its ${declared.size} declared draws${red.length ? ` — red: ${red.map((t) => t.name).join('; ')}` : ''}${stray.length ? ` — stray: ${stray.join(', ')}` : ''}${missing.length ? ` — missing: ${missing.join(', ')}` : ''}`);
+    }
+  }
+}
+
+// =============================================================================
 // the table
 // =============================================================================
 

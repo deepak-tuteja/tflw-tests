@@ -1649,6 +1649,239 @@ export const PLANTS = [
     catches: 'an `as` clause that applies no credential, and one that authorizes every test in the file whether it opted in or not.',
     blockedOn: null,
   },
+
+  // --- `M154g` step 3: the generator family, eleven of twelve ---------------------------------
+  //
+  // One plant and one grader serve all eleven, because every claim in this family is about a
+  // *relationship between values* and the relationships overlap: the same four runs that show
+  // `random string` repeating under one seed show `unique("…")` ignoring the seed entirely, and the
+  // counter that makes `unique number` meaningful is the one `unique email` and `unique uuid` are
+  // also reading. Splitting that into eleven fixtures would have produced eleven weaker claims.
+  //
+  // `generator:unique-like` is the twelfth and it stays on `RATCHET`; see `M154g-07` and the note
+  // on the ratchet's `generator` heading.
+  {
+    id: 'C81',
+    construct: 'generator:unique-prefix',
+    family: 'generator',
+    tier: 'api',
+    title: '`unique("prefix")` appends a run-wide counter — its distinctness is ordering, not entropy',
+    target: 'tests/.constructs/generator-known-answers.tflw, against `POST /v1/lifecycle/mark` and `/attempt`',
+    evidence: { file: 'tests/.constructs/generator-known-answers.tflw', pattern: '^  let a = unique\\("W3-Widget"\\)$', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'Three draws yield `W3-Widget-0`, `-1`, `-2`: the prefix verbatim, then three **consecutive** ' +
+      'integers. The grader states that as arithmetic, which is what separates this row from the ' +
+      '~60 `unique("…")` sites in this suite — every one of them spends the value on a request and ' +
+      'asserts on the response, so a generator returning a constant passes the lot. It also runs ' +
+      'the plant under two seeds and two run clocks and requires the value to be **identical** in ' +
+      'all four, because a counter is not seeded, which is the whole difference from the `random` ' +
+      'group. The last claim is `SPEC` §7.2\'s bolded retry clause: inside a `retry 2` test that ' +
+      'settles on attempt 3, the counter keeps advancing, so the server sees three distinct values ' +
+      'marked once each. Nothing in this repository had observed that — `retry-and-flake.tflw` ' +
+      'retries against a `random string 8` key, which is the opposite promise and passes either way.',
+    catches: 'a `unique("…")` that drops or mangles its prefix, that repeats within a run, that became seed-derived, or that replays a value across a retried test\'s attempts.',
+    blockedOn: null,
+  },
+  {
+    id: 'C82',
+    construct: 'generator:unique-email',
+    family: 'generator',
+    tier: 'api',
+    title: '`unique email` is `user<n>@example.test` off the **same** counter every other `unique` reads',
+    target: 'tests/.constructs/generator-known-answers.tflw, against `POST /v1/lifecycle/mark`',
+    evidence: { file: 'tests/.constructs/generator-known-answers.tflw', pattern: '^  let a = unique email$', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'The 32 sites this construct has in the suite all use it as an address and none of them says ' +
+      'what the address is. It is `user<n>@example.test`, and `<n>` is not this construct\'s own ' +
+      'sequence — the grader requires the first address to be `user{k+1}` where `k` is the last ' +
+      'index `C81`\'s test drew, so the plant reads `user3@example.test` **because the test above ' +
+      'it drew three prefixes**. That is the family\'s real known answer and it is stated nowhere ' +
+      'else: two `unique` values are distinct because of ordering across the whole run, not ' +
+      'because each construct has a private counter.',
+    catches: 'a `unique email` that repeats, that stops being a routable-looking address, or that acquires a per-construct counter and so stops being collision-safe against its siblings.',
+    blockedOn: null,
+  },
+  {
+    id: 'C83',
+    construct: 'generator:unique-number',
+    family: 'generator',
+    tier: 'api',
+    title: '`unique number` is the shared counter itself, unwrapped',
+    target: 'tests/.constructs/generator-known-answers.tflw, against `POST /v1/lifecycle/mark`',
+    evidence: { file: 'tests/.constructs/generator-known-answers.tflw', pattern: '^  let a = unique number$', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'This construct has **no site anywhere in the repository** — `M154g` step 1\'s discovery leg ' +
+      'found four like it, and the first move on those is to write a use, not a grader. So this ' +
+      'row and its plant are its entire evidence. Three draws are three consecutive integers, and ' +
+      'they continue directly from `C82`\'s last address index, which is the third of the four ' +
+      'observations that pin the counter as shared.',
+    catches: 'a `unique number` that repeats, that returns something other than digits, or that runs off a sequence of its own.',
+    blockedOn: null,
+  },
+  {
+    id: 'C84',
+    construct: 'generator:unique-uuid',
+    family: 'generator',
+    tier: 'api',
+    title: '`unique uuid` carries the counter in its last eight hex digits — the guarantee `random uuid` does not have',
+    target: 'tests/.constructs/generator-known-answers.tflw, against `POST /v1/lifecycle/mark`',
+    evidence: { file: 'tests/.constructs/generator-known-answers.tflw', pattern: '^  let a = unique uuid$', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'v4-shaped, and its trailing eight hex digits are the same run-wide counter — `…0000000c`, ' +
+      '`…0000000d`, `…0000000e` is 12, 13, 14. The grader parses them and requires consecutive ' +
+      'integers, which is what turns "distinct" from a probability into a guarantee. It also ' +
+      'requires that under a **different seed** the uuid changes while those eight digits do not: ' +
+      'the two halves of this construct have different sources and only one of them carries the ' +
+      'promise. That comparison against `C90` is the documented difference between the two uuid ' +
+      'constructs, and it existed nowhere. The counter also jumps by four rather than one between ' +
+      '`C83`\'s last draw and this one — three ticks consumed and discarded by `unique like`, which ' +
+      'is `M154g-07`\'s evidence.',
+    catches: 'a `unique uuid` whose tail stopped being the counter (silently downgrading a guarantee to 122 bits of luck), and one that is no longer v4-shaped.',
+    blockedOn: null,
+  },
+  {
+    id: 'C85',
+    construct: 'generator:random-number',
+    family: 'generator',
+    tier: 'api',
+    title: '`random number`/`random decimal` are inclusive, seed-reproducible, clock-independent, and refuse an empty range',
+    target: 'tests/.constructs/generator-known-answers.tflw + tests/.checkonly/invalid-literal-operand.tflw',
+    evidence: { file: 'tests/.constructs/generator-known-answers.tflw', pattern: '^  let n = random number 1 to 100$', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'Four claims. The value is inside its range, and `random number 7 to 7` pins **inclusivity** ' +
+      'from both ends, since an exclusive bound has nothing to return. Two runs at one seed repeat ' +
+      'it exactly; a different seed moves it; a different `--now` does not. And `random number 5 ' +
+      'to 1` / `random decimal 5 to 1` are refused in the source (`TF054`), which is `SPEC` §7.3\'s ' +
+      'generator-operand rule for this construct. The seed-sensitivity half is asserted on the ' +
+      '**decimal** only, deliberately: a 1-to-100 integer collides across seeds one run in a ' +
+      'hundred, and a gate that flakes at 1% is worse than one that asserts less.',
+    catches: 'an exclusive upper bound, a generator that ignores `--seed` or wrongly consults the run clock, and a silently-accepted empty range.',
+    blockedOn: null,
+  },
+  {
+    id: 'C86',
+    construct: 'generator:random-date',
+    family: 'generator',
+    tier: 'api',
+    title: '`random date` derives from the run **clock**, which `--seed` alone cannot reproduce',
+    target: 'tests/.constructs/generator-known-answers.tflw + tests/.checkonly/invalid-literal-operand.tflw',
+    evidence: { file: 'tests/.constructs/generator-known-answers.tflw', pattern: '^  let past = random date in past$', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'The row that needed a fourth run. `SPEC` §7.5 makes **two** promises — one run seed and one ' +
+      'run clock — and three runs cannot tell them apart, because a date derived purely from the ' +
+      'seed satisfies all of them. So the grader adds a run at the same seed and a `--now` one year ' +
+      'later, and requires `random date in past` to move by about a year while `random string 12` ' +
+      'does not. Alongside: `in past` and `in future` straddle the pinned instant, `between today - ' +
+      '10 days and today` lands inside its window, and both `between` refusals are stated in the ' +
+      'source — bounds reversed, and a quoted string that is never a date on any run.',
+    catches: 'a `random date` that ignores `--now`, that puts a "past" date in the future, that leaves `between` unbounded, or that accepts a reversed or string-typed bound.',
+    blockedOn: null,
+  },
+  {
+    id: 'C87',
+    construct: 'generator:random-of',
+    family: 'generator',
+    tier: 'api',
+    title: '`random of` picks from its inline list, and picks more than one of them',
+    target: 'tests/.constructs/generator-known-answers.tflw, against `POST /v1/lifecycle/mark`',
+    evidence: { file: 'tests/.constructs/generator-known-answers.tflw', pattern: '^  let a = random of "red", "blue", "green"$', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'Membership is the obvious half and it is satisfied by a generator that always returns the ' +
+      'head of the list — which one draw cannot exclude and which the construct\'s single other ' +
+      'site in this repository does not either. So the plant draws three times and the grader ' +
+      'requires more than one distinct element, plus the whole sequence repeating under one seed. ' +
+      'The three-draw assertion is sound rather than lucky because the seed is pinned: the ' +
+      'sequence is a fixed fact about seed 4242, not a coin flip.',
+    catches: 'a `random of` that returns something outside its list, and one stuck on a single element.',
+    blockedOn: null,
+  },
+  {
+    id: 'C88',
+    construct: 'generator:random-string',
+    family: 'generator',
+    tier: 'api',
+    title: '`random string N` is N alphanumerics, `0` is legal, `-3` is not — and it **replays** across a retry',
+    target: 'tests/.constructs/generator-known-answers.tflw + tests/.checkonly/invalid-literal-operand.tflw',
+    evidence: { file: 'tests/.constructs/generator-known-answers.tflw', pattern: '^  let s = random string 12$', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'The retry half is the one that matters and it is graded as a **pair with `C81`**, in one ' +
+      'test: inside a `retry 2` that settles on attempt 3, `random string 10` is marked three ' +
+      'times as one value while `unique("W3-Retry")` is marked once each as three. That is `SPEC` ' +
+      '§7.2 and §7.3\'s opposite promises observed together, and it is the fact a reader needs when ' +
+      'choosing which generator an idempotency key comes from. Alongside: twelve alphanumerics, ' +
+      'repeat-under-one-seed / move-under-another / ignore-the-clock, and the operand table\'s ' +
+      'asymmetry — `random string 0` is legal and yields `""` while `random string -3` is refused. ' +
+      'That silence is asserted inside a file that *does* report `TF054`, so "no error on `0`" ' +
+      'cannot be satisfied by a rule that fires nowhere.',
+    catches: 'a wrong length or alphabet, a generator that ignores the seed, a `0` that started erroring, a `-3` that stopped, and a `random` value that stopped replaying across a retried test\'s attempts.',
+    blockedOn: null,
+  },
+  {
+    id: 'C89',
+    construct: 'generator:random-like',
+    family: 'generator',
+    tier: 'api',
+    title: '`random like` fills `#` from digits and `?` from letters — two alphabets, not one',
+    target: 'tests/.constructs/generator-known-answers.tflw, against `POST /v1/lifecycle/mark`',
+    evidence: { file: 'tests/.constructs/generator-known-answers.tflw', pattern: '^  let a = random like "SKU-####-\\?\\?"$', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      '`SKU-####-??` must come back as four digits and two letters in those exact positions. The ' +
+      'discriminating part is that the two placeholders draw from **different** alphabets: an ' +
+      'implementation using one alphanumeric pool for both produces a string of the right length ' +
+      'and the right literal skeleton, and the construct\'s single other site in this repository ' +
+      'would not notice. Plus seed reproducibility, as for every member of this group.',
+    catches: 'a pattern filler that uses one alphabet for both placeholders, that drops the literal characters, or that ignores the seed.',
+    blockedOn: null,
+  },
+  {
+    id: 'C90',
+    construct: 'generator:random-uuid',
+    family: 'generator',
+    tier: 'api',
+    title: '`random uuid` is v4 all the way to its last digit — collisions allowed, and the seed reaches them',
+    target: 'tests/.constructs/generator-known-answers.tflw, against `POST /v1/lifecycle/mark`',
+    evidence: { file: 'tests/.constructs/generator-known-answers.tflw', pattern: '^  let a = random uuid$', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'The whole content of this row is its **contrast with `C84`**, and it is the reason the two ' +
+      'constructs exist separately. Both are v4-shaped, so shape alone cannot tell them apart and ' +
+      'the 26 sites this one has in the suite say nothing. Under a changed seed, `random uuid`\'s ' +
+      'trailing eight hex digits move and `unique uuid`\'s do not — one is entropy, the other is ' +
+      'the run-wide counter. It is also seed-reproducible, which a uuid drawn from the platform\'s ' +
+      'own entropy source would not be, and that is the observation that catches a `random uuid` ' +
+      'quietly reimplemented as `crypto.randomUUID()`.',
+    catches: 'a `random uuid` that bypasses the run seed (breaking `--seed` replay for every test that uses one), and one that acquired a counter and so silently became `unique uuid`.',
+    blockedOn: null,
+  },
+  {
+    id: 'C91',
+    construct: 'generator:random-password',
+    family: 'generator',
+    tier: 'api',
+    title: '`random password` carries four character classes at the length asked for, defaults to 12, and refuses 2',
+    target: 'tests/.constructs/generator-known-answers.tflw + tests/.checkonly/invalid-literal-operand.tflw',
+    evidence: { file: 'tests/.constructs/generator-known-answers.tflw', pattern: '^  let p = random password 16$', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'This construct has 29 sites here and every one of them posts the value to a registration or ' +
+      'login endpoint, so what they actually prove is that **apiV2\'s** password policy accepts it ' +
+      '— which would stay true of a generator that emitted one constant. The grader asserts the ' +
+      'value itself: sixteen characters when sixteen were asked for, twelve when nothing was, all ' +
+      'four classes (upper, lower, digit, symbol) present, seed-reproducible, and `random password ' +
+      '2` refused in the source because four classes cannot fit in two characters. The refusal and ' +
+      'the four classes are the same fact from two directions, which is why they are one row.',
+    catches: 'a password missing a character class (making the refusal rule arbitrary), a wrong or ignored length, a changed default, and a generator that stopped honouring the seed.',
+    blockedOn: null,
+  },
 ];
 
 /**
@@ -1786,10 +2019,26 @@ export const RATCHET = [
   // roster row must not be built on. **Rosters when the Tier 3 grader runs on something that
   // reports** — a condition, not a milestone number (`M131`).
   'matcher:was-made', 'matcher:has-no-input-handling-violations',
-  // --- generator (12) ---
-  'generator:unique-prefix', 'generator:unique-email', 'generator:unique-number', 'generator:unique-like',
-  'generator:unique-uuid', 'generator:random-number', 'generator:random-date', 'generator:random-of',
-  'generator:random-string', 'generator:random-like', 'generator:random-uuid', 'generator:random-password',
+  // --- generator (1) ---
+  // Eleven of the twelve left at `M154g` step 3 (`C81`-`C91`), on one plant and four runs of it.
+  // The family was scoped as this milestone's expensive end and it was, but not for the predicted
+  // reason: the cost was not building an observable, it was that **every claim here is about a
+  // relationship between values** — distinct from each other, identical across a seed, moving with
+  // a clock — and a `.tflw` file holds one run and cannot do arithmetic. The observable was the
+  // grader running the same plant four times.
+  //
+  // **`generator:unique-like` stays, and it is a finding rather than a turn that ran out.** The
+  // `unique` group's guarantee is a run-wide counter, and `unique like "ORD-######"` **advances
+  // that counter and then does not use it** — it fills its pattern from the seeded `random` stream
+  // instead, which the plant's counter arithmetic sees as a gap of exactly three between
+  // `unique number`'s last draw and `unique uuid`'s first. So its distinctness is 10^6-probabilistic
+  // rather than guaranteed, two runs at one seed produce the identical triple, and `SPEC` §7.2's
+  // bolded retry clause — *a retried attempt cannot use `unique(...)` to reproduce a value an
+  // earlier attempt already used* — is false for it. Rostering it would mean writing a row that
+  // states the measured behaviour while the manifest states the opposite, which is exactly the
+  // laundering `D722` exists to refuse. **Rosters when tflw's `unique like` embeds the counter, or
+  // when the manifest stops promising it does** — a condition, not a milestone number (`M154g-07`).
+  'generator:unique-like',
   // --- locator (0) ---
   // The first family to empty, at `M154d`'s locator harness. The header stays so the seven
   // families read in manifest order and an emptied one is visibly empty rather than absent.
@@ -1923,7 +2172,7 @@ export const RATCHET = [
  * the unrostered remainder, and a remainder can only be honest about a denominator that has itself
  * just been corrected upwards.
  */
-export const RATCHET_CEILING = 33;
+export const RATCHET_CEILING = 22;
 
 /**
  * `CONSTRUCTS.md` carries one row per plant and prose a human reads; this asserts their id sets

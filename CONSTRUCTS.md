@@ -188,6 +188,17 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C78` | `use` (`declaration:use`) | api | two claims, two instruments. The export returns `c78-51f2ab95`, a hash the DSL has no arithmetic to compute; and two files differing by **one** `use` line make the same bogus call, `TF037` on the one without and silence on the one with. The control is load-bearing | a `use` that imports nothing, a call that returns its argument, and a checker that "improves" `TF037` by peeking at a module it must not execute |
 | `C79` | `before` (`declaration:before`) | api | after a three-test run the server holds `c79file` at **1** and `c79each` at **3**; the three tests assert ordinals 1, 2, 3 off the bare hook's own capture. The fourth claim — `before file`'s scope sealed off — is a file that must **not** compile, graded as `TF030` | a `before file` that runs per test, a bare `before` that runs once per file, and a `before file` whose scope leaks into a test |
 | `C80` | `as` (`declaration:as`) | api | **no new fixture.** `tests/examples/sessions-explained.tflw` has been running the pair all along: the same `GET /orders/all` answers 200 in a test declared `as admin` and 401 in one with no clause. The grader requires both verdicts *and* that they came from the same request | an `as` clause that applies no credential, and one that authorizes every test in the file whether it opted in or not |
+| `C81` | `unique("prefix")` (`generator:unique-prefix`) | api | `W3-Widget-0/-1/-2` — the prefix verbatim, then three **consecutive** counter values, identical under two seeds and two run clocks. Plus `SPEC` §7.2's bolded retry clause: three attempts, three distinct values, one mark each | a `unique("…")` that drops its prefix, repeats, became seed-derived, or replays across a retried test's attempts |
+| `C82` | `unique email` (`generator:unique-email`) | api | `user<n>@example.test` where `<n>` continues **`C81`'s** sequence — the plant reads `user3@…` because the test above it drew three prefixes. One counter, shared by the whole group, and nothing in the suite said so | a `unique email` that repeats, stops being an address, or acquires a per-construct counter and so stops being collision-safe against its siblings |
+| `C83` | `unique number` (`generator:unique-number`) | api | the shared counter unwrapped, continuing from `C82`'s last index. **No other site in the repository** — this row and its plant are its entire evidence | a `unique number` that repeats, returns non-digits, or runs off a sequence of its own |
+| `C84` | `unique uuid` (`generator:unique-uuid`) | api | v4-shaped with the counter in its last eight hex digits — `…0000000c/d/e` parsed as 12, 13, 14. Under a changed seed the uuid moves and those digits do not. The counter also jumps by **four**, not one, which is `M154g-07`'s evidence | a `unique uuid` whose tail stopped being the counter, silently downgrading a guarantee to 122 bits of luck |
+| `C85` | `random number` (`generator:random-number`) | api | inclusive (pinned by `random number 7 to 7`, which an exclusive bound cannot answer at all), repeats under one seed, moves under another, ignores the clock, and refuses an empty range in both forms. Seed-sensitivity asserted on the **decimal**, because a 1-to-100 integer collides one run in a hundred | an exclusive upper bound, a generator that ignores `--seed` or consults the run clock, and a silently-accepted empty range |
+| `C86` | `random date` (`generator:random-date`) | api | the row that needed a **fourth run**: same seed, `--now` a year later, and `random date in past` must move by about a year while `random string 12` must not. `--seed` and `--now` are two promises and three runs cannot separate them | a `random date` that ignores `--now`, puts a "past" date in the future, leaves `between` unbounded, or accepts a reversed or string-typed bound |
+| `C87` | `random of` (`generator:random-of`) | api | membership is satisfied by a generator stuck on the head of the list, so the plant draws three times and the grader requires more than one element — sound rather than lucky because the seed is pinned | a `random of` that returns something outside its list, and one stuck on a single element |
+| `C88` | `random string` (`generator:random-string`) | api | graded as a **pair with `C81` in one retried test**: `random string 10` marked three times as one value, `unique("W3-Retry")` marked once each as three. Plus `0` legal / `-3` refused, with the silence asserted inside a file that *does* report `TF054` | a wrong length or alphabet, an ignored seed, a `0` that started erroring, and a `random` value that stopped replaying across a retry |
+| `C89` | `random like` (`generator:random-like`) | api | `SKU-####-??` → four digits and two letters. The discriminator is that the two placeholders draw from **different alphabets**: one shared alphanumeric pool gives the right length and the right skeleton | a pattern filler using one alphabet for both placeholders, dropping the literals, or ignoring the seed |
+| `C90` | `random uuid` (`generator:random-uuid`) | api | the whole row is its **contrast with `C84`** — both are v4-shaped, so shape cannot tell them apart and the 26 sites here say nothing. Under a changed seed this one's trailing digits move; `unique uuid`'s do not | a `random uuid` that bypasses the run seed (breaking `--seed` replay everywhere), and one that acquired a counter and so became `unique uuid` |
+| `C91` | `random password` (`generator:random-password`) | api | 16 when 16 was asked for, 12 by default, **all four character classes present**, seed-reproducible, and `random password 2` refused because four classes cannot fit in two characters. The refusal and the classes are one fact from two directions | a password missing a class (making the refusal arbitrary), a wrong or ignored length, a changed default, an ignored seed |
 
 ### `C1` — the soft assertion records a failure and keeps going
 
@@ -944,6 +955,74 @@ concurrency — so both settings leave it byte-identical. It needs a server-side
 apiV2: an endpoint that holds a request open and reports the high-water mark of simultaneous holders.
 That is real target surface, not a roster row, and the entry rosters when apiV2 has one.
 
+### `C81`–`C91` — the generator family, and the counter nobody had written down
+
+Eleven rows, one plant, and **four runs of it**. The family was scoped as this milestone's expensive
+end and it was the expensive end, but not for the predicted reason. The prediction was that each
+generator needed an observable built. What it actually needed was a *grader that runs the same file
+more than once*: every claim this family makes is about a **relationship between values** — distinct
+from each other, identical across a seed, moving with a clock — and a `.tflw` file holds exactly one
+run's values and cannot do arithmetic on them.
+
+    A  --seed 4242 --now 2026-07-06     the reference run
+    B  --seed 4242 --now 2026-07-06     same seed, same clock  ->  every `random` value repeats
+    C  --seed 9999 --now 2026-07-06     same clock, new seed   ->  the seeded values move
+    D  --seed 4242 --now 2027-07-06     same seed, new clock   ->  only the clock-derived ones move
+
+D is not redundant with C, and it is the run this repository most lacked. `SPEC` §7.5 makes **two**
+promises — one run seed and one run clock — and C alone cannot tell them apart, because a date
+derived purely from the seed satisfies it. D separates them: `random date in past` must move by about
+a year and `random string 12` must not.
+
+**The family's real known answer is a single shared counter, and it was invisible in 60-odd sites.**
+Measured on `fedora-box`:
+
+    unique("W3-Widget")  ->  W3-Widget-0        W3-Widget-1        W3-Widget-2
+    unique email         ->  user3@example.test user4@example.test user5@example.test
+    unique number        ->  6                  7                  8
+    unique uuid          ->  …9f770000000c      …9e0a0000000d      …333c0000000e
+
+`unique email` reads `user3@…` *because the test above it drew three prefixes*. One counter, read by
+every `unique` construct, restarting at 0 each run — so two `unique` values are distinct because of
+**ordering across the whole run**, not because each construct has a private sequence and not because
+of entropy. That also makes them identical across runs, which is the exact opposite of the `random`
+group and the reason the two are separate constructs at all. `unique uuid`'s trailing eight hex
+digits are that counter, which is what turns v4's usual low collision *probability* into a
+guarantee, and the pair `C84`/`C90` is the only place that difference is stated.
+
+`D739`'s cheap/expensive distinction lands here too, from the other side. `random password` has 29
+sites in this suite and every one of them posts the value to a registration endpoint — so what they
+prove is that **apiV2's** password policy accepts it, which would stay true of a generator emitting
+one constant. `unique email` has 32 sites and none says what an address looks like. `unique number`
+and `unique like` have **none**: `M154g` step 1's discovery leg found four constructs like that, and
+the first move on them is to write a use, not a grader.
+
+**The retry pair is the one to read if only one thing is read.** Inside a single `retry 2` test that
+settles on its third attempt, `unique("W3-Retry")` is marked three times as three distinct values
+while `random string 10` is marked three times as *one*. `SPEC` §7.2 and §7.3 promise exactly that,
+in opposite directions, and it decides which generator an idempotency key may come from — and
+nothing in this repository had ever observed either half, because `retry-and-flake.tflw` retries
+against a `random string 8` key and passes under both readings.
+
+**`generator:unique-like` is the twelfth and it stays on the ratchet — as a finding, not a turn that
+ran out.** The counter jumps 8 → 12 in the table above. The three missing ticks are the three
+`unique like` draws in the test between them: the construct **advances the counter and then does not
+use it**, filling its pattern from the seeded `random` stream instead. Two runs at one seed produce
+the identical triple, and `random like "SKU-####-??"` → `SKU-8562-VQ` shares its digits with
+`unique like "ORD-######"` → `ORD-856286`, which is one stream being read twice. So its distinctness
+is 10⁶-probabilistic rather than guaranteed, and `SPEC` §7.2's bolded clause — *a retried attempt
+cannot use `unique(...)` to reproduce a value an earlier attempt already used* — is false for it.
+Rostering it would mean writing a row that states the measured behaviour while the manifest states
+the opposite, which is the laundering `D722` exists to refuse. It rosters when tflw's `unique like`
+embeds the counter, or when the manifest stops promising it does (`M154g-07`).
+
+The check-time half of four rows lives in `tests/.checkonly/invalid-literal-operand.tflw`, which this
+step **extended rather than copied**: `SPEC` §7.3's generator-operand table had seven rows and four
+were already dogfooded there, so the remaining three went in beside them. A second file restating
+`random number 5 to 1` would have been two sites for one fact, drifting apart. Note what the gate
+asks of that file is a different sentence from what `C59` asks: `C59` asks *does `TF054` fire*, and
+these rows ask *does **this generator** refuse **this operand***.
+
 ### The three constructs this tier did **not** roster
 
 `config:probe:oversized`, `config:probe:traversal` and `matcher:has-no-input-handling-violations`
@@ -973,9 +1052,17 @@ ledger, and is marked `blocked-on:<row>` here — counted as *covered but curren
 known reason*, never deleted and never quietly moved to the ratchet. Without this convention, this
 ledger's successes and its bugs look identical.
 
-**None at present.** All fifty plants pass, measured on `fedora-box` 2026-08-25 — the first three
+**None at present.** All ninety plants pass, measured on `fedora-box` 2026-08-27 — 83 of them
+graded here and 7 by their own gates. `C1`–`C50` were last measured 2026-08-25 (the first three
 against tflw `5cba2da`, `C4`–`C12` against the `M154c` build that added the `declaration` family,
-`C13`–`C43` against `M154c`'s `main`, and `C44`–`C50` against `M154d`'s.
+`C13`–`C43` against `M154c`'s `main`, `C44`–`C50` against `M154d`'s); `C51`–`C91` on 2026-08-26/27
+across `M154f` and `M154g`'s four steps.
+
+This paragraph said *"All fifty plants pass"* through three milestones that added forty of them, and
+it is left visible here rather than quietly corrected because it is the same defect the ratchet
+exists to catch, one level up: a **count in prose that no gate reads**. `verify-construct-coverage.mjs`
+checks that `CONSTRUCTS.md` documents exactly the plants the manifest module defines, so a missing
+*row* is caught — a stale *sentence* is not. `M154g-03`'s class, on this side of the pair.
 
 `M154e-01` is likewise **not** a `blocked-on` marking, for the same reason `M154b-02` is not: `C48`
 is green. The defect is in the manifest's *description* of `cleanup`, not in `cleanup`, and the
