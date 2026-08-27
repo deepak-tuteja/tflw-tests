@@ -174,6 +174,12 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C64` | `matches schema "…" from "…"` (`matcher:matches-schema`) | api | the frozen payload validates against `SoftCheckAnswerDto` out of apiV2's live `/openapi.json`, and is **rejected** by `ProductResponseDto` in the same document — the half that a matcher validating nothing cannot fake | a schema matcher that reports success without validating |
 | `C65` | `is greater than` / `is less than` (`matcher:greater-less-than`) | api | all four assertions sit on the boundary of `body.price` = 42 — `> 41`, `not > 42`, `< 43`, `not < 42` — so `>=` masquerading as `>` is red in both directions; no existing use sits within one of its bound | a comparison that is inclusive where the language says strict |
 | `C66` | `has count <n>` (`matcher:has-count`) | api | `body.tags` has two elements and the negatives are one either side: `not has count 1` catches `length >= N`, `not has count 3` catches `length <= N` | a `has count` that is a lower bound, an upper bound, or not a count |
+| `C67` | `api` (`step:api`) | api | the server counts arrivals per label, so *one step, one request* is a number: `c67once` at exactly 2 for two steps, and the corpus at exactly the 5 marks it declares — all 1139 existing uses assert on the last response, which a duplicate request leaves identical | a step that fires twice, retries silently, or sends a preflight nobody asked for |
+| `C68` | `expect` (`step:expect`) | api | a file **meant to fail**: the test marks `c68before`, fails one `expect`, then marks `c68after`, and the known answer is that `c68after` never arrives. Re-run with that one assertion softened to `check`, it **does** arrive — so the absence is caused by `expect` and not by the assertion being false | `expect` degrading into `check`: recording its failure and carrying on |
+| `C69` | `capture` (`step:capture`) | api | two halves — the stated contract (a capture of a missing path fails the *step*, and the step after it never runs) and one the manifest does not state: a capture binds at capture time, proven by issuing another request between the capture and its use | a capture that binds `undefined` silently, and one that re-reads the response at use time |
+| `C70` | `let` (`step:let`) | api | `let tag = random string 8` used as a label twice: bound-once leaves the server holding **one** label marked twice, re-evaluated-at-use leaves **two** marked once, and every assertion about status is green either way. With a literal on the right-hand side the two implementations are indistinguishable | a `let` that is a macro over its source expression rather than a binding of its value |
+| `C71` | `log` (`step:log`) | api | graded from `results.json`, since `log` is never an assertion: `kind: log`, `level: warn`, `destination: both`, and a detail reading `c71 observed c71logged` — the captured `{subject}` resolved | a log line that never reaches the report, loses its level, or is stored unexpanded |
+| `C72` | `wait until api` (`step:wait`) | api | `c72settles` answers 503 twice then 200, and three independent readings agree on **3**: the plant's in-band `expect body.attempt equals 3`, the report's own `passed after 3 attempts`, and the server's attempt counter. The first two prove it re-issued; only the third proves it stopped | a `wait` that issues one request behind a long timeout, and one that keeps polling after its condition holds |
 
 ### `C1` — the soft assertion records a failure and keeps going
 
@@ -742,6 +748,80 @@ uses are in `tests/mixed/storefront.tflw`. A pair for it needs a page that issue
 path that is never requested, which is UI-tier work in a UI fixture; putting it in an API plant
 would be filing it where nobody looking for it would look. It stays on the ratchet with a reason
 rather than a turn.
+
+### `C67`–`C72` — the six workhorses, and the two things 3354 uses could not say
+
+`api` appears 1139 times in this repository, `expect` 1692, `capture` 523. Between them they are
+most of what this suite is written in, and before `M154g` step 2b not one of those uses was evidence
+about the construct itself.
+
+The reason is structural rather than careless. Every one of them is an *instrument*, pointed at
+something else. A test that creates a product and asserts its price is evidence about the price; it
+would read identically if `api` had issued the request twice, because an extra request leaves the
+final response untouched and the final response is all any assertion looks at. A test that captures
+an id and immediately spends it on a path would read identically if `capture` bound a lazy reference
+rather than a value, because nothing happens in between. This is `D739`'s distinction at its most
+extreme — the evidence was everywhere and the claim was nowhere — and it is why the ratchet said
+`step:api` with 1139 occurrences behind it.
+
+Two fixtures state what an ordinary test structurally cannot.
+
+**`tests/.constructs/step-workhorses.tflw` makes the observable a server-side counter.**
+`POST /v1/lifecycle/mark` answers with its own arrival count for that label — the same module `C4`
+and `C5` read — so *one step, one request* stops being an assumption and becomes an integer. The
+row that matters is not any single assertion but the corpus total: the file declares five marks, and
+the grader requires the server to have seen exactly five. Any step that issued a request nobody
+asked for lands there, and nowhere else.
+
+The same counter settles `let`. `let tag = random string 8`, then two marks against `c70-{tag}`: a
+binding leaves **one** label marked twice, a macro re-evaluated at each `{tag}` leaves **two** marked
+once, and both spellings pass every assertion about status. The generator is load-bearing rather than
+decorative — with a literal on the right-hand side the two implementations cannot be told apart —
+and the grader pins that by reading the `let` step's own report detail and requiring an 8-character
+random value. Weakening the plant to `let tag = "fixed8ch"` leaves the test green and turns the gate
+**red**, which was measured, not assumed.
+
+`wait` gets three readings of one number, which is the point of it: the plant asserts
+`body.attempt equals 3` in-band, the report's step detail says `passed after 3 attempts`, and the
+grader reads `attempts.c72settles == 3` off the server. The first two prove the wait **re-issued**.
+Only the third proves it **stopped** — a wait that kept polling its budget out after the condition
+held is green on both of the others.
+
+`log` is the weakest row here and is labelled as such. `log` is never an assertion and cannot fail,
+so like `C41`'s `screenshot` there is no verdict to grade; what is checked is the shape of the step
+in `results.json` — `level: warn`, `destination: both`, and a detail with `{subject}` resolved. It
+grades what tflw says it did.
+
+**`tests/.constructs/hard-stop-semantics.tflw` is meant to fail**, and its known answer is a label
+the server never sees. `expect` is specified to fail the test *immediately*; `check` is specified to
+record and continue, which is `C1`. Until now nothing in this repository could tell the two
+constructs apart — if `expect` had silently become `check`, `C1` would still be green and every one
+of the 1692 uses would still pass. The plant marks `c68before`, fails one `expect`, then marks
+`c68after`, and the claim is that `c68after` never arrives.
+
+An absence is a weak observation, so it is made twice. The leading mark rules out a test that never
+started. And the grader then re-runs the same file with that one assertion softened to `check` and
+requires `c68after` to **appear**. That control is step 2's instrument pointed the other way: there
+a mutation had to make passing assertions fail, here it has to make a missing arrival happen.
+
+The control earns its place. Renaming the plant's `c68after` mark to something else — a plausible
+edit that leaves the fixture looking fine — keeps the recall assertion green, because the label is
+still absent, *trivially*. Only the control catches it, and it does: measured 2026-08-27 on
+`fedora-box`, that mutation produced exactly one red, `with the same assertion written as check, the
+step after it DOES run (got absent)`.
+
+`capture` rides the same file for the same reason. The manifest states one half — "a capture that
+resolves to nothing fails the step rather than binding `undefined`" — and the plant grades it as a
+`capture` step with `ok: false` and a `c69after` that never arrives. The other half is not in the
+manifest at all: a capture binds *at capture time*. The third test captures, issues another request,
+and then asserts the first value, which a lazy read against "the response in scope" would answer
+`c69second`. None of the 523 existing captures can see it, because none of them issues a request
+between a capture and its use.
+
+**What is not claimed.** `api`'s optional clauses are not graded here. `without redirects` already
+has a real discriminating pair in `tests/api/catalog/http-protocol-corners.tflw` — the same product
+fetched with and without the clause, 200 against 302 plus its `location` — and `timeout <dur>` has
+no plant at all. The row states the contract those 1139 uses could not: one step, one request.
 
 ### The three constructs this tier did **not** roster
 
