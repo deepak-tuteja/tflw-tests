@@ -1,0 +1,21 @@
+# `M154g` step 2d / `C79`, the isolation half. **Never run — only `tflw check`ed.**
+#
+# `before file` is specified to run "in a scope isolated from every test", and that is the one
+# clause of the sentence which cannot be demonstrated by running anything: a file that reads a
+# `before file` binding from a test body does not get as far as a runtime, because `tflw check`
+# refuses it first. So the observation is the refusal, and the fixture is a file that must **not**
+# compile.
+#
+# `before-scopes.tflw` is the other side of the same coin and is what keeps this from being a
+# statement about `capture` instead of about `before`: the *bare* `before` there captures in
+# exactly this way and its binding is read by all three tests without complaint. Identical
+# construct, identical capture, one keyword apart — `TF030` here, clean there.
+
+before file
+  api POST /lifecycle/reset
+  expect status equals 200
+  capture body.count as fromFileScope
+
+@constructs @declarations
+test "reads a binding that `before file` made, which it must not be able to see"
+  expect {fromFileScope} equals 1

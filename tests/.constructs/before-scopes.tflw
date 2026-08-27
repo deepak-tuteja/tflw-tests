@@ -1,0 +1,49 @@
+# `M154g` step 2d / `C79` — `declaration:before`, whose manifest sentence is four claims in one
+# breath and whose 90-odd uses in this repository observe exactly one of them.
+#
+#   "setup — bare runs once per test and shares its scope, `file` runs once per file in a scope
+#    isolated from every test"
+#
+# Every existing `before file` here does the same thing: reset the database, log something in.
+# That proves setup ran *at least once* before *something*. It does not distinguish once-per-file
+# from once-per-test — a `before file` that ran before every test would reset the database more
+# often and leave every one of those files just as green — and it says nothing at all about scope.
+#
+# This file separates the two forms by making them count. Both hooks mark, and the arrival counter
+# answers with each label's running total:
+#
+#   `c79file`  marked in `before file` → must be **1** after a three-test run
+#   `c79each`  marked in bare `before` → must be **3**
+#
+# and the *shared scope* half rides along on the same request: bare `before` captures the count it
+# just caused, and each test asserts its own ordinal. That single line carries two claims — the
+# hook's binding is visible inside the test body (shared scope), and it was re-evaluated for this
+# test rather than reused (once per test). A `before` that ran once per file and shared its scope
+# would leave all three tests asserting 1 and only the first would pass.
+#
+# The fourth claim — `before file`'s scope being *isolated* from every test — cannot be written
+# here at all, because a file that states it does not compile. It lives in
+# `check-before-file-scope-isolated.tflw`, graded by `tflw check`.
+
+before file
+  api POST /lifecycle/reset
+  expect status equals 200
+  api POST /lifecycle/mark body { label: "c79file" }
+  expect status equals 200
+
+before
+  api POST /lifecycle/mark body { label: "c79each" }
+  expect status equals 200
+  capture body.count as nth
+
+@constructs @declarations
+test "bare `before` ran for this test, and its binding is visible here — this is arrival 1"
+  expect {nth} equals 1
+
+@constructs @declarations
+test "…and it ran again for this one, so the binding is 2 rather than a value reused from above"
+  expect {nth} equals 2
+
+@constructs @declarations
+test "…and a third time, which is what makes `c79each` 3 while `c79file` stays 1"
+  expect {nth} equals 3

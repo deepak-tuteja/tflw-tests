@@ -1,0 +1,21 @@
+# `M154g` step 2d / `C78`, claim half. **Never run — only `tflw check`ed.**
+#
+# The same unknown call as `check-unknown-call-without-use.tflw`, and the same expectation. The
+# only difference in the whole file is the `use` line below, which is the point: `TF037`'s own
+# definition says a JS helper module's exports "cannot be enumerated without importing it, and the
+# checker never executes the code it checks", so **one** `use` makes the negative undecidable for
+# the entire file and the diagnostic must go quiet — even though `c78 no such export` is, in fact,
+# not exported by the module named here.
+#
+# That last clause is what makes this a known answer rather than a tautology. The helper is real
+# and resolvable (`TF043` would fire otherwise); the call into it is genuinely bogus; and `tflw
+# check` is required to say nothing anyway. A checker that peeked at the module's exports — the
+# obvious "improvement" — would report `TF037` here and be **wrong** by the manifest, because it
+# would have had to execute the code to be right.
+
+use "../helpers/c78-digest.ts"
+
+@constructs @declarations
+test "calls a name that nothing in a closed world defines"
+  let v = c78 no such export("conformance")
+  expect {v} equals "c78-51f2ab95"

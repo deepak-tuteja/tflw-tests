@@ -26,14 +26,30 @@
 # exit status: a file that went red for the wrong reason and one that went red for the right reason
 # are indistinguishable from outside.
 
+# `M154g-05`, 2026-08-27. The three keys below were hard-coded string literals, and that made this
+# gate **pass exactly once per stack**. `flaky-widget` counts attempts per key and its service says
+# so in its own comment — "a key's counter never resets; tests use `random string 8` so each run
+# gets fresh keys" — so a second run of `verify-construct-acceptance.mjs` against the same stack got
+# 429 on attempt two and 201 on attempt three, and `C6`/`C7` went red claiming `expect request
+# fails` had passed against a 503 that never happened.
+#
+# It was invisible because `regression.mjs` restarts the stack before every phase and CI does the
+# same, so the only way to meet it is to re-run the gate by hand — which is exactly what someone
+# does while diagnosing something else. Three separate keys because each request needs its own
+# attempt #1: one shared key would walk 503 -> 429 -> 201 down the three steps.
+
 @constructs @requestlifecycle
 test "a 503 is a response, not a connection failure — this test MUST end red on its last line"
-  api POST /flaky-widget body { key: "c6-control-status" }
+  let statusKey = random string 8
+  let connectsKey = random string 8
+  let failsKey = random string 8
+
+  api POST /flaky-widget body { key: {statusKey} }
   expect status equals 503
 
-  api POST /flaky-widget body { key: "c6-control-connects" }
+  api POST /flaky-widget body { key: {connectsKey} }
   expect request connects
 
-  api POST /flaky-widget body { key: "c6-control-fails" }
+  api POST /flaky-widget body { key: {failsKey} }
   # The connection worked. This must NOT pass.
   expect request fails matching "503"

@@ -1,0 +1,48 @@
+# `M154g` step 2d / `C77` — `declaration:action`, and the half of its contract that 51 existing
+# `action` declarations in this repository do not observe.
+#
+# The manifest's sentence is two claims joined by a "so":
+#
+#   "the language's only unit of reuse; gets its own response scope, so a call never publishes its
+#    response to the caller (`FU-12`)"
+#
+# The first clause — reuse — is what every existing use demonstrates: declare `create order(...)`,
+# call it from four tests, read what it `give`s back. The second is a claim about the caller's
+# state **after** the call returns, and nothing here has ever looked. The ordinary shape of a test
+# is that a call is followed by an assertion on the value it gave, not by an assertion on `body`,
+# so an action that leaked its own response into the caller's scope would be invisible in all 51.
+#
+# The test below is deliberately written in the one order that can tell the two apart: the caller
+# makes a request, the action makes a *later* one, and then the caller asserts on `body` again. If
+# a call published its response, the last line reads the action's `c77inner` and goes red. `give`
+# being the only channel out is asserted in the same test, one line above, so the file states both
+# directions of `FU-12` rather than only the negative.
+#
+# Third reading, and the reason the negative means anything: the grader also requires the server to
+# have seen `c77inner` exactly once. Without it, an `action` that was never invoked at all — or one
+# whose body was skipped — passes the last line trivially, because `body` would still be the
+# caller's for the most boring possible reason.
+
+before file
+  api POST /lifecycle/reset
+  expect status equals 200
+
+action c77 marks inside(label)
+  api POST /lifecycle/mark body { label: "{label}" }
+  expect status equals 200
+  capture body.label as marked
+  give marked
+
+@constructs @declarations
+test "an action's response never becomes the caller's — `give` is the only channel out"
+  api POST /lifecycle/mark body { label: "c77outer" }
+  expect status equals 200
+  expect body.label equals "c77outer"
+
+  # The positive half: the value crosses, and it crosses by being `give`n.
+  let inner = c77 marks inside("c77inner")
+  expect {inner} equals "c77inner"
+
+  # `FU-12`. The action issued a strictly later request whose response echoed `c77inner`; if a call
+  # published its response to its caller, this reads `c77inner` and the test is red.
+  expect body.label equals "c77outer"

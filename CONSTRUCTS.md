@@ -184,6 +184,10 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C74` | `import` (`declaration:import`) | api | the imported file offers an `action` **and** a `test`, and both mark the server. After the run, `c74action` has arrived once and `c74importedtest` has never arrived — the action is what makes the absence mean *excluded* rather than *never loaded* | an `import` that registers the imported file's tests, and one that quietly imports nothing at all |
 | `C75` | `with each` (`declaration:with-each`) | api | three rows → **three** reported tests with three interpolated names, and three distinct labels at one each. Aimed at a wrong implementation that is not broken: rows looped inside one reported test pass every existing use here and differ only in the summary | a `with each` that reports its rows as one test, runs a row twice, or does not interpolate the row into the name |
 | `C76` | `@tag` (`declaration:tags`) | api | four runs of one file compared against the arrival counter — unfiltered, `--tag c76alpha`, `--tag c76beta`, `--tag c76alpha,c76beta` — and what carries the row is what is **absent** from runs 2 and 3. `--exclude-tag` is run too, and must come back `unknown flag` | a `--tag` that filters nothing, filters everything, or reads only the first tag on a declaration |
+| `C77` | `action` (`declaration:action`) | api | the caller marks, the action marks, and then the caller asserts on `body` again — and reads **its own** response, although the action's request was strictly later (`FU-12`). The action's mark is required too, so the negative cannot be satisfied by a body that never ran | an `action` whose response leaks into the caller's scope, and one whose body never executed |
+| `C78` | `use` (`declaration:use`) | api | two claims, two instruments. The export returns `c78-51f2ab95`, a hash the DSL has no arithmetic to compute; and two files differing by **one** `use` line make the same bogus call, `TF037` on the one without and silence on the one with. The control is load-bearing | a `use` that imports nothing, a call that returns its argument, and a checker that "improves" `TF037` by peeking at a module it must not execute |
+| `C79` | `before` (`declaration:before`) | api | after a three-test run the server holds `c79file` at **1** and `c79each` at **3**; the three tests assert ordinals 1, 2, 3 off the bare hook's own capture. The fourth claim — `before file`'s scope sealed off — is a file that must **not** compile, graded as `TF030` | a `before file` that runs per test, a bare `before` that runs once per file, and a `before file` whose scope leaks into a test |
+| `C80` | `as` (`declaration:as`) | api | **no new fixture.** `tests/examples/sessions-explained.tflw` has been running the pair all along: the same `GET /orders/all` answers 200 in a test declared `as admin` and 401 in one with no clause. The grader requires both verdicts *and* that they came from the same request | an `as` clause that applies no credential, and one that authorizes every test in the file whether it opted in or not |
 
 ### `C1` — the soft assertion records a failure and keeps going
 
@@ -895,6 +899,50 @@ why this row rides `hard-stop-semantics.tflw`, and costs no run of its own.
 "<file.csv>"` — the CSV spelling has real uses elsewhere and its own failure modes, and the table
 spelling is what these three rows observe. The four `@tag` runs cost four corpus executions of three
 one-step tests, which is the most expensive plant in this file and still under a second.
+
+### `C77`–`C80` — the four declarations about scope and identity, and the one that stays
+
+Step 2c took the declarations that decide *which tests exist*. These four decide *what a test can
+see* — its response scope, its callable names, its setup bindings, its credential — and they are the
+last rows in the `declaration` family with an observable. After them the family holds one entry.
+
+| construct | the claim nothing here observed | how it is graded |
+|---|---|---|
+| `action` | a call never publishes its response to the caller (`FU-12`) | run, then assert on `body` **after** the call |
+| `use` | one `use` makes `TF037` undecidable for the file | two files, one line apart, under `tflw check` |
+| `before` | bare runs per test and shares scope; `file` runs once and is sealed | arrival counts 3 vs 1, plus a file that must not compile |
+| `as` | the clause is what authorizes the request | a file that was **already running** the pair |
+
+**Two of these are graded by a refusal rather than a run, which is new in this tier.** `C78`'s second
+claim and `C79`'s fourth are both negatives about the *checker*, and the files that would state them
+by executing do not exist — they cannot, because they do not compile. So the observation is the
+diagnostic, and each ships with a control whose entire diff is one line. That control is not
+ceremony: "no `TF037` on the file with `use`" is satisfied exactly as well by a checker that never
+emits `TF037` at all, and "`TF030` on a test reading a `before file` binding" says nothing about
+`before` unless the identical capture from a *bare* `before` is accepted in the same breath. Each
+pair is one keyword apart for that reason.
+
+`C78`'s pair is worth one more sentence, because the obvious optimisation is the bug. The `use`d
+module is real, resolvable, and does **not** export the name the fixture calls — and `tflw check` is
+required to stay silent anyway. A checker that enumerated the module's exports would report `TF037`
+there and be *wrong* by the manifest, since it would have had to execute the code it was checking to
+be right. The quiet diagnostic is the correct answer to an undecidable question, not a missed one.
+
+**`C80` needed no fixture, and that is the finding rather than the shortcut.** The discriminating
+pair has been running in `tests/examples/sessions-explained.tflw` since long before this milestone:
+one `GET /orders/all` at 200 under `as admin`, the same `GET /orders/all` at 401 with no clause, same
+file, same run. `M154a` counted that file as evidence of `as` and never asked what it proved. This is
+`D722` in a single row — presence is not sufficiency — and it cuts the way that is easy to forget: a
+ratchet entry is a missing *sentence* at least as often as it is missing coverage. The grader adds
+the one thing the file leaves implicit, requiring both verdicts to have come from the **same**
+request, because two tests that merely disagree about a status code are not a pair.
+
+**What is left of `declaration` is one entry and a condition.** `declaration:concurrency` stays on
+the ratchet because `parallel` against `sequential` is a claim about two tests overlapping *in time*,
+and the arrival counter every plant in this tier leans on counts arrivals rather than their
+concurrency — so both settings leave it byte-identical. It needs a server-side overlap watermark in
+apiV2: an endpoint that holds a request open and reports the high-water mark of simultaneous holders.
+That is real target surface, not a roster row, and the entry rosters when apiV2 has one.
 
 ### The three constructs this tier did **not** roster
 

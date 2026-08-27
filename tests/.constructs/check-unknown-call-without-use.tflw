@@ -1,0 +1,14 @@
+# `M154g` step 2d / `C78`, control half. **Never run — only `tflw check`ed.**
+#
+# This file and `check-unknown-call-with-use.tflw` differ by exactly one line: that one has a `use`
+# and this one does not. Everything else, including the unknown call, is identical on purpose, so
+# the difference in what `tflw check` says about them is attributable to `use` and to nothing else.
+#
+# Here the world is closed — no `use`, no `import` — so `TF037` is decidable and must fire. This is
+# the control: without it, "the other file reports no `TF037`" is equally satisfied by a checker
+# that never reports `TF037` at all, which is the failure this whole tier exists to refuse.
+
+@constructs @declarations
+test "calls a name that nothing in a closed world defines"
+  let v = c78 no such export("conformance")
+  expect {v} equals "c78-51f2ab95"
