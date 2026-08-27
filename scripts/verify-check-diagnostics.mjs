@@ -64,6 +64,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveTflw } from './lib/tflw-bin.mjs';
+import { readSpec } from './lib/tflw-provenance.mjs';
+import { REFERENCE_ROSTERS, expandReferenceRosters, GRADERS } from './lib/constructs.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 // The *installed* tflw by default, which is the question this proof exists to answer: does the tflw
@@ -77,6 +79,26 @@ const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const CLI_ENTRY = resolveTflw('released', { label: 'verify-check-diagnostics' }).entry;
 
 let violations = 0;
+
+/**
+ * The codes this run actually saw a real `tflw check` emit.
+ *
+ * `M154g` step 1 (`D752`). `CONSTRUCTS.md`'s `C59` rosters the whole diagnostic family by citing
+ * this script, and a citation is only worth what the cited run did — not what its fixture tables
+ * declare. So the set is recorded at the point a fixture's output is matched, and the check at the
+ * bottom of this file compares it against the family as `tflw spec --json` reports it, both ways.
+ *
+ * Deliberately narrower than `dogfooded` below, which is keyed off the fixture tables. A fixture
+ * whose code stopped firing fails its own assertion first — but if one were ever added and never
+ * asserted, `dogfooded` would count it and this would not.
+ */
+const witnessed = new Set();
+const reports = (code, out) => {
+  const fired = out.includes(`[${code}]`);
+  if (fired) witnessed.add(code);
+  return fired;
+};
+
 function ok(label, condition, detail = '') {
   if (condition) {
     console.log(`✓ ${label}`);
@@ -249,7 +271,7 @@ const FILE_FIXTURES = {
 
 for (const [code, file] of Object.entries(FILE_FIXTURES)) {
   const out = runCheck([`tests/.checkonly/${file}`]);
-  ok(`${code}: tests/.checkonly/${file} reports ${code}`, out.includes(`[${code}]`), out.trim().split('\n')[0]);
+  ok(`${code}: tests/.checkonly/${file} reports ${code}`, reports(code, out), out.trim().split('\n')[0]);
 }
 
 // --- config-dialect codes: inline fixture content, own scratch tflw.config per case -------------
@@ -348,7 +370,7 @@ try {
   for (const [code, content] of Object.entries(CONFIG_FIXTURES)) {
     writeFileSync(path.join(scratchDir, 'tflw.config'), content);
     const out = runCheck([], { cwd: scratchDir });
-    ok(`${code}: a scratch tflw.config reports ${code}`, out.includes(`[${code}]`), out.trim().split('\n')[0]);
+    ok(`${code}: a scratch tflw.config reports ${code}`, reports(code, out), out.trim().split('\n')[0]);
   }
 } finally {
   rmSync(scratchDir, { recursive: true, force: true });
@@ -404,7 +426,7 @@ try {
     writeFileSync(path.join(envDir, 'tflw.config'), config);
     const out = runCheck([ENV_FIXTURE_FILE], { cwd: envDir });
     const fired = out.split('[TF051]').length - 1;
-    ok(`TF051: ${ENV_FIXTURE_FILE} under ${label} reports TF051`, out.includes('[TF051]'), out.trim().split('\n')[0]);
+    ok(`TF051: ${ENV_FIXTURE_FILE} under ${label} reports TF051`, reports('TF051', out), out.trim().split('\n')[0]);
     ok(`TF051: ${label} names the missing half`, out.includes(expect), `expected to see "${expect}"`);
     ok(`TF051: ${label} stays silent on the half it declares`, !out.includes(forbid), `unexpectedly saw "${forbid}"`);
     ok(`TF051: ${label} fires at exactly ${count} site(s)`, fired === count, `fired at ${fired} — a control regressed, or a site was added`);
@@ -465,7 +487,7 @@ try {
     const out = runCheck([ALLOWLIST_FIXTURE_FILE], { cwd: allowDir });
     ok(
       `${code}: ${ALLOWLIST_FIXTURE_FILE} under ${label} reports ${code}`,
-      out.includes(`[${code}]`),
+      reports(code, out),
       out.trim().split('\n')[0],
     );
     ok(
@@ -522,7 +544,7 @@ try {
     if (expect) {
       ok(
         `${expect}: ${AUTHZ_TARGET_FIXTURE_FILE} under ${label} reports ${expect}`,
-        out.includes(`[${expect}]`),
+        reports(expect, out),
         out.trim().split('\n')[0],
       );
     } else {
@@ -600,7 +622,7 @@ try {
   for (const { label, flags, expect, says } of PUBLIC_TARGET_FIXTURES) {
     const out = runCheck([...flags, PUBLIC_TARGET_FIXTURE_FILE], { cwd: publicDir });
     if (expect) {
-      ok(`${expect}: ${PUBLIC_TARGET_FIXTURE_FILE} with ${label} reports ${expect}`, out.includes(`[${expect}]`), out.trim().split('\n')[0]);
+      ok(`${expect}: ${PUBLIC_TARGET_FIXTURE_FILE} with ${label} reports ${expect}`, reports(expect, out), out.trim().split('\n')[0]);
       ok(`${expect}: names the repair`, out.includes(says), `expected to see "${says}"`);
     } else {
       // The half a missing-flag-only proof cannot express: a suite that *has* affirmed the target
@@ -680,6 +702,61 @@ ok(
       `        npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs`
     : '',
 );
+
+// --- the roster row that cites this script, checked in both directions (`D752`) -----------------
+//
+// `CONSTRUCTS.md`'s `C59` rosters tflw's whole diagnostic family — sixty-six constructs — by
+// pointing at this script instead of writing sixty-six rows (`D751`, `D763`). `D752` is what stops
+// that being a promise: the citation is checked from both ends, and against what this run actually
+// did rather than against the fixture tables' declarations.
+//
+// The two failure modes are opposite and both silent. A roster row can go on claiming a construct
+// after the proof for it stopped running — `M154f-01` is that exact case, one ledger over. And this
+// script can prove a code that no roster row claims, which is the direction that leaves a construct
+// counted as unrostered while a gate quietly grades it.
+//
+// The cross-check is worth more than it looks, because the two sides are read out of the bundle by
+// two different means: `assignedCodes()` greps the §17 manifest for `code:` literals, while the
+// family below comes from `tflw spec --json`'s emitted construct list. They must agree.
+const spec = readSpec(CLI_ENTRY);
+const SELF = 'scripts/verify-check-diagnostics.mjs';
+const citingRosters = REFERENCE_ROSTERS.filter((r) => GRADERS[r.grader]?.script === SELF);
+ok(
+  `${SELF} is cited by a roster row`,
+  citingRosters.length > 0,
+  'no row in REFERENCE_ROSTERS cites this script, but this script proves 66 constructs — either the row was deleted, ' +
+    'in which case the diagnostic family is being graded and counted as unrostered, or the citation moved and nobody ' +
+    'told the ledger',
+);
+
+const manifestById = new Map(spec.constructs.map((c) => [c.id, c]));
+const expansion = expandReferenceRosters(spec.constructs);
+for (const roster of citingRosters) {
+  // The construct id is opaque by tflw's own contract (`M154a`), so the code comes from the
+  // manifest entry's `name` field rather than from splitting the id apart.
+  const claimed = (expansion.get(roster.id) ?? []).map((id) => manifestById.get(id)?.name).filter(Boolean);
+
+  const unproven = claimed.filter((code) => !witnessed.has(code)).sort();
+  ok(
+    `${roster.id}: every construct it rosters by reference was proved by this run`,
+    claimed.length > 0 && unproven.length === 0,
+    claimed.length === 0
+      ? `the \`${roster.family}\` family expanded to nothing against this build's manifest — the row covers no construct at all`
+      : `${unproven.join(', ')} — rostered by ${roster.id}, and no fixture in this run saw a real \`tflw check\` emit it.\n` +
+          `    The roster claims a known answer that nothing here answered. Either the fixture stopped provoking the code\n` +
+          `    (it will have failed above too) or the code is proved only by an assertion about silence, which cannot carry\n` +
+          `    a roster row on its own.`,
+  );
+
+  const unclaimed = [...witnessed].filter((code) => !claimed.includes(code)).sort();
+  ok(
+    `${roster.id}: every code this run proved is inside the family it rosters`,
+    unclaimed.length === 0,
+    `${unclaimed.join(', ')} — proved here, and not in \`tflw spec --json\`'s \`${roster.family}\` family.\n` +
+      `    The two readings of the bundle disagree: \`assignedCodes()\` greps the §17 manifest, the roster expands the\n` +
+      `    emitted construct list. A code in one and not the other means tflw's manifest and its spec output have drifted.`,
+  );
+}
 
 if (violations > 0) {
   console.error(`\n${violations} check-diagnostic proof violation(s).`);

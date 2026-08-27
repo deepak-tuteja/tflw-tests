@@ -59,7 +59,18 @@ import { fileURLToPath } from 'node:url';
 
 import { resolveTflw } from './lib/tflw-bin.mjs';
 import { readSpec, siblingState, gradeProvenance, announceProvenance, GRADEABLE } from './lib/tflw-provenance.mjs';
-import { PLANTS, PLANT_IDS, COVERED_CONSTRUCTS, RATCHET, RATCHET_CEILING, GRADERS, assertLedgerIds } from './lib/constructs.mjs';
+import {
+  PLANTS,
+  PLANT_IDS,
+  COVERED_CONSTRUCTS,
+  REFERENCE_ROSTERS,
+  REFERENCE_ROSTER_IDS,
+  expandReferenceRosters,
+  RATCHET,
+  RATCHET_CEILING,
+  GRADERS,
+  assertLedgerIds,
+} from './lib/constructs.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -106,6 +117,49 @@ ok(`manifest: ${manifestIds.length} constructs from tflw ${spec.build.version} (
 
 const covered = new Set(COVERED_CONSTRUCTS);
 const ratchet = new Set(RATCHET);
+
+// --- the rosters that cite a gate instead of writing a row (`D751`, `D763`) ---
+//
+// A reference roster claims a whole family, and it claims it as a rule: the ids come from the
+// manifest read a few lines above, never from a list in this repository. So the three things that
+// could make the citation a lie are checked here, before a single id is added to `covered` — the
+// grader has to exist, it has to be *gated*, and the family has to be non-empty in the manifest that
+// this very run is grading against. The last one is the quiet failure: a family renamed upstream
+// leaves a row that reads like sixty-six graded constructs and covers nothing at all.
+const referenceCovered = expandReferenceRosters(spec.constructs);
+for (const roster of REFERENCE_ROSTERS) {
+  const ids = referenceCovered.get(roster.id) ?? [];
+  const grader = GRADERS[roster.grader];
+  if (!grader) {
+    fail(`${roster.id} cites grader \`${roster.grader}\`, which is not in GRADERS — the citation resolves to nothing`);
+    continue;
+  }
+  if (!grader.gated) {
+    fail(
+      `${roster.id} rosters the \`${roster.family}\` family by citing ${grader.script}, which nothing runs automatically.\n` +
+        '    A row pointing at a gate nobody runs reads as evidence while nothing evaluates it — `M137e-01` in a new ledger,\n' +
+        '    and worse here than for a plant, because one such row can carry a whole family.',
+    );
+    continue;
+  }
+  if (ids.length === 0) {
+    fail(
+      `${roster.id} rosters family \`${roster.family}\`, and \`tflw spec --json\` has no shipped construct in it.\n` +
+        '    Either the family was renamed in tflw — in which case this row now covers nothing while still reading as a\n' +
+        '    roster entry — or every one of its constructs was retired. Both need the row rewritten, not the count ignored.',
+    );
+    continue;
+  }
+  const alsoPlanted = ids.filter((id) => COVERED_CONSTRUCTS.includes(id));
+  if (alsoPlanted.length > 0) {
+    fail(
+      `${roster.id} covers ${alsoPlanted.join(', ')} by reference, and a plant row rosters the same construct by hand.\n` +
+        '    Two claims about one construct, which is how they drift apart. Pick the one that states the known answer.',
+    );
+  }
+  for (const id of ids) covered.add(id);
+  ok(`${roster.id} ${roster.family}:* — ${ids.length} construct(s) rostered by reference to ${grader.script} (${grader.phase})`);
+}
 
 // --- D730's three directions, each its own failure ----------------------------
 //
@@ -160,7 +214,7 @@ if (RATCHET.length > RATCHET_CEILING) {
 const dupes = RATCHET.filter((id, i) => RATCHET.indexOf(id) !== i);
 if (dupes.length > 0) fail(`the ratchet lists ${dupes.length} id(s) twice: ${[...new Set(dupes)].join(', ')} — its length is the pinned number, so a duplicate inflates it`);
 
-const bothWays = COVERED_CONSTRUCTS.filter((id) => ratchet.has(id));
+const bothWays = [...covered].filter((id) => ratchet.has(id));
 if (bothWays.length > 0) fail(`${bothWays.join(', ')} — rostered AND on the ratchet. A construct is graded or it is not.`);
 
 // --- every roster row, against the manifest and against the corpus ------------
@@ -220,7 +274,10 @@ if (!existsSync(ledgerPath)) {
 } else {
   const before = failures;
   assertLedgerIds(readFileSync(ledgerPath, 'utf8'), fail);
-  if (failures === before) ok(`CONSTRUCTS.md documents exactly the ${PLANT_IDS.length} plant(s) the manifest module defines`);
+  if (failures === before)
+    ok(
+      `CONSTRUCTS.md documents exactly the ${PLANT_IDS.length} plant(s) and ${REFERENCE_ROSTER_IDS.length} reference roster(s) the manifest module defines`,
+    );
 }
 
 // --- every plant has a gated grader (`M137e-01`'s shape, one ledger over) ------
@@ -234,7 +291,11 @@ for (const plant of PLANTS) {
 // --- the report --------------------------------------------------------------
 
 const pct = ((covered.size / manifestIds.length) * 100).toFixed(1);
-console.log(`\nrostered: ${covered.size}/${manifestIds.length} (${pct}%) · ratchet ${RATCHET.length}/${RATCHET_CEILING}`);
+const byReference = covered.size - COVERED_CONSTRUCTS.length;
+console.log(
+  `\nrostered: ${covered.size}/${manifestIds.length} (${pct}%) — ${COVERED_CONSTRUCTS.length} by plant, ` +
+    `${byReference} by reference (${REFERENCE_ROSTER_IDS.join(', ')}) · ratchet ${RATCHET.length}/${RATCHET_CEILING}`,
+);
 console.log(
   failures === 0
     ? '✓ construct coverage: every construct tflw ships is rostered or explicitly unrostered, and every roster row still carries its construct.'
