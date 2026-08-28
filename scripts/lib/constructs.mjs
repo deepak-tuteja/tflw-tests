@@ -1671,8 +1671,10 @@ export const PLANTS = [
   // counter that makes `unique number` meaningful is the one `unique email` and `unique uuid` are
   // also reading. Splitting that into eleven fixtures would have produced eleven weaker claims.
   //
-  // `generator:unique-like` is the twelfth and it stays on `RATCHET`; see `M154g-07` and the note
-  // on the ratchet's `generator` heading.
+  // `generator:unique-like` is the twelfth and it joined them in the `M154g-07` fix batch, as `C113`
+  // at the end of this list — it stayed on `RATCHET` through step 3 on a stated condition, and the
+  // condition was met by tflw rather than by this repository. It reads with them, not apart: its
+  // whole claim is which half of this family it belongs to.
   {
     id: 'C81',
     construct: 'generator:unique-prefix',
@@ -1751,8 +1753,12 @@ export const PLANTS = [
       'the two halves of this construct have different sources and only one of them carries the ' +
       'promise. That comparison against `C90` is the documented difference between the two uuid ' +
       'constructs, and it existed nowhere. The counter also jumps by four rather than one between ' +
-      '`C83`\'s last draw and this one — three ticks consumed and discarded by `unique like`, which ' +
-      'is `M154g-07`\'s evidence.',
+      '`C83`\'s last draw and this one, because the three `unique like` draws in between spend three ' +
+      'ticks of the same shared sequence (`SPEC` §7.5). That gap used to be `M154g-07`\'s evidence — ' +
+      'the ticks were spent and the values did not carry them — and it is now just the counter being ' +
+      'one counter. It is still asserted, because it is the only place the *sharing* is visible: ' +
+      'four constructs reading one sequence is what makes `C82`\'s and `C83`\'s continuations mean ' +
+      'anything, and an implementation that gave each construct its own would pass every other claim here.',
     catches: 'a `unique uuid` whose tail stopped being the counter (silently downgrading a guarantee to 122 bits of luck), and one that is no longer v4-shaped.',
     blockedOn: null,
   },
@@ -2404,6 +2410,45 @@ export const PLANTS = [
     catches: 'a `was made` that answers `true` for anything observed, one that ignores the `with method` clause, and one that counts the runner\'s own requests as the page\'s.',
     blockedOn: null,
   },
+  // --- the `M154g-07` fix batch: the ratchet's last entry, and the only one tflw cleared ---------
+  //
+  // This row exists because a *stated condition* was met by the repository the condition named.
+  // `generator:unique-like` sat on `RATCHET` from step 3 saying it would roster *when tflw's
+  // `unique like` embeds the counter, or when the manifest stops promising it does*, and tflw did
+  // the first. It reads beside `C81`-`C91` and shares their plant and their four runs, because its
+  // claim is not about a value at all — it is about **which half of the generator family this
+  // construct belongs to**, and that question only exists relative to the other eleven.
+  {
+    id: 'C113',
+    construct: 'generator:unique-like',
+    family: 'generator',
+    tier: 'api',
+    title: '`unique like` renders the counter, not a draw — it is in the `unique` half of the family and not the `random` half',
+    target: 'tests/.constructs/generator-known-answers.tflw, against `POST /v1/lifecycle/mark` and `/attempt`',
+    evidence: { file: 'tests/.constructs/generator-known-answers.tflw', pattern: '^  let a = unique like "ORD-######"$', min: 1 },
+    graders: ['acceptance'],
+    knownAnswer:
+      'Three claims, and the shape one is the weakest of them. `#` fills with digits and the three ' +
+      'draws are distinct — but a sample of three cannot tell a guarantee from a high probability, ' +
+      'and for a year this construct passed exactly that assertion while having no guarantee at ' +
+      'all. So the row is graded on the two things a sample cannot fake. First, the value is ' +
+      '**identical under both seeds and both run clocks**, which places it with `C81`-`C84` and ' +
+      'against `C89`: `random like` shares this construct\'s entire pattern language and moves with ' +
+      'the seed, so *seed-independence is the only thing that tells the two constructs apart*, and ' +
+      'nothing here or in tflw asserted it. It is also the claim that discriminates, measured: this ' +
+      'row scored **3/4 against the pre-fix build and 4/4 after**, and seed-independence is the one ' +
+      'that moved. Second, `SPEC` §7.2\'s **bolded** retry clause — a retried attempt cannot ' +
+      'reproduce a value an earlier attempt used — is read off the same `retry 2` test that grades ' +
+      '`C81` and `C88`: three distinct values, marked once each, where `random string` beside them ' +
+      'is one value marked three times. **That mark was written at step 3 and read for the first ' +
+      'time here, and reading it corrected the record.** `M154g-07` twice asserted the clause was ' +
+      '*false* for this construct and it never was: the old build keyed its RNG on the shared ' +
+      'counter, which advances across a retried test\'s attempts, so the three values already ' +
+      'differed. The claim was inferred from a mechanism theory that was itself wrong, while the ' +
+      'instrument that would have settled it sat unread in this file.',
+    catches: 'a `unique like` whose distinctness went back to being probabilistic (it would move under a second seed, since the only way to draw is to consult the RNG), one that replays a value across a retried test\'s attempts, and one that silently wrapped its pattern instead of refusing to overflow it.',
+    blockedOn: null,
+  },
 ];
 
 /**
@@ -2547,7 +2592,7 @@ export const RATCHET = [
   // `security-acceptance-gate`'s 1.70-1.99 s, measured live. `D765` puts the grader in `regression.mjs`
   // as the `input-acceptance` phase, which is `M137e-01`'s remedy (`D493`) for the third time rather
   // than a new mechanism. `C109`.
-  // --- generator (1) ---
+  // --- generator (0) ---
   // Eleven of the twelve left at `M154g` step 3 (`C81`-`C91`), on one plant and four runs of it.
   // The family was scoped as this milestone's expensive end and it was, but not for the predicted
   // reason: the cost was not building an observable, it was that **every claim here is about a
@@ -2555,18 +2600,13 @@ export const RATCHET = [
   // a clock — and a `.tflw` file holds one run and cannot do arithmetic. The observable was the
   // grader running the same plant four times.
   //
-  // **`generator:unique-like` stays, and it is a finding rather than a turn that ran out.** The
-  // `unique` group's guarantee is a run-wide counter, and `unique like "ORD-######"` **advances
-  // that counter and then does not use it** — it fills its pattern from the seeded `random` stream
-  // instead, which the plant's counter arithmetic sees as a gap of exactly three between
-  // `unique number`'s last draw and `unique uuid`'s first. So its distinctness is 10^6-probabilistic
-  // rather than guaranteed, two runs at one seed produce the identical triple, and `SPEC` §7.2's
-  // bolded retry clause — *a retried attempt cannot use `unique(...)` to reproduce a value an
-  // earlier attempt already used* — is false for it. Rostering it would mean writing a row that
-  // states the measured behaviour while the manifest states the opposite, which is exactly the
-  // laundering `D722` exists to refuse. **Rosters when tflw's `unique like` embeds the counter, or
-  // when the manifest stops promising it does** — a condition, not a milestone number (`M154g-07`).
-  'generator:unique-like',
+  // **The twelfth, `generator:unique-like`, left in the `M154g-07` fix batch (`C113`), and it is
+  // the only entry in this list's history that left because the *language* changed rather than
+  // because this repository finally wrote down what it already had.** It sat here on a stated
+  // condition — *rosters when tflw's `unique like` embeds the counter, or when the manifest stops
+  // promising it does* — and the condition was met by the first of those. `D739`'s distinction is
+  // at its sharpest in the pair: the construct was exercised the whole time, and every exercise of
+  // it passed against an implementation with no guarantee behind it.
   // --- locator (0) ---
   // The first family to empty, at `M154d`'s locator harness. The header stays so the seven
   // families read in manifest order and an emptied one is visibly empty rather than absent.
@@ -2640,10 +2680,17 @@ export const RATCHET = [
  * provenance**, because a `D`-number in a sentence reads as already-checked and for two milestones
  * that is exactly what it bought.
  *
- * The one entry left is `generator:unique-like`, and it is a real floor: its condition names a
- * requirement, cites a defect that reproduces (`M154g-07`), and is blocked on a repository this
- * milestone does not own. Rostering it would state the measured behaviour while the manifest
- * promises the opposite — the laundering `D722` refuses.
+ * **`1` -> `0` in the `M154g-07` fix batch, and the ratchet is empty.** Step 5 called the last entry
+ * a real floor and it was one — its condition named a requirement, cited a defect that reproduced,
+ * and was blocked on a repository this milestone does not own. What cleared it is the thing a
+ * stated condition is *for*: tflw's `unique like` now embeds the counter, so the condition was met
+ * by the sibling and the row followed (`C113`). No entry here was ever waived, re-worded or aged
+ * out. That is the whole case for `D730`/`D740`'s shape — an entry whose exit is a sentence someone
+ * else can satisfy is a debt with an address, and the four that left at step 5 for a bad citation
+ * are the counter-example that made `D764` necessary.
+ *
+ * An empty ratchet is not a finished one. `RATCHET_CEILING` at `0` means the next construct that
+ * cannot be rostered has to *raise* it, which is exactly the edit this pin exists to make loud.
  *
  * **`41` -> `37` at `M154g` step 2c: the four declarations that decide which tests exist.** `test`,
  * `import`, `with each` and `@tag` answer, before a step runs, *which tests are there and which of
@@ -2736,7 +2783,7 @@ export const RATCHET = [
  * the unrostered remainder, and a remainder can only be honest about a denominator that has itself
  * just been corrected upwards.
  */
-export const RATCHET_CEILING = 1;
+export const RATCHET_CEILING = 0;
 
 /**
  * `CONSTRUCTS.md` carries one row per plant and prose a human reads; this asserts their id sets

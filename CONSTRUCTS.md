@@ -220,6 +220,7 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C110` | `probe oversized` (`config:probe:oversized`) | security | a granted/withheld pair where **nothing else moves**: granted, `sec/oversized-input-accepted` is applicable and fires twice on one body at two leaves; withheld, the identical assertion lists it not-applicable and **names the missing word**. The reason string is graded, not the count — an opt-in read and never sent looks exactly like a correct withheld half | an opt-in honoured where it was not granted, and one accepted in the config and never sent — both leave the assertion green |
 | `C111` | `probe traversal` (`config:probe:traversal`) | security | the same pair, plus the thing that makes it a different row: **where the grant lives was measured**. Through the sidecar the rule reported applicable, 9 probes sent, 9 answered, no violation — nginx normalises the payload away first, so the app is vulnerable and its deployment is not. The grant sits on `plaintext`, where it fires (`V11`); the sidecar env is the withheld half | a probe class granted where the deployment eats it — indistinguishable from a clean target — and a traversal rule that stands down without saying why |
 | `C112` | `was made` (`matcher:was-made`) | ui | four known answers off one page load: the URL the page fetched **was** made, the same URL under a method it never used was **not**, a URL it never touched was **not**, and the `/health` request **tflw itself** sent was **not** — that last one is what says the observation set is the browser's log rather than the runner's. Two `check` rows are the same assertions with `not` dropped and must fail in the same run | a `was made` that answers `true` for anything observed, one that ignores the `with method` clause, and one that counts the runner's own requests as the page's |
+| `C113` | `unique like "ORD-######"` (`generator:unique-like`) | api | the ratchet's last entry, cleared by tflw rather than by this repository. Three claims, and the shape one is the weakest: `#` fills with digits and three draws are distinct — which is what this plant asserted for a year while the construct had **no guarantee at all**. So the row is graded on what a sample cannot fake: the value is **identical under a second seed and a moved clock**, which is the only thing separating it from `random like` (same pattern language, same regex, moves with the seed); and inside the `retry 2` test it yields three distinct values where `random string` yields one three times. Measured: **3/4 against the pre-fix build, 4/4 after**, and seed-independence is the claim that moved | a `unique like` whose distinctness went back to being probabilistic (it would move under a second seed, since the only way to draw is to consult the RNG), one that replays a value across a retried test's attempts, and one that silently wrapped its pattern instead of refusing to overflow it |
 
 ### `C1` — the soft assertion records a failure and keeps going
 
@@ -1246,6 +1247,63 @@ with the negation dropped: they must fail, in that same run, so the wrong answer
 reachable rather than assumed to be — the control step 2 established and every step since has paid
 for.
 
+### `C113` — the last ratchet entry, and the only one another repository cleared
+
+`generator:unique-like` was the twelfth member of a family whose other eleven rostered together in
+step 3, and it stayed behind on a condition: *rosters when tflw's `unique like` embeds the counter,
+or when the manifest stops promising it does*. On 2026-08-28 tflw did the first. The row follows,
+and the ratchet is **empty** — `RATCHET_CEILING` is `0`.
+
+**That is the case for writing conditions instead of dates.** Four of the five entries alive at step
+5 died of a bad citation, which is why `D764` exists; this one is the other outcome. Its condition
+named a requirement rather than an address, the requirement was legible to somebody who did not
+write it, and when the sibling repository met it there was no judgement left to make. An entry whose
+exit is a sentence someone else can satisfy is a debt with an address. Nothing here was waived,
+re-worded, or aged out.
+
+**What this plant did while it waited was find the defect.** The eleven-row grader reads the counter
+off the constructs either side of `unique like` and asserts the gap — 8 to 12, three ticks for three
+draws. Those ticks were real and the values did not carry them: the construct advanced the shared
+counter and then spent it as a *sub-seed*, filling its pattern from the resulting stream. So its
+distinctness was 10⁶-probabilistic on a construct whose entire purpose is keys under a uniqueness
+constraint, and `SPEC` §7.2's bolded retry clause was false for it. Filed as `M154g-07`, fixed in
+tflw, and the ledger row's own account of the mechanism was corrected in the same pass — it said the
+counter was *discarded*, and it was spent.
+
+**The row is not graded on the thing the plant asserts in-band.** `expect {a} not equals {b}` across
+three draws is the assertion that passed for a year against an implementation with no guarantee
+behind it, and it would pass again tomorrow against the same one: a sample of three cannot tell a
+guarantee from a high probability. `D722` in its sharpest form yet — not *presence is not evidence*
+but **a passing assertion is not evidence**, when what it samples is the thing in question.
+
+So the two graded claims are both invisible to a single run. The first is **seed-independence**:
+`unique like` must return the identical value under a second seed and a moved clock, which places it
+with `C81`–`C84` and against `C89`. That matters more than it sounds, because `random like` shares
+this construct's pattern language, its shape, and the grader's own regex — *which run moves the
+value is the only thing that tells the two constructs apart*, and nothing in either repository
+asserted it. It is also the claim that caught the fix's own first draft, which keyed the pattern
+permutation on the run seed and would have made one member of a family of five move under `--seed`.
+The second is the **retry** clause, read off the same `retry 2` test that grades `C81` and `C88`:
+three distinct values marked once each, where `random string` beside them is one value marked three
+times.
+
+**That mark was written at step 3 and read for the first time here, and reading it corrected the
+record.** `M154g-07` asserted twice — in the ledger row and in this plant's own header — that
+`SPEC` §7.2's bolded retry clause was *false* for `unique like`. It never was. The claim followed
+from the mechanism theory the row also got wrong: if the pattern came from the test's replayed
+`random` stream, a retried attempt would reproduce the earlier value, and the clause would fail. But
+the old build keyed its RNG on `uniqueSeq.next()` — the *shared* counter, which advances across a
+retried test's attempts — so the three values already differed. The construct was probabilistic and
+seed-dependent; it was never a retry hazard.
+
+The instrument that would have settled it was **built here at step 3 and never consulted**:
+`g3r|unique-like|{el}` has been posted by every run of this plant since, and no grader read the
+slot. So the same file simultaneously carried a claim and the measurement refuting it, for two
+milestones. `D722` says presence is not evidence; this is the sharper form — *an observation nobody
+reads is not evidence either*, and it is worse than an absent one, because the file looks like it
+already checked. Two lines of grader is the whole cost, and the reason it went unwritten is that
+the claim it would have tested was one nobody doubted.
+
 ## Blocked plants (`D734`)
 
 A plant that goes red because tflw is genuinely broken **keeps its row**, gets a row in tflw's
@@ -1253,8 +1311,7 @@ ledger, and is marked `blocked-on:<row>` here — counted as *covered but curren
 known reason*, never deleted and never quietly moved to the ratchet. Without this convention, this
 ledger's successes and its bugs look identical.
 
-**None at present.** All one hundred and eleven plants pass — 101 of them graded here and 10 by their own gates.
-`C1`–`C50` were last measured 2026-08-25 (the first three against tflw `5cba2da`, `C4`–`C12` against
+**None at present**, and every plant passes. `C1`–`C50` were last measured 2026-08-25 (the first three against tflw `5cba2da`, `C4`–`C12` against
 the `M154c` build that added the `declaration` family, `C13`–`C43` against `M154c`'s `main`,
 `C44`–`C50` against `M154d`'s); `C51`–`C91` on `fedora-box` 2026-08-26/27 across `M154f` and
 `M154g`'s first three steps; `C92`–`C96` on 2026-08-28, and those five need no stack at all;
@@ -1263,11 +1320,16 @@ the three Tier 3 rows through `verify-input-acceptance.mjs` (7 ledger rows, 2 ap
 1 `TF067` probe, 0 failures, `D752` index resolving both ways) and `C112` at recall 4/4, precision
 3/3.
 
-This paragraph said *"All fifty plants pass"* through three milestones that added forty of them, and
-it is left visible here rather than quietly corrected because it is the same defect the ratchet
-exists to catch, one level up: a **count in prose that no gate reads**. `verify-construct-coverage.mjs`
-checks that `CONSTRUCTS.md` documents exactly the plants the manifest module defines, so a missing
-*row* is caught — a stale *sentence* is not. `M154g-03`'s class, on this side of the pair.
+This paragraph carried a **count** for four milestones — *"All fifty plants pass"* through three that
+added forty of them, then a corrected number that was stale again within a step. The count is now
+gone rather than corrected a third time, which is `D767`: a number in prose that no gate reads is a
+copy with no guard, so the repair is to stop asserting it, not to re-derive it. The plant total is
+`verify-construct-coverage.mjs`'s to state, and it states it on every run.
+
+The stale sentence is worth one line of memory even so, because it is the same defect the ratchet
+exists to catch, one level up. That gate checks `CONSTRUCTS.md` documents exactly the plants the
+manifest module defines, so a missing *row* is caught — a stale *sentence* was not. `M154g-03`'s
+class, on this side of the pair.
 
 `M154e-01` is likewise **not** a `blocked-on` marking, for the same reason `M154b-02` is not: `C48`
 is green. The defect is in the manifest's *description* of `cleanup`, not in `cleanup`, and the

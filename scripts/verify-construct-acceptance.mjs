@@ -1969,7 +1969,7 @@ if (wanted('C80')) {
 // clock — and C alone cannot tell them apart, because a `random date` derived purely from the seed
 // would satisfy it. D is the run that separates them: under it `random date in past` must move and
 // `random string 12` must not.
-const GENERATOR_IDS = ['C81', 'C82', 'C83', 'C84', 'C85', 'C86', 'C87', 'C88', 'C89', 'C90', 'C91'];
+const GENERATOR_IDS = ['C81', 'C82', 'C83', 'C84', 'C85', 'C86', 'C87', 'C88', 'C89', 'C90', 'C91', 'C113'];
 
 if (GENERATOR_IDS.some((id) => wanted(id))) {
   const plant = plantFor('generator:unique-prefix');
@@ -2061,7 +2061,7 @@ if (GENERATOR_IDS.some((id) => wanted(id))) {
     const uIdx = uuids.map(tail);
     recall('C84', uuids.every((s) => V4.test(String(s))), `v4-shaped (${uuids.join(', ')})`);
     recall('C84', distinct(uuids) && consecutive(uIdx), `and the last eight hex digits are the counter, not entropy — ${uuids.map((s) => String(s).slice(-8)).join(', ')} is ${uIdx.join(', ')}. That is what makes distinctness a guarantee instead of 122 bits of luck, and it is the whole difference from \`random uuid\``);
-    recall('C84', uIdx[0] - nIdx[2] === 4, `the counter jumped ${nIdx[2]} -> ${uIdx[0]}, so **three ticks went missing** between the two tests — the three \`unique like\` draws, which advance the counter and then fill their pattern from the seeded stream instead. That gap is \`M154g-07\`'s evidence and the reason \`generator:unique-like\` has no row here`);
+    recall('C84', uIdx[0] - nIdx[2] === 4, `the counter jumped ${nIdx[2]} -> ${uIdx[0]} across the intervening test, which spent three ticks of the **same** sequence on its three \`unique like\` draws (\`SPEC\` §7.5). Until \`M154g-07\` was fixed this gap was the defect's evidence — the ticks were spent and the values did not carry them — and it is now the one place the *sharing* is visible: four constructs reading one counter is what makes \`C82\`'s and \`C83\`'s continuations mean anything, and a build that gave each construct its own sequence would pass every other claim in this block`);
     recall('C84', same('unique-uuid#1', C) === false && tail(C.single['unique-uuid#1']) === uIdx[0], `under a different seed the uuid changes but its counter digits do not (${C.single['unique-uuid#1']}) — the two halves of this construct have different sources, and only the counter half carries the guarantee`);
     precision('C84', passed('carries the counter in its last eight'), `the plant's own test for it passed`);
 
@@ -2093,6 +2093,19 @@ if (GENERATOR_IDS.some((id) => wanted(id))) {
     recall('C87', new Set(picks).size > 1, `and the three draws are not one element repeated (${picks.join(', ')}) — the shape a generator that always returns the head would produce, and the one a single draw cannot exclude`);
     recall('C87', [1, 2, 3].every((i) => same(`random-of#${i}`, B)), `the sequence repeats under the same seed (${[1, 2, 3].map((i) => B.single[`random-of#${i}`]).join(', ')})`);
     precision('C87', passed('picks from the list'), `the plant's own test for it passed`);
+
+    // --- `C113`: `unique like`, and the half of the family it belongs to -----------------------
+    //
+    // Graded here rather than beside `C89`'s `random like` on purpose: the two constructs share a
+    // pattern language, a shape and a regex, and the ONLY thing that separates them is which of
+    // these four runs moves the value. Read them together or the claim is not made.
+    const likes = trio('unique-like');
+    recall('C113', likes.every((s) => /^ORD-\d{6}$/.test(String(s))), `\`#\` filled with digits and the literal survives (${likes.join(', ')})`);
+    recall('C113', distinct(likes), `three draws, three values (${likes.join(', ')}) — the weakest claim in this row, and the one that passed for a year against an implementation with no guarantee behind it. A sample of three cannot tell a guarantee from a high probability, which is why the two claims below exist`);
+    recall('C113', same('unique-like#1', B) && same('unique-like#1', C) && same('unique-like#1', D), `and it is **identical under a second seed and a moved clock** (${B.single['unique-like#1']} / ${C.single['unique-like#1']} / ${D.single['unique-like#1']}), which places it with \`C81\`-\`C84\` and not with \`C89\`. That is the whole discriminator: \`random like\` on the same pattern moved to ${C.single['random-like#1']} under the same seed change. Before \`M154g-07\` this value moved too, because the only way to draw is to consult the RNG`);
+    const retriedLike = A.retried['unique-like'] ?? [];
+    recall('C113', retriedLike.length === 3 && retriedLike.every((e) => e.count === 1), `and across a retried test's three attempts it advances rather than replaying — three distinct values, each marked once (${JSON.stringify(retriedLike.map((e) => e.value))}), against \`C88\`'s one value marked three times. **This mark was written at step 3 and never read until now**, and reading it corrects the record: \`M154g-07\` claimed twice that \`SPEC\` §7.2's bolded retry clause was *false* for this construct, and it never was. The claim followed from a wrong mechanism theory — if the pattern came from the test's replayed \`random\` stream it would follow — but the old build keyed on \`uniqueSeq.next()\`, so the counter advanced across attempts and the three values already differed. The instrument that would have settled it was built here and nothing consulted it`);
+    precision('C113', passed('fills `#` with digits'), `the plant's own test for it passed`);
 
     const s12 = String(v['random-string#1']);
     recall('C88', /^[A-Za-z0-9]{12}$/.test(s12), `\`random string 12\` is twelve alphanumerics (${s12})`);
