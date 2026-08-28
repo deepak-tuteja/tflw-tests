@@ -1,0 +1,370 @@
+# `M154g` step 3 / `C81`-`C91` — the known-answer plant for eleven of the twelve generators.
+#
+# **This file is meant to pass.**
+#
+# ## Why this family was left for last, and why it turned out not to be the expensive one
+#
+# `unique …` and `random …` are the one place in the language where **presence proves least**. The
+# corpus is not thin — `unique email` has 32 sites, `random password` 29, `random uuid` 26 — and
+# every one of them spends the value on a request and then asserts something about the *response*.
+# A generator that returned the same constant on every call would pass almost all of them: the
+# product still gets created, the login still succeeds, the assertion still reads a price. The two
+# constructs with no site at all (`unique number`, `unique like`) are the same defect at zero.
+#
+# So this plant asserts on **the value itself**, which nothing else here does, and it is paired with
+# a grader that does the three things a `.tflw` file structurally cannot:
+#
+#   1. **Read the values back.** Every draw below is base64-encoded and marked as a label on
+#      `POST /v1/lifecycle/mark`, so `GET /v1/lifecycle/counts` hands the grader the exact strings
+#      this run produced. base64 for every slot uniformly rather than only where it is needed:
+#      `random password` guarantees four character classes and may contain a quote or a backslash,
+#      and a label that sometimes needs escaping is a class of bug rather than a case.
+#   2. **Compare two runs.** "Seed-reproducible" is a claim about a *pair* of runs and no single run
+#      can state it. The grader runs this file three times — twice under one seed, once under
+#      another — and asserts every `random` value repeats under the first pair and changes under the
+#      second.
+#   3. **Do arithmetic on the values.** The `unique` group's guarantee is a **counter**, and the
+#      counter is the fact this repository most needed written down (see below). A `.tflw` file
+#      cannot subtract two substrings; the grader can.
+#
+# ## The shared counter, which is the family's real known answer
+#
+# Measured on `fedora-box`, seed 4242 and seed 9999, four runs:
+#
+#     unique("W3-Widget")  ->  W3-Widget-0   W3-Widget-1   W3-Widget-2
+#     unique email         ->  user3@example.test  user4@…   user5@…
+#     unique number        ->  6   7   8
+#     unique uuid          ->  …-9f770000000c   …-9e0a0000000d   …-333c0000000e
+#
+# **One counter, shared by every `unique` construct, restarting at 0 each run.** `unique email`
+# reads `user3@…` here *because the test above it drew three prefixes* — and that is the sentence a
+# reader of this suite most needs and could not have got anywhere: two `unique` values are distinct
+# because of **ordering**, not because of entropy. The values are therefore identical across runs
+# (a counter is not seeded), which is the opposite of the `random` group and the reason the two are
+# separate constructs. `unique uuid`'s trailing eight hex digits are that same counter — `0000000c`
+# is 12 — which is what makes its distinctness a guarantee rather than 122 bits of luck.
+#
+# ## `unique like` is **not** rostered by this file, and the gap in the sequence is why
+#
+# The counter above jumps 8 -> 12. The three missing ticks are the three `unique like` draws in the
+# test between them: the construct **advances the counter and then does not use it**, filling its
+# pattern from the seeded `random` stream instead. Two runs at seed 4242 produced the identical
+# triple, and `random like "SKU-####-??"` -> `SKU-8562-VQ` shares its digits with `unique like
+# "ORD-######"` -> `ORD-856286`, which is the same stream being read twice.
+#
+# So its distinctness is 10^6-probabilistic, not guaranteed, and `SPEC` §7.2's bolded retry clause —
+# *"a retried attempt cannot use `unique(...)` to reproduce a value an earlier attempt already
+# used"* — is false for it, because §7.3 replays `random` identically on every attempt. The last
+# test below demonstrates exactly that, and it is the reason `generator:unique-like` **stays on the
+# ratchet with a stated condition** rather than getting a row here. Filed as `M154g-07`.
+#
+# ## What is stated in-band and what is stated by the grader
+#
+# In-band: **shape** — format, range, membership, length, and the pattern alphabets (`#` is a digit,
+# `?` is a letter) — plus **within-run distinctness**. Out-of-band: the counter's arithmetic,
+# cross-run reproducibility, the date ordering against a pinned `--now`, and the retry claim.
+#
+# The refusals — a reversed range, a negative length, a password below its minimum — are check-time
+# facts and this file is a run. They live in `tests/.checkonly/invalid-literal-operand.tflw`, which
+# this milestone extended rather than copied, and the grader reads them from there.
+#
+# **`random date` values are never handed to `matches`, and never compared to another date.** Two
+# defects were found writing this plant and both are in the matchers rather than the generators.
+# `matches` against a date subject is incoherent — `".*"` and `"2025"` pass while `"^[0-9]"` and
+# `"^$"` fail on the same value, and the failure message prints a value that plainly satisfies the
+# pattern (`M154g-08`). And `equals` between two date values is **unconditionally true**, so
+# `not equals` on two visibly different instants is red (`M154g-09`). `contains` and `is less than`
+# both give clean type errors on the same subject; those two do not. So the shape claim goes through
+# `format … as` and the ordering claim goes to the grader, which reads the values as text.
+
+before file
+  # The grader reads the marks back as a set, so a leftover label from a previous run would read as
+  # a value this run produced. `C67`'s plant does the same for the same reason. It also clears the
+  # attempt counter the retry test at the bottom depends on — which is what makes that test
+  # repeatable against one stack, the property `M154g-05` was filed for losing.
+  api POST /lifecycle/reset
+  expect status equals 200
+
+# --- the `unique` group: one shared counter, and the value's shape around it -------------------
+
+@constructs @generators
+test "`unique(\"prefix\")` keeps the prefix and never repeats it"
+  let a = unique("W3-Widget")
+  let b = unique("W3-Widget")
+  let c = unique("W3-Widget")
+
+  # The prefix survives — the half every one of the ~60 `unique("…")` sites leans on and none
+  # asserts.
+  expect {a} matches "^W3-Widget"
+  # And the value is not merely the prefix: the counter was appended.
+  expect {a} not equals "W3-Widget"
+  # Three draws, three values. A generator returning a constant passes every `unique("…")` site in
+  # this repository and fails here.
+  expect {a} not equals {b}
+  expect {b} not equals {c}
+  expect {a} not equals {c}
+
+  let ea = base64 encode("{a}")
+  let eb = base64 encode("{b}")
+  let ec = base64 encode("{c}")
+  api POST /lifecycle/mark body { label: "g3|unique-prefix|1|{ea}" }
+  expect status equals 200
+  api POST /lifecycle/mark body { label: "g3|unique-prefix|2|{eb}" }
+  expect status equals 200
+  api POST /lifecycle/mark body { label: "g3|unique-prefix|3|{ec}" }
+  expect status equals 200
+
+@constructs @generators
+test "`unique email` is an address, and a different one each time"
+  let a = unique email
+  let b = unique email
+  let c = unique email
+
+  expect {a} matches "^[^@ ]+@[^@ ]+\\.[A-Za-z]+$"
+  expect {a} not equals {b}
+  expect {b} not equals {c}
+  expect {a} not equals {c}
+
+  let ea = base64 encode("{a}")
+  let eb = base64 encode("{b}")
+  let ec = base64 encode("{c}")
+  api POST /lifecycle/mark body { label: "g3|unique-email|1|{ea}" }
+  expect status equals 200
+  api POST /lifecycle/mark body { label: "g3|unique-email|2|{eb}" }
+  expect status equals 200
+  api POST /lifecycle/mark body { label: "g3|unique-email|3|{ec}" }
+  expect status equals 200
+
+@constructs @generators
+test "`unique number` is the counter itself, in digits"
+  let a = unique number
+  let b = unique number
+  let c = unique number
+
+  # This construct has **no other site in the repository** — this file and its row are its entire
+  # evidence, which is why the shape is stated explicitly rather than left to a request.
+  expect {a} matches "^[0-9]+$"
+  expect {a} not equals {b}
+  expect {b} not equals {c}
+  expect {a} not equals {c}
+
+  let ea = base64 encode("{a}")
+  let eb = base64 encode("{b}")
+  let ec = base64 encode("{c}")
+  api POST /lifecycle/mark body { label: "g3|unique-number|1|{ea}" }
+  expect status equals 200
+  api POST /lifecycle/mark body { label: "g3|unique-number|2|{eb}" }
+  expect status equals 200
+  api POST /lifecycle/mark body { label: "g3|unique-number|3|{ec}" }
+  expect status equals 200
+
+@constructs @generators
+test "`unique like` fills `#` with digits — the construct this file does not roster"
+  let a = unique like "ORD-######"
+  let b = unique like "ORD-######"
+  let c = unique like "ORD-######"
+
+  # `#` is a digit and everything else is a literal. That much holds, and it is all that holds: the
+  # three ticks these draws take out of the shared counter are the gap the grader measures between
+  # `unique number`'s last value and `unique uuid`'s first, and they are spent on nothing.
+  expect {a} matches "^ORD-[0-9]{6}$"
+  expect {a} not equals {b}
+  expect {b} not equals {c}
+  expect {a} not equals {c}
+
+  let ea = base64 encode("{a}")
+  let eb = base64 encode("{b}")
+  let ec = base64 encode("{c}")
+  api POST /lifecycle/mark body { label: "g3|unique-like|1|{ea}" }
+  expect status equals 200
+  api POST /lifecycle/mark body { label: "g3|unique-like|2|{eb}" }
+  expect status equals 200
+  api POST /lifecycle/mark body { label: "g3|unique-like|3|{ec}" }
+  expect status equals 200
+
+@constructs @generators
+test "`unique uuid` is v4-shaped and carries the counter in its last eight digits"
+  let a = unique uuid
+  let b = unique uuid
+  let c = unique uuid
+
+  expect {a} matches "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+  expect {a} not equals {b}
+  expect {b} not equals {c}
+  expect {a} not equals {c}
+
+  let ea = base64 encode("{a}")
+  let eb = base64 encode("{b}")
+  let ec = base64 encode("{c}")
+  api POST /lifecycle/mark body { label: "g3|unique-uuid|1|{ea}" }
+  expect status equals 200
+  api POST /lifecycle/mark body { label: "g3|unique-uuid|2|{eb}" }
+  expect status equals 200
+  api POST /lifecycle/mark body { label: "g3|unique-uuid|3|{ec}" }
+  expect status equals 200
+
+# --- the `random` group: seed-reproducible, and inside its stated bounds ------------------------
+
+@constructs @generators
+test "`random number` lands inside an inclusive range, and `random decimal` is not an integer"
+  let n = random number 1 to 100
+  let lo = random number 7 to 7
+  let d = random decimal 1 to 10
+
+  expect {n} is greater than 0
+  expect {n} is less than 101
+  # The degenerate range is what pins inclusivity: an exclusive upper bound still satisfies the two
+  # lines above, and has no value at all to return here.
+  expect {lo} equals 7
+  # A decimal is not a whole number — the discriminator between the construct's two forms.
+  expect {d} matches "\\."
+
+  let en = base64 encode("{n}")
+  let ed = base64 encode("{d}")
+  api POST /lifecycle/mark body { label: "g3|random-number|1|{en}" }
+  expect status equals 200
+  api POST /lifecycle/mark body { label: "g3|random-decimal|1|{ed}" }
+  expect status equals 200
+
+@constructs @generators
+test "`random date` respects the run clock and its stated bounds"
+  let past = random date in past
+  let future = random date in future
+  let between = random date between today - 10 days and today
+
+  # `format … as` is the way to a string; see the header for why `matches` is not.
+  let fp = format {past} as "yyyy-MM-dd"
+  expect {fp} matches "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+  # **No date is compared to another date here**, and that is not squeamishness. `expect {past} not
+  # equals {future}` is red on two visibly different instants, because `equals` between two
+  # date-typed values is unconditionally true — filed as `M154g-09`, and the reason the ordering
+  # claim below belongs to the grader, which reads the values as text and parses them itself.
+
+  let ep = base64 encode("{past}")
+  let ef = base64 encode("{future}")
+  let eb = base64 encode("{between}")
+  api POST /lifecycle/mark body { label: "g3|random-date-past|1|{ep}" }
+  expect status equals 200
+  api POST /lifecycle/mark body { label: "g3|random-date-future|1|{ef}" }
+  expect status equals 200
+  api POST /lifecycle/mark body { label: "g3|random-date-between|1|{eb}" }
+  expect status equals 200
+
+@constructs @generators
+test "`random of` picks from the list it was given and nothing else"
+  let a = random of "red", "blue", "green"
+  let b = random of "red", "blue", "green"
+  let c = random of "red", "blue", "green"
+
+  # Membership is the whole claim, and it is stated three times because one draw is satisfied by a
+  # generator that always returns the first element. The grader adds the half a file cannot: that
+  # the three draws are not all the same element.
+  expect {a} matches "^(red|blue|green)$"
+  expect {b} matches "^(red|blue|green)$"
+  expect {c} matches "^(red|blue|green)$"
+
+  let ea = base64 encode("{a}")
+  let eb = base64 encode("{b}")
+  let ec = base64 encode("{c}")
+  api POST /lifecycle/mark body { label: "g3|random-of|1|{ea}" }
+  expect status equals 200
+  api POST /lifecycle/mark body { label: "g3|random-of|2|{eb}" }
+  expect status equals 200
+  api POST /lifecycle/mark body { label: "g3|random-of|3|{ec}" }
+  expect status equals 200
+
+@constructs @generators
+test "`random string N` is N alphanumerics, and `0` is a legal length"
+  let s = random string 12
+  let t = random string 12
+  let zero = random string 0
+
+  expect {s} matches "^[A-Za-z0-9]{12}$"
+  # Two draws in one run differ. A seeded generator is reproducible across runs, not constant
+  # within one, and this is the line that separates those two readings.
+  expect {s} not equals {t}
+  # `0` is legal and yields the empty string — `SPEC` §7.3's generator-operand rule keeps this
+  # asymmetric against `random password 2`, which is refused. It is the boundary a length check
+  # written as `> 0` gets wrong.
+  expect {zero} equals ""
+
+  let es = base64 encode("{s}")
+  api POST /lifecycle/mark body { label: "g3|random-string|1|{es}" }
+  expect status equals 200
+
+@constructs @generators
+test "`random like` fills `#` with a digit and `?` with a letter"
+  let a = random like "SKU-####-??"
+
+  # Two alphabets, and an implementation using one for both still passes a length check. This is
+  # the pattern family's only discriminating assertion in the repository.
+  expect {a} matches "^SKU-[0-9]{4}-[A-Za-z]{2}$"
+
+  let ea = base64 encode("{a}")
+  api POST /lifecycle/mark body { label: "g3|random-like|1|{ea}" }
+  expect status equals 200
+
+@constructs @generators
+test "`random uuid` is v4-shaped, and its distinctness is luck rather than a counter"
+  let a = random uuid
+  let b = random uuid
+
+  expect {a} matches "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+  expect {a} not equals {b}
+  # The contrast with `unique uuid` above is the pair that makes both rows mean something: this
+  # one's last eight digits are entropy, that one's are the run-wide counter. The grader states it
+  # as arithmetic.
+
+  let ea = base64 encode("{a}")
+  api POST /lifecycle/mark body { label: "g3|random-uuid|1|{ea}" }
+  expect status equals 200
+
+@constructs @generators
+test "`random password` has the length it was asked for, and a default when it was not"
+  let p = random password 16
+  let q = random password
+
+  expect {p} matches "^.{16}$"
+  # The default is 12, and no site in this repository states it.
+  expect {q} matches "^.{12}$"
+  expect {p} not equals {q}
+
+  let ep = base64 encode("{p}")
+  let eq = base64 encode("{q}")
+  api POST /lifecycle/mark body { label: "g3|random-password|1|{ep}" }
+  expect status equals 200
+  api POST /lifecycle/mark body { label: "g3|random-password-default|1|{eq}" }
+  expect status equals 200
+
+# --- the retry clause, which is where the two groups' promises are opposite ---------------------
+
+@constructs @generators
+test "a retried attempt gets fresh `unique` data and replays its `random` data" retry 2
+  # `g3settles` answers 503 until attempt 3, so this test runs three times and the marks below are
+  # made three times. Each label *contains its own value*, so the grader does not need to know how
+  # many attempts ran: it counts distinct labels per slot. Three means the generator advanced, one
+  # means it replayed.
+  #
+  #   `unique("…")`   `SPEC` §7.2, bold: the counter keeps advancing, so a retried attempt can
+  #                   never reuse data the failed attempt created.  ->  three labels.
+  #   `random string` `SPEC` §7.3: the per-test seed is re-derived, so the value is identical on
+  #                   every attempt — which is what makes it the right choice for an idempotency
+  #                   key.  ->  one label, marked three times.
+  #   `unique like`   promises the first and behaves as the second. `M154g-07`.
+  let u = unique("W3-Retry")
+  let r = random string 10
+  let l = unique like "RTY-######"
+
+  let eu = base64 encode("{u}")
+  let er = base64 encode("{r}")
+  let el = base64 encode("{l}")
+  api POST /lifecycle/mark body { label: "g3r|unique-prefix|{eu}" }
+  expect status equals 200
+  api POST /lifecycle/mark body { label: "g3r|random-string|{er}" }
+  expect status equals 200
+  api POST /lifecycle/mark body { label: "g3r|unique-like|{el}" }
+  expect status equals 200
+
+  api POST /lifecycle/attempt body { key: "g3settles" }
+  expect status equals 200
+  expect body.attempt equals 3

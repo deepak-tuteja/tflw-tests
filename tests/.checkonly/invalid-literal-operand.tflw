@@ -2,11 +2,19 @@
 # step will reject the moment it evaluates — demonstrates `tflw check`'s TF054 (checker, tflw M124 /
 # review `M97a-02`/`M97a-03`/`M97a-16`).
 #
-# Seven runtime `throw`s, one code. The rule's subject is not "this value is wrong" but "this value
+# Runtime `throw`s, one code. The rule's subject is not "this value is wrong" but "this value
 # is wrong **and was legible as wrong in the source**": an empty `random number` range, a
 # `random password` too short for the four character classes it guarantees, a `hex`/`base64`/`url`
 # decode over a literal that cannot decode, and a `matches`/`fails matching` pattern that is not a
 # valid regular expression.
+#
+# **`M154g` step 3 completed the generator half of SPEC §7.3's operand table here rather than in a
+# second file.** Four of its seven rows already lived below (`random number 5 to 1`, `random
+# password 2`, and the two interpolated controls); the remaining three — `random decimal 5 to 1`,
+# both spellings of a reversed/typed `random date between`, and `random string -3` — are the third
+# test. They are what lets `C85`/`C86`/`C88`/`C91` state a refusal clause without copying these
+# lines into `tests/.constructs/`, and `random string 0` is beside them as the row the table
+# deliberately does **not** refuse: the empty string is a string of length 0.
 #
 # **It fires on literals only, and that is the rule rather than a limit of it.** `random number
 # {lo} to {hi}` is ordinary, legal, and unknowable until the run binds those names — so an
@@ -30,6 +38,21 @@ test "generator operands that cannot produce a value"
   let impossible = random number 5 to 1
   # Four character classes are guaranteed, so two characters cannot carry them.
   let tooShort = random password 2
+
+test "the rest of the generator-operand table (M154g step 3)"
+  # An empty range in the decimal form of the same construct.
+  let emptyDecimal = random decimal 5 to 1
+  # Both `random date between` refusals. The first is orderable without a clock — two bounds
+  # measured from the same anchor — and the second is a string, which is never a date on any run.
+  let backwards = random date between today and today - 10 days
+  let notADate = random date between "2030-01-01" and today
+  # No string has a negative length.
+  let negative = random string -3
+  # And the row the table keeps asymmetric on purpose: `0` is legal, and nothing below this line
+  # may report on it. `C88` asserts that silence, which is why the control lives in this file
+  # rather than in a clean one — a rule that fires here and not there would be indistinguishable
+  # from a rule that fires nowhere.
+  let empty = random string 0
 
 test "transform operands that cannot decode"
   # `!` is not a hex digit, and the length is odd besides.

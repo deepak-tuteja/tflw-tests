@@ -43,6 +43,15 @@ export const LIFECYCLE_KEYS = {
    *  identical threshold: the two plants run as separate corpora with a `reset` each, and sharing a
    *  key would make one plant's stray-key precision check depend on the other's. */
   polls: 'c72settles',
+  /** `M154g` step 3 / `C81`'s retry clause. Answers 200 on attempt **3**, so a `retry 2` test
+   *  reaches it on its last attempt and the grader gets three attempts' worth of generated values
+   *  out of one test. The claim being settled is `SPEC` §7.2's bolded one — that `unique(...)`'s
+   *  run-wide counter *keeps advancing across retry attempts*, so a retried attempt can never
+   *  reuse data the failed attempt already created — against §7.3's opposite promise for `random`,
+   *  whose per-test seed replays identically on every attempt. Nothing in this repository has ever
+   *  observed either half: `retry-and-flake.tflw` retries against a `random string 8` key and
+   *  passes under both readings, because the key replaying is exactly what it needs. */
+  generators: 'g3settles',
 } as const;
 
 /** The attempt on which each `C4` key starts answering 200. The pair pins the budget from both
@@ -52,6 +61,7 @@ export const LIFECYCLE_SUCCEEDS_ON: Readonly<Record<string, number>> = {
   [LIFECYCLE_KEYS.settles]: 3,
   [LIFECYCLE_KEYS.exhausts]: 4,
   [LIFECYCLE_KEYS.polls]: 3,
+  [LIFECYCLE_KEYS.generators]: 3,
 };
 
 /** The labels the plants mark, and the count each must reach.
