@@ -1,4 +1,4 @@
-// Shared between scripts/regression.mjs (full 30-phase sweep) and scripts/regression-smoke.mjs
+// Shared between scripts/regression.mjs (the full sweep) and scripts/regression-smoke.mjs
 // (fast local subset, PLAN_CI.md decision 15) — phase-report archiving and the Docker
 // restart/run helpers, so both scripts write report-by-phase/ the same way and a failing smoke
 // run's evidence is inspectable exactly like a full sweep's.

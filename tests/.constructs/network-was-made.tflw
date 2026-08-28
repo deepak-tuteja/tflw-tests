@@ -1,0 +1,39 @@
+# `C112` — `matcher:was-made`, the one matcher whose three existing uses are all positive.
+#
+# `tests/mixed/storefront.tflw` asserts it twice and
+# `tflw-acceptance/webv2/tflw/02-checkout-iframe-network.tflw` once, and every one of the three says
+# *this request was made*. None of them could tell that matcher from one that answers `true`
+# unconditionally, ignores the `with method` clause, or reads tflw's own request log instead of the
+# browser's — `D739`'s distinction at its sharpest, and the same shape `C105`-`C108` had.
+#
+# So this file is a **grid, not a pair**: one URL the page really fetched, one it did not, one method
+# it used and one it did not, and one request **tflw itself** sent that the browser never saw. The
+# four `expect` rows are the known answers; the two `check` rows at the end are the control that
+# makes the wrong answers reachable *in this run* — they are the same assertions with the negation
+# dropped, they must FAIL, and `check` records and continues (`C1`) so one run carries both halves.
+#
+# Run by `scripts/verify-construct-acceptance.mjs` under `env local`, whose `web` base is the SPA
+# storefront on `:8090`. Not discovered by an ordinary sweep: `tests/.constructs/` is dot-prefixed.
+#
+# `not was made` rather than `was not made`: this grammar has no negated words, only a single `not`
+# prefix in front of the positive one (`parser.ts`'s `negatedStateWord`), so `was not made` is a
+# `TF010` and reads as a typo rather than as the rule it is.
+
+test "`was made` reads the browser's own log, the URL it names, and the method clause"
+  # tflw's own request, to an origin and a path the storefront never fetches: this one goes to
+  # apiV2 on `:4001` directly, while every browser request below is same-origin on `:8090`. `was
+  # made` observes what the *browser* did; if it read the runner's log too, the `/health` row below
+  # would fail. (`api root GET /health` is a 404 by design — `versioning.tflw` grades that — so the
+  # versioned base is the one to use here.)
+  api GET /health
+  expect status equals 200
+  open "/"
+  # The settle. `.product-grid` renders from `CatalogPage`'s own `apiFetch('/products?…')`, so the
+  # page being visible is what makes the positive below a fact rather than a race.
+  expect css ".product-grid" is visible
+  expect request to "/v1/products" with method "GET" was made
+  expect request to "/v1/products" with method "POST" not was made
+  expect request to "/cart/checkout" not was made
+  expect request to "/health" not was made
+  check request to "/v1/products" with method "POST" was made
+  check request to "/health" was made

@@ -216,6 +216,10 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C106` | `cert` (`config:key:cert`) | security | one unchanged file, two config lines: a 200 through `ssl_verify_client on`, and nginx's own **400** with `cert`/`key` deleted — the pair that has always run under two envs in two files, now as one. The negative fails on the *status*, so the connection was made and refused by the listener | a `cert` parsed and never presented, and an mTLS listener that stopped requiring one |
 | `C107` | `key` (`config:key:key`) | security | moved rather than removed, because deleting `key` deletes `cert`'s answer too: `server.key` is a real key the same container generated and does not belong to `client.pem`. The run fails **at the transport**, before any status exists — which is exactly what tells it from `C106`'s server-chosen 400 | a `key` read and never paired with `cert`, and a mismatched pair accepted locally and refused as an authorization failure instead |
 | `C108` | `web` (`config:key:web`) | ui | a two-by-two grid, because one cell proves nothing: `.product-grid` exists only in the storefront and `testFlow-tests admin console` only in the console, so the diagonal passes and the off-diagonal fails. A `web` key ignored for one hard-coded base lights a **column** instead | a `web` base ignored for a bare path, and an env switch that moves the `api` base without moving the browser's |
+| `C109` | `has no … input handling violations` (`matcher:has-no-input-handling-violations`) | security | seven ledger rows graded on the **full** counts line — `[rules, applicable, notApplicable, violations]` — because the interesting Tier 3 failure moves `applicable` and the violation count alone reads the same; every rule demonstrated firing, silent and not-applicable, with the two stand-down *reasons* graded apart; `TF067`'s runtime refusal underneath, read from stderr because there is no report | a rule that stops applying while its assertion stays green, an opt-in dropped from a config, and a stand-down reported without the reason that says what to do about it |
+| `C110` | `probe oversized` (`config:probe:oversized`) | security | a granted/withheld pair where **nothing else moves**: granted, `sec/oversized-input-accepted` is applicable and fires twice on one body at two leaves; withheld, the identical assertion lists it not-applicable and **names the missing word**. The reason string is graded, not the count — an opt-in read and never sent looks exactly like a correct withheld half | an opt-in honoured where it was not granted, and one accepted in the config and never sent — both leave the assertion green |
+| `C111` | `probe traversal` (`config:probe:traversal`) | security | the same pair, plus the thing that makes it a different row: **where the grant lives was measured**. Through the sidecar the rule reported applicable, 9 probes sent, 9 answered, no violation — nginx normalises the payload away first, so the app is vulnerable and its deployment is not. The grant sits on `plaintext`, where it fires (`V11`); the sidecar env is the withheld half | a probe class granted where the deployment eats it — indistinguishable from a clean target — and a traversal rule that stands down without saying why |
+| `C112` | `was made` (`matcher:was-made`) | ui | four known answers off one page load: the URL the page fetched **was** made, the same URL under a method it never used was **not**, a URL it never touched was **not**, and the `/health` request **tflw itself** sent was **not** — that last one is what says the observation set is the browser's log rather than the runner's. Two `check` rows are the same assertions with `not` dropped and must fail in the same run | a `was made` that answers `true` for anything observed, one that ignores the `with method` clause, and one that counts the runner's own requests as the page's |
 
 ### `C1` — the soft assertion records a failure and keeps going
 
@@ -1092,27 +1096,52 @@ The rest of the `config` family — eleven keys and the two Tier 3 probes — is
 a running target and in several cases a paired config with a stack behind it, which is a different
 kind of work from anything in this section and is scoped as the rest of step 4.
 
-### The three constructs this tier did **not** roster
+### The three constructs this tier did **not** roster — and why the reason did not survive
 
 `config:probe:oversized`, `config:probe:traversal` and `matcher:has-no-input-handling-violations`
-are Tier 3, and they stay on the ratchet.
+are Tier 3. `M154f` left them on the ratchet; **`M154g` step 5 rostered them as `C109`–`C111`**, and
+the section is kept rather than replaced because half of what it said was right and half of it was a
+citation nobody had checked.
 
-Their grader, `scripts/verify-input-acceptance.mjs`, is not missing and not weak: it states its
-ledger rows in full, grades the three states apart — including the two *different* reasons a rule
-can be not-applicable, which Tier 1's grader cannot distinguish — asserts them, and exits non-zero.
-It runs in **no automated pass**. Neither `regression.mjs` nor CI carries it, deliberately: a Tier 3
-assertion costs an order of magnitude more requests than a Tier 2 one (`D380`), and that price was
-judged too high for every PR.
+**The right half.** Their grader, `scripts/verify-input-acceptance.mjs`, is not missing and not weak:
+it states its ledger rows in full, grades the three states apart — including the two *different*
+reasons a rule can be not-applicable, which Tier 1's grader cannot distinguish — asserts them, and
+exits non-zero. And it ran in **no automated pass**: neither `regression.mjs` nor CI carried it. A row
+pointing at a gate nothing runs reads as evidence while nothing evaluates it, which is `M141`'s
+vacuity class wearing a roster row, and this repository already refuses it —
+`verify-construct-coverage.mjs` fails any plant whose graders are all ungated, in as many words:
+*"that is `M137e-01` recurring in a new ledger"*. Holding the three back was correct.
 
-A row pointing at a gate nothing runs reads as evidence while nothing evaluates it. That is
-`M141`'s vacuity class wearing a roster row, and this repository already has the rule that refuses
-it — `verify-construct-coverage.mjs` fails any plant whose graders are all ungated, in as many
-words: *"that is `M137e-01` recurring in a new ledger"*. Rostering these three would have required
-either lying about the grader or switching that check off.
+**The half that was wrong.** The *reason* the grader ran nowhere was given as: *a Tier 3 assertion
+costs an order of magnitude more requests than a Tier 2 one (`D380`), and that price was judged too
+high for every PR.* **`D380` does not decide that.** It decides that the ~45 real test files are
+Tier 3's *negative corpus and its volume measurement* — a claim about attaching the tier to a real
+suite, which is `scripts/sweep-input-volume.mjs` and its 240 observed requests. That is a different
+script, against a different corpus, answering a different question. The grader has a corpus built for
+it and prints its own price at the bottom of every run: **7 assertions, 80 extra requests**. No entry
+in tflw's `DECISIONS.md` ever placed it outside CI; the only sentence that did was the script's own
+closing paragraph, unsourced.
 
-**They roster when the Tier 3 grader runs on something that reports.** A condition, not a milestone
-number, per the rule `M131` set: the milestone that gives an expensive grader a scheduled home is
-the one that closes them, whichever milestone that turns out to be.
+**And the cost is the other way round.** Measured live on `fedora-box` against the full
+`VULN_MODE=1` stack: this grader passes — 7 ledger rows, 2 applicability probes, 1 `TF067` probe, 0
+failures — in **0.91-1.05 s**. `security-acceptance-gate`, the Tier 1/2 phase every sweep has run
+since `M139-5`, costs **1.70-1.99 s** on the same box in the same state. Six runs each, taken on two
+days and at two commits, because one triple is a reading rather than a measurement:
+0.97/0.97/1.05 against 1.99 at `1e3fa9c`, and 0.97/0.91/0.92 against 1.84/1.70/1.70 at step 5's own
+tree. The gate nobody ran was half the price of the gate everybody ran, both times. Filed as
+`M154g-13`.
+
+So the remedy needed no new mechanism. `D493` already settled it for Tier 1/2 — put the asserting
+script in `regression.mjs` — and `D765` does the same thing one tier over: **`input-acceptance`**, an
+ordinary gated phase with `VULN_MODE=1`, beside the sibling it was always the other half of.
+Deliberately **not** `M154h`'s `localOnly` venue: `D761` exists for a gate CI genuinely cannot judge,
+and a one-second gate against the same Docker stack is not one.
+
+**The rule that came out of it is `D764`: a ratchet condition is audited against the decision it
+cites, never read as provenance.** `D739` says what a `RATCHET` entry *asserts*; nothing said what
+its stated condition has to *be*. It has to name a requirement, and a decision it cites has to
+actually state that requirement. A `D`-number in a sentence reads as already-checked, and for two
+milestones that is exactly what it bought.
 
 ### `C97`–`C108` — the config keys, and the split inside the family that step 4a got wrong
 
@@ -1167,6 +1196,56 @@ these rows were being written: `scripts/exec.mjs`'s rsync had no exclusion for `
 container had just issued — and the resulting failure is `400 No required SSL certificate was sent`,
 i.e. indistinguishable from the negative case `C106` exists to prove. Recorded as `M154g-12`.
 
+### `C109`–`C112` — the four rows the ratchet's own conditions were hiding
+
+These four did not become gradable in step 5. **They were gradable all along**, and the ratchet said
+otherwise in four sentences nobody had audited. Acceptance clause 5 asked whether a ceiling of five
+conditioned entries was the floor; taking that as a judgement meant reading each condition as a claim
+to be checked rather than as a note already checked by whoever wrote it, and four of the five did not
+survive. The floor is **1**.
+
+**`C109`, `C110`, `C111` — three conditions, one bad citation.** All three read *"their rules are
+Tier 3's pack, so the only script that grades them is the one nothing runs"*, resting on a cost claim
+attributed to `D380`. The section above has the full retraction; in one line, `D380` is about the
+whole-suite volume sweep and not about this grader, and the measurement inverts the price anyway.
+They are rostered **by reference** against `scripts/verify-input-acceptance.mjs`, exactly as
+`C51`–`C58` are rostered against the Tier 1/2 grader and for the same reason (`D752`, and `D724`'s
+cite-don't-duplicate one axis over): that script already states its known answers as *data* —
+`LEDGER`, `APPLICABILITY_PROBES`, `TF067_PROBE` — and restating them as prose here would be a copy
+with no guard.
+
+**The citation is checked from both ends, and on what the run actually did.** The grader ends by
+deriving which constructs this run answered and comparing that set against the rows claiming it, in
+both directions. Answered is derived from **states demonstrated**, never from a line being reached —
+`M154f-03`'s open half is that the Tier 1/2 grader's `answers(...)` records a code path, which a
+grader asserting nothing would also reach. Here each of the two config keys needs a *pair*: the same
+rule firing where the config grants the opt-in and standing down, naming the missing word, where it
+does not. A run that only ever fired, or only ever stood down, answers neither.
+
+**`C112` — the condition that was never a requirement at all.** `matcher:was-made` sat on the ratchet
+under *"a browser-network assertion and does not belong in an API fixture — it rosters with the UI
+work, not here"*. "The UI work" is `M154d`, which **closed**. So the sentence was an **address**, and
+an address goes stale silently while still reading like a live condition — the purest form of the
+`declaration:concurrency` mistake step 4b found, which at least named the right requirement at the
+wrong door. The requirement it meant is a browser fixture with observable network traffic, and both
+halves already existed: `tflw-acceptance/webv2/tflw/02-checkout-iframe-network.tflw` runs one, and
+`C108` had already proved this harness can drive and grade a browser tier.
+
+What the construct's three existing uses could not do is **fail**. All three are positive — *this
+request was made* — so a matcher that answered `true` for anything observed, that ignored the `with
+method` clause, or that read the runner's own request log instead of the browser's would satisfy
+every one of them. `D739` at its sharpest, and the same shape `C105`–`C108` had: the evidence was
+everywhere and could not have caught the defect.
+
+So the plant is a **grid on one page load**, not a pair. `tests/.constructs/network-was-made.tflw`
+opens the storefront's catalog page and then asserts four things whose only overlap is the matcher
+itself — one URL the page fetched, the same URL under a method it did not use, a URL it never
+touched, and a `/health` request **tflw's own runner** sent before the browser started. No single
+wrong implementation satisfies all four. The two `check` rows at the end are those same assertions
+with the negation dropped: they must fail, in that same run, so the wrong answers are demonstrated
+reachable rather than assumed to be — the control step 2 established and every step since has paid
+for.
+
 ## Blocked plants (`D734`)
 
 A plant that goes red because tflw is genuinely broken **keeps its row**, gets a row in tflw's
@@ -1174,11 +1253,15 @@ ledger, and is marked `blocked-on:<row>` here — counted as *covered but curren
 known reason*, never deleted and never quietly moved to the ratchet. Without this convention, this
 ledger's successes and its bugs look identical.
 
-**None at present.** All one hundred and seven plants pass — 100 of them graded here and 7 by their own gates.
+**None at present.** All one hundred and eleven plants pass — 101 of them graded here and 10 by their own gates.
 `C1`–`C50` were last measured 2026-08-25 (the first three against tflw `5cba2da`, `C4`–`C12` against
 the `M154c` build that added the `declaration` family, `C13`–`C43` against `M154c`'s `main`,
 `C44`–`C50` against `M154d`'s); `C51`–`C91` on `fedora-box` 2026-08-26/27 across `M154f` and
-`M154g`'s first three steps; `C92`–`C96` on 2026-08-28, and those five need no stack at all.
+`M154g`'s first three steps; `C92`–`C96` on 2026-08-28, and those five need no stack at all;
+`C97`–`C108` on `fedora-box` 2026-08-28 with step 4b; `C109`–`C112` there the same day with step 5 —
+the three Tier 3 rows through `verify-input-acceptance.mjs` (7 ledger rows, 2 applicability probes,
+1 `TF067` probe, 0 failures, `D752` index resolving both ways) and `C112` at recall 4/4, precision
+3/3.
 
 This paragraph said *"All fifty plants pass"* through three milestones that added forty of them, and
 it is left visible here rather than quietly corrected because it is the same defect the ratchet

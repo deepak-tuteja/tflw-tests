@@ -56,6 +56,17 @@ export const GRADERS = {
   // move on the construct axis, and `D752` is what makes the reference an assertion instead of a
   // claim.
   security: { script: 'scripts/verify-security-acceptance.mjs', phase: 'security-acceptance-gate', gated: true },
+  // `M154g` step 5 (`D765`). Tier 3's grader, and the newest `gated: true` in this table — it was
+  // `gated: false` in everything but the field, because the field did not exist and the script ran
+  // nowhere. `D764` is what found it: three ratchet entries held themselves back on the sentence
+  // *"a Tier 3 assertion costs an order of magnitude more requests than a Tier 2 one (`D380`)"*, and
+  // `D380` does not say that — it decides that the ~45 real test files are Tier 3's negative corpus
+  // and its **volume measurement**, which is `sweep-input-volume.mjs`'s 240 observed requests and a
+  // different script entirely. Measured instead of argued: this grader costs 7 assertions and 80
+  // extra requests and finishes in **0.91-1.05 s** on `fedora-box`, against **1.70-1.99 s** for
+  // `security-acceptance-gate`, the Tier 1/2 phase the sweep has run since `M139-5` — six runs each,
+  // two days, two commits. The premise was not merely misattributed, it was inverted.
+  input: { script: 'scripts/verify-input-acceptance.mjs', phase: 'input-acceptance', gated: true },
   redaction: { script: 'scripts/verify-redaction.mjs', phase: 'safety-redaction-check', gated: true },
   diagnostics: { script: 'scripts/verify-check-diagnostics.mjs', phase: 'check-diagnostics', gated: true },
 };
@@ -1029,13 +1040,15 @@ export const PLANTS = [
   // the evidence; it was the *index*. `D752` supplies it, and makes it bidirectional so the index
   // cannot drift from the assertions it points at.
   //
-  // **Three security constructs are deliberately NOT here**, and the reason is the milestone's
-  // finding rather than an omission: `config:probe:oversized`, `config:probe:traversal` and
-  // `matcher:has-no-input-handling-violations` are Tier 3, and Tier 3's grader
-  // (`verify-input-acceptance.mjs`) asserts, exits non-zero, and **runs in no automated pass** —
-  // `regression.mjs` does not carry it and neither does CI. It could fail; nothing would notice. A
-  // row pointing at it would read as evidence while nothing evaluated it, which is `M141`'s vacuity
-  // class wearing a roster row. They stay on `RATCHET` and the condition is named below.
+  // **Three security constructs were deliberately NOT here, and `M154g` step 5 added them as
+  // `C109`-`C111`.** The reason they were held back was sound in form and wrong in fact: Tier 3's
+  // grader asserts, exits non-zero, and ran in **no automated pass**, so a row pointing at it would
+  // have read as evidence while nothing evaluated it. That half was true, and it is the half `D765`
+  // fixed — the grader is now the `input-acceptance` regression phase, which is `D493`'s remedy for
+  // `M137e-01` applied a third time. What was never true is the reason given for leaving it
+  // ungated: *"a Tier 3 assertion costs an order of magnitude more requests than a Tier 2 one
+  // (`D380`)"*. `D380` decides something else entirely, and the measurement inverts the claim
+  // (0.91-1.05 s against `security-acceptance-gate`'s 1.70-1.99 s). See `D764` and `M154g-13`.
   {
     id: 'C51',
     construct: 'config:probe:ciphers',
@@ -2292,6 +2305,105 @@ export const PLANTS = [
     catches: 'a `web` base ignored for a bare path, and an env switch that moves the `api` base without moving the browser\'s.',
     blockedOn: null,
   },
+
+  // ===========================================================================
+  // `M154g` step 5 — the four rows the ratchet's own conditions were hiding
+  // (`D764`, `D765`, `D766`)
+  // ===========================================================================
+  //
+  // These four did not become gradable in this step. They were gradable all along, and the ratchet
+  // said otherwise in four sentences nobody had audited — which is what `D764` is: a stated
+  // condition has to name a **requirement**, and a decision it cites has to actually state that
+  // requirement. Three of the four cited `D380` for a cost claim `D380` does not make, and the
+  // fourth cited a milestone (`M154d`) that had closed.
+  //
+  // `C109`-`C111` are graded by `verify-input-acceptance.mjs`, by reference and in both directions
+  // (`D752`), exactly as `C51`-`C58` are graded by the Tier 1/2 script. `C112` is an ordinary plant
+  // in the acceptance harness.
+  {
+    id: 'C109',
+    construct: 'matcher:has-no-input-handling-violations',
+    family: 'matcher',
+    tier: 'security',
+    title: 'the third state is instrumented, and the two reasons a rule stands down mean different things',
+    target: "apiV2's `/vuln/*` input surface under two envs — `secureLocal` through the TLS sidecar and `plaintext` straight to the app, which grant different probe opt-ins",
+    evidence: { file: 'tflw-acceptance/security/input.tflw', pattern: 'has no .*input handling violations', min: 4 },
+    graders: ['input', 'coverage'],
+    knownAnswer:
+      'Seven ledger rows, each grading the full counts line — `[rules, applicable, notApplicable, ' +
+      'violations]` — rather than the violation total, because the interesting Tier 3 failure moves ' +
+      '`applicable`: an opt-in silently dropped from the config turns a firing rule into a ' +
+      'not-applicable one and the violation count alone reads identically. Every rule in the pack is ' +
+      'demonstrated **firing**, **silent** and **not applicable**, and the two not-applicable ' +
+      'reasons are graded apart — *the operator did not grant this opt-in* against *probes were sent ' +
+      'and none was answered* — because collapsing them loses the difference between a coverage gap ' +
+      'and a finding. `TF067` is the runtime floor under all of it: an assertion with nothing to ' +
+      'mutate is refused before a request leaves, and it is graded from stderr because there is no ' +
+      'report to read.',
+    catches: 'a rule that stops applying while its assertion stays green, an opt-in dropped from a config, and a stand-down reported without the reason that tells an operator which of the two things to do about it.',
+    blockedOn: null,
+  },
+  {
+    id: 'C110',
+    construct: 'config:probe:oversized',
+    family: 'config',
+    tier: 'security',
+    title: 'the same rule, the same corpus, and the only variable is whether the config grants the word',
+    target: 'apiV2 `POST /vuln/notes` under both envs — `secureLocal` grants `probe oversized`, `plaintext` deliberately does not',
+    evidence: { file: 'tflw-acceptance/security/tflw.config', pattern: '^\\s*probe oversized\\s*$', min: 1 },
+    graders: ['input', 'coverage'],
+    knownAnswer:
+      'A granted/withheld pair on one rule, and the discrimination is that **nothing else moves**: ' +
+      'granted, `sec/oversized-input-accepted` is applicable and fires twice on one body at two ' +
+      'leaves; withheld, the identical assertion lists it as not applicable and names `probe ' +
+      'oversized` as the missing word. The 64 KiB value is the whole probe class, so an opt-in that ' +
+      'was read but ignored produces a green assertion over an unsent payload — which is the same ' +
+      'observable as a correct withheld half, and is why the reason string is graded rather than the ' +
+      'count.',
+    catches: 'an opt-in honoured against a target that never granted it, and one accepted in the config and never sent — both of which leave the assertion green.',
+    blockedOn: null,
+  },
+  {
+    id: 'C111',
+    construct: 'config:probe:traversal',
+    family: 'config',
+    tier: 'security',
+    title: 'the grant is on the env the payload can actually reach, and that was measured rather than chosen',
+    target: '`GET /vuln/files/{seg}` over `plaintext`, which grants `probe traversal` — the sidecar env withholds it because nginx normalises the payload away before the app sees it',
+    evidence: { file: 'tflw-acceptance/security/tflw.config', pattern: '^\\s*probe traversal\\s*$', min: 1 },
+    graders: ['input', 'coverage'],
+    knownAnswer:
+      'The same granted/withheld pair as `C110` and one thing more, which is the reason this row is ' +
+      'not a duplicate of it: **where the grant lives was decided by a measurement**. Run through ' +
+      'the sidecar, the traversal assertion reported the rule applicable, nine probes sent, nine ' +
+      'answered and no violation — a rule that looks tested and is not, because nginx decodes and ' +
+      'normalises the URI and returns `400` before the app is reached. The app is vulnerable and its ' +
+      'deployment is not. So the grant sits on `plaintext`, where the rule fires (`V11`), and the ' +
+      'sidecar env is the withheld half that names the missing word. Its silence is earned ' +
+      'separately, on an identifier-shaped path segment that reads no files.',
+    catches: 'a probe class granted where the deployment eats it, which is indistinguishable from a clean target — and a traversal rule that stands down without saying which of the two reasons applies.',
+    blockedOn: null,
+  },
+  {
+    id: 'C112',
+    construct: 'matcher:was-made',
+    family: 'matcher',
+    tier: 'ui',
+    title: 'a grid on one page load: the URL, the method, and whose request log is being read',
+    target: "webV2's SPA storefront on `:8090` under `env local` — one `open \"/\"`, whose catalog page fetches `/v1/products` and nothing else this row names",
+    evidence: { file: 'tests/.constructs/network-was-made.tflw', pattern: '^\\s*(?:expect|check) request to .* (?:not )?was made$', min: 6 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'Four known answers off one page load, arranged so that no single wrong implementation can ' +
+      'satisfy them: the URL the page fetched **was** made, the same URL under a method it never ' +
+      'used was **not**, a URL it never touched was **not**, and the `/health` request **tflw ' +
+      'itself** sent was **not** — that last one is what says the observation set is the browser\'s ' +
+      'network log rather than the runner\'s. The two `check` rows at the end are the same ' +
+      'assertions with the negation dropped: they must fail, in this same run, so the wrong answers ' +
+      'are demonstrated reachable rather than assumed to be.',
+    catches: 'a `was made` that answers `true` for anything observed, one that ignores the `with method` clause, and one that counts the runner\'s own requests as the page\'s.',
+    blockedOn: null,
+  },
 ];
 
 /**
@@ -2415,21 +2527,26 @@ export const RATCHET = [
   // step needing an observable, and it is not one: `TF033` says "`pause` is only legal inside a
   // workload-bearing `test`", so it is `M67`'s per-iteration pacing and its known answer is an
   // inter-arrival gap.
-  // --- matcher (2) ---
+  // --- matcher (0) ---
   // Eight of the nine left at `M154g` step 2 (`C60`-`C66`), on one plant whose every assertion is a
-  // *pair*: `tests/.constructs/matcher-discrimination.tflw`. The eighth, `matcher:was-made`, is a
-  // browser-network assertion and does not belong in an API fixture — it rosters with the UI work,
-  // not here. What remains is one row, and it is a condition rather than a backlog item.
+  // *pair*: `tests/.constructs/matcher-discrimination.tflw`. Tier 1 and Tier 2 left at `M154f`
+  // (`C57`, `C58`).
   //
-  // Tier 1 and Tier 2 left at `M154f` (`C57`, `C58`). **`matcher:has-no-input-handling-violations`
-  // stays**, and it is the milestone's finding rather than an oversight: Tier 3's grader
-  // (`verify-input-acceptance.mjs`) states its known answers in full, asserts them, and exits
-  // non-zero — and it runs in **no automated pass**, neither `regression.mjs` nor CI, because a Tier 3
-  // assertion costs an order of magnitude more requests than a Tier 2 one (`D380`) and the cost was
-  // judged too high for every-PR. So it can fail and nothing would notice, which is exactly what a
-  // roster row must not be built on. **Rosters when the Tier 3 grader runs on something that
-  // reports** — a condition, not a milestone number (`M131`).
-  'matcher:was-made', 'matcher:has-no-input-handling-violations',
+  // **The last two left at `M154g` step 5, and neither of their conditions survived being audited
+  // rather than read (`D764`).**
+  //
+  // `matcher:was-made`'s said *"a browser-network assertion … it rosters with the UI work, not
+  // here"*. "The UI work" was `M154d`, which closed — so the sentence was an **address**, and it
+  // never named a requirement at all. The requirement it meant is a browser fixture with observable
+  // network traffic, and both halves already existed: `02-checkout-iframe-network.tflw` runs one,
+  // and step 4b's `C108` had already driven and graded a browser tier from this harness. `C112`.
+  //
+  // `matcher:has-no-input-handling-violations`'s said Tier 3's grader runs in **no automated pass**
+  // *"because a Tier 3 assertion costs an order of magnitude more requests than a Tier 2 one
+  // (`D380`)"*. `D380` does not say that, and the cost is the other way round: 0.91-1.05 s against
+  // `security-acceptance-gate`'s 1.70-1.99 s, measured live. `D765` puts the grader in `regression.mjs`
+  // as the `input-acceptance` phase, which is `M137e-01`'s remedy (`D493`) for the third time rather
+  // than a new mechanism. `C109`.
   // --- generator (1) ---
   // Eleven of the twelve left at `M154g` step 3 (`C81`-`C91`), on one plant and four runs of it.
   // The family was scoped as this milestone's expensive end and it was, but not for the predicted
@@ -2453,11 +2570,13 @@ export const RATCHET = [
   // --- locator (0) ---
   // The first family to empty, at `M154d`'s locator harness. The header stays so the seven
   // families read in manifest order and an emptied one is visibly empty rather than absent.
-  // --- config (2) ---
+  // --- config (0) ---
   // Five left at `M154f`: `authorized` (`C53`), `evidence` (`C54`), `redact` (`C55`), `probe
-  // mutating` (`C52`) and `probe ciphers` (`C51`). **`probe oversized` and `probe traversal` stay
-  // for the same reason as the Tier 3 matcher above** — their rules are Tier 3's pack, so the only
-  // script that grades them is the one nothing runs. All three roster together, on that condition.
+  // mutating` (`C52`) and `probe ciphers` (`C51`). **`probe oversized` and `probe traversal` left at
+  // `M154g` step 5 (`C110`, `C111`)**, together with the Tier 3 matcher above and on the same
+  // finding: all three had been held back by the same unaudited sentence about `D380`, and the
+  // condition it stated was not one `D380` makes. They roster together, as they always said they
+  // would — just not on the condition that was written down.
   //
   // The five **directives** left at `M154g` step 4a (`C92`-`C96`), and they are the first rows in
   // this ledger whose witness is a config rather than a test. A `.tflw` file cannot observe which
@@ -2481,7 +2600,6 @@ export const RATCHET = [
   // `env secureLocal` passes whether or not `insecure` does anything, and the admin suite passing
   // is equally consistent with both webV2 apps being served from one port. That is `D739`'s
   // distinction at its sharpest — the evidence was there, and it could not have caught the defect.
-  'config:probe:oversized', 'config:probe:traversal',
   // --- diagnostic (0) ---
   // Emptied at `M154g` step 1, and by a **rule** rather than by sixty-six rows: `C59` in
   // `REFERENCE_ROSTERS` rosters the whole family by citing `verify-check-diagnostics.mjs`, which
@@ -2511,6 +2629,21 @@ export const RATCHET = [
  * is otherwise satisfied by a checker that never emits it at all.
  * * `RATCHET.length` must not exceed this (`D740`). Lower it as milestones roster constructs; raising
  * it is the edit this pin exists to make loud.
+ *
+ * **`5` -> `1` at `M154g` step 5, and this is the drop that says the least about coverage and the
+ * most about the pin itself.** Acceptance clause 5 asked whether five conditioned entries were the
+ * floor. Taking that as a judgement meant *auditing* the five rather than reading them, and four did
+ * not survive: three cited `D380` for a cost claim it does not make, and one cited a milestone that
+ * had closed. Nothing about the language changed and no new capability was built — what changed is
+ * that four sentences were checked for the first time since they were written. `D764` is the rule
+ * that came out of it: **a condition is audited against the decision it cites, never read as
+ * provenance**, because a `D`-number in a sentence reads as already-checked and for two milestones
+ * that is exactly what it bought.
+ *
+ * The one entry left is `generator:unique-like`, and it is a real floor: its condition names a
+ * requirement, cites a defect that reproduces (`M154g-07`), and is blocked on a repository this
+ * milestone does not own. Rostering it would state the measured behaviour while the manifest
+ * promises the opposite — the laundering `D722` refuses.
  *
  * **`41` -> `37` at `M154g` step 2c: the four declarations that decide which tests exist.** `test`,
  * `import`, `with each` and `@tag` answer, before a step runs, *which tests are there and which of
@@ -2574,7 +2707,9 @@ export const RATCHET = [
  * list worth reading before the numbers: `config:probe:oversized`, `config:probe:traversal` and
  * `matcher:has-no-input-handling-violations` are Tier 3, their grader asserts and exits non-zero,
  * and nothing runs it. Rostering them would have made the ratchet fall by eleven and made the
- * roster three rows less true.
+ * roster three rows less true. **Still true as written, and step 5 took them anyway** — by making
+ * something run it (`D765`) rather than by lowering the bar. What did not survive is the *cost*
+ * reason attached to that hold; see the ceiling's own note below.
  *
  * `M154d`'s second artifact took it down another sixteen, and cost no new target-app surface at
  * all: every one of those sixteen already had a real flow that already went red for the right
@@ -2601,7 +2736,7 @@ export const RATCHET = [
  * the unrostered remainder, and a remainder can only be honest about a denominator that has itself
  * just been corrected upwards.
  */
-export const RATCHET_CEILING = 5;
+export const RATCHET_CEILING = 1;
 
 /**
  * `CONSTRUCTS.md` carries one row per plant and prose a human reads; this asserts their id sets

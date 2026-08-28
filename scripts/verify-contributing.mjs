@@ -174,7 +174,7 @@ const CLASSIFIED = [
       'xvfb-run -a npm run regression -- --group security-ui',
     ],
     why:
-      'the 30-phase sweep, dealt into four duration-packed groups. **CONTRIBUTING names the four group commands and never the 30 phases** (`D504`): the phase list changes every milestone, PHASE_GROUPS is already held to PHASES by a partition guard that exits 1 on an ungrouped phase, and a copy of the phase list in prose would be a copy with no guard. `xvfb-run -a` is mandatory (`M131-04`) — the watch-check phase spawns a real headed browser',
+      'the sweep, dealt into four duration-packed groups. **CONTRIBUTING names the four group commands and never the phases — nor, since `M154g`/`D767`, how many there are** (`D504`): the phase list changes every milestone, PHASE_GROUPS is already held to PHASES by a partition guard that exits 1 on an ungrouped phase, and a copy of the phase list in prose would be a copy with no guard. The count was such a copy and had drifted 30 vs 38 (`M154g-14`). `xvfb-run -a` is mandatory (`M131-04`) — the watch-check phase spawns a real headed browser',
   },
 ];
 

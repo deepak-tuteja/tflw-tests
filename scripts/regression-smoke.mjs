@@ -2,7 +2,7 @@
 // Fast local smoke check (PLAN_CI.md decision 15): one Docker restart, then `--tag smoke` (a
 // mixed sample across all 3 layers) plus the cheapest, highest-signal `*-check` scripts that
 // don't need their own `--env`/restart-adjacent assumptions — demo-fail-check, cli-flags-check,
-// check-diagnostics. Not a replacement for `npm run regression`'s full 30-phase sweep: reserve
+// check-diagnostics. Not a replacement for `npm run regression`'s full sweep: reserve
 // that for `testFlow`-touching changes, or let CI catch it (README's own "Fast local smoke
 // check" note points here).
 //
@@ -14,7 +14,7 @@
 import { rmSync } from 'node:fs';
 import { tflwCommand } from './lib/tflw-bin.mjs';
 
-/** **`released`, and this is the loudest declaration of it in the repo.** The 30-phase sweep is
+/** **`released`, and this is the loudest declaration of it in the repo.** The sweep is
  *  this project's primary dogfood gate, and until M141 it opened every phase with a literal
  *  `npx tflw` — which resolves the VENDORED tarball through `node_modules/.bin`. So the gate a
  *  contributor reads as "my change still passes" has always graded the *released* build, and

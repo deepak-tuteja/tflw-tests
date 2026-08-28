@@ -223,22 +223,27 @@ endpoints invented specifically to exercise a feature that does not exist yet. U
 the layer that is supposed to move, and each one would be work spent defending a fixture against its
 own purpose.
 
-What holds apiV2 honest instead is the **30-phase `.tflw` regression sweep**, asserted from outside
+What holds apiV2 honest instead is the **`.tflw` regression sweep**, asserted from outside
 over HTTP — the layer that stays stable across all that reshaping, and the same interface tflw's own
 users see. That is the stronger check of the two, and it was already the only one doing anything.
 
 If apiV2 ever stops being a target and starts being something whose internals other code depends on,
 this decision expires. That is the condition; it is deliberately not tied to a milestone number.
-- **`xvfb-run -a npm run regression`** — the 30-phase sweep, each phase on its own fresh Docker
-  restart — **plus one 31st phase that runs only off CI**, see `perf-ladder` below. Restarting is
+- **`xvfb-run -a npm run regression`** — the whole sweep, each phase on its own fresh Docker
+  restart — **plus one phase that runs only off CI**, see `perf-ladder` below. Restarting is
   not optional: `unique(...)`'s counter resets per `tflw run` while Postgres
   data does not, so chained phases on one database reproduce false collisions. `xvfb-run -a` is not
   optional either — the `watch-check` phase spawns a real `tflw watch`, which always forces a headed
   browser.
-  **The phases are deliberately not listed here.** `scripts/regression.mjs`'s `PHASES` is the
-  authoritative list, and `PHASE_GROUPS` is already held to it by a partition guard that exits 1 on
-  an ungrouped, unknown or duplicated phase. A copy of that list in prose would be a copy with no
-  guard — in the document whose entire subject is copies with no guards.
+  **The phases are deliberately not listed here, and since `M154g`/`D767` they are not *counted*
+  here either.** `scripts/regression.mjs`'s `PHASES` is the authoritative list, and `PHASE_GROUPS` is
+  already held to it by a partition guard that exits 1 on an ungrouped, unknown or duplicated phase.
+  A copy of that list in prose would be a copy with no guard — in the document whose entire subject
+  is copies with no guards. **A count is that same copy compressed**, and it drifted exactly as
+  `D504` predicted the list would: these three sentences said "30-phase sweep" while `PHASES` held
+  **38**, through eight phases arriving across six milestones, and nothing anywhere could notice
+  (`M154g-14`). The number is gone rather than corrected — correcting it would have restored a claim
+  with no guard to a document that is about not doing that.
   **`perf-ladder` is the one phase CI never runs** (`D758`). It is the *measured* half of the perf
   gate — the ladder's seven rungs plus the functional leg, `node scripts/perf-conformance.mjs
   --profile sweep --in-sweep` — and it needs what a GitHub runner cannot give it: `fedora-box`, k6,
