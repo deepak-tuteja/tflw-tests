@@ -1,0 +1,10 @@
+# unscoped-session.tflw — CHECK-ONLY FIXTURE (`M154g` step 4a, `C94`'s control): see
+# `named-service.tflw` for what this directory is.
+#
+# `session everywhere` carries no `for env` clause, so it resolves under every env the config
+# declares. This file is clean under `--env one` **and** `--env two`, which is the half that stops
+# `scoped-session.tflw`'s `TF028` from being a fact about `--env two`.
+
+test "a session with no scoping clause resolves in every env" as everywhere
+  api GET /health
+  expect status equals 200

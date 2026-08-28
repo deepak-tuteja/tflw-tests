@@ -1,0 +1,11 @@
+# `config:key:allow`. `localhost` and `127.0.0.1` are two spellings of one machine and two entries in
+# an allowlist, which is what makes this a one-word difference between the two configs rather than a
+# different target. Written as an absolute URL because that is the one step form that can reach a
+# host the config never names (SPEC §5.1) — `TF057` warns about exactly that and is expected here.
+#
+# The step fails when the run refuses it, and that failure is not the known answer: the answer is
+# whether a request ever arrived at `/blocked`, which only the server can say.
+
+test "a step written as an absolute URL to the other spelling of this machine"
+  api GET http://localhost:4507/blocked
+  expect status equals 200

@@ -1,0 +1,13 @@
+# `C105`-`C107`. One request through the nginx TLS sidecar, held fixed while the config beside it
+# changes — the same inversion the rest of this directory uses, against a target that has to be real:
+# `insecure`, `cert` and `key` are claims about a TLS handshake, and there is no handshake to make
+# claims about without a listener that performs one.
+#
+# The `server` header is nginx's and Express sends none, so it also says the response came *through*
+# the sidecar rather than from the plaintext backend behind it.
+
+test "the api answers through the TLS sidecar"
+  api GET /health
+  expect status equals 200
+  expect body.status equals "ok"
+  expect header "server" matches "nginx"

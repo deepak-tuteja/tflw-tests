@@ -1,0 +1,6 @@
+# `config:key:report`. One green request, because what this plant reads is not the report's contents
+# but where the four artifacts were written.
+
+test "a run that produces artifacts"
+  api GET /reported
+  expect status equals 200

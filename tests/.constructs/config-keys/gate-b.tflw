@@ -1,0 +1,8 @@
+# `config:key:workers` — file B. `/gate` holds a request until a second one joins it or its deadline
+# passes, so two files that run concurrently meet inside the server and two that do not never do.
+# The step passes either way: the finding is the watermark, and a plant whose known answer was "the
+# step failed" could not tell a serialized run from a broken target.
+
+test "file B meets the rendezvous"
+  api GET /gate
+  expect status equals 200

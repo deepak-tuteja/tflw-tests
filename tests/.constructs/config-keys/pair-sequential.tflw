@@ -1,0 +1,12 @@
+# `declaration:concurrency` — the `sequential` header modifier (SPEC §4.5). A maximal run of
+# consecutive `parallel`-marked tests forms one concurrently-executed batch, so these two meet
+# inside `arrival-server.mjs`'s rendezvous. Its twin `pair-sequential.tflw` differs by one word per
+# header and nothing else.
+
+test "first half of the rendezvous" sequential
+  api GET /gate
+  expect status equals 200
+
+test "second half of the rendezvous" sequential
+  api GET /gate
+  expect status equals 200

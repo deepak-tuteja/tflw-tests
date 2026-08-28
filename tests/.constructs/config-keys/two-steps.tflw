@@ -1,0 +1,28 @@
+# `M154g` step 4b — the config-key corpus, and the directory-level note lives here because this is
+# the file the first plant in it runs.
+#
+# `C97`-`C103` grade **config keys**, and a config key is a claim about the request tflw is about to
+# make rather than about anything a test can assert. So this directory has step 4a's shape
+# (`tests/.checkonly/config-directives/`) for step 4a's reason: the `.tflw` files are held fixed and
+# the `*.config` file beside them is the operand that varies. `verify-construct-acceptance.mjs`
+# copies one in as `tflw.config` into a scratch corpus under the OS temp directory and runs it there.
+#
+# **Why the configs are `*.config` and not `tflw.config`.** `check-acceptance.mjs` and
+# `verify-external-targets.mjs` discover corpora by walking for a file named exactly `tflw.config`.
+# An operand that is one of a set is not a corpus, and naming it so would enrol every variant here
+# into two gates that would run them against a target they do not describe.
+#
+# **Why the target is `arrival-server.mjs` and not apiV2** — `D745`, unchanged. What is under test is
+# what tflw put on the wire, and a real target with a database makes the database the instrument.
+# Every plant here is graded against what the server recorded — paths, headers, and the rendezvous
+# watermark — never against tflw's own report of what it did. **No plant here needs a stack.**
+#
+# Two steps, two paths, and the second one is the whole point of the pair: a `header` key promised
+# "on every `api` step" is a per-request claim, and a header attached to the first request only
+# would satisfy any total.
+
+test "two steps against two paths"
+  api GET /alpha
+  expect status equals 200
+  api GET /beta
+  expect status equals 200

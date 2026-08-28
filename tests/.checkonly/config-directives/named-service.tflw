@@ -1,0 +1,37 @@
+# named-service.tflw — CHECK-ONLY FIXTURE (`M154g` step 4a, `C92`): the first of five files in this
+# directory, and the one carrying the header for all of them.
+#
+# **What this directory is.** The five `config:directive:*` constructs — `defaults`, `env`,
+# `session`, `require`, `exclude` — are the config dialect's top-level words, and every one of them
+# is a statement about *the config*, not about a test. So none can be graded the way every other
+# plant in `tests/.constructs/` is graded: there is nothing a `.tflw` file can assert about which
+# `env` was selected, because by the time a step runs the selection has already happened and the
+# file cannot see it. The observable is one file's text held fixed while the **config underneath it
+# changes**, and the thing measured is what `tflw check` (or `tflw run`) then says. Each file here
+# is copied into a scratch directory by `scripts/verify-construct-acceptance.mjs`, which writes the
+# config variants beside it — the same shape `verify-check-diagnostics.mjs` uses for `TF051` and
+# `TF057`/`TF058`, and for that script's stated reason: the fixture stays a real, readable file in
+# the repository, and only the second operand is generated.
+#
+# **No stack, ever.** Every leg is a `tflw check`, or a `tflw run` against `127.0.0.1:9` — a port
+# the fetch standard blocks outright, so no socket is opened and the outcome does not depend on
+# whether apiV2 is up. These rows grade identically while the box is busy, which is the property
+# `C78`/`C79` have and the reason they were worth separating from the run-tier plants.
+#
+# **Why the diagnostics are the instrument and not the subject.** `C59` already proves, by rule,
+# that every code tflw assigns fires somewhere. These rows ask a different question with the same
+# codes: not *does `TF026` fire* but *does the **active env** decide which named services exist*.
+# Same distinction step 3 drew for `TF054` in `invalid-literal-operand.tflw` — same file, two
+# sentences, and only one of them is about the diagnostic.
+#
+# **This file's own job (`C92`).** `api extra` names a service that `env one` declares and `env two`
+# does not. The text never changes; `--env two` turns it into a `TF026`. Its silence under no flag
+# at all is the `default` marker's own claim — that is a third reading, not a repetition of
+# `--env one`.
+#
+# Run explicitly (dot-directory, and it needs the generated config beside it):
+#   node scripts/verify-construct-acceptance.mjs --only C92
+
+test "a named service belongs to the env that declares it"
+  api extra GET /health
+  expect status equals 200

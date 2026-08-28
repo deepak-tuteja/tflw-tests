@@ -1,0 +1,9 @@
+# `config:key:log`. Two levels and one request, so a run has both something to render and something
+# to record. `log` steps always succeed (SPEC §7.7), so this file is green under every config here —
+# what moves is what the console prints and what `results.json` keeps, which are different questions.
+
+test "two log statements at two levels"
+  api GET /logged
+  expect status equals 200
+  log debug "c103-debug-line"
+  log warn "c103-warn-line"

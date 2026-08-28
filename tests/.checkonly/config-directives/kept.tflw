@@ -1,0 +1,15 @@
+# kept.tflw — CHECK-ONLY FIXTURE (`M154g` step 4a, `C95`/`C96`): see `named-service.tflw` for what
+# this directory is.
+#
+# The plainest file that can be discovered. It carries no session, no named service and no
+# diagnostic of its own, which is exactly what the two rows using it need:
+#
+# * `C96` (`exclude`) counts it. `excluded/skipped.tflw` is its twin one directory down, and the
+#   whole claim is the difference between "1 file checked" and "2 files checked".
+# * `C95` (`require`) runs it. The run never reaches a socket — the generated config points `api`
+#   at `127.0.0.1:9` — so the only thing that varies between that row's legs is whether the run was
+#   refused before it started or failed at the port.
+
+test "a discoverable file with nothing else to say"
+  api GET /health
+  expect status equals 200

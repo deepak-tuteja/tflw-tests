@@ -1,0 +1,7 @@
+# `config:key:timeout`. `/slow` is `arrival-server.mjs`'s one deliberately delayed path (50 ms, added
+# for `C49`) — far above any scheduling jitter and far below any sensible budget, so a tight
+# `timeout step` fails against it on every machine and a loose one passes on every machine.
+
+test "one step against the deliberately slow path"
+  api GET /slow
+  expect status equals 200

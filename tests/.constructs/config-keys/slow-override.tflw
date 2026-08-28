@@ -1,0 +1,7 @@
+# The same request as `slow.tflw`, carrying its own `timeout` clause (SPEC §5.1). The config key is a
+# *default*; a step may override it. Without this file a tight config value and a hard-wired refusal
+# to wait would look identical.
+
+test "the same slow step carrying its own timeout"
+  api GET /slow timeout 5s
+  expect status equals 200
