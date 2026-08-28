@@ -44,19 +44,33 @@
 # separate constructs. `unique uuid`'s trailing eight hex digits are that same counter — `0000000c`
 # is 12 — which is what makes its distinctness a guarantee rather than 122 bits of luck.
 #
-# ## `unique like` is **not** rostered by this file, and the gap in the sequence is why
+# ## `unique like` and the gap in the sequence — what this file found, and what it now grades
 #
-# The counter above jumps 8 -> 12. The three missing ticks are the three `unique like` draws in the
-# test between them: the construct **advances the counter and then does not use it**, filling its
-# pattern from the seeded `random` stream instead. Two runs at seed 4242 produced the identical
-# triple, and `random like "SKU-####-??"` -> `SKU-8562-VQ` shares its digits with `unique like
-# "ORD-######"` -> `ORD-856286`, which is the same stream being read twice.
+# The counter above jumps 8 -> 12, and the three ticks in between are the three `unique like` draws
+# in the test between them. **That gap is how this file found `M154g-07`.** The construct advanced
+# the counter and then spent it as a *sub-seed*, filling its pattern from the resulting stream — so
+# the ticks were real and the values did not carry them. Two runs at seed 4242 produced the
+# identical triple, and `random like "SKU-####-??"` -> `SKU-8562-VQ` shared its digits with `unique
+# like "ORD-######"` -> `ORD-856286`, which was one stream being read twice. Its distinctness was
+# 10^6-probabilistic rather than guaranteed.
 #
-# So its distinctness is 10^6-probabilistic, not guaranteed, and `SPEC` §7.2's bolded retry clause —
-# *"a retried attempt cannot use `unique(...)` to reproduce a value an earlier attempt already
-# used"* — is false for it, because §7.3 replays `random` identically on every attempt. The last
-# test below demonstrates exactly that, and it is the reason `generator:unique-like` **stays on the
-# ratchet with a stated condition** rather than getting a row here. Filed as `M154g-07`.
+# **This header used to add that `SPEC` §7.2's bolded retry clause was false for it too, and that
+# was wrong.** The claim followed from the mechanism theory above being wrong in the same way: if
+# the pattern came from the test's replayed `random` stream, a retried attempt would reproduce the
+# earlier value. It did not — the old build keyed on the *shared* counter, which advances across a
+# retried test's attempts, so the three values already differed. The retry test at the bottom of
+# this file has been posting `g3r|unique-like|` since step 3 and **no grader read the slot**, so
+# this file carried a claim and the measurement refuting it at the same time, for two milestones.
+# `C113` reads it now.
+#
+# Fixed in tflw on 2026-08-28: the counter is rendered into the placeholders themselves, through a
+# permutation keyed by the pattern alone. So the gap stays — one counter shared four ways is what
+# makes `C82`'s and `C83`'s continuations mean anything — but it now says *sharing* rather than
+# *loss*, and `generator:unique-like` left the ratchet for `C113`. The two claims that row is
+# actually graded on are both invisible in this file, because a single run cannot make either: the
+# value must be **identical** under a second seed and a moved clock (which is the only thing
+# separating this construct from `random like`, whose pattern language is the same), and the retry
+# test's three attempts must produce three values rather than one.
 #
 # ## What is stated in-band and what is stated by the grader
 #
@@ -159,14 +173,17 @@ test "`unique number` is the counter itself, in digits"
   expect status equals 200
 
 @constructs @generators
-test "`unique like` fills `#` with digits — the construct this file does not roster"
+test "`unique like` fills `#` with digits and the counter is what fills them"
   let a = unique like "ORD-######"
   let b = unique like "ORD-######"
   let c = unique like "ORD-######"
 
-  # `#` is a digit and everything else is a literal. That much holds, and it is all that holds: the
-  # three ticks these draws take out of the shared counter are the gap the grader measures between
-  # `unique number`'s last value and `unique uuid`'s first, and they are spent on nothing.
+  # `#` is a digit and everything else is a literal. Note how little that is: three draws being
+  # distinct is exactly what this test asserted while `M154g-07` was live, and it passed. A sample
+  # of three cannot tell a guarantee from a high probability, so `C113` is graded on the two things
+  # a run cannot show — seed-independence and the retry claim — and these lines are the shape half.
+  # The three ticks these draws take are the gap the grader reads between `unique number`'s last
+  # value and `unique uuid`'s first; they are one counter shared, not three spent on nothing.
   expect {a} matches "^ORD-[0-9]{6}$"
   expect {a} not equals {b}
   expect {b} not equals {c}
@@ -350,7 +367,10 @@ test "a retried attempt gets fresh `unique` data and replays its `random` data" 
   #   `random string` `SPEC` §7.3: the per-test seed is re-derived, so the value is identical on
   #                   every attempt — which is what makes it the right choice for an idempotency
   #                   key.  ->  one label, marked three times.
-  #   `unique like`   promises the first and behaves as the second. `M154g-07`.
+  #   `unique like`   three labels, and it always did — `C113`. This line used to say it promised
+  #                   the first and behaved as the second, which was never measured and was not
+  #                   true: the old build advanced the same counter, so the attempts already
+  #                   differed. What it lacked was a *guarantee*, not retry-freshness.
   let u = unique("W3-Retry")
   let r = random string 10
   let l = unique like "RTY-######"
