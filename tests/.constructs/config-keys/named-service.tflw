@@ -1,0 +1,6 @@
+# The named-service half of `config:key:api` (SPEC §3.2) and of `config:key:header`'s `for <service>`
+# scoping. One step, addressed by name, so the path it lands on says which base URL was consulted.
+
+test "a step addressed to a named service"
+  api second GET /gamma
+  expect status equals 200

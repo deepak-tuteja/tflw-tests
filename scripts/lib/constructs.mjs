@@ -2023,6 +2023,275 @@ export const PLANTS = [
     catches: 'an `exclude` that stops filtering discovery, and one that hardens into a refusal so an explicitly named file can no longer be checked.',
     blockedOn: null,
   },
+  {
+    id: 'C97',
+    construct: 'config:key:api',
+    family: 'config',
+    tier: 'api',
+    title: 'the base URL is joined onto the step\'s path, and each named service has its own',
+    target: '`arrival-server.mjs` — three steps under one config, graded by the paths the server recorded',
+    evidence: { file: 'tests/.constructs/config-keys/services.config', pattern: '^\\s*api second\\s+"', min: 1 },
+    run: 'two-steps.tflw',
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'The base URL carries a path segment on purpose, because a bare-origin base cannot tell '
+      + '*joined* from *replaced*: `api GET /alpha` under `api "http://127.0.0.1:4507/base"` must '
+      + 'arrive at **`/base/alpha`**, and it does. `api second GET /gamma` arrives at '
+      + '**`/second/gamma`** — a different base, chosen by the name on the step. Ground truth is the '
+      + 'server\'s own path counter, never tflw\'s report of where it sent things: a run that '
+      + 'resolved `/alpha` against the wrong service, or concatenated the base and dropped its path, '
+      + 'produces an identical green summary and a different set of paths on the wire.',
+    catches: 'a base URL whose own path is discarded when a step\'s path is appended, and a named service resolved to the default base.',
+    blockedOn: null,
+  },
+  {
+    id: 'C98',
+    construct: 'config:key:header',
+    family: 'config',
+    tier: 'api',
+    title: 'the configured header is on **every** request, and a service-scoped one is on exactly one',
+    target: '`arrival-server.mjs` — the same three steps, with the headers each arrival carried read back off the wire',
+    evidence: { file: 'tests/.constructs/config-keys/services-headers.config', pattern: '^\\s*header\\s+"X-Second"\\s+is\\s+".*"\\s+for second\\s*$', min: 1 },
+    run: 'two-steps.tflw',
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      '`tflw spec --json` summarises this key as *"a request header sent on every `api` step"*, and '
+      + '**every** is the word an ordinary test cannot check: a header attached to the first request '
+      + 'of a run satisfies any assertion written after it. The server records the headers of each '
+      + 'arrival separately, so the answer is per-request — `X-Plant` on all three, including the one '
+      + 'addressed to the named service. The precision half is the same key\'s *scoped* form '
+      + '(SPEC §3.2): `header "X-Second" is … for second` arrives on `/second/gamma` and is **absent** '
+      + 'from the other two, which is what stops "the header is everywhere" from being satisfied by a '
+      + 'runtime that ignores scoping and sends everything. **The key had one occurrence in this '
+      + 'repository before this plant** — a `defaults` header written for `C95` — because every other '
+      + '`header` line here is inside a `session` block, which is a different construct.',
+    catches: 'a header applied to the first request of a run rather than to each one, and per-service scoping that leaks a header onto every service.',
+    blockedOn: null,
+  },
+  {
+    id: 'C99',
+    construct: 'config:key:timeout',
+    family: 'config',
+    tier: 'api',
+    title: 'the configured budget is the one the request gets, and a step may overrule it',
+    target: '`arrival-server.mjs`\'s 50 ms `/slow` path — two configs differing by one duration',
+    evidence: { file: 'tests/.constructs/config-keys/timeout-tight.config', pattern: '^\\s*timeout step 10ms\\s*$', min: 1 },
+    run: 'slow.tflw',
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      '`timeout step 10ms` against a 50 ms path fails on every machine and `timeout step 5s` passes '
+      + 'on every machine, so the *value* is what decides rather than the presence of a timeout at '
+      + 'all — and the failure detail quotes the configured duration back (*"request timed out after '
+      + '10ms"*), which is the strongest available statement that the number was read. Two things stop '
+      + 'it being vacuous. `slow-override.tflw` is the identical request carrying its own `timeout 5s` '
+      + 'clause (SPEC §5.1) and **passes under the tight config**, so what was proven is a default a '
+      + 'step can overrule, not a hard-wired refusal to wait. And the plant asserts the spellings the '
+      + 'parser accepts: `timeout api 5s` is `TF010`, against a manifest sentence that documents it — '
+      + '`M154g-10`, asserted as measured so the day tflw implements it this row goes red on purpose.',
+    catches: 'a `timeout` key parsed and never applied, a per-step override that stopped winning, and the manifest\'s `timeout api`/`timeout browser` spelling silently becoming real.',
+    blockedOn: null,
+  },
+  {
+    id: 'C100',
+    construct: 'config:key:allow',
+    family: 'config',
+    tier: 'api',
+    title: 'the refusal happens before a socket, proven against a listener that would have recorded one',
+    target: '`arrival-server.mjs` — one absolute-URL step, two allowlists differing by one entry',
+    evidence: { file: 'tests/.constructs/config-keys/allow-narrow.config', pattern: '^\\s*allow hosts "127\\.0\\.0\\.1"\\s*$', min: 1 },
+    run: 'absolute.tflw',
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      '`localhost` and `127.0.0.1` are one machine and two allowlist entries, so the two configs '
+      + 'differ by one word and point at the same listener. SPEC §3.7 says a violating request is '
+      + 'refused *"before any network I/O — no connection ever attempted, not just a request that then '
+      + 'fails"*, and **an absence is only provable against something that would have recorded a '
+      + 'presence**: under the narrow list the server records **zero** arrivals at `/blocked`, under '
+      + 'the wide one exactly **one**, and its socket counter goes up only in the second. '
+      + '`tests/.demo-fail/allow-hosts-blocked.tflw` has dogfooded the *verdict* of this guardrail for '
+      + 'two arcs; what it cannot show is that nothing was sent, because a refused request and a '
+      + 'rejected one produce the same red.',
+    catches: 'an allowlist enforced by discarding the response rather than by never sending the request, and a host matched by address instead of by name.',
+    blockedOn: null,
+  },
+  {
+    id: 'C101',
+    construct: 'config:key:workers',
+    family: 'config',
+    tier: 'api',
+    title: 'two files either meet inside the target or they do not, and one digit decides',
+    target: '`arrival-server.mjs`\'s `/gate` rendezvous — two files, two configs differing by one digit',
+    evidence: { file: 'tests/.constructs/config-keys/workers-two.config', pattern: '^\\s*workers 2\\s*$', min: 1 },
+    run: 'gate-a.tflw',
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      '**The entry `constructs.mjs` said "rosters when apiV2 has one" about.** `/gate` holds a request '
+      + 'until a second joins it or its deadline passes, and reports the high-water mark of '
+      + 'simultaneous holders — the overlap watermark a counter cannot produce. At `workers 1` the '
+      + 'watermark is **1**, nobody is ever paired and both holders are released alone; at `workers 2` '
+      + 'it is **2**, both are released as a pair and nobody waits out a deadline. Exact in both '
+      + 'directions and not a timing judgement: the deadline changes how long the serialized leg '
+      + 'takes (~3 s against ~30 ms), never which answer it gives, and both legs pass every assertion '
+      + 'either way. **`workers` is the `--parallel` axis, not the `--workers` flag** (SPEC §12) — '
+      + '`C3` already proves an iteration count is independent of the second one, so this ledger now '
+      + 'states both halves of a distinction the two names invite readers to collapse.',
+    catches: 'a `workers` key parsed and never reaching the scheduler, and file concurrency that runs regardless of what the config asked for.',
+    blockedOn: null,
+  },
+  {
+    id: 'C102',
+    construct: 'config:key:report',
+    family: 'config',
+    tier: 'api',
+    title: 'all four artifacts move together, and nothing is left behind at the default location',
+    target: 'one green run, twice — the identical corpus with and without the key',
+    evidence: { file: 'tests/.constructs/config-keys/report-custom.config', pattern: '^\\s*report "artifacts/custom"\\s*$', min: 1 },
+    run: 'one-step.tflw',
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'With `report "artifacts/custom"` the run writes `report.html`, `results.json`, `junit.xml` and '
+      + '`.last-run.json` into that nested directory — created, not required to exist — and **`report/` '
+      + 'is not written at all**. With the key removed and nothing else changed, the same four land in '
+      + '`report/`. Both halves are needed: a key that moved `report.html` alone would satisfy any '
+      + 'assertion that only looked for the file the CLI prints, and a key that copied rather than '
+      + 'moved would leave a stale `report/results.json` that every other plant in this gate reads. '
+      + '**The key had zero occurrences in this repository** before this plant — `report` is the '
+      + 'default nobody ever had a reason to write down.',
+    catches: 'a `report` key honoured by one writer and ignored by the other three, and a relocation that leaves the default directory populated.',
+    blockedOn: null,
+  },
+  {
+    id: 'C103',
+    construct: 'config:key:log',
+    family: 'config',
+    tier: 'api',
+    title: 'the two keys change what is *rendered* and neither changes what is *recorded*',
+    target: 'one file with a `debug` and a `warn` call, under three configs',
+    evidence: { file: 'tests/.constructs/config-keys/log-warn.config', pattern: '^\\s*log level warn\\s*$', min: 1 },
+    run: 'logged.tflw',
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'Three configs, one fixture, and the invariant is the interesting half. `log level warn` keeps '
+      + 'the `debug` line off the console and `log level debug` lets it through; `log destination '
+      + 'console` keeps both lines out of `report.html` and `log destination html` puts both in and '
+      + 'neither on the console. Under **all three**, `results.json` carries both lines identically — '
+      + 'SPEC §3.8\'s *"never affects whether it is recorded"*, which is the claim a reader is most '
+      + 'likely to get wrong and the one no ordinary run can observe, because a suite that greps its '
+      + 'own console output would see a level filter as data loss. `env logConfig` and '
+      + '`verify-logging.mjs` have exercised these keys since `M51`; what neither states is that '
+      + 'filtering is a rendering decision.',
+    catches: 'a `log level` that drops a step from `results.json` instead of from the console, and a `log destination` that reaches one renderer and not the other.',
+    blockedOn: null,
+  },
+  {
+    id: 'C104',
+    construct: 'declaration:concurrency',
+    family: 'declaration',
+    tier: 'api',
+    title: '`parallel` and `sequential` decide whether two tests are ever in the target at once',
+    target: 'the same `/gate` rendezvous, one file, two tests, one word per header',
+    evidence: { file: 'tests/.constructs/config-keys/pair-parallel.tflw', pattern: '^test ".*" parallel$', min: 2 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      '**Not a config key, and it rosters here because one instrument answered both questions.** This '
+      + 'entry sat on the ratchet on a stated condition — *"needs a server-side overlap watermark; '
+      + 'rosters when apiV2 has one"* — and `D745` is why the endpoint is not in apiV2: a claim about '
+      + 'tflw\'s own scheduling measured against a real target measures the target. Two `parallel` '
+      + 'tests reach a watermark of **2** and are released as a pair; the same two marked `sequential` '
+      + 'reach **1** and each waits out its deadline alone. Both files run under `workers 1`, so the '
+      + 'file-concurrency axis is pinned and the header modifier is the only thing that moved — '
+      + 'without that control the plant would be `C101` written twice.',
+    catches: 'a `parallel` batch executed one test at a time, and a `sequential` marker that no longer serializes.',
+    blockedOn: null,
+  },
+  {
+    id: 'C105',
+    construct: 'config:key:insecure',
+    family: 'config',
+    tier: 'security',
+    title: 'the verification it disables is really happening, and the trade is never silent',
+    target: 'the nginx sidecar\'s plain-TLS listener (`:8443`), whose certificate is signed by a CA the container invents at every start',
+    evidence: { file: 'tests/.constructs/config-keys/tls-insecure.config', pattern: '^\\s*insecure true\\s*$', min: 1 },
+    run: 'health.tflw',
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'The same request, twice, one config line apart: with `insecure true` it is a 200 whose `server` '
+      + 'header is nginx\'s, and without it the run fails naming the certificate. That second half is '
+      + 'the one nothing here had: `env secureLocal` has carried the key since `M128a` and every run '
+      + 'under it passes, so **the suite could not tell a key that disabled verification from a '
+      + 'target whose certificate verified**. Two precision halves keep it from being a bare '
+      + 'on/off: SPEC §3.5 promises the run *"carries a visible warning in the CLI summary and the '
+      + 'report header — never a silent trade-off"*, so the banner must be present in the one leg and '
+      + 'absent in the other; and `--forbid-insecure` must refuse the run **before any test executes**, '
+      + 'which is a different thing from failing it.',
+    catches: 'an `insecure` key that is parsed and never reaches the agent, a run that disables verification quietly, and a CI policy flag that fails a run instead of refusing it.',
+    blockedOn: null,
+  },
+  {
+    id: 'C106',
+    construct: 'config:key:cert',
+    family: 'config',
+    tier: 'security',
+    title: 'the client certificate is what gets past `ssl_verify_client on`',
+    target: 'the nginx sidecar\'s mTLS listener (`:8444`) — the same `GET /health` under two configs',
+    evidence: { file: 'tests/.constructs/config-keys/mtls-matched.config', pattern: '^\\s*cert "client\\.pem"\\s*$', min: 1 },
+    run: 'health.tflw',
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'With `cert`/`key` the request is a 200 through the listener; with both lines deleted and '
+      + 'nothing else changed the same request is nginx\'s **400 `No required SSL certificate was '
+      + 'sent`**. Both halves already run in this suite — `tests/api/identity/mtls.tflw` and '
+      + '`tests/.env-specific/mtls-rejection.tflw` — and they run under two *different envs* in two '
+      + 'different files, so what has never been stated is that the pair is a pair: this row runs one '
+      + 'unchanged file and moves only the two config lines. The certificate is regenerated at every '
+      + 'container start, which is why the grader copies it beside the config rather than referring '
+      + 'to a path (`M104-01`/`D183`: `cert`/`key` resolve against the config\'s own directory).',
+    catches: 'a `cert` key parsed and never presented, and an mTLS listener that stopped requiring one.',
+    blockedOn: null,
+  },
+  {
+    id: 'C107',
+    construct: 'config:key:key',
+    family: 'config',
+    tier: 'security',
+    title: 'the private key is loaded and paired with the certificate, not carried beside it',
+    target: 'the same listener and the same file, with `key` pointing at a real key that belongs to somebody else',
+    evidence: { file: 'tests/.constructs/config-keys/mtls-mismatched-key.config', pattern: '^\\s*key "server\\.key"\\s*$', min: 1 },
+    run: 'health.tflw',
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      '`key` is the hardest of the four to state on its own, because deleting it deletes `cert`\'s '
+      + 'answer too — so it is moved rather than removed. `server.key` is a real, well-formed private '
+      + 'key the same container generated, and it does not belong to `client.pem`. The run fails '
+      + '**before any HTTP status exists**, which is the whole discrimination: `C106`\'s negative is a '
+      + '400 the server chose to send, and this one never reaches a server, because the pair is '
+      + 'refused where it is assembled. A `key` that were decorative — parsed, stored, never handed '
+      + 'to the TLS context — would produce `C106`\'s 200 here.',
+    catches: 'a `key` that is read and never paired with `cert`, and a mismatched pair accepted locally and refused as an authorization failure instead.',
+    blockedOn: null,
+  },
+  {
+    id: 'C108',
+    construct: 'config:key:web',
+    family: 'config',
+    tier: 'ui',
+    title: 'two files, two `web` bases, and each is at home under exactly one of them',
+    target: 'webV2\'s SPA storefront (`:8090`) and its SSR admin console (`:8091`) — `open "/"` under each',
+    evidence: { file: 'tests/.constructs/config-keys/web-admin.config', pattern: '^\\s*web "http://localhost:8091"\\s*$', min: 1 },
+    run: 'open-admin.tflw',
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'A two-by-two grid rather than a pair, because one cell proves nothing: `open "/"` names a path, '
+      + 'and the same path under two `web` bases reaches two genuinely different applications. '
+      + '`.product-grid` exists only in the storefront and the heading `testFlow-tests admin console` '
+      + 'only in the console, so the diagonal passes and the off-diagonal fails — a `web` key that '
+      + 'were ignored in favour of one hard-coded base would light up a whole column instead. This is '
+      + 'the key `env webv2Admin` exists for, and until now the only thing establishing that it worked '
+      + 'was that the admin suite passed, which is equally consistent with both apps being served '
+      + 'from one port.',
+    catches: 'a `web` base ignored for a bare path, and an env switch that moves the `api` base without moving the browser\'s.',
+    blockedOn: null,
+  },
 ];
 
 /**
@@ -2107,7 +2376,7 @@ export const expandReferenceRosters = (manifestConstructs) =>
  * exercised*. `step:api` sits here with 1139 occurrences behind it.
  */
 export const RATCHET = [
-  // --- declaration (1) ---
+  // --- declaration (0) ---
   // The family `M154a` missed and `M154c`/`D742` added: twelve constructs, of which `after` and
   // `retry` were rostered above, `crawl` left at `M154f` (`C56`), the four that decide **which
   // tests exist** left at `M154g` step 2c (`C73`-`C76`), and the four about **scope and identity**
@@ -2122,14 +2391,15 @@ export const RATCHET = [
   // spells differently — `@…`, `with each`, and `parallel`/`sequential`. Read them as ids, never as
   // keywords (`M154a`, `spec-data.ts`).
   //
-  // **`declaration:concurrency` is the one with no observable, and it is a condition rather than a
-  // backlog item.** Telling `parallel` from `sequential` means proving two tests did or did not
-  // overlap *in time*, and nothing in apiV2 records that: the arrival counter every plant above
-  // leans on counts arrivals and not their concurrency, so both settings leave it identical. It
-  // needs a server-side overlap watermark — an endpoint that holds a request open and reports the
-  // high-water mark of simultaneous holders — which is real target surface, not a roster row.
-  // **Rosters when apiV2 has one.**
-  'declaration:concurrency',
+  // **`declaration:concurrency` left at `M154g` step 4b (`C104`), and its stated condition was met
+  // by a different endpoint than the one it named.** The condition read *"needs a server-side
+  // overlap watermark — an endpoint that holds a request open and reports the high-water mark of
+  // simultaneous holders — which is real target surface, not a roster row. Rosters when apiV2 has
+  // one."* The watermark was the right requirement and apiV2 was the wrong address: `D745` had
+  // already decided that a claim about tflw's own *scheduling* is measured against a zero-latency
+  // target, because a real one makes the database the instrument. `arrival-server.mjs` grew the
+  // rendezvous instead, and the same endpoint rostered `config:key:workers` (`C101`) — which is
+  // what the condition should have said, since the two constructs were always waiting on one thing.
   // --- step (0) ---
   // Empty as of `M154g` step 2b. The last six were the workhorses `D739` is about — `api` with 1139
   // occurrences behind it, `expect` with 1692 — and they are the clearest case the distinction was
@@ -2183,7 +2453,7 @@ export const RATCHET = [
   // --- locator (0) ---
   // The first family to empty, at `M154d`'s locator harness. The header stays so the seven
   // families read in manifest order and an emptied one is visibly empty rather than absent.
-  // --- config (13) ---
+  // --- config (2) ---
   // Five left at `M154f`: `authorized` (`C53`), `evidence` (`C54`), `redact` (`C55`), `probe
   // mutating` (`C52`) and `probe ciphers` (`C51`). **`probe oversized` and `probe traversal` stay
   // for the same reason as the Tier 3 matcher above** — their rules are Tier 3's pack, so the only
@@ -2194,10 +2464,23 @@ export const RATCHET = [
   // `env` was selected or whether a `defaults` block was shared, so the plant is inverted — the
   // fixture is held fixed and the *config beside it* is the operand that varies. Every one of them
   // grades with no stack at all, which is why the config family was split with these first.
-  'config:key:header', 'config:key:timeout',
-  'config:key:workers', 'config:key:report', 'config:key:web', 'config:key:api', 'config:key:insecure',
-  'config:key:cert', 'config:key:key', 'config:key:allow',
-  'config:key:log',
+  //
+  // **Seven of the eleven **keys** left at `M154g` step 4b (`C97`-`C103`), and the split inside the
+  // family was not the one step 4a predicted.** That handoff said every key needs a running target;
+  // seven of them need no stack, because what a config key claims is a property of *the request
+  // tflw was about to make*, and `arrival-server.mjs` is where that is readable — paths, per-arrival
+  // headers, a rendezvous watermark, and, for `allow hosts`, the absence of an arrival at all. Two
+  // of the seven (`report`, `workers`) had **zero occurrences anywhere in this repository** and
+  // `header` had one, so these are the rare `RATCHET` rows where the entry did mean *unexercised*
+  // and not only `D739`'s *unrostered*.
+  //
+  // **The other four went in the same step (`C105`-`C108`) and they are a different kind of work**:
+  // `insecure`, `cert` and `key` are claims about a TLS handshake and `web` is a claim about which
+  // application a browser reached, so all four need a real target and none of them can be graded on
+  // a wire. Every one of them had a *positive* already running in this suite and no negative:
+  // `env secureLocal` passes whether or not `insecure` does anything, and the admin suite passing
+  // is equally consistent with both webV2 apps being served from one port. That is `D739`'s
+  // distinction at its sharpest — the evidence was there, and it could not have caught the defect.
   'config:probe:oversized', 'config:probe:traversal',
   // --- diagnostic (0) ---
   // Emptied at `M154g` step 1, and by a **rule** rather than by sixty-six rows: `C59` in
@@ -2318,7 +2601,7 @@ export const RATCHET = [
  * the unrostered remainder, and a remainder can only be honest about a denominator that has itself
  * just been corrected upwards.
  */
-export const RATCHET_CEILING = 17;
+export const RATCHET_CEILING = 5;
 
 /**
  * `CONSTRUCTS.md` carries one row per plant and prose a human reads; this asserts their id sets

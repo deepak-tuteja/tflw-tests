@@ -2280,6 +2280,374 @@ if (DIRECTIVE_IDS.some((id) => wanted(id))) {
 }
 
 // =============================================================================
+// C97-C104 — the config keys, and the one declaration the same instrument freed
+// =============================================================================
+//
+// Step 4a's handoff predicted that every one of the eleven `config:key:*` entries needs a running
+// target. Seven of them do not, and the reason is what a config key actually claims: it is a
+// statement about **the request tflw was about to make**, so the place it is readable is the wire,
+// not a report and not a database. `arrival-server.mjs` is that wire — `D745`'s target, already
+// chosen for `C3` and the perf tier on the argument that a real target measures the target.
+//
+// Three things were added to it here, each for one claim no counter could answer: a per-arrival
+// header log (`C98` — "on **every** step" is a per-request question), a `/gate` rendezvous
+// reporting the high-water mark of simultaneous holders (`C101`, `C104`), and nothing at all for
+// `C100`, which needs only that the server would have recorded an arrival if one had been sent.
+//
+// `C104` is not a config key. It rosters here because the rendezvous is the endpoint its `RATCHET`
+// condition asked for — that condition named apiV2 as the address and `D745` had already answered
+// why the address is wrong.
+
+const KEY_IDS = ['C97', 'C98', 'C99', 'C100', 'C101', 'C102', 'C103', 'C104'];
+
+if (KEY_IDS.some((id) => wanted(id))) {
+  const FIX = path.join(ROOT, 'tests', '.constructs', 'config-keys');
+  const CONFORMANCE = path.join(ROOT, 'tflw-acceptance', 'conformance');
+  console.log('\nC97-C104 — the config keys, graded on the wire\n  target: `arrival-server.mjs` — committed configs, copied in as `tflw.config`, no stack');
+
+  // Same scratch placement and same reason as step 4a: `tflw run` reads a `.env` from its working
+  // directory and this repository has one. Nothing here needs it, and a corpus that silently
+  // inherited it would make "this plant needs no secrets" a property of where it was run.
+  const scratch = mkdtempSync(path.join(tmpdir(), 'tflw-config-keys-'));
+  const useConfig = (dir, config) => copyFileSync(path.join(FIX, config), path.join(dir, 'tflw.config'));
+  const corpus = (name, files, config) => {
+    const dir = path.join(scratch, name);
+    mkdirSync(dir, { recursive: true });
+    for (const f of files) copyFileSync(path.join(FIX, f), path.join(dir, f));
+    useConfig(dir, config);
+    return dir;
+  };
+  const peak = async () => JSON.parse(await (await fetch('http://127.0.0.1:4507/__peak')).text());
+  const headersOf = async (name) => JSON.parse(await (await fetch(`http://127.0.0.1:4507/__headers?name=${name}`)).text());
+  const hits = (text, needle) => (text.match(new RegExp(needle, 'g')) ?? []).length;
+  const readIn = (dir, ...rel) => (existsSync(path.join(dir, ...rel)) ? readFileSync(path.join(dir, ...rel), 'utf8') : '');
+
+  let server = null;
+  try {
+    server = await startArrivalServer(CONFORMANCE);
+
+    // ---- C97 / C98: one corpus, two configs, and the wire says which base and which headers ----
+    const apiDir = corpus('api', ['two-steps.tflw', 'named-service.tflw'], 'services.config');
+    const ALPHA = '/base/alpha';
+    const BETA = '/base/beta';
+    const GAMMA = '/second/gamma';
+
+    await arrivals('__reset');
+    const plainOut = runRun([], { cwd: apiDir });
+    const plainPaths = await arrivals('__arrivals');
+    const plainHeaders = await headersOf('x-plant');
+
+    if (wanted('C97')) {
+      recall('C97', (plainPaths.byPath[ALPHA] ?? 0) === 1 && (plainPaths.byPath[BETA] ?? 0) === 1,
+        `\`/alpha\` and \`/beta\` arrived at \`${ALPHA}\` and \`${BETA}\` — the base URL's own path segment is joined, not replaced (got: ${JSON.stringify(plainPaths.byPath)})`);
+      recall('C97', (plainPaths.byPath[GAMMA] ?? 0) === 1,
+        `and the step naming \`second\` arrived at \`${GAMMA}\`, which is a different base chosen by the name on the step`);
+      // Without this, a runtime that sent every request to every declared service would satisfy
+      // both assertions above and be wrong in the way that costs a real suite a duplicate write.
+      precision('C97', Object.keys(plainPaths.byPath).length === 3 && plainPaths.total === 3,
+        `exactly three requests arrived and nowhere else (got: ${JSON.stringify(plainPaths.byPath)})`);
+      precision('C97', /PASS 2\/2/.test(plainOut), 'the run itself is green, so the paths above are what a passing suite put on the wire');
+    }
+
+    if (wanted('C98')) {
+      const off = [ALPHA, BETA, GAMMA].every((p) => (plainHeaders.byPath[p] ?? [null])[0] === null);
+      useConfig(apiDir, 'services-headers.config');
+      await arrivals('__reset');
+      const headerOut = runRun([], { cwd: apiDir });
+      const every = await headersOf('x-plant');
+      const scoped = await headersOf('x-second');
+      const got = (h, p) => (h.byPath[p] ?? [])[0] ?? null;
+
+      recall('C98', off, 'the control config declares no `header` key and none of the three arrivals carried `X-Plant`');
+      recall('C98', [ALPHA, BETA, GAMMA].every((p) => (every.byPath[p] ?? []).length === 1 && got(every, p) === 'c98-every-step'),
+        `one \`defaults\` header line reached **each** of the three arrivals separately (got: ${JSON.stringify(every.byPath)})`);
+      recall('C98', got(scoped, GAMMA) === 'c98-second-only',
+        `and \`header … for second\` reached the step addressed to that service (got: ${JSON.stringify(scoped.byPath)})`);
+      // The half that stops "the header is everywhere" being satisfied by a runtime that ignores
+      // scoping: a service-scoped header must be ABSENT from the other two.
+      precision('C98', got(scoped, ALPHA) === null && got(scoped, BETA) === null,
+        'the scoped header is absent from the two arrivals it does not name, so scoping narrows rather than decorates');
+      precision('C98', /PASS 2\/2/.test(headerOut), 'the run is green under both configs, so nothing above is a side effect of a failure');
+    }
+
+    // ---- C99: the value decides, a step may overrule it, and one spelling does not exist -------
+    if (wanted('C99')) {
+      const tDir = corpus('timeout', ['slow.tflw', 'slow-override.tflw'], 'timeout-tight.config');
+      const tight = runRun([], { cwd: tDir });
+      useConfig(tDir, 'timeout-loose.config');
+      const loose = runRun([], { cwd: tDir });
+
+      recall('C99', /request timed out after 10ms/.test(tight),
+        'the tight config fails the 50 ms step and the detail quotes the configured duration back, so the number was read rather than the key noticed');
+      recall('C99', /PASS 2\/2/.test(loose), 'the same corpus is green when the only change is `10ms` -> `5s`');
+      recall('C99', /✓ the same slow step carrying its own timeout/.test(tight),
+        'and under the tight config the step with its own `timeout 5s` still passes — a default a step can overrule, not a refusal to wait');
+      precision('C99', /FAIL 1\/2/.test(tight),
+        'exactly one of the two tests failed under the tight config, so the override is the difference between them and not the run');
+      // `M154g-10`, asserted as measured. The manifest documents `timeout api`/`timeout browser`;
+      // the parser's `TIMEOUT_TARGETS` is `step`/`expect`/`wait`. Written down here so that the day
+      // tflw implements the spelling, this row goes red on purpose rather than silently agreeing.
+      useConfig(tDir, 'timeout-api-spelling.config');
+      const spelled = runCheck(['slow.tflw'], { cwd: tDir });
+      precision('C99', /error\[TF010\]/.test(spelled),
+        `\`timeout api 5s\` is refused by the parser against a manifest that documents it (got: ${spelled.trim().split('\n')[0] || '(no output)'}) — \`M154g-10\``);
+    }
+
+    // ---- C100: an absence, proven against something that would have recorded a presence --------
+    if (wanted('C100')) {
+      const aDir = corpus('allow', ['absolute.tflw'], 'allow-narrow.config');
+      await arrivals('__reset');
+      const narrowOut = runRun([], { cwd: aDir });
+      const narrow = await arrivals('__arrivals');
+      useConfig(aDir, 'allow-wide.config');
+      await arrivals('__reset');
+      const wideOut = runRun([], { cwd: aDir });
+      const wide = await arrivals('__arrivals');
+
+      recall('C100', (narrow.byPath['/blocked'] ?? 0) === 0,
+        `nothing arrived at \`/blocked\` under an allowlist that names the other spelling of this machine (got: ${JSON.stringify(narrow.byPath)})`);
+      recall('C100', (wide.byPath['/blocked'] ?? 0) === 1,
+        'and exactly one request arrived when `"localhost"` was added — same listener, same step, one config line apart');
+      recall('C100', /is not in `allow hosts`/.test(narrowOut) && /localhost/.test(narrowOut),
+        'the refusal names the host it refused, so the red is this guardrail rather than an unrelated failure');
+      // SPEC §3.7 promises no connection is attempted, not merely that the response is discarded.
+      // Both readings are already in the baseline — the grader's own `__arrivals` fetch opens a
+      // socket in each leg — so what is asserted is that the counter moved only where a request
+      // was permitted.
+      precision('C100', wide.connections > narrow.connections,
+        `the socket counter rose only in the permitted leg (${narrow.connections} -> ${wide.connections}), so the refusal is before the connection and not after the response`);
+      precision('C100', /PASS 1\/1/.test(wideOut), 'the permitted leg is green, so the blocked leg is not failing for a reason both configs share');
+    }
+
+    // ---- C101 / C104: the rendezvous, once per axis --------------------------------------------
+    if (wanted('C101')) {
+      const wDir = corpus('workers', ['gate-a.tflw', 'gate-b.tflw'], 'workers-one.config');
+      await arrivals('__reset');
+      const oneOut = runRun([], { cwd: wDir });
+      const onePeak = await peak();
+      useConfig(wDir, 'workers-two.config');
+      await arrivals('__reset');
+      const twoOut = runRun([], { cwd: wDir });
+      const twoPeak = await peak();
+
+      recall('C101', onePeak.peakWaiting === 1 && onePeak.gatePaired === 0 && onePeak.gateAlone === 2,
+        `at \`workers 1\` the watermark is 1 and both holders waited out their deadline alone (got: ${JSON.stringify(onePeak)})`);
+      recall('C101', twoPeak.peakWaiting === 2 && twoPeak.gatePaired === 2 && twoPeak.gateAlone === 0,
+        `at \`workers 2\` it is 2 and both were released as a pair — one digit, over an unchanged corpus (got: ${JSON.stringify(twoPeak)})`);
+      precision('C101', /PASS 2\/2/.test(oneOut) && /PASS 2\/2/.test(twoOut),
+        'both legs pass every assertion, so the watermark is the only thing that moved and the plant cannot be reading a failure');
+    }
+
+    if (wanted('C104')) {
+      const cDir = corpus('concurrency', ['pair-parallel.tflw', 'pair-sequential.tflw'], 'workers-one.config');
+      await arrivals('__reset');
+      const parOut = runRun(['pair-parallel.tflw'], { cwd: cDir });
+      const parPeak = await peak();
+      await arrivals('__reset');
+      const seqOut = runRun(['pair-sequential.tflw'], { cwd: cDir });
+      const seqPeak = await peak();
+
+      recall('C104', parPeak.peakWaiting === 2 && parPeak.gatePaired === 2,
+        `two consecutive \`parallel\` tests met inside the target (got: ${JSON.stringify(parPeak)})`);
+      recall('C104', seqPeak.peakWaiting === 1 && seqPeak.gateAlone === 2,
+        `the same two marked \`sequential\` never did (got: ${JSON.stringify(seqPeak)})`);
+      // Without this the plant is `C101` written twice: file concurrency would produce the same
+      // watermark. Read off the config actually in place rather than asserted in prose.
+      precision('C104', /^\s*workers 1\s*$/m.test(readIn(cDir, 'tflw.config')),
+        'both legs ran under `workers 1`, so the file-concurrency axis is pinned and the header modifier is the only difference');
+      precision('C104', /PASS 2\/2/.test(parOut) && /PASS 2\/2/.test(seqOut),
+        'both files are green, so `sequential` is serializing rather than failing');
+    }
+
+    // ---- C102: four artifacts, and nothing left behind -----------------------------------------
+    if (wanted('C102')) {
+      const ARTIFACTS = ['report.html', 'results.json', 'junit.xml', '.last-run.json'];
+      const rDir = corpus('report', ['one-step.tflw'], 'report-custom.config');
+      runRun([], { cwd: rDir });
+      const custom = ARTIFACTS.filter((f) => existsSync(path.join(rDir, 'artifacts', 'custom', f)));
+      const strayDefault = existsSync(path.join(rDir, 'report'));
+
+      useConfig(rDir, 'report-default.config');
+      rmSync(path.join(rDir, 'artifacts'), { recursive: true, force: true });
+      runRun([], { cwd: rDir });
+      const dflt = ARTIFACTS.filter((f) => existsSync(path.join(rDir, 'report', f)));
+      const strayCustom = existsSync(path.join(rDir, 'artifacts'));
+
+      recall('C102', custom.length === 4,
+        `all four artifacts were written under \`artifacts/custom\`, a nested directory the run created (got: ${custom.join(', ') || 'none'})`);
+      recall('C102', dflt.length === 4,
+        `and all four land in \`report/\` when the key is removed and nothing else changes (got: ${dflt.join(', ') || 'none'})`);
+      // A key that copied rather than moved would leave a stale `report/results.json` behind, which
+      // every other plant in this gate reads — so this half is a guard on the instrument too.
+      precision('C102', !strayDefault, '`report/` was not written at all under the custom key, so the artifacts moved rather than being copied');
+      precision('C102', !strayCustom, 'and `artifacts/` is not written back when the key is gone');
+    }
+
+    // ---- C103: what is rendered moves, what is recorded does not -------------------------------
+    if (wanted('C103')) {
+      const lDir = corpus('log', ['logged.tflw'], 'log-warn.config');
+      const legs = {};
+      for (const which of ['warn', 'debug', 'html']) {
+        rmSync(path.join(lDir, 'report'), { recursive: true, force: true });
+        useConfig(lDir, `log-${which}.config`);
+        const out = runRun([], { cwd: lDir });
+        legs[which] = { out, json: readIn(lDir, 'report', 'results.json'), html: readIn(lDir, 'report', 'report.html') };
+      }
+      const DEBUG = 'c103-debug-line';
+      const WARN = 'c103-warn-line';
+
+      recall('C103', hits(legs.warn.out, DEBUG) === 0 && hits(legs.debug.out, DEBUG) > 0,
+        `\`log level warn\` keeps the \`debug\` call off the console and \`log level debug\` lets it through (got ${hits(legs.warn.out, DEBUG)} / ${hits(legs.debug.out, DEBUG)})`);
+      recall('C103', hits(legs.debug.html, DEBUG) === 0 && hits(legs.html.html, DEBUG) > 0,
+        `\`log destination console\` keeps both calls out of \`report.html\` and \`log destination html\` puts them in (got ${hits(legs.debug.html, DEBUG)} / ${hits(legs.html.html, DEBUG)})`);
+      recall('C103', hits(legs.html.out, WARN) === 0 && hits(legs.warn.out, WARN) > 0,
+        `and the destination is exclusive rather than additive — the \`warn\` call is on the console under \`console\` and absent under \`html\` (got ${hits(legs.warn.out, WARN)} / ${hits(legs.html.out, WARN)})`);
+      // SPEC §3.8: neither key ever affects whether a `log` step is *recorded*. This is the claim a
+      // reader is most likely to get wrong, and the one a suite that greps its own console output
+      // would read as data loss.
+      const recorded = ['warn', 'debug', 'html'].map((w) => hits(legs[w].json, DEBUG) + hits(legs[w].json, WARN));
+      precision('C103', recorded[0] > 0 && recorded.every((n) => n === recorded[0]),
+        `\`results.json\` carries both calls identically under all three configs (got ${recorded.join(' / ')}), so what these keys filter is rendering`);
+    }
+  } catch (e) {
+    for (const id of KEY_IDS) if (wanted(id)) { fail(`${id} could not run: ${e.message}`); scores.get(id).skipped = e.message; }
+  } finally {
+    server?.kill();
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+// =============================================================================
+// C105-C108 — the four keys whose witness is a target rather than a wire
+// =============================================================================
+//
+// `insecure`, `cert` and `key` are claims about a TLS handshake and `web` is a claim about which
+// application a browser reached. None of them is readable off `arrival-server.mjs`, so unlike
+// `C97`-`C104` these four need the compose stack: the nginx sidecar's two listeners (`:8443` plain
+// TLS, `:8444` mTLS) and both webV2 apps (`:8090` SPA storefront, `:8091` SSR admin console).
+//
+// Each of the four already had a **positive** running in this suite and no negative — `env
+// secureLocal` passes whether or not `insecure` does anything, `mtls.tflw` and `mtls-rejection.tflw`
+// are a pair split across two envs and two files, and the admin suite passing is equally consistent
+// with both webV2 apps being served from one port. So every row here moves one config line over one
+// unchanged fixture and states what the other side looks like.
+
+const TARGET_IDS = ['C105', 'C106', 'C107', 'C108'];
+
+if (TARGET_IDS.some((id) => wanted(id))) {
+  const FIX = path.join(ROOT, 'tests', '.constructs', 'config-keys');
+  const CERTS = path.join(ROOT, 'nginx', 'certs');
+  console.log('\nC105-C108 — the config keys that need a real target\n  target: the nginx TLS sidecar (:8443, :8444) and both webV2 apps (:8090, :8091)');
+
+  const scratch = mkdtempSync(path.join(tmpdir(), 'tflw-config-targets-'));
+  const useConfig = (dir, config) => copyFileSync(path.join(FIX, config), path.join(dir, 'tflw.config'));
+  const corpus = (name, files, config) => {
+    const dir = path.join(scratch, name);
+    mkdirSync(dir, { recursive: true });
+    for (const f of files) copyFileSync(path.join(FIX, f), path.join(dir, f));
+    useConfig(dir, config);
+    return dir;
+  };
+
+  try {
+    // ---- C105: the verification `insecure` disables is really happening ------------------------
+    if (wanted('C105')) {
+      const tDir = corpus('tls', ['health.tflw'], 'tls-insecure.config');
+      const on = runRun([], { cwd: tDir });
+      const forbidden = runRun(['--forbid-insecure'], { cwd: tDir });
+      useConfig(tDir, 'tls-verify.config');
+      const off = runRun([], { cwd: tDir });
+
+      recall('C105', /PASS 1\/1/.test(on),
+        'with `insecure true` the request completes against a certificate signed by a CA the container invented at start-up');
+      recall('C105', !/PASS 1\/1/.test(off) && /certificate/i.test(off),
+        `and with that one line removed the same request fails naming the certificate (got: ${(off.match(/.*certificate.*/i) ?? ['(no certificate text)'])[0].trim().slice(0, 120)})`);
+      // SPEC §3.5: never a silent trade-off. A key that worked and said nothing would pass every
+      // assertion above, and is the failure this clause exists to prevent.
+      // Matched on the banner's own words, not on the substring `insecure`: the *failing* leg's
+      // hint offers `set \`insecure true\` in tflw.config` as the repair, so a looser test passes on
+      // both legs and asserts nothing. The teaching hint and the trade-off banner are different
+      // sentences and only one of them is the promise.
+      const BANNER = /insecure: true — TLS certificate verification was disabled for this run/;
+      precision('C105', BANNER.test(on) && !BANNER.test(off),
+        'the permitted leg carries the run-summary banner SPEC §3.5 promises and the verifying leg does not, so the trade-off is never silent');
+      precision('C105', !/PASS 1\/1/.test(forbidden) && /forbid-insecure|refus/i.test(forbidden),
+        `\`--forbid-insecure\` refuses the run rather than failing a test (got: ${forbidden.trim().split('\n').filter(Boolean).slice(-1)[0]?.slice(0, 120) ?? '(no output)'})`);
+    }
+
+    // ---- C106 / C107: the certificate, and then the key that has to belong to it ---------------
+    if (wanted('C106') || wanted('C107')) {
+      // Copied rather than referenced: `cert`/`key` resolve against the config's own directory
+      // (`M104-01`, `D183`), and these three files are regenerated at every container start, so a
+      // committed path would be either wrong or stale.
+      const mDir = corpus('mtls', ['health.tflw'], 'mtls-matched.config');
+      for (const pem of ['client.pem', 'client.key', 'server.key']) {
+        const src = path.join(CERTS, pem);
+        if (!existsSync(src)) fail(`C106/C107 need \`nginx/certs/${pem}\`, which the nginx container writes at start-up — the stack is not up`);
+        else copyFileSync(src, path.join(mDir, pem));
+      }
+      const matched = runRun([], { cwd: mDir });
+      useConfig(mDir, 'mtls-nocert.config');
+      const nocert = runRun([], { cwd: mDir });
+      useConfig(mDir, 'mtls-mismatched-key.config');
+      const wrongKey = runRun([], { cwd: mDir });
+
+      if (wanted('C106')) {
+        recall('C106', /PASS 1\/1/.test(matched), 'the client certificate gets the request past `ssl_verify_client on`');
+        recall('C106', /expected status to equal 200, but got 400/.test(nocert),
+          'and deleting the two lines leaves nginx\'s own 400 — the pair that has always run under two envs in two files, here as one file and one config line');
+        // The half that separates this row's negative from `C107`'s: a 400 is a status the server
+        // chose to send, so the handshake completed and the request was made. `mtls-rejection.tflw`
+        // owns the assertion on the body text; what is claimed here is the status and its kind.
+        precision('C106', !/request failed/.test(nocert) && !/PASS 1\/1/.test(nocert),
+          'the no-certificate leg fails on the status rather than on the transport, so the connection was made and refused by the listener');
+      }
+
+      if (wanted('C107')) {
+        // The discrimination: `C106`'s negative is a status the server chose to send. This one
+        // never reaches a server, because the pair is refused where it is assembled.
+        // Stated as what the output MUST contain rather than as what it must not, after one run of
+        // this row disagreed on 2026-08-28 and did not reproduce in five more. A bare `!PASS` is
+        // satisfied by any failure at all — including a crash, an empty buffer, or the corpus not
+        // being there — so it cannot tell "the pairing was refused" from "something went wrong",
+        // and an assertion whose flake is indistinguishable from its finding is the shape
+        // `arrival-server.mjs`'s own header warns about.
+        recall('C107', /request failed/.test(wrongKey) && !/PASS 1\/1/.test(wrongKey),
+          'a real private key that belongs to somebody else fails at the transport, so the key is handed to the TLS context rather than stored beside the certificate');
+        recall('C107', !/expected status to equal 200, but got 400/.test(wrongKey),
+          `and it fails before any HTTP status exists, which is what tells it from \`C106\`'s server-chosen 400 (got: ${(wrongKey.match(/.*(?:request failed|error).*/i) ?? ['(no failure line)'])[0].trim().slice(0, 140)})`);
+        precision('C107', /PASS 1\/1/.test(matched),
+          'the matching pair over the identical fixture passes, so what failed above is the pairing and not the listener');
+      }
+    }
+
+    // ---- C108: two bases, two applications, and a diagonal ------------------------------------
+    if (wanted('C108')) {
+      const wDir = corpus('web', ['open-storefront.tflw', 'open-admin.tflw'], 'web-storefront.config');
+      const store = { front: runRun(['open-storefront.tflw'], { cwd: wDir }), admin: runRun(['open-admin.tflw'], { cwd: wDir }) };
+      useConfig(wDir, 'web-admin.config');
+      const console8091 = { front: runRun(['open-storefront.tflw'], { cwd: wDir }), admin: runRun(['open-admin.tflw'], { cwd: wDir }) };
+      const passed = (out) => /PASS 1\/1/.test(out);
+
+      recall('C108', passed(store.front) && passed(console8091.admin),
+        'each file passes under the `web` base whose application it describes');
+      recall('C108', !passed(store.admin) && !passed(console8091.front),
+        'and fails under the other one — the same `open "/"`, two applications');
+      // A key ignored in favour of one hard-coded base lights up a whole column rather than a
+      // diagonal, which is exactly what the two assertions above would not distinguish alone.
+      precision('C108', passed(store.front) !== passed(console8091.front),
+        'the storefront file\'s verdict inverts when only the `web` line moves, so the base URL is what the bare path resolved against');
+      precision('C108', passed(console8091.admin) !== passed(store.admin),
+        'and so does the console file\'s, so neither result is one application answering both ports');
+    }
+  } catch (e) {
+    for (const id of TARGET_IDS) if (wanted(id)) { fail(`${id} could not run: ${e.message}`); scores.get(id).skipped = e.message; }
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+// =============================================================================
 // the table
 // =============================================================================
 

@@ -204,6 +204,18 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C94` | `session` (`config:directive:session`) | check | `session scoped for env one` and `session everywhere` are identical but for the clause: under `--env two` the first is a `TF028` quoting its own clause back, the second is clean. `C80` already grades `as`; this is the half `as` cannot see | a `for env` clause parsed and ignored, and a session table built from the wrong env |
 | `C95` | `require` (`config:directive:require`) | check | refused naming both variables with neither set; refused naming **`C95_UNUSED` alone** — which the config references nowhere — with the other set; past the gate and dead at port 9 with both. And `tflw check` says *no problems found* over the identical config, against a manifest that promises check-time refusal (`M154g-11`) | a `require env` guarding only interpolated variables, a refusal arriving after the first request, and the manifest sentence or the behaviour quietly moving under the other |
 | `C96` | `exclude` (`config:directive:exclude`) | check | **1 file checked** with the line and **2** without, over an unchanged two-file corpus — and naming the excluded file explicitly checks it under **both** configs, which is the manifest's own *"names a folder rather than a file"* clause asserted rather than paraphrased | an `exclude` that stops filtering discovery, and one that hardens into a refusal so a named file can no longer be checked |
+| `C97` | `api` (`config:key:api`) | api | `api GET /alpha` under a base whose own URL carries `/base` arrives at **`/base/alpha`** — a bare-origin base could not tell *joined* from *replaced* — and `api second GET /gamma` arrives at `/second/gamma`. Exactly three requests, and nowhere else | a base URL whose path is discarded, a named service resolved to the default base, and a step fanned out to every declared service |
+| `C98` | `header` (`config:key:header`) | api | the manifest says *"on every `api` step"*, and **every** is what a total cannot check: the server records each arrival's headers separately, so one `defaults` line is seen on all three. `header … for second` arrives on that service and is **absent** from the other two | a header attached to the first request of a run rather than to each, and per-service scoping that decorates instead of narrowing |
+| `C99` | `timeout` (`config:key:timeout`) | api | `timeout step 10ms` against a 50 ms path fails and the detail quotes **`10ms`** back; `5s` passes; and a step carrying its own `timeout 5s` passes under the tight config, so it is a default rather than a refusal to wait. Plus `timeout api 5s` → `TF010`, against a manifest that documents it (`M154g-10`) | a `timeout` key parsed and never applied, a per-step override that stopped winning, and the documented `timeout api` spelling silently becoming real |
+| `C100` | `allow hosts` (`config:key:allow`) | api | `localhost` and `127.0.0.1` are one machine and two entries, so the two configs differ by one word: **zero** arrivals at `/blocked` under the narrow list, **one** under the wide one, and the socket counter moves only in the second. An absence proven against something that would have recorded a presence | an allowlist enforced by discarding the response rather than never sending the request, and a host matched by address instead of by name |
+| `C101` | `workers` (`config:key:workers`) | api | the rendezvous the `RATCHET` was waiting for. At `workers 1` the watermark is **1** and both holders wait out their deadline alone; at `workers 2` it is **2** and both are released as a pair. One digit, unchanged corpus, and both legs green either way | a `workers` key that never reaches the scheduler, and file concurrency that ignores what the config asked for |
+| `C102` | `report` (`config:key:report`) | api | all four artifacts — `report.html`, `results.json`, `junit.xml`, `.last-run.json` — land under `artifacts/custom`, a nested directory the run creates, and **`report/` is not written at all**; remove the line and all four are back. Zero occurrences of this key existed in this repository before the plant | a `report` key honoured by one writer and ignored by the other three, and a relocation that leaves a stale default directory behind |
+| `C103` | `log` (`config:key:log`) | api | three configs, one fixture: `warn` keeps the `debug` call off the console and `debug` lets it through; `destination console` keeps both out of `report.html` and `html` puts both in and neither on the console. Under **all three**, `results.json` carries both identically — filtering is a rendering decision | a `log level` that drops a step from `results.json` instead of from the console, and a `log destination` that reaches one renderer and not the other |
+| `C104` | `parallel`/`sequential` (`declaration:concurrency`) | api | not a config key, and it rosters here because one instrument answered both questions. Two `parallel` tests reach a watermark of **2** and are released as a pair; the same two marked `sequential` reach **1**. Both legs under `workers 1`, so the file axis is pinned and the modifier is the only difference | a `parallel` batch executed one test at a time, and a `sequential` marker that no longer serializes |
+| `C105` | `insecure` (`config:key:insecure`) | security | with the line the request completes against a CA the container invented at start-up; without it the same request fails naming the certificate — the half `env secureLocal` has never had. Plus the run-summary banner present in one leg and absent in the other, and `--forbid-insecure` **refusing** rather than failing | an `insecure` key that never reaches the agent, a run that disables verification quietly, and a CI policy flag that fails a run instead of refusing it |
+| `C106` | `cert` (`config:key:cert`) | security | one unchanged file, two config lines: a 200 through `ssl_verify_client on`, and nginx's own **400** with `cert`/`key` deleted — the pair that has always run under two envs in two files, now as one. The negative fails on the *status*, so the connection was made and refused by the listener | a `cert` parsed and never presented, and an mTLS listener that stopped requiring one |
+| `C107` | `key` (`config:key:key`) | security | moved rather than removed, because deleting `key` deletes `cert`'s answer too: `server.key` is a real key the same container generated and does not belong to `client.pem`. The run fails **at the transport**, before any status exists — which is exactly what tells it from `C106`'s server-chosen 400 | a `key` read and never paired with `cert`, and a mismatched pair accepted locally and refused as an authorization failure instead |
+| `C108` | `web` (`config:key:web`) | ui | a two-by-two grid, because one cell proves nothing: `.product-grid` exists only in the storefront and `testFlow-tests admin console` only in the console, so the diagonal passes and the off-diagonal fails. A `web` key ignored for one hard-coded base lights a **column** instead | a `web` base ignored for a bare path, and an env switch that moves the `api` base without moving the browser's |
 
 ### `C1` — the soft assertion records a failure and keeps going
 
@@ -1102,6 +1114,59 @@ either lying about the grader or switching that check off.
 number, per the rule `M131` set: the milestone that gives an expensive grader a scheduled home is
 the one that closes them, whichever milestone that turns out to be.
 
+### `C97`–`C108` — the config keys, and the split inside the family that step 4a got wrong
+
+Step 4a's handoff predicted that every one of the eleven `config:key:*` entries needs a running
+target. **Seven of them need no stack at all**, and the reason is what a config key actually claims:
+it is a statement about *the request tflw was about to make*, so the place it is readable is the
+**wire**. `arrival-server.mjs` is that wire — `D745`'s target, chosen for `C3` and the perf tier on
+the argument that a real target with a database measures the database rather than tflw.
+
+Three things were added to it, each for one claim a counter cannot answer:
+
+- a **per-arrival header log**, because `C98`'s manifest sentence is *"a request header sent on every
+  `api` step"* and **every** is a per-request question — a header attached to the first request of a
+  run satisfies any total;
+- a **`/gate` rendezvous** that holds a request until a second joins it or its deadline passes, and
+  reports the high-water mark of simultaneous holders. That is the overlap watermark, and it grades
+  `C101` *and* `C104`;
+- **nothing at all** for `C100`, which needs only that the server would have recorded an arrival had
+  one been sent. An absence is only provable against something that would have shown a presence.
+
+**`C104` is not a config key**, and it is here because the rendezvous is the endpoint its own
+`RATCHET` condition asked for. That condition read *"needs a server-side overlap watermark … rosters
+when apiV2 has one"*. The watermark was the right requirement and apiV2 was the wrong address —
+`D745` had already answered why. One endpoint, two entries, and the deadline changes only how long
+the serialized leg takes (~3 s against ~30 ms), never which answer it gives.
+
+**Two of the seven had zero occurrences anywhere in this repository** — `report` and `workers` — and
+`header` had one, written for `C95` a step earlier. These are the rare `RATCHET` rows where the entry
+really did mean *unexercised* rather than `D739`'s usual *unrostered*: every other `header` line in
+this repo is inside a `session` block, which is a different construct.
+
+**`C105`–`C108` are the other four, and they are a different kind of work.** `insecure`, `cert` and
+`key` are claims about a TLS handshake and `web` is a claim about which application a browser
+reached; none is readable off a wire, so all four need the compose stack — the nginx sidecar's two
+listeners and both webV2 apps. What they share is the shape `D739` is sharpest about: **each already
+had a positive running in this suite and no negative.** `env secureLocal` passes whether or not
+`insecure` does anything; `mtls.tflw` and `mtls-rejection.tflw` are a pair split across two envs and
+two files, so nothing said they were a pair; and the admin suite passing is equally consistent with
+both webV2 apps being served from one port. Every row here moves **one config line over one
+unchanged fixture** and states what the other side looks like.
+
+`C107` is the hardest of the four to state alone, because deleting `key` deletes `cert`'s answer
+too. So it is **moved rather than removed**: `server.key` is a real, well-formed private key the same
+container generated, and it does not belong to `client.pem`. The run then fails at the *transport*,
+before any HTTP status exists — which is precisely what tells it from `C106`'s server-chosen 400.
+
+**The grader copies the three PEM files beside the config rather than pointing at `nginx/certs/`**,
+because `cert`/`key` resolve against the config's own directory (`M104-01`, `D183`) and the container
+reissues all three at every start. That property found a live defect in the offload driver while
+these rows were being written: `scripts/exec.mjs`'s rsync had no exclusion for `nginx/certs/`, so an
+`exec` against an already-running stack pushed this machine's stale copies over the ones the
+container had just issued — and the resulting failure is `400 No required SSL certificate was sent`,
+i.e. indistinguishable from the negative case `C106` exists to prove. Recorded as `M154g-12`.
+
 ## Blocked plants (`D734`)
 
 A plant that goes red because tflw is genuinely broken **keeps its row**, gets a row in tflw's
@@ -1109,7 +1174,7 @@ ledger, and is marked `blocked-on:<row>` here — counted as *covered but curren
 known reason*, never deleted and never quietly moved to the ratchet. Without this convention, this
 ledger's successes and its bugs look identical.
 
-**None at present.** All ninety-five plants pass — 88 of them graded here and 7 by their own gates.
+**None at present.** All one hundred and seven plants pass — 100 of them graded here and 7 by their own gates.
 `C1`–`C50` were last measured 2026-08-25 (the first three against tflw `5cba2da`, `C4`–`C12` against
 the `M154c` build that added the `declaration` family, `C13`–`C43` against `M154c`'s `main`,
 `C44`–`C50` against `M154d`'s); `C51`–`C91` on `fedora-box` 2026-08-26/27 across `M154f` and

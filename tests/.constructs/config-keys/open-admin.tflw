@@ -1,0 +1,6 @@
+# `C108`'s other half. The admin console redirects `/` to `/login`, whose heading names the app —
+# so this assertion is true of that base URL and of no other.
+
+test "a bare path opens the admin console"
+  open "/"
+  expect text "testFlow-tests admin console" is visible

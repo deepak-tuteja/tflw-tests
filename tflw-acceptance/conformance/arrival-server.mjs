@@ -85,6 +85,61 @@ let dropped = 0;
  *  not of tflw's iteration accounting, and asserting it would tie the plant to a dependency. */
 let connections = 0;
 
+// ---------------------------------------------------------------------------------------------
+// `M154g` step 4b — what a *config key* does to a request, recorded on the wire
+// ---------------------------------------------------------------------------------------------
+//
+// Three additions, and each is here for `D745`'s reason rather than for convenience. A config key
+// is a claim about the request tflw is about to make, and tflw's own report is the thing under
+// test: a `header` key that reached the report and not the socket would pass any assertion written
+// inside a `.tflw` file. So the socket is what records it.
+//
+//   - `headerLog` — the headers of each arrival, per path. `C98` asks whether a `header` key
+//     reaches **every** `api` step, which is a per-arrival question a total cannot answer.
+//   - `/gate` + `waiting` — a rendezvous. Two requests that arrive together are released together;
+//     one that arrives alone is released alone when its deadline passes. `peakWaiting` is the
+//     high-water mark of simultaneous holders, which is the overlap watermark `config:key:workers`
+//     and `declaration:concurrency` both need and neither could get from a counter. **This is the
+//     endpoint `constructs.mjs` says "rosters when apiV2 has one" about, and it does not belong in
+//     apiV2**: `D745` already decided that a claim about tflw's own scheduling is measured against
+//     a zero-latency target, because a real one makes the database the instrument.
+//   - `/blocked` — an ordinary counted path that exists only to be *unreachable*. `C100`'s claim is
+//     that `allow hosts` refuses before a socket is opened, and the only way to prove an absence is
+//     against a listener that would have recorded a presence.
+
+/** Per-path header maps, capped. `C98` reads two or three arrivals; the workload plants push
+ *  hundreds of thousands through the same process, so this is capped hard and separately from
+ *  `MAX_SAMPLES` — a header log is per-arrival *objects*, which is a different order of cost from
+ *  a float. Nothing reads a path with more than `MAX_HEADERS` arrivals. */
+const MAX_HEADERS = 50;
+const headerLog = new Map();
+
+/** The rendezvous. `GATE_HOLD_MS` is the deadline a lone holder waits before being released on its
+ *  own — long enough that two genuinely concurrent files always meet, short enough that the
+ *  one-worker leg costs seconds rather than a timeout budget. It is a *duration*, never a verdict:
+ *  both legs answer 200 and both tests pass, because the finding lives in `peakWaiting` and not in
+ *  whether tflw liked the response. A plant whose known answer was "the step failed" would be
+ *  indistinguishable from a broken target. */
+const GATE_N = 2;
+const GATE_HOLD_MS = Number(process.env.ARRIVAL_GATE_HOLD_MS ?? 1500);
+let waiting = [];
+let peakWaiting = 0;
+let gatePaired = 0;
+let gateAlone = 0;
+
+/** Release everyone currently held. `paired` is recorded per release rather than per request: what
+ *  the plant asks is whether anybody was *ever* in there at the same time as somebody else. */
+function releaseWaiting(paired) {
+  const held = waiting;
+  waiting = [];
+  for (const w of held) {
+    clearTimeout(w.timer);
+    if (paired) gatePaired += 1; else gateAlone += 1;
+    w.res.writeHead(200, { 'content-type': 'application/json' });
+    w.res.end(JSON.stringify({ ok: true, gate: true, paired }));
+  }
+}
+
 /** Min / median / max of the gaps between consecutive arrivals on one path. Null for fewer than
  *  two arrivals, because a single arrival has no gap and reporting `0` would be a made-up number. */
 function gapStats(list) {
@@ -100,6 +155,19 @@ function gapStats(list) {
   };
 }
 
+/** One arrival: the count, the offset, and the headers. Factored out when `M154g` added the header
+ *  log so the two counted branches could not drift — `/slow` and the default branch used to carry
+ *  the same three lines twice, and a header recorded on only one of them would have made `C98`
+ *  silently path-dependent. */
+function count(path, req) {
+  arrivals.set(path, (arrivals.get(path) ?? 0) + 1);
+  const list = offsets.get(path) ?? (offsets.set(path, []).get(path));
+  if (list.length < MAX_SAMPLES) list.push(performance.now() - epoch);
+  else dropped += 1;
+  const hs = headerLog.get(path) ?? (headerLog.set(path, []).get(path));
+  if (hs.length < MAX_HEADERS) hs.push({ ...req.headers });
+}
+
 const server = createServer((req, res) => {
   const path = req.url.split('?')[0];
   if (path === '/__arrivals') {
@@ -110,9 +178,17 @@ const server = createServer((req, res) => {
   if (path === '/__reset') {
     arrivals.clear();
     offsets.clear();
+    headerLog.clear();
     epoch = performance.now();
     dropped = 0;
     connections = 0;
+    // A holder left over from a previous plant would be counted into the next one's watermark, so
+    // the reset releases rather than forgets: dropping the references would leave two sockets open
+    // until their deadlines and the run's own `--parallel` accounting waiting on them.
+    releaseWaiting(false);
+    peakWaiting = 0;
+    gatePaired = 0;
+    gateAlone = 0;
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end('{"reset":true}');
     return;
@@ -146,6 +222,37 @@ const server = createServer((req, res) => {
     res.end(JSON.stringify({ epochBinMs: binMs, dropped, byPath: curve }));
     return;
   }
+  if (path === '/__headers') {
+    // The header name is the caller's choice for the same reason `/__curve`'s bin is: the server
+    // records what arrived and decides nothing about which part of it a plant is asking about.
+    const name = (new URL(req.url, 'http://x').searchParams.get('name') ?? '').toLowerCase();
+    const byPath = {};
+    for (const [p, list] of headerLog) byPath[p] = list.map((h) => h[name] ?? null);
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ name, byPath }));
+    return;
+  }
+  if (path === '/__peak') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ peakWaiting, gatePaired, gateAlone, holdMs: GATE_HOLD_MS, gateN: GATE_N }));
+    return;
+  }
+  if (path === '/gate') {
+    count(path, req);
+    const entry = { res, timer: null };
+    entry.timer = setTimeout(() => {
+      // Alone at the deadline. Released on its own, and recorded as such — the release is what the
+      // watermark means, so a lone holder must never be able to look like half of a pair.
+      waiting = waiting.filter((w) => w !== entry);
+      gateAlone += 1;
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, gate: true, paired: false }));
+    }, GATE_HOLD_MS);
+    waiting.push(entry);
+    if (waiting.length > peakWaiting) peakWaiting = waiting.length;
+    if (waiting.length >= GATE_N) releaseWaiting(true);
+    return;
+  }
   // `M154e` / `C49` — one path that is deliberately slow, and it is the only thing in this file
   // that delays anything. `threshold` decides a workload's verdict from the run's *aggregate*
   // metrics, and a plant for it needs a latency it can predict: against the zero-latency paths
@@ -156,10 +263,7 @@ const server = createServer((req, res) => {
   // ever showed the red half would not distinguish "the verdict comes from thresholds" from
   // "the verdict is always red".
   if (path === '/slow') {
-    arrivals.set(path, (arrivals.get(path) ?? 0) + 1);
-    const list = offsets.get(path) ?? (offsets.set(path, []).get(path));
-    if (list.length < MAX_SAMPLES) list.push(performance.now() - epoch);
-    else dropped += 1;
+    count(path, req);
     setTimeout(() => {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end('{"ok":true,"slow":true}');
@@ -169,10 +273,7 @@ const server = createServer((req, res) => {
   // Counted on *arrival*, before any work and before the response is written. A counter incremented
   // on the way out would undercount anything the process failed to answer, which is the opposite of
   // what this measures: the question is what tflw issued, not what it got back.
-  arrivals.set(path, (arrivals.get(path) ?? 0) + 1);
-  const list = offsets.get(path) ?? (offsets.set(path, []).get(path));
-  if (list.length < MAX_SAMPLES) list.push(performance.now() - epoch);
-  else dropped += 1;
+  count(path, req);
   res.writeHead(200, { 'content-type': 'application/json' });
   res.end('{"ok":true}');
 });

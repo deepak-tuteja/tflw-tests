@@ -1,0 +1,7 @@
+# `C108`. `open "/"` names a path, so the address it resolves to is whatever the active env's `web`
+# base says — the two apps this repository serves are two different applications on two ports, and
+# `.product-grid` exists in exactly one of them.
+
+test "a bare path opens the storefront"
+  open "/"
+  expect css ".product-grid" is visible
