@@ -38,11 +38,36 @@
 // counted applicable, did not fire — plus the ledger's own claim, drawn from `VULNS.md`, that the
 // response meets the rule's precondition. `M128-01` is the open row that would make it sufficient.
 
+// ## Where this runs, and the sentence that was wrong for three milestones
+//
+// **`M154g` step 5 (`D765`): this is the `input-acceptance` phase of `regression.mjs`.** Until then
+// it ran in no automated pass at all — not here, not in CI — which is `M137e-01`'s exact shape for
+// the third time: a script that states its known answers in full, asserts them, exits non-zero, and
+// could fail with nothing noticing. `D493` settled the remedy for Tier 1/2 in `M139-5`; this is that
+// remedy, unchanged.
+//
+// What kept it out was a sentence in this file's own closing paragraph — *"a manual measurement,
+// deliberately not in CI"* — carrying no decision behind it, and three `RATCHET` entries in
+// `constructs.mjs` that cited `D380` for the cost claim underneath it. **`D380` does not make that
+// claim.** It decides that the ~45 real test files are Tier 3's *negative corpus and its volume
+// measurement*, which is `sweep-input-volume.mjs`'s subject and its 240 observed requests — a
+// different script, against a different corpus, answering a different question. This grader has a
+// corpus built for it and prints its own price at the bottom: 7 assertions, 80 extra requests.
+//
+// **Measured rather than argued** (`M154g-13`, `fedora-box`, full `VULN_MODE=1` stack): this script
+// passes in **0.91-1.05 s**, against **1.70-1.99 s** for `security-acceptance-gate` — the Tier 1/2
+// phase every sweep has run since `M139-5`. Six runs each, on two days and two commits, because a
+// single triple is a reading rather than a measurement: 0.97/0.97/1.05 against 1.99 at `1e3fa9c`,
+// and 0.97/0.91/0.92 against 1.84/1.70/1.70 at step 5's own tree. The gate nobody ran was half the
+// price of the gate everybody ran, both times. `D764` is the rule that came out of it: a stated condition is audited against
+// the decision it cites, never read as provenance.
+
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveTflw } from './lib/tflw-bin.mjs';
+import { plantsFor as constructPlantsFor } from './lib/constructs.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const corpus = join(repoRoot, 'tflw-acceptance', 'security');
@@ -381,6 +406,11 @@ const seen = { fires: new Set(), silent: new Set(), notApplicable: new Set() };
 const seenReason = { withheld: new Set(), unanswered: new Set() };
 /** Every mutation line this run produced, for the price table at the end. */
 const volume = [];
+/** Ledger rows that reached their per-row verdict, for `D752` below. Counted rather than assumed:
+ *  a corpus that failed to start produces zero and must not be able to answer a construct. */
+let ledgerRowsGraded = 0;
+/** Whether the `TF067` runtime refusal actually held this run — see `D752` below. */
+let tf067Held = false;
 
 // --- the fired set, per case, exact ------------------------------------------
 
@@ -480,6 +510,7 @@ for (const env of ['secureLocal', 'plaintext']) {
     for (const id of claimed) seen.silent.add(id);
 
     const price = `${step.mutations.sent} request(s) over ${step.mutations.sites} site(s)`;
+    ledgerRowsGraded += 1;
     console.log(`✓ [${env}] ${row.test} @${row.floor ?? 'no floor'} — ${step.counts[3]} finding(s) from ${actual.length} rule(s), ${price}, exactly as the ledger says`);
   }
   for (const [test, leftover] of byTest) {
@@ -569,6 +600,7 @@ for (const [i, probe] of APPLICABILITY_PROBES.entries()) {
   } else if (!TF067_PROBE.expectHelp.test(output)) {
     fail(`${TF067_PROBE.expectCode} was raised but its help text no longer explains which three mutation sites were absent — the diagnostic is the whole value here`);
   } else {
+    tf067Held = true;
     console.log(`✓ [${TF067_PROBE.env}] ${TF067_PROBE.expectCode} refused an assertion with nothing to mutate, at runtime, before any request was sent`);
   }
 }
@@ -622,8 +654,59 @@ for (const v of volume) {
 }
 console.log(`\n  ${volume.length} assertion(s), ${totalSent} extra request(s) against the target in total.`);
 console.log('  Strictly sequential, one in flight, per D21 layer 5 — so this is also seconds, not just');
-console.log('  packets. `verify:input-acceptance` is a manual measurement and is deliberately not in CI;');
-console.log('  the sweep that answers the whole-suite question is D380\'s, run under its own command.');
+console.log('  packets: measured at 0.91-1.05s on fedora-box against a full VULN_MODE=1 stack, which is');
+console.log('  half of security-acceptance-gate\'s 1.70-1.99s. This runs as the `input-acceptance` regression');
+console.log('  phase (D765). The sweep that answers the whole-suite question is D380\'s, and it is a');
+console.log('  different measurement under its own command — `npm run sweep:input-volume`.');
+
+// --- D752: the construct index, both directions ------------------------------
+//
+// `CONSTRUCTS.md`'s `C109`-`C111` roster three constructs against this script rather than against a
+// plant row of their own, exactly as `C51`-`C58` are rostered against the Tier 1/2 grader. `D752` is
+// what makes that citation an assertion instead of a claim: this end has to agree, in both
+// directions, and it has to agree **on what the run did**.
+//
+// **Answered off the run's evidence, never off a code path.** `M154f-03`'s open half is that
+// `verify-security-acceptance.mjs`'s `answers(...)` records reaching a line, which a grader that
+// asserted nothing would also reach. Each id below is instead derived from the states this run
+// actually demonstrated, and every one of the three needs a *pair*: for the two config keys, the
+// same rule firing where the config grants the opt-in and standing down — naming the missing word —
+// where it does not. A run that only ever fired, or only ever stood down, answers neither.
+const CONSTRUCTS_ANSWERED = new Set();
+{
+  const bothWays = (rule) => seen.fires.has(rule) && seenReason.withheld.has(rule);
+  if (ledgerRowsGraded === LEDGER.length && seen.fires.size > 0 && seen.silent.size > 0 && seen.notApplicable.size > 0 && tf067Held) {
+    CONSTRUCTS_ANSWERED.add('matcher:has-no-input-handling-violations');
+  }
+  if (bothWays('sec/oversized-input-accepted')) CONSTRUCTS_ANSWERED.add('config:probe:oversized');
+  if (bothWays('sec/path-traversal-read')) CONSTRUCTS_ANSWERED.add('config:probe:traversal');
+
+  const rostered = constructPlantsFor('input');
+  for (const plant of rostered) {
+    if (!CONSTRUCTS_ANSWERED.has(plant.construct)) {
+      fail(
+        `${plant.id} rosters \`${plant.construct}\` against this script (CONSTRUCTS.md), and nothing in this run answered it.\n` +
+          '    A roster row is a claim that this gate states that construct\'s known answer and would go red without it.\n' +
+          '    Either the states it needs stopped being demonstrated, or the row points at the wrong grader.',
+      );
+    }
+  }
+  for (const id of CONSTRUCTS_ANSWERED) {
+    if (!rostered.some((p) => p.construct === id)) {
+      fail(
+        `this run answered \`${id}\` and no row in CONSTRUCTS.md names it against this script.\n` +
+          '    The reverse direction, and the one that catches a construct quietly graded here while the ledger\n' +
+          '    still says it is unrostered. Add the row (`D724`/`D752`), or drop the claim.',
+      );
+    }
+  }
+  if (rostered.length > 0 && rostered.every((p) => CONSTRUCTS_ANSWERED.has(p.construct)) && CONSTRUCTS_ANSWERED.size === rostered.length) {
+    console.log(
+      `\n✓ D752 — the construct index resolves both ways: ${rostered.length} rostered construct(s) ` +
+        `(${rostered.map((p) => p.id).join(', ')}), ${CONSTRUCTS_ANSWERED.size} answered by this run, no drift`,
+    );
+  }
+}
 
 console.log(`\n${failures === 0 ? '✓' : '✗'} ${LEDGER.length} ledger row(s), ${APPLICABILITY_PROBES.length} applicability probe(s), 1 TF067 probe — ${failures} failure(s)`);
 process.exit(failures === 0 ? 0 : 1);

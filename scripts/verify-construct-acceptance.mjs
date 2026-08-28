@@ -2648,6 +2648,69 @@ if (TARGET_IDS.some((id) => wanted(id))) {
 }
 
 // =============================================================================
+// C112 — `was made`: the URL, the method, and whose network log is being read
+// =============================================================================
+
+// **`M154g` step 5 (`D766`).** This construct sat on the ratchet under the condition *"a
+// browser-network assertion … it rosters with the UI work, not here"*. "The UI work" was `M154d`,
+// which closed — so the condition was an **address**, not a requirement, and it went stale while
+// still reading as live. The requirement it meant was a browser fixture with observable network
+// traffic; `02-checkout-iframe-network.tflw` had been running one and `C108` had already proved this
+// harness can drive and grade a browser tier.
+//
+// What the three existing uses could not do is fail. All three are positive — *this request was
+// made* — so a matcher that answered `true` for anything observed, ignored the `with method` clause,
+// or read the runner's own request log would satisfy every one of them. This is `D739` at its
+// sharpest and the same shape `C105`-`C108` had: the evidence was everywhere and could not have
+// caught the defect.
+//
+// One page load, six rows, graded **by position in the report** rather than by counting greens: four
+// `expect`s that must pass and two `check`s — the same assertions with the negation dropped — that
+// must fail in the same run. Without the controls the row would be asserting that answers it never
+// saw are different from ones it did.
+if (wanted('C112')) {
+  const plant = plantFor('matcher:was-made');
+  console.log(`\n${plant.id} — ${plant.title}\n  target: ${plant.target}`);
+  const { report, output } = runCorpus(ROOT, [plant.evidence.file]);
+  if (!report) {
+    fail(`${plant.id} produced no report. Needs the stack, the storefront on :8090 and a browser.\n${output.trim().split('\n').slice(-12).join('\n')}`);
+    scores.get('C112').skipped = 'no report';
+  } else {
+    const test = report.tests.find((t) => t.kind === 'functional');
+    const steps = test?.steps ?? [];
+    // Matched on the assertion's own source line, whole, and never on a fragment: `"/v1/products"`
+    // appears in three of the six rows and `was made` is a substring of nothing useful. A `.find`
+    // on a fragment is the first-match trap `C26` and `C43` both cost this milestone.
+    const row = (src) => steps.find((st) => st.source.trim() === src);
+    const held = (src) => row(src)?.ok === true;
+    const broke = (src) => row(src)?.ok === false;
+
+    const POS = 'expect request to "/v1/products" with method "GET" was made';
+    const NEG_METHOD = 'expect request to "/v1/products" with method "POST" not was made';
+    const NEG_URL = 'expect request to "/cart/checkout" not was made';
+    const NEG_OWN = 'expect request to "/health" not was made';
+    const CTRL_METHOD = 'check request to "/v1/products" with method "POST" was made';
+    const CTRL_OWN = 'check request to "/health" was made';
+
+    recall('C112', held(POS), 'the request the catalog page really issued is observed — the positive the three existing uses already make');
+    recall('C112', held(NEG_METHOD), 'the same URL under a method the page never used was NOT made, so the `with method` clause is part of the judgement and not decoration');
+    recall('C112', held(NEG_URL), 'a URL this run never touched was NOT made, so the matcher is not answering `true` for anything observed');
+    // The claim nothing in this repository made before: `was made` reads the *browser's* network
+    // log. The fixture's first step is a tflw-issued `api root GET /health`, so if the runner's own
+    // requests were in scope this row is the only one of the six that would notice.
+    recall('C112', held(NEG_OWN), 'the `/health` request tflw itself sent was NOT made, so the observation set is the browser\'s network log rather than the runner\'s');
+
+    // Precision: the wrong answers are reachable in this very run. Two `check` rows, the same two
+    // assertions with the negation dropped, recorded and continued past (`C1`) so one page load
+    // carries both halves.
+    precision('C112', broke(CTRL_METHOD), 'the control — the method negative with `not` dropped — FAILED, so that row discriminates rather than passing vacuously');
+    precision('C112', broke(CTRL_OWN), 'and so did the runner\'s-own-request control, which is what makes the browser-log claim an assertion');
+    const otherFailures = steps.filter((st) => !st.ok && st.kind !== 'check');
+    precision('C112', otherFailures.length === 0, `nothing outside the two controls failed (got ${otherFailures.map((st) => st.source.trim()).join('; ') || 'none'}) — the page load itself is not what produced the reds`);
+  }
+}
+
+// =============================================================================
 // the table
 // =============================================================================
 

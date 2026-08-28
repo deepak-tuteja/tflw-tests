@@ -9,7 +9,7 @@
 // this file that deliberately does not run in CI. Current total: 31 phases — **30 grouped, which is
 // what CI's four legs run, plus one `localOnly`** — and PHASES below is the source of truth for the
 // exact count, not this comment; don't let this number drift the way README.md's once did (fixed in
-// E2a). Everything else in this repository that says "30-phase sweep" is naming the grouped sweep
+// E2a). Everything else in this repository that names the sweep is naming the grouped sweep
 // and stays true; only this file counts the array.
 //
 // Every phase gets its own fresh Docker restart first. Necessary, not just cautious: `unique(...)`
@@ -20,7 +20,7 @@
 import { rmSync } from 'node:fs';
 import { tflwCommand } from './lib/tflw-bin.mjs';
 
-/** **`released`, and this is the loudest declaration of it in the repo.** The 30-phase sweep is
+/** **`released`, and this is the loudest declaration of it in the repo.** The sweep is
  *  this project's primary dogfood gate, and until M141 it opened every phase with a literal
  *  `npx tflw` — which resolves the VENDORED tarball through `node_modules/.bin`. So the gate a
  *  contributor reads as "my change still passes" has always graded the *released* build, and
@@ -220,6 +220,37 @@ const PHASES = [
     cmd: 'node scripts/verify-security-acceptance.mjs --gate',
     stackEnv: { VULN_MODE: '1' },
   },
+  // `M154g` step 5 (`D765`). Tier 3's grader, and `M137e-01` for the **third** time: a script that
+  // states its known answers in full, asserts them, and exits non-zero — running in no automated
+  // pass at all. `D493` settled that remedy for Tier 1/2 in `M139-5` and the phase directly above is
+  // it; this is the same move, and it needs no new mechanism because the mechanism is that one.
+  //
+  // **Why it took three milestones to notice.** Three constructs sat on the ratchet citing this
+  // script's own footer — *"a Tier 3 assertion costs an order of magnitude more requests than a Tier
+  // 2 one (`D380`), too high for every-PR"* — and that sentence was unsourced. `D380` decides that
+  // the ~45 real test files are Tier 3's negative corpus and its **volume measurement**, which is
+  // `sweep-input-volume.mjs` and its 240 observed requests: a different script, a different corpus,
+  // a different question. Nothing in `DECISIONS.md` ever placed this grader outside CI.
+  //
+  // **And the cost is inverted, measured rather than argued.** On `fedora-box` against the full
+  // `VULN_MODE=1` stack this grader passes — 7 ledger rows, 2 applicability probes, 1 `TF067` probe,
+  // 0 failures — in 0.91-1.05 s, printing its own price of 7 assertions and 80 extra requests.
+  // `security-acceptance-gate` costs 1.70-1.99 s in the same state. Six runs each across two days and
+  // two commits, because one triple is a reading and not a measurement. The gate nobody ran was half
+  // the price of the gate everybody ran, both times (`D764`, `M154g-13`).
+  //
+  // NOT `localOnly`. `M154h`'s `perf-ladder` exception exists for a gate CI genuinely cannot judge
+  // (`D750`, `D761`); a one-second gate against the same Docker stack every other phase here uses is
+  // not one, and borrowing a real exception to avoid re-measuring a wrong number is the same error
+  // one layer up.
+  //
+  // `VULN_MODE=1` for the reason its three neighbours above need it: the Tier 3 corpus grades routes
+  // under `/vuln/`, so the fixture slice has to be there.
+  {
+    name: 'input-acceptance',
+    cmd: 'node scripts/verify-input-acceptance.mjs',
+    stackEnv: { VULN_MODE: '1' },
+  },
   // M154b (`D722`, `D726`, `D732`). The construct ledger's three plants, graded against their known
   // answers. Needs everything: the stack for `C1`, a browser and the admin console for `C2`, and a
   // standalone arrival counter this script starts itself for `C3`.
@@ -319,8 +350,18 @@ const PHASES = [
 // is the stack restart every phase pays regardless. That makes bin *count* the only proxy worth
 // using here, and `core` — 8 phases, the unique smallest — the placement. Four hand-placed phases is
 // past the point where the re-pack above should still be deferred.
+//
+// M154g step 5 adds `input-acceptance` to `core`, the sixth hand placement, and this one is placed on
+// *theme against count* rather than on either alone — which is worth saying plainly, because the four
+// bins were tied at 9/10/9/9 and count alone would have said `safety` or `security-ui`. It goes to
+// `core` because its two nearest neighbours are already there: `secure-local-check` runs the same
+// `tflw-acceptance/security/` corpus and `security-acceptance-gate` is literally this script's Tier
+// 1/2 sibling, so a red in one is read next to a red in the other. Its own graded work is ~1s
+// measured on the box, against a stack restart every phase pays regardless, so what it moves is
+// `core` from 9 to 10 — tied with `tooling` rather than exceeding it. The re-pack six placements have
+// now deferred still needs CI timings this milestone had no reason to pull.
 const PHASE_GROUPS = {
-  core: ['full suite', '--tag orderOps', '--tag smoke,catalogOps', 'demo-fail-check', '--tag orgOps', '--tag inventoryOps', 'migrate-check', 'secure-local-check', 'security-acceptance-gate'],
+  core: ['full suite', '--tag orderOps', '--tag smoke,catalogOps', 'demo-fail-check', '--tag orgOps', '--tag inventoryOps', 'migrate-check', 'secure-local-check', 'security-acceptance-gate', 'input-acceptance'],
   tooling: ['--tag api', 'watch-check', 'pick-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check', 'security-target-check', 'sarif-acceptance', 'construct-acceptance'],
   safety: ['--tag identityOps', '--tag mixed', '--tag smoke,orderOps', '--tag adminOps', '--tag catalogOps', 'safety-flags-check', 'check-diagnostics', 'artifact-contract', 'safety-redaction-check'],
   'security-ui': ['--tag smoke,identityOps', 'cli-flags-check', '--tag smoke,adminOps', '--tag ui', 'webv2-admin-check', '--tag smoke,inventoryOps', 'logging-check', 'mtls-rejection', 'vuln-slice-hidden-check'],
