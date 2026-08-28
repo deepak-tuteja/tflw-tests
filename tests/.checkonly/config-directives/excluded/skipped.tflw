@@ -1,0 +1,12 @@
+# excluded/skipped.tflw — CHECK-ONLY FIXTURE (`M154g` step 4a, `C96`): see `named-service.tflw` for
+# what this directory is.
+#
+# Identical in every way to `../kept.tflw` except its directory, which is the only variable `C96`
+# is allowed. Under a config with `exclude "excluded"` discovery reports one file; without the
+# directive it reports two. And the clause the manifest states out loud — that `exclude` applies
+# "when a run names a folder rather than a file" — is the third leg: naming **this file** on the
+# command line checks it even under the excluding config.
+
+test "a discoverable file one directory down"
+  api GET /health
+  expect status equals 200

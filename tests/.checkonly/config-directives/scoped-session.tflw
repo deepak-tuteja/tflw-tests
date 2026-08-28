@@ -1,0 +1,12 @@
+# scoped-session.tflw — CHECK-ONLY FIXTURE (`M154g` step 4a, `C94`): see `named-service.tflw` for
+# what this directory is and why its configs are generated.
+#
+# `session scoped` is declared `for env one`. Under `--env two` the identical `as scoped` clause is
+# a `TF028`, and the sibling `unscoped-session.tflw` — same clause shape, a session with no `for
+# env` — stays clean under both. The pair is what separates the **scoping clause** from env
+# selection itself: without it, a `TF028` under `--env two` is equally consistent with sessions
+# simply not resolving in that env at all.
+
+test "a scoped session resolves only in the envs its clause names" as scoped
+  api GET /health
+  expect status equals 200

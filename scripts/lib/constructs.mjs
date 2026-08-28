@@ -1882,6 +1882,147 @@ export const PLANTS = [
     catches: 'a password missing a character class (making the refusal rule arbitrary), a wrong or ignored length, a changed default, and a generator that stopped honouring the seed.',
     blockedOn: null,
   },
+  // --- M154g step 4a: the five config directives ------------------------------------------------
+  //
+  // The config dialect's top-level words, and the first family in this ledger whose every claim is
+  // about the **config** rather than about a test. Nothing a `.tflw` file asserts can see which
+  // `env` was selected or whether a `defaults` block was shared — by the time a step runs the
+  // selection has happened and left no trace a step can read. So the plant is inverted: one
+  // fixture file whose text never changes, and a **committed** config beside it that does. Every
+  // config operand lives in `tests/.checkonly/config-directives/` as a readable file rather than a
+  // string in the grader, which is `verify-check-diagnostics.mjs`'s own stated rule (*"the fixture
+  // stays a real, readable file in the repo — it is dogfood, not a string in a script"*) applied to
+  // the half that is the subject here.
+  //
+  // **`evidence.file` is the config and `run` is the fixture beside it, for `C54`'s reason** —
+  // the coverage grader greps where the construct is *witnessed*, and `env two`, `defaults` and
+  // `require env` are written in a config and nowhere else. Unlike `C54` the acceptance driver
+  // never executes these: each block below builds its own scratch corpus, because the operand
+  // being varied is the file `tflw run` would otherwise pick up implicitly.
+  //
+  // **No stack on any leg.** Four are `tflw check`; the fifth is a `tflw run` against
+  // `127.0.0.1:9`, a port the fetch standard blocks, so nothing is ever dialled. These rows grade
+  // identically with apiV2 down — the property `C78`/`C79` have — and they are the reason step 4
+  // could be split with the cheap half first.
+  {
+    id: 'C92',
+    construct: 'config:directive:env',
+    family: 'config',
+    tier: 'check',
+    title: 'the active env decides what an unchanged file means, and the `default` marker is a third reading of the same grid',
+    target: 'three fixture files under `two-envs.config`, checked with no flag, `--env one` and `--env two`',
+    evidence: { file: 'tests/.checkonly/config-directives/two-envs.config', pattern: '^env two$', min: 1 },
+    run: 'named-service.tflw',
+    graders: ['acceptance'],
+    knownAnswer:
+      'A nine-cell grid over three files and three selections, and the diagnostics are the ' +
+      'instrument rather than the subject — `C59` already proves `TF026` fires somewhere, so what ' +
+      'is asked here is whether the **active env** is what decides. `named-service.tflw` writes ' +
+      '`api extra`, which `env one` declares and `env two` does not: clean, clean, `TF026`. The ' +
+      'first column is the `default` marker and is a separate reading, not a repetition of the ' +
+      'second — it is the only leg in which nothing on the command line names an env at all, and a ' +
+      'tflw that ignored the marker and took the first env would produce the identical answer, so ' +
+      'the row also asserts `--env nosuch` is refused **naming both envs**, which is the marker ' +
+      'and the roster being read out of the same file. `unscoped-session.tflw` is clean in all ' +
+      'three cells, which is what stops the grid from being a fact about `--env two` being broken.',
+    catches: 'an `--env` that selects nothing and leaves the first env active, a `default` marker that is parsed and ignored, and named services resolved from the union of every env rather than from the active one.',
+    blockedOn: null,
+  },
+  {
+    id: 'C93',
+    construct: 'config:directive:defaults',
+    family: 'config',
+    tier: 'check',
+    title: 'one line written once is read by every env — and a second `defaults` block is refused',
+    target: 'three configs differing by which block one `allow hosts` line sits in, and by how many `defaults` blocks there are',
+    evidence: { file: 'tests/.checkonly/config-directives/defaults-shared.config', pattern: '^defaults$', min: 1 },
+    run: 'kept.tflw',
+    graders: ['acceptance'],
+    knownAnswer:
+      'The manifest states two clauses in one sentence — *settings shared by every environment; at ' +
+      'most one per config* — and the row is those two clauses. Sharing is a **pair of configs ' +
+      'differing by one indentation level**: with `allow hosts "example.test"` in `defaults`, ' +
+      '`TF036` fires under `--env one` *and* under `--env two`; with the identical line moved into ' +
+      '`env one`, `--env one` is unchanged and `--env two` goes silent. The positive alone is ' +
+      'consistent with an allowlist that is global wherever it is written, which would make ' +
+      '`defaults` a word the parser accepts rather than a scope it honours. The second clause is ' +
+      '`TF022` over a config with two blocks, whose env is deliberately **inside** its own ' +
+      'allowlist so `TF036` cannot fire and the asserted code is the only one in the output.',
+    catches: 'a `defaults` block parsed and dropped for every env but the default one, an env-level setting that leaks to its siblings, and a duplicate block silently taking the last-wins reading.',
+    blockedOn: null,
+  },
+  {
+    id: 'C94',
+    construct: 'config:directive:session',
+    family: 'config',
+    tier: 'check',
+    title: 'the `for env` clause is the difference between a session that exists here and one that does not',
+    target: 'two sessions in one config, identical but for the clause, against two files identical but for the name they cite',
+    evidence: { file: 'tests/.checkonly/config-directives/two-envs.config', pattern: '^session scoped for env one$', min: 1 },
+    run: 'scoped-session.tflw',
+    graders: ['acceptance'],
+    knownAnswer:
+      '`C80` already grades `as` — the same `GET` at 200 with it and 401 without — so what is left ' +
+      'for the **declaration** is the half `as` cannot see: which envs the identity exists in. ' +
+      '`session scoped for env one` and `session everywhere` carry the same login step, the same ' +
+      'capture and the same header, and differ only in the clause. Under `--env two` the file ' +
+      'citing `scoped` is a `TF028` whose help text quotes the clause back (*"declared `for env ' +
+      'one`"*), and the file citing `everywhere` is clean. That second file is the whole reason ' +
+      'this is a row and not an observation: without it the `TF028` is equally consistent with ' +
+      'sessions not resolving in `env two` at all.',
+    catches: 'a `for env` clause parsed and ignored (every session resolving everywhere), and a session table built per-env from the wrong env.',
+    blockedOn: null,
+  },
+  {
+    id: 'C95',
+    construct: 'config:directive:require',
+    family: 'config',
+    tier: 'check',
+    title: 'the run is refused before a socket exists, the unreferenced variable is required just as hard, and `tflw check` says nothing',
+    target: '`require.config` — two required variables, one of them referenced nowhere, over an `api` base on a port the fetch standard blocks',
+    evidence: { file: 'tests/.checkonly/config-directives/require.config', pattern: '^require env C95_TOKEN, C95_UNUSED$', min: 1 },
+    run: 'kept.tflw',
+    graders: ['acceptance'],
+    knownAnswer:
+      'Three legs, and the third is the finding. **Neither set:** the run is refused naming both ' +
+      'variables. **`C95_TOKEN` set:** still refused, naming `C95_UNUSED` **alone** — and that one ' +
+      'is referenced nowhere in the config, so the directive is a precondition on the environment ' +
+      'rather than a check on use sites. **Both set:** the same run reaches the transport and dies ' +
+      'on port 9 (*"no socket was opened"*), which is how "refused before it started" is told from ' +
+      '"ran and failed" without a stack. **The third leg asserts a silence tflw\'s own manifest ' +
+      'denies**: the summary for this construct reads *"a missing secret fails at **check time** ' +
+      'rather than mid-suite"*, and `tflw check` over the identical config reports *"1 file ' +
+      'checked, no problems found"*. The guarantee users get is real and is a run-start one; the ' +
+      'sentence describing it is wrong, and it is wrong against tflw\'s own principle rather than ' +
+      'against an accident: `cli.ts:1520` gates the secrets in the *run* path under the comment ' +
+      '*"`check` never reaches this — no execution, no need for real credentials"*, and `P#75` ' +
+      'makes doing no I/O the reason `tflw check` can run in CI without secrets at all. So the ' +
+      'repair is the sentence, never the gate. Asserted as measured and filed as `M154g-11`.',
+    catches: 'a `require env` that only guards the variables something interpolates, a refusal that arrives after the first request instead of before it, and the manifest sentence quietly becoming true or the behaviour quietly changing under it.',
+    blockedOn: null,
+  },
+  {
+    id: 'C96',
+    construct: 'config:directive:exclude',
+    family: 'config',
+    tier: 'check',
+    title: 'discovery skips the folder and an explicit path still does not',
+    target: 'a two-file corpus checked under one config with an `exclude` line and one without',
+    evidence: { file: 'tests/.checkonly/config-directives/exclude-on.config', pattern: '^exclude "excluded"$', min: 1 },
+    run: 'kept.tflw',
+    graders: ['acceptance'],
+    knownAnswer:
+      'The corpus is `kept.tflw` and `excluded/skipped.tflw`, identical but for their directory, ' +
+      'and the two configs are identical but for one line. Discovery reports **1 file checked** ' +
+      'with the line and **2 files checked** without it. The third leg is the manifest\'s own ' +
+      'qualifier — *"when a run names a folder rather than a file"* — asserted rather than ' +
+      'paraphrased: naming `excluded/skipped.tflw` on the command line checks it under **both** ' +
+      'configs, so `exclude` is a discovery filter and not an access rule. That distinction is the ' +
+      'one with consequences here, because this repository\'s own root config excludes ' +
+      '`tflw-acceptance` while several graders run files inside it by path.',
+    catches: 'an `exclude` that stops filtering discovery, and one that hardens into a refusal so an explicitly named file can no longer be checked.',
+    blockedOn: null,
+  },
 ];
 
 /**
@@ -2042,13 +2183,18 @@ export const RATCHET = [
   // --- locator (0) ---
   // The first family to empty, at `M154d`'s locator harness. The header stays so the seven
   // families read in manifest order and an emptied one is visibly empty rather than absent.
-  // --- config (18) ---
+  // --- config (13) ---
   // Five left at `M154f`: `authorized` (`C53`), `evidence` (`C54`), `redact` (`C55`), `probe
   // mutating` (`C52`) and `probe ciphers` (`C51`). **`probe oversized` and `probe traversal` stay
   // for the same reason as the Tier 3 matcher above** — their rules are Tier 3's pack, so the only
   // script that grades them is the one nothing runs. All three roster together, on that condition.
-  'config:directive:defaults', 'config:directive:env', 'config:directive:session',
-  'config:directive:require', 'config:directive:exclude', 'config:key:header', 'config:key:timeout',
+  //
+  // The five **directives** left at `M154g` step 4a (`C92`-`C96`), and they are the first rows in
+  // this ledger whose witness is a config rather than a test. A `.tflw` file cannot observe which
+  // `env` was selected or whether a `defaults` block was shared, so the plant is inverted — the
+  // fixture is held fixed and the *config beside it* is the operand that varies. Every one of them
+  // grades with no stack at all, which is why the config family was split with these first.
+  'config:key:header', 'config:key:timeout',
   'config:key:workers', 'config:key:report', 'config:key:web', 'config:key:api', 'config:key:insecure',
   'config:key:cert', 'config:key:key', 'config:key:allow',
   'config:key:log',
@@ -2172,7 +2318,7 @@ export const RATCHET = [
  * the unrostered remainder, and a remainder can only be honest about a denominator that has itself
  * just been corrected upwards.
  */
-export const RATCHET_CEILING = 22;
+export const RATCHET_CEILING = 17;
 
 /**
  * `CONSTRUCTS.md` carries one row per plant and prose a human reads; this asserts their id sets

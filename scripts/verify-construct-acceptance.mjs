@@ -37,7 +37,8 @@
 // split `M139-5`/`D493` made in the security grader, for the same reason: a script that both
 // asserts and reports has one exit status for two jobs.
 
-import { readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, rmSync, existsSync, copyFileSync, mkdirSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -108,12 +109,27 @@ function runCorpus(cwd, args) {
 // about the checker, and the files that would state them by running do not compile. Nothing is
 // spawned against a stack here, so these legs grade identically with the stack down — which is
 // also how they get dry-run while the box is busy.
-function runCheck(args) {
+function runCheck(args, { cwd = ROOT } = {}) {
   const r = spawnSync(process.execPath, [TFLW_BIN, 'check', '--no-color', ...args], {
-    cwd: ROOT,
+    cwd,
     encoding: 'utf8',
     shell: false,
     maxBuffer: 16 * 1024 * 1024,
+  });
+  return `${r.stdout ?? ''}${r.stderr ?? ''}`;
+}
+
+// `M154g` step 4a. The same shape for `tflw run`, and it exists for exactly one row: `C95` is the
+// only claim in this ledger whose subject is something that happens **before** a run produces a
+// report, so there is nothing for `runCorpus` to parse. The config it runs under points `api` at
+// port 9 — on the fetch standard's blocked-ports list — so this opens no socket either.
+function runRun(args, { cwd = ROOT, env = {} } = {}) {
+  const r = spawnSync(process.execPath, [TFLW_BIN, 'run', '--no-color', ...args], {
+    cwd,
+    encoding: 'utf8',
+    shell: false,
+    maxBuffer: 16 * 1024 * 1024,
+    env: { ...process.env, ...env },
   });
   return `${r.stdout ?? ''}${r.stderr ?? ''}`;
 }
@@ -2118,6 +2134,148 @@ if (GENERATOR_IDS.some((id) => wanted(id))) {
     for (const id of GENERATOR_IDS) {
       precision(id, red.length === 0 && stray.length === 0 && missing.length === 0, `the corpus went green and produced exactly its ${declared.size} declared draws${red.length ? ` — red: ${red.map((t) => t.name).join('; ')}` : ''}${stray.length ? ` — stray: ${stray.join(', ')}` : ''}${missing.length ? ` — missing: ${missing.join(', ')}` : ''}`);
     }
+  }
+}
+
+// =============================================================================
+// C92-C96 — the five config directives: the file is held still and the config moves
+// =============================================================================
+//
+// Every other block in this file varies a run and reads a report. These five cannot: their subject
+// is the config, and a `.tflw` file has no way to observe which `env` was selected, whether a
+// `defaults` block was shared, or that a run was refused before it began. So the corpus is built
+// the other way round — the fixtures under `tests/.checkonly/config-directives/` never change, and
+// a **committed** `.config` file is copied in beside them as `tflw.config` for each leg.
+//
+// The scratch directories live under the OS temp dir rather than inside the repository, and that
+// is load-bearing rather than tidy: `tflw run` reads a `.env` from its working directory, and this
+// repository has one at its root. `C95`'s whole claim is about variables being absent.
+//
+// No stack. Four rows are `tflw check`; `C95` is a `tflw run` whose config points `api` at port 9,
+// which the fetch standard blocks outright, so the "it got past the gate" leg fails identically
+// whether or not apiV2 is up.
+
+const DIRECTIVE_IDS = ['C92', 'C93', 'C94', 'C95', 'C96'];
+
+if (DIRECTIVE_IDS.some((id) => wanted(id))) {
+  const FIX = path.join(ROOT, 'tests', '.checkonly', 'config-directives');
+  console.log('\nC92-C96 — the five config directives\n  target: tests/.checkonly/config-directives/ — committed configs, copied in as `tflw.config`');
+
+  const scratch = mkdtempSync(path.join(tmpdir(), 'tflw-config-directives-'));
+  const useConfig = (dir, config) => copyFileSync(path.join(FIX, config), path.join(dir, 'tflw.config'));
+  const corpus = (name, files, config) => {
+    const dir = path.join(scratch, name);
+    mkdirSync(dir, { recursive: true });
+    for (const f of files) {
+      const dest = path.join(dir, f);
+      mkdirSync(path.dirname(dest), { recursive: true });
+      copyFileSync(path.join(FIX, f), dest);
+    }
+    useConfig(dir, config);
+    return dir;
+  };
+  const clean = (out) => /no problems found/.test(out);
+  const firstLine = (out) => out.trim().split('\n')[0] || '(no output)';
+  const counted = (out) => Number((out.match(/(\d+) files? checked/) ?? [])[1] ?? NaN);
+
+  try {
+    // ---- C92 / C94: one config, two envs, three unchanged files ------------------------------
+    const NS = 'named-service.tflw';
+    const SC = 'scoped-session.tflw';
+    const US = 'unscoped-session.tflw';
+    const envDir = corpus('envs', [NS, SC, US], 'two-envs.config');
+    const chk = (args) => runCheck(args, { cwd: envDir });
+
+    if (wanted('C92')) {
+      const nsNoFlag = chk([NS]);
+      const nsOne = chk(['--env', 'one', NS]);
+      const nsTwo = chk(['--env', 'two', NS]);
+      recall('C92', clean(nsOne), `\`api extra\` is clean under the env that declares it (got: ${firstLine(nsOne)})`);
+      recall('C92', /error\[TF026\]/.test(nsTwo) && /"extra"/.test(nsTwo),
+        `and the unchanged file is a \`TF026\` naming "extra" under the env that does not (got: ${firstLine(nsTwo)})`);
+      recall('C92', clean(nsNoFlag), `the \`default\` marker resolves an env with nothing on the command line (got: ${firstLine(nsNoFlag)})`);
+      // The marker is a *third* reading, not a repetition of `--env one`: a tflw that ignored it
+      // and took the first declared env would produce the identical verdict. Byte-identical output
+      // is the strongest available statement that the two resolved the same env.
+      precision('C92', nsNoFlag === nsOne, 'the no-flag and `--env one` outputs are byte-identical, so the marker resolved that env rather than the first one');
+      const nosuch = chk(['--env', 'nosuch', NS]);
+      precision('C92', /unknown env "nosuch"/.test(nosuch) && /\bone\b/.test(nosuch) && /\btwo\b/.test(nosuch),
+        `\`--env nosuch\` is refused naming both envs the config declares (got: ${firstLine(nosuch)})`);
+      precision('C92', clean(chk(['--env', 'two', US])), '`env two` checks a file cleanly, so the `TF026` above is about the named service and not about that env being unusable');
+    }
+
+    if (wanted('C94')) {
+      const scOne = chk(['--env', 'one', SC]);
+      const scTwo = chk(['--env', 'two', SC]);
+      recall('C94', clean(scOne), `\`as scoped\` is clean under the env its \`for env\` clause names (got: ${firstLine(scOne)})`);
+      recall('C94', /error\[TF028\]/.test(scTwo) && /unknown session "scoped" in env "two"/.test(scTwo),
+        `and a \`TF028\` under the env it does not (got: ${firstLine(scTwo)})`);
+      recall('C94', /declared `for env one`/.test(scTwo), 'and the help text quotes the clause back, so the refusal names its own cause');
+      // Without this the `TF028` is equally consistent with sessions not resolving in `env two` at
+      // all. Same login step, same capture, same header — the clause is the only difference.
+      precision('C94', clean(chk(['--env', 'two', US])), 'the unscoped sibling resolves in that same env, so what was refused is the clause and not the session table');
+    }
+
+    // ---- C93: one line, two blocks, two envs -------------------------------------------------
+    if (wanted('C93')) {
+      const defDir = corpus('defaults', ['kept.tflw'], 'defaults-shared.config');
+      const dchk = (args) => runCheck(args, { cwd: defDir });
+      const sharedOne = dchk(['--env', 'one', 'kept.tflw']);
+      const sharedTwo = dchk(['--env', 'two', 'kept.tflw']);
+      recall('C93', /error\[TF036\]/.test(sharedOne) && /error\[TF036\]/.test(sharedTwo),
+        `one \`allow hosts\` line in \`defaults\` is read by both envs — \`TF036\` under each (got: ${firstLine(sharedOne)} / ${firstLine(sharedTwo)})`);
+      precision('C93', /env `one`/.test(sharedOne) && /env `two`/.test(sharedTwo),
+        'and each diagnostic names the env it was resolved for, so this is two readings rather than one cached verdict');
+
+      useConfig(defDir, 'defaults-per-env.config');
+      const perOne = dchk(['--env', 'one', 'kept.tflw']);
+      const perTwo = dchk(['--env', 'two', 'kept.tflw']);
+      recall('C93', /error\[TF036\]/.test(perOne), `moving the identical line into \`env one\` leaves that env's verdict unchanged (got: ${firstLine(perOne)})`);
+      recall('C93', clean(perTwo), `and \`env two\` goes silent — one indentation level is the whole difference (got: ${firstLine(perTwo)})`);
+
+      useConfig(defDir, 'defaults-duplicated.config');
+      const dup = dchk(['kept.tflw']);
+      recall('C93', /error\[TF022\]/.test(dup), `a second \`defaults\` block is refused (got: ${firstLine(dup)})`);
+      precision('C93', !/TF036/.test(dup), 'and that config\'s env sits inside its own allowlist, so `TF022` is the only code in the output and the assertion cannot pass on a different complaint');
+    }
+
+    // ---- C95: refused before a socket exists -------------------------------------------------
+    if (wanted('C95')) {
+      const reqDir = corpus('require', ['kept.tflw'], 'require.config');
+      const none = runRun([], { cwd: reqDir });
+      recall('C95', /missing required environment variable/.test(none) && /C95_TOKEN/.test(none) && /C95_UNUSED/.test(none),
+        `neither variable set: the run is refused naming both (got: ${firstLine(none)})`);
+      const partial = runRun([], { cwd: reqDir, env: { C95_TOKEN: 'c95' } });
+      recall('C95', /C95_UNUSED/.test(partial) && !/C95_TOKEN/.test(partial),
+        `\`C95_UNUSED\` is referenced nowhere in that config and is required just as hard — the refusal names it alone (got: ${firstLine(partial)})`);
+      const both = runRun([], { cwd: reqDir, env: { C95_TOKEN: 'c95', C95_UNUSED: 'c95' } });
+      recall('C95', !/missing required environment variable/.test(both) && /blocked-ports/.test(both),
+        'with both set the same run reaches the transport and dies at port 9 — "refused before it started" told from "ran and failed" without a stack');
+      // The finding. `tflw spec --json` summarises this construct as "a missing secret fails at
+      // check time rather than mid-suite". The guarantee is real and it is a run-start one; the
+      // sentence is wrong. Asserted as measured (`M154g-11`), so the day tflw moves the gate this
+      // row goes red on purpose rather than silently agreeing with its manifest.
+      const checked = runCheck(['kept.tflw'], { cwd: reqDir });
+      precision('C95', clean(checked),
+        `\`tflw check\` reports no problems over the identical config, against a manifest that promises check-time refusal (got: ${firstLine(checked)}) — \`M154g-11\``);
+    }
+
+    // ---- C96: discovery skips the folder, an explicit path does not --------------------------
+    if (wanted('C96')) {
+      const exDir = corpus('exclude', ['kept.tflw', path.join('excluded', 'skipped.tflw')], 'exclude-on.config');
+      const on = runCheck([], { cwd: exDir });
+      const onNamed = runCheck([path.join('excluded', 'skipped.tflw')], { cwd: exDir });
+      useConfig(exDir, 'exclude-off.config');
+      const off = runCheck([], { cwd: exDir });
+      const offNamed = runCheck([path.join('excluded', 'skipped.tflw')], { cwd: exDir });
+      recall('C96', counted(on) === 1, `discovery reports 1 file with the \`exclude\` line (got ${counted(on)}: ${firstLine(on)})`);
+      recall('C96', counted(off) === 2, `and 2 without it, over an unchanged corpus (got ${counted(off)}: ${firstLine(off)})`);
+      recall('C96', counted(onNamed) === 1 && counted(offNamed) === 1,
+        `naming the excluded file checks it under both configs — a discovery filter, not an access rule (got ${counted(onNamed)} / ${counted(offNamed)})`);
+      precision('C96', clean(on) && clean(off), 'both corpora are otherwise clean, so the count is the only thing that moved between the two configs');
+    }
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
   }
 }
 

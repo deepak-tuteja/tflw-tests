@@ -199,6 +199,11 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C89` | `random like` (`generator:random-like`) | api | `SKU-####-??` → four digits and two letters. The discriminator is that the two placeholders draw from **different alphabets**: one shared alphanumeric pool gives the right length and the right skeleton | a pattern filler using one alphabet for both placeholders, dropping the literals, or ignoring the seed |
 | `C90` | `random uuid` (`generator:random-uuid`) | api | the whole row is its **contrast with `C84`** — both are v4-shaped, so shape cannot tell them apart and the 26 sites here say nothing. Under a changed seed this one's trailing digits move; `unique uuid`'s do not | a `random uuid` that bypasses the run seed (breaking `--seed` replay everywhere), and one that acquired a counter and so became `unique uuid` |
 | `C91` | `random password` (`generator:random-password`) | api | 16 when 16 was asked for, 12 by default, **all four character classes present**, seed-reproducible, and `random password 2` refused because four classes cannot fit in two characters. The refusal and the classes are one fact from two directions | a password missing a class (making the refusal arbitrary), a wrong or ignored length, a changed default, an ignored seed |
+| `C92` | `env` (`config:directive:env`) | check | a nine-cell grid: `api extra` clean under the env that declares it, `TF026` under the one that does not, and the `default` marker's no-flag output **byte-identical** to `--env one`. `--env nosuch` is refused naming both envs | an `--env` that selects nothing and leaves the first env active, a `default` marker parsed and ignored, and named services resolved from the union of every env |
+| `C93` | `defaults` (`config:directive:defaults`) | check | one `allow hosts` line in `defaults` fires `TF036` under **both** envs; the identical line moved into `env one` leaves that env unchanged and silences the other. Plus `TF022` for a second `defaults` block, over a config whose env is inside its own allowlist so no other code can fire | a `defaults` block honoured only for the default env, an env-level setting leaking to its siblings, and a duplicate block taking a silent last-wins reading |
+| `C94` | `session` (`config:directive:session`) | check | `session scoped for env one` and `session everywhere` are identical but for the clause: under `--env two` the first is a `TF028` quoting its own clause back, the second is clean. `C80` already grades `as`; this is the half `as` cannot see | a `for env` clause parsed and ignored, and a session table built from the wrong env |
+| `C95` | `require` (`config:directive:require`) | check | refused naming both variables with neither set; refused naming **`C95_UNUSED` alone** — which the config references nowhere — with the other set; past the gate and dead at port 9 with both. And `tflw check` says *no problems found* over the identical config, against a manifest that promises check-time refusal (`M154g-11`) | a `require env` guarding only interpolated variables, a refusal arriving after the first request, and the manifest sentence or the behaviour quietly moving under the other |
+| `C96` | `exclude` (`config:directive:exclude`) | check | **1 file checked** with the line and **2** without, over an unchanged two-file corpus — and naming the excluded file explicitly checks it under **both** configs, which is the manifest's own *"names a folder rather than a file"* clause asserted rather than paraphrased | an `exclude` that stops filtering discovery, and one that hardens into a refusal so a named file can no longer be checked |
 
 ### `C1` — the soft assertion records a failure and keeps going
 
@@ -1023,6 +1028,58 @@ were already dogfooded there, so the remaining three went in beside them. A seco
 asks of that file is a different sentence from what `C59` asks: `C59` asks *does `TF054` fire*, and
 these rows ask *does **this generator** refuse **this operand***.
 
+### `C92`–`C96` — the config directives, where the fixture holds still and the config moves
+
+Five rows, seven committed configs, and **no stack on any leg**. This is the first group in the
+roster whose every claim is about the *config* rather than about a test, and that inverts the plant.
+Nothing a `.tflw` file asserts can see which `env` was selected, whether a `defaults` block was
+shared, or that a run was refused before it began — by the time a step executes, the selection has
+happened and left nothing a step can read. So the fixtures under
+`tests/.checkonly/config-directives/` never change and the **config beside them** is the operand
+that varies.
+
+**The configs are committed files, not strings in the grader**, which is
+`verify-check-diagnostics.mjs`'s own rule applied to the half that is the subject here: *"the
+fixture stays a real, readable file in the repo — it is dogfood, not a string in a script"*. When
+the config is what the row is about, the config is what has to be reviewable in a diff. Each pair
+differs by one line or one indentation level and by nothing else — `defaults-shared.config` against
+`defaults-per-env.config` is the same `allow hosts` line in a different block; `exclude-on.config`
+against `exclude-off.config` is that line present or absent.
+
+**The diagnostics are the instrument, not the subject.** `TF026`, `TF028`, `TF036` and `TF022` all
+appear above, and `C59` already proves by rule that each of them fires. What these rows ask is a
+different sentence with the same codes — not *does `TF026` fire* but *does the **active env** decide
+which named services exist*. That is the distinction step 3 drew for `TF054`, one family over.
+
+**Every negative control is a second file or a second env, never an argument.** `C92`'s grid would
+be equally consistent with `env two` simply being unusable, so `unscoped-session.tflw` is checked
+clean under it. `C94`'s `TF028` would be equally consistent with sessions not resolving in that env
+at all, so the unscoped session resolves there. `C93`'s positive alone is consistent with an
+allowlist that is global wherever it is written, so the line moves and the second env goes quiet.
+Five adversarial mutations were run against the finished rows and each landed on exactly one row:
+declaring `api extra` in `env two` took `C92` to 2/3 recall, deleting `for env one` took `C94` to
+1/3, swapping the shared config for the per-env one took `C93` to 3/4 and 1/2, deleting the
+`exclude` line took `C96` to 2/3, and dropping the unreferenced variable took `C95` to 1/3.
+
+**`C95` is the row that found something.** `tflw spec --json` summarises `require` as *"environment
+variables that must be set before a run starts, so a missing secret fails at **check time** rather
+than mid-suite"*. The guarantee is real — the run is refused before a socket exists, and the
+refusal names the variable nothing in the config references, so it is a precondition on the
+environment rather than a check on use sites. But `tflw check` over that same config reports *"1
+file checked, no problems found"*.
+
+The sentence is wrong against tflw's **own principle**, which is what makes this worth a row rather
+than a typo. `cli.ts:1520` gates the required secrets inside the run path, under the comment
+*"`check` never reaches this — no execution, no need for real credentials"*, and `P#75` makes doing
+no I/O the reason `tflw check` can run in CI with no secrets in the first place. Moving the gate to
+check time would contradict both. So the repair here is the sentence, never the behaviour — and the
+row asserts the silence as measured, which means the day anybody does move it this plant goes red on
+purpose. Filed as `M154g-11`.
+
+The rest of the `config` family — eleven keys and the two Tier 3 probes — is not here. The keys need
+a running target and in several cases a paired config with a stack behind it, which is a different
+kind of work from anything in this section and is scoped as the rest of step 4.
+
 ### The three constructs this tier did **not** roster
 
 `config:probe:oversized`, `config:probe:traversal` and `matcher:has-no-input-handling-violations`
@@ -1052,11 +1109,11 @@ ledger, and is marked `blocked-on:<row>` here — counted as *covered but curren
 known reason*, never deleted and never quietly moved to the ratchet. Without this convention, this
 ledger's successes and its bugs look identical.
 
-**None at present.** All ninety plants pass, measured on `fedora-box` 2026-08-27 — 83 of them
-graded here and 7 by their own gates. `C1`–`C50` were last measured 2026-08-25 (the first three
-against tflw `5cba2da`, `C4`–`C12` against the `M154c` build that added the `declaration` family,
-`C13`–`C43` against `M154c`'s `main`, `C44`–`C50` against `M154d`'s); `C51`–`C91` on 2026-08-26/27
-across `M154f` and `M154g`'s four steps.
+**None at present.** All ninety-five plants pass — 88 of them graded here and 7 by their own gates.
+`C1`–`C50` were last measured 2026-08-25 (the first three against tflw `5cba2da`, `C4`–`C12` against
+the `M154c` build that added the `declaration` family, `C13`–`C43` against `M154c`'s `main`,
+`C44`–`C50` against `M154d`'s); `C51`–`C91` on `fedora-box` 2026-08-26/27 across `M154f` and
+`M154g`'s first three steps; `C92`–`C96` on 2026-08-28, and those five need no stack at all.
 
 This paragraph said *"All fifty plants pass"* through three milestones that added forty of them, and
 it is left visible here rather than quietly corrected because it is the same defect the ratchet
