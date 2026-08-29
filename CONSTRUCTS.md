@@ -450,13 +450,15 @@ each transform's most plausible wrong implementation produces a visibly differen
 | `hex encode` | `4d3135…3d65`, lowercase, `ÿ` as `c3bf` | uppercase; a character-level transform |
 | `url encode` | `M154c%20x%C3%BF%3F%3E~a%2Bb%2Fc%20d%3De` | `+` for space, `%7E` for `~`; `encodeURI` |
 
-**Two of the three are derived and one is pinned, and the difference is worth stating.** `SPEC` §7.6
-names `encodeURIComponent` outright, so `url` needed no judgement. `base64`'s alphabet is derivable
-from the other end — `TF054` refuses a URL-safe literal to `base64 decode`, so an `encode` emitting
-one would produce output its own `decode` rejects. **`hex`'s case is pinned by this plant and by
-nothing else**: `SPEC` §7.6 does not state it. That is filed as `M154c-02` in tflw rather than
-asserted here as though it were specified, because a plant that quietly promotes an implementation
-detail to a contract is how a spec gap becomes invisible.
+**All three are specified now, and the route each took there is worth stating.** `SPEC` §7.6 names
+`encodeURIComponent` outright, so `url` needed no judgement. `base64`'s alphabet is derivable from
+the other end — `TF054` refuses a URL-safe literal to `base64 decode`, so an `encode` emitting one
+would produce output its own `decode` rejects. **`hex`'s case was pinned by this plant and by
+nothing else** until tflw's `M161` (`D814`): `SPEC` §7.6 now states that `hex encode` emits
+lowercase and `hex decode` accepts either case, and names `M154c-02` — the row this plant's silence
+was filed as — as the reason it says so. The plant asserts the contract rather than *being* it,
+which is the right way round; a plant that quietly promotes an implementation detail to a contract
+is how a spec gap becomes invisible.
 
 The grader asserts the literal is still present in the file, character for character, as well as
 that the tests pass. That second half is what stops the plant being weakened into a tautology later.
@@ -1002,7 +1004,7 @@ Measured on `fedora-box`:
     unique("W3-Widget")  ->  W3-Widget-0        W3-Widget-1        W3-Widget-2
     unique email         ->  user3@example.test user4@example.test user5@example.test
     unique number        ->  6                  7                  8
-    unique uuid          ->  …9f770000000c      …9e0a0000000d      …333c0000000e
+    unique uuid          ->  …09350000000c      …33e90000000d      …37d60000000e
 
 `unique email` reads `user3@…` *because the test above it drew three prefixes*. One counter, read by
 every `unique` construct, restarting at 0 each run — so two `unique` values are distinct because of
@@ -1026,17 +1028,26 @@ in opposite directions, and it decides which generator an idempotency key may co
 nothing in this repository had ever observed either half, because `retry-and-flake.tflw` retries
 against a `random string 8` key and passes under both readings.
 
-**`generator:unique-like` is the twelfth and it stays on the ratchet — as a finding, not a turn that
-ran out.** The counter jumps 8 → 12 in the table above. The three missing ticks are the three
-`unique like` draws in the test between them: the construct **advances the counter and then does not
-use it**, filling its pattern from the seeded `random` stream instead. Two runs at one seed produce
-the identical triple, and `random like "SKU-####-??"` → `SKU-8562-VQ` shares its digits with
-`unique like "ORD-######"` → `ORD-856286`, which is one stream being read twice. So its distinctness
-is 10⁶-probabilistic rather than guaranteed, and `SPEC` §7.2's bolded clause — *a retried attempt
-cannot use `unique(...)` to reproduce a value an earlier attempt already used* — is false for it.
-Rostering it would mean writing a row that states the measured behaviour while the manifest states
-the opposite, which is the laundering `D722` exists to refuse. It rosters when tflw's `unique like`
-embeds the counter, or when the manifest stops promising it does (`M154g-07`).
+**`generator:unique-like` was the twelfth, and this table is how it was found.** The counter jumps
+8 → 12 above. The three missing ticks were the three `unique like` draws in the test between them:
+the construct **advanced the counter and then spent it as a sub-seed**, filling its pattern from the
+resulting stream. Two runs at one seed produced the identical triple, and `random like "SKU-####-??"`
+→ `SKU-8562-VQ` shared its digits with `unique like "ORD-######"` → `ORD-856286`, which was one
+stream being read twice — so its distinctness was 10⁶-probabilistic rather than guaranteed on a
+construct whose whole purpose is keys under a uniqueness constraint. Filed as `M154g-07`; **tflw
+fixed it on 2026-08-28**, rendering the counter into the pattern's own placeholders through a
+permutation keyed by the pattern alone. The gap in the table therefore stays, and now says *sharing*
+rather than *loss*. It stayed off the roster until then rather than being rostered against a manifest
+saying the opposite, which is the laundering `D722` exists to refuse — and it rostered as `C113` on
+the day its stated condition was met, taking the ratchet to zero. **The two claims it is actually
+graded on are neither of the two this paragraph could see**; `C113` below is the row.
+
+**The `unique uuid` line above re-derived on 2026-08-29 and the counter tail did not**, which is
+tflw's `D815` stated in one row. `unique uuid` drew its random half from the same sub-seed space a
+test's own `random` stream is keyed in (`M154g-15`); it has its own domain now, so `9f77` became
+`0935` while `0000000c` stayed, because that half is the counter. No other line here moved, and
+`SKU-8562-VQ` did not either — `D815` keys the test domain to the mixing identity so every `random`
+stream replays bit-for-bit.
 
 The check-time half of four rows lives in `tests/.checkonly/invalid-literal-operand.tflw`, which this
 step **extended rather than copied**: `SPEC` §7.3's generator-operand table had seven rows and four

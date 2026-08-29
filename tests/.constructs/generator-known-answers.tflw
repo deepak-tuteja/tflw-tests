@@ -29,12 +29,20 @@
 #
 # ## The shared counter, which is the family's real known answer
 #
-# Measured on `fedora-box`, seed 4242 and seed 9999, four runs:
+# Measured on `fedora-box`, seed 4242 and seed 9999, four runs — re-measured 2026-08-29:
 #
 #     unique("W3-Widget")  ->  W3-Widget-0   W3-Widget-1   W3-Widget-2
 #     unique email         ->  user3@example.test  user4@…   user5@…
 #     unique number        ->  6   7   8
-#     unique uuid          ->  …-9f770000000c   …-9e0a0000000d   …-333c0000000e
+#     unique uuid          ->  …-09350000000c   …-33e90000000d   …-37d60000000e
+#
+# **`unique uuid`'s first four digits moved that day and its last eight did not**, which is the
+# whole of tflw's `D815` in one line. It used to draw its random half from the same sub-seed space
+# a test's own `random` stream is keyed in — one index space indexing two unrelated things
+# (`M154g-15`) — and it has a domain of its own now, so the random half re-derived (`9f77` ->
+# `0935`) while the counter tail could not, because it *is* the counter. Nothing else in this table
+# moved, and neither did `random like "SKU-####-??"` -> `SKU-8562-VQ`: `D815` keys the test domain
+# to the mixing identity precisely so that every `random` stream replays bit-for-bit.
 #
 # **One counter, shared by every `unique` construct, restarting at 0 each run.** `unique email`
 # reads `user3@…` here *because the test above it drew three prefixes* — and that is the sentence a
@@ -82,14 +90,21 @@
 # facts and this file is a run. They live in `tests/.checkonly/invalid-literal-operand.tflw`, which
 # this milestone extended rather than copied, and the grader reads them from there.
 #
-# **`random date` values are never handed to `matches`, and never compared to another date.** Two
-# defects were found writing this plant and both are in the matchers rather than the generators.
-# `matches` against a date subject is incoherent — `".*"` and `"2025"` pass while `"^[0-9]"` and
-# `"^$"` fail on the same value, and the failure message prints a value that plainly satisfies the
-# pattern (`M154g-08`). And `equals` between two date values is **unconditionally true**, so
-# `not equals` on two visibly different instants is red (`M154g-09`). `contains` and `is less than`
-# both give clean type errors on the same subject; those two do not. So the shape claim goes through
-# `format … as` and the ordering claim goes to the grader, which reads the values as text.
+# **`random date` values are handed to `matches` and compared to each other directly, and that is
+# new.** Two defects were found writing this plant and both were in the matchers rather than the
+# generators. `matches` against a date subject was incoherent — `".*"` and `"2025"` passed while
+# `"^[0-9]"` and `"^$"` failed on the same value, and the failure message printed a value that
+# plainly satisfied the pattern (`M154g-08`). And `equals` between two date values was
+# **unconditionally true**, so `not equals` on two visibly different instants was red
+# (`M154g-09`). Both are fixed in tflw — `M154g-09` by making `deepEqual` compare a `Date` by
+# instant, `M154g-08` by `M161`'s `D813`, which gives a value **one** string form, so a date
+# renders as ISO-8601 UTC wherever it is turned into text. So both claims are stated in-band here
+# now, where this file used to route the shape claim through `format … as` and hand the rest to the
+# grader.
+#
+# **The ordering claim still belongs to the grader, and that is not a leftover.** `is less than`
+# gives a clean type error on a date subject; nothing in the language orders two dates, so a run
+# cannot state past < between < future. The grader reads the marks back as text and parses them.
 
 before file
   # The grader reads the marks back as a set, so a leftover label from a previous run would read as
@@ -249,13 +264,14 @@ test "`random date` respects the run clock and its stated bounds"
   let future = random date in future
   let between = random date between today - 10 days and today
 
-  # `format … as` is the way to a string; see the header for why `matches` is not.
-  let fp = format {past} as "yyyy-MM-dd"
-  expect {fp} matches "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
-  # **No date is compared to another date here**, and that is not squeamishness. `expect {past} not
-  # equals {future}` is red on two visibly different instants, because `equals` between two
-  # date-typed values is unconditionally true — filed as `M154g-09`, and the reason the ordering
-  # claim below belongs to the grader, which reads the values as text and parses them itself.
+  # Against the date value itself, not a reformatted copy of it. `format {past} as "yyyy-MM-dd"`
+  # stood here until `M154g-08` was fixed, and the pattern could then only pin a prefix; the whole
+  # ISO-8601 instant is pinned now, which is what `D813` bought.
+  expect {past} matches "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+  # Two visibly different instants are visibly different to `equals` too, since `M154g-09`. The
+  # **ordering** claim still goes to the grader — see the header — because `is less than` gives a
+  # type error on a date subject and no construct in the language orders two of them.
+  expect {past} not equals {future}
 
   let ep = base64 encode("{past}")
   let ef = base64 encode("{future}")
