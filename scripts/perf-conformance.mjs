@@ -83,7 +83,7 @@ const ARRIVAL_PORT = 4507;
 // them so a number can be attributed to a build.
 const { entry: TFLW_BIN, label: TFLW_LABEL } = resolveTflw('released', { label: 'perf-conformance' });
 
-/** `M160d` / `D813` — the reporting bound of the build this run is about to measure, copied into the
+/** `M160d` / `D835` — the reporting bound of the build this run is about to measure, copied into the
  *  artifact so a derivation months later reads the right one.
  *
  *  `derive-perf-bands.mjs` suppresses a `p95Ratio` band when tflw's own reporting error is a large

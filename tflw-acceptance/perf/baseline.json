@@ -6,75 +6,86 @@
   "rungs": {
     "checkout-burst": {
       "rpsRatio": {
-        "min": 0.387,
-        "max": 0.605
+        "min": 0.392,
+        "max": 0.613
       },
       "p95Ratio": {
-        "min": 1.072,
-        "max": 1.675
+        "min": 1.078,
+        "max": 1.685
       }
     },
     "dogfood-get-only": {
       "rpsRatio": {
-        "min": 0.858,
-        "max": 1.341
+        "min": 0.84,
+        "max": 1.313
       },
-      "p95Ratio": null
+      "p95Ratio": {
+        "min": 0.81,
+        "max": 1.266
+      }
     },
     "dogfood-post-uncontended": {
       "rpsRatio": {
-        "min": 0.784,
-        "max": 1.225
+        "min": 0.789,
+        "max": 1.233
       },
       "p95Ratio": {
-        "min": 0.833,
-        "max": 1.302
+        "min": 0.834,
+        "max": 1.303
       }
     },
     "search-read": {
       "rpsRatio": {
-        "min": 0.808,
-        "max": 1.263
+        "min": 0.812,
+        "max": 1.269
       },
       "p95Ratio": {
-        "min": 0.781,
-        "max": 1.271
+        "min": 0.786,
+        "max": 1.341
       }
     },
     "ticket-write": {
       "rpsRatio": {
-        "min": 0.81,
-        "max": 1.266
+        "min": 0.82,
+        "max": 1.281
       },
       "p95Ratio": {
-        "min": 0.826,
-        "max": 1.29
+        "min": 0.821,
+        "max": 1.283
       }
     },
     "echo-get-only": {
       "rpsRatio": {
-        "min": 0.336,
-        "max": 0.609
+        "min": 0.31,
+        "max": 0.593
       },
-      "p95Ratio": null
+      "p95Ratio": {
+        "min": 1.887,
+        "max": 2.949
+      }
     },
     "echo-post-only": {
       "rpsRatio": {
-        "min": 0.301,
-        "max": 0.548
+        "min": 0.283,
+        "max": 0.537
       },
-      "p95Ratio": null
+      "p95Ratio": {
+        "min": 1.979,
+        "max": 3.093
+      }
     }
   },
-  "_method": "Bands drawn by scripts/derive-perf-bands.mjs from 3 clean runs: geometric centre, half-width max(observed spread ^ 0.5 * 1.2, 1.25) capped at 1.7. Re-derive rather than hand-editing.",
+  "_method": "Bands drawn by scripts/derive-perf-bands.mjs from 5 run artifacts: geometric centre, half-width max(observed spread ^ 0.5 * 1.2, 1.25) capped at 1.7. Contribution is per-rung AND per-metric, so an artifact can found one rung's band and not another's, and can found a rpsRatio without founding the p95Ratio beside it — _notes says where that happened. \"Clean run\" is deliberately not claimed here: the founding set has held a partial contributor since the day it was established. Re-derive rather than hand-editing.",
   "_sources": [
     "founding-runs/2026-08-26T10-29-43-000Z.json",
     "founding-runs/2026-08-26T11-20-50-000Z.json",
-    "founding-runs/2026-08-26T10-23-37-000Z.json"
+    "founding-runs/2026-08-26T10-23-37-000Z.json",
+    "founding-runs/2026-08-29T14-29-32-000Z.json",
+    "founding-runs/2026-08-29T14-33-41-000Z.json"
   ],
   "_notes": {
-    "dogfood-get-only.p95Ratio": "not banded: tflw reported a p95 of 3/3 ms, so its +/-0.5 ms integer-reporting quantum is 17% of the reading — over the 10% share at which a band would fail on rounding rather than on behaviour (M154f-12).",
-    "echo-get-only.p95Ratio": "not banded: tflw reported a p95 of 1/1/1 ms, so its +/-0.5 ms integer-reporting quantum is 50% of the reading — over the 10% share at which a band would fail on rounding rather than on behaviour (M154f-12).",
-    "echo-post-only.p95Ratio": "not banded: tflw reported a p95 of 1/1/1 ms, so its +/-0.5 ms integer-reporting quantum is 50% of the reading — over the 10% share at which a band would fail on rounding rather than on behaviour (M154f-12)."
+    "dogfood-get-only.p95Ratio.contributors": "banded on 2 of 4 run(s): the other 2 reported a p95 of 3/3 ms too coarsely to use (M160d, D836). Their rpsRatio still contributes — the throughput count is unaffected by how the percentile was rendered.",
+    "echo-get-only.p95Ratio.contributors": "banded on 2 of 5 run(s): the other 3 reported a p95 of 1/1/1 ms too coarsely to use (M160d, D836). Their rpsRatio still contributes — the throughput count is unaffected by how the percentile was rendered.",
+    "echo-post-only.p95Ratio.contributors": "banded on 2 of 5 run(s): the other 3 reported a p95 of 1/1/1 ms too coarsely to use (M160d, D836). Their rpsRatio still contributes — the throughput count is unaffected by how the percentile was rendered."
   }
 }

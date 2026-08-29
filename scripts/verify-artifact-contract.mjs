@@ -63,7 +63,7 @@ const UNDERSTOOD_VERSION = 1;
  */
 const GRADER = 'scripts/verify-sarif-acceptance.mjs';
 /** The second consumer, and the first that reads something other than `findings.sarif`. */
-// `M160d`/`D813` — `durations` reaches its consumer in two hops, and the row names the hop a rename
+// `M160d`/`D835` — `durations` reaches its consumer in two hops, and the row names the hop a rename
 // would actually break. `perf-conformance.mjs` copies the whole block into each artifact it writes,
 // so the bound stays attached to the run it describes; that copy is by reference to the block and
 // would survive any rename inside it. `derive-perf-bands.mjs` is where the individual key names are
@@ -81,7 +81,7 @@ const EXPECTED = [
   { path: 'sarif.resultProperties.endpoint', is: 'tflw/endpoint', witness: `res.properties?.['tflw/endpoint']`, reads: GRADER },
   { path: 'sarif.ruleProperties.securitySeverity', is: 'security-severity', witness: `descriptor.properties?.['security-severity']`, reads: GRADER },
   { path: 'sarif.partialFingerprint', is: 'tflwFindingV1', witness: 'res.partialFingerprints?.tflwFindingV1', reads: GRADER },
-  // `M160d` (`D812`) — not a name, and not from `findings.sarif`. tflw's *rounding rule*, which
+  // `M160d` (`D834`) — not a name, and not from `findings.sarif`. tflw's *rounding rule*, which
   // `derive-perf-bands.mjs` needs in order to decide whether a p95 is precise enough to band. It
   // held that as a local `QUANTUM_MS = 0.5` until tflw's `M160a` made it false, and the rows above
   // are the reason that is worth a row: this is `M136c-01`'s break in a second currency. Nothing

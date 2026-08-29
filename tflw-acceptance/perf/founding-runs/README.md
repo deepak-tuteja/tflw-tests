@@ -12,7 +12,9 @@ These are the raw artifacts `scripts/derive-perf-bands.mjs` read to draw the rat
 node scripts/derive-perf-bands.mjs \
   tflw-acceptance/perf/founding-runs/2026-08-26T10-29-43-000Z.json \
   tflw-acceptance/perf/founding-runs/2026-08-26T11-20-50-000Z.json \
-  tflw-acceptance/perf/founding-runs/2026-08-26T10-23-37-000Z.json
+  tflw-acceptance/perf/founding-runs/2026-08-26T10-23-37-000Z.json \
+  tflw-acceptance/perf/founding-runs/2026-08-29T14-29-32-000Z.json \
+  tflw-acceptance/perf/founding-runs/2026-08-29T14-33-41-000Z.json
 ```
 
 The first two were taken on 2026-08-26 under the `tflw:load:conformance` lease (`D746`/`D747`) on an
@@ -38,3 +40,30 @@ two-clean-run version sat 0.2% under this run's `echo-get-only` ratio, i.e. it w
 
 That is the argument for keeping it: a band founded only on back-to-back idle-box runs looks
 precise and is not.
+
+## The 2026-08-29 pair, and what they were for (`M160`)
+
+`2026-08-29T14-29-32-000Z.json` and `14-33-41-000Z.json` are back-to-back `--profile ladder` runs on
+an idle `fedora-box` under the same lease, both `PASS`, 7 rungs compared, 0 regressions, against tflw
+`0e49518` and this repository at `a7c8924`.
+
+They were taken because the 2026-08-26 three **cannot** found a `p95Ratio` for the three rungs that
+had none. Those runs measured a tflw that rounded every duration to a whole millisecond, and the
+readings say so: `1/1/1 ms` on both `echo-*` rungs. `M160` removed that rounding and `D809` replaced
+it with a magnitude-relative render, so a current tflw reports `0.86` where the old one reported `1`.
+No amount of re-derivation recovers a digit the old build never wrote down.
+
+**Both dates are here, and both still contribute**, which is the point worth carrying. `D836` makes
+contribution per-*metric* as well as per-rung: coarse reporting disqualifies a run's `p95Ratio` and
+not its `rpsRatio`, because a count of completed iterations does not become less true because the
+percentile printed beside it was rounded. So the `echo-*` `p95Ratio` bands rest on the 2026-08-29
+pair alone, while their `rpsRatio` bands rest on all five — and keeping the older three is what holds
+those bands at x1.91/x1.90 instead of the x1.56 floor two back-to-back idle-box runs would produce.
+
+That is the same argument the section above makes for the partial run, applied to a second axis. The
+older set is not superseded evidence. It is evidence about a different question.
+
+**How each run's precision is known** is recorded in the artifact rather than inferred: since `D835`,
+`perf-conformance.mjs` copies the measuring build's `durations` block from tflw's artifact contract
+into `tflw.durations`. The 2026-08-26 three have no such field, which is not missing data — it is how
+a pre-`D809` build identifies itself, and the derivation has an exact model for what that build did.
