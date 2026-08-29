@@ -25,11 +25,46 @@
 //
 // ## Why some rungs get no `p95Ratio`
 //
-// `M154f-12` — tflw reports percentiles as integer milliseconds. When tflw's p95 is small the ratio
-// against a co-runner reporting sub-millisecond numbers is dominated by that rounding, not by
-// either tool's behaviour: `echo-get-only` reads 1.00/0.37 = 2.68, and a "1" that is really
+// `M154f-12` — tflw *used to* report percentiles as integer milliseconds. When tflw's p95 was small
+// the ratio against a co-runner reporting sub-millisecond numbers was dominated by that rounding,
+// not by either tool's behaviour: `echo-get-only` read 1.00/0.37 = 2.68, and a "1" that is really
 // anything in [0.5, 1.5) makes the true ratio anywhere from 1.35 to 4.05. A band over that measures
 // the reporter's quantisation. So the rule is stated as a **condition, not a rung list** (`M131`).
+//
+// ## Where the quantum comes from, and why it is no longer a number in this file (`M160d`, `D812`)
+//
+// It was one, and that was the defect. `QUANTUM_MS = 0.5` is a statement about **tflw's** behaviour
+// living in **this** repository, and tflw's `M160a` falsified it: durations are no longer rounded at
+// the point of measurement, and `D809` renders them magnitude-relatively (integer at or above 10 ms,
+// two significant digits below). Nothing went red. This script went on suppressing bands using a
+// quantum tflw no longer had — `M136a`'s cross-repo break exactly, one artifact over, with
+// arithmetic in place of a field name.
+//
+// So tflw publishes the bound itself, in `dist/artifact-contract.json`'s `durations` block. The
+// largest relative error `D809` can produce is exactly **1/21 (4.76%)**, reached just under
+// `1.05 x 10^k` where the render lattice widens tenfold but the value has not. That is under
+// `MAX_QUANTISATION_SHARE` at every magnitude, so under a current tflw the condition cannot fire —
+// which is this milestone's result, not a reason to delete the condition.
+//
+// **A contract with no `durations` block is not an error, it is an older tflw**, and the fallback is
+// the pre-`D809` model rather than a guess: that build really did report whole milliseconds, so
+// `0.5 / p95` is exactly right for it. The absence *is* the signal.
+//
+// ## The bound belongs to the run, not to the checkout (`M160d`, `D813`)
+//
+// The first version of this read the bound from the **installed** tflw and applied it to every
+// artifact on the command line. That is the same category error it had just fixed, pointed the
+// other way: a bound describes the build that *produced* a reading, and the artifacts on disk were
+// produced by builds that are no longer installed. Measured before it shipped, which is the only
+// reason it did not: re-deriving the three founding runs of 2026-08-26 — whose tflw p95 readings are
+// literally `1/1/1 ms` — under a current contract **banded `echo-get-only` at 1.906-3.317** and
+// emptied `notes`. Those suppressions were correct. A build that reported `1` for anything in
+// `[0.5, 1.5)` has a 50% error whatever a later build publishes about itself.
+//
+// So `perf-conformance.mjs` copies the measuring tflw's `durations` block into the artifact it
+// writes, and this script reads it **per artifact**, from `artifact.tflw.durations`. An artifact
+// with no such field predates the arrangement and gets the pre-`D809` model — which is right for
+// every artifact that exists today, because that is exactly what those builds did.
 //
 // The condition is about the quantum's **share of the value**, not a millisecond floor. The first
 // draft used a flat 2 ms cutoff and it was the wrong shape: it admitted `dogfood-get-only`, whose
@@ -53,13 +88,31 @@ import { RUNGS } from './lib/perf-ladder.mjs';
  *  else is untouched by that reset succeeding or failing. */
 const RESET_RESTORES = 'apiV2';
 
-/** tflw reports whole milliseconds, so any p95 carries a +/-0.5 ms rounding quantum. A rung earns a
- *  p95 band only while that quantum is under this share of the reading. At 10% the rounding step is
- *  comfortably inside `K_FLOOR`'s 25% half-width, so a band breach means behaviour rather than
- *  arithmetic; the equivalent cutoff is a tflw p95 of 5 ms. */
+/** A rung earns a p95 band only while tflw's reporting error is under this share of the reading. At
+ *  10% the error is comfortably inside `K_FLOOR`'s 25% half-width, so a band breach means behaviour
+ *  rather than arithmetic. This threshold is **this repository's policy** and stays a literal here;
+ *  what moved to the contract is tflw's *behaviour*, which is the half this repo cannot know. */
 export const MAX_QUANTISATION_SHARE = 0.10;
-/** Half of tflw's integer-millisecond reporting step. */
-export const QUANTUM_MS = 0.5;
+
+/** The pre-`D809` model, for a tflw predating the contract's `durations` block. Not a default and
+ *  not a guess — an older tflw genuinely did round every duration to a whole millisecond, so half a
+ *  step is that build's exact worst case. */
+export const LEGACY_QUANTUM_MS = 0.5;
+
+/**
+ * tflw's worst-case relative error for a reported p95 — from tflw, not from a literal here.
+ *
+ * Returns `{ share, source }`. `share` is what `MAX_QUANTISATION_SHARE` is compared against;
+ * `source` is what the suppression note cites, so a reader can tell "tflw says it rounds this hard"
+ * from "this script assumed an older tflw".
+ */
+export function reportingError(tflwP95, durations) {
+  const published = durations?.maxRelativeError;
+  if (typeof published === 'number') {
+    return { share: published, source: `tflw ${durations?.rule ?? 'D809'}, published bound` };
+  }
+  return { share: LEGACY_QUANTUM_MS / tflwP95, source: 'pre-D809 tflw, whole-millisecond reporting' };
+}
 
 /** Minimum runs before a band may be written at all. See the header. */
 export const MIN_RUNS = 2;
@@ -106,6 +159,10 @@ export function observationsFrom(artifact) {
       rpsRatio: tflw.rps / peer.rps,
       p95Ratio: tflw.p95 / peer.p95,
       tflwP95: tflw.p95,
+      // `D813` — the bound travels with the observation, because it describes the build that
+      // produced it. `undefined` here is a pre-`M160d` artifact, and `reportingError` has an exact
+      // model for that build rather than a default.
+      durations: artifact.tflw?.durations,
     };
   }
   return out;
@@ -142,15 +199,16 @@ export function derive(artifacts) {
     entry.rpsRatio = rps.band;
     if (!rps.band) notes[`${rung.name}.rpsRatio`] = rps.why;
 
-    const quantised = seen.filter((s) => QUANTUM_MS / s.tflwP95 > MAX_QUANTISATION_SHARE);
+    const quantised = seen.filter((s) => reportingError(s.tflwP95, s.durations).share > MAX_QUANTISATION_SHARE);
     if (quantised.length) {
       entry.p95Ratio = null;
-      const worst = Math.max(...quantised.map((s) => QUANTUM_MS / s.tflwP95));
+      const errs = quantised.map((s) => reportingError(s.tflwP95, s.durations));
+      const worst = Math.max(...errs.map((e) => e.share));
       notes[`${rung.name}.p95Ratio`] =
-        `not banded: tflw reported a p95 of ${quantised.map((s) => s.tflwP95).join('/')} ms, so its ` +
-        `+/-${QUANTUM_MS} ms integer-reporting quantum is ${(worst * 100).toFixed(0)}% of the reading — over the ` +
+        `not banded: tflw reported a p95 of ${quantised.map((s) => s.tflwP95).join('/')} ms, and its ` +
+        `reporting error (${errs[0].source}) is ${(worst * 100).toFixed(0)}% of the reading — over the ` +
         `${(MAX_QUANTISATION_SHARE * 100).toFixed(0)}% share at which a band would fail on rounding rather than ` +
-        `on behaviour (M154f-12).`;
+        `on behaviour (M154f-12, M160d).`;
     } else {
       const p95 = bandFrom(seen.map((s) => s.p95Ratio));
       entry.p95Ratio = p95.band;

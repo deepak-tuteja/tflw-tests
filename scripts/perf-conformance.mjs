@@ -60,7 +60,7 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 import { RUNGS, FIXTURES, FIXTURE_SOURCE, TARGETS } from './lib/perf-ladder.mjs';
-import { resolveTflw } from './lib/tflw-bin.mjs';
+import { resolveTflw, resolveArtifactContract } from './lib/tflw-bin.mjs';
 import { compare } from './verify-perf-baseline.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -82,6 +82,28 @@ const ARRIVAL_PORT = 4507;
 // branch build; the resolver announces the entry path and a sha prefix, and the artifact records
 // them so a number can be attributed to a build.
 const { entry: TFLW_BIN, label: TFLW_LABEL } = resolveTflw('released', { label: 'perf-conformance' });
+
+/** `M160d` / `D813` — the reporting bound of the build this run is about to measure, copied into the
+ *  artifact so a derivation months later reads the right one.
+ *
+ *  `derive-perf-bands.mjs` suppresses a `p95Ratio` band when tflw's own reporting error is a large
+ *  share of the reading, and that error is a property of the **binary that produced the number**.
+ *  Reading it from whatever tflw is installed when the bands are drawn gets it right only while the
+ *  two happen to agree: re-deriving the 2026-08-26 founding runs under a current contract banded
+ *  `echo-get-only` from readings of `1/1/1 ms`, whose true error is 50%.
+ *
+ *  `null` is a real answer, not a failure — a tflw predating the `durations` block rounded every
+ *  duration to a whole millisecond, and the consumer has an exact model for that. So this never
+ *  throws; `verify-artifact-contract.mjs` is the script whose job is to fail on a missing contract,
+ *  and it fails for a different reason (a name this repo reads having gone away). */
+function measuringBuildDurations() {
+  try {
+    const { file } = resolveArtifactContract('released', { label: 'perf-conformance' });
+    return JSON.parse(readFileSync(file, 'utf8')).durations ?? null;
+  } catch {
+    return null;
+  }
+}
 
 const argv = process.argv.slice(2);
 const arg = (name, dflt) => {
@@ -880,7 +902,7 @@ async function main() {
     node: process.version,
     lease: LEASE_LABEL,
     tree: describeTree(ROOT),
-    tflw: { entry: TFLW_BIN, resolved: TFLW_LABEL ?? 'released' },
+    tflw: { entry: TFLW_BIN, resolved: TFLW_LABEL ?? 'released', durations: measuringBuildDurations() },
     legs: {},
     absent_runners: [],
     regressions: [],
