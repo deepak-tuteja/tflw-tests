@@ -1,0 +1,436 @@
+{
+  "v": 1,
+  "ts": 1788014021,
+  "profile": "ladder",
+  "host": "fedora",
+  "node": "v22.22.0",
+  "lease": "tflw:load:conformance",
+  "tree": {
+    "sha": "a7c8924d5d17add583b1583d90483695099a111e",
+    "branch": "main",
+    "dirty": true
+  },
+  "tflw": {
+    "entry": "/home/deepaktuteja/tflw-perf/checkout/node_modules/tflw/dist/cli.cjs",
+    "resolved": "released",
+    "durations": {
+      "rule": "D809",
+      "maxRelativeError": 0.0477
+    }
+  },
+  "legs": {
+    "ladder": {
+      "ok": true,
+      "reset": {
+        "ok": true,
+        "http": "201",
+        "as": "admin@example.com",
+        "detail": null
+      },
+      "reset_http": "201",
+      "health": {
+        "apiV2": {
+          "before": {
+            "ok": true,
+            "http": "200",
+            "ms": 2.9
+          },
+          "after": {
+            "ok": true,
+            "http": "200",
+            "ms": 2.33
+          }
+        },
+        "echo": {
+          "before": {
+            "ok": true,
+            "http": "200",
+            "ms": 2.36
+          },
+          "after": {
+            "ok": true,
+            "http": "200",
+            "ms": 2.03
+          }
+        }
+      },
+      "absent_runners": [
+        "artillery"
+      ],
+      "rungs": [
+        {
+          "name": "checkout-burst",
+          "what": "the contended rung — every VU races the one hot product row through a real Postgres row lock",
+          "target": "apiV2",
+          "runners": {
+            "tflw": {
+              "iterations": 12890,
+              "errorRate": 0,
+              "p95": 93,
+              "rps": 641.8683398067922,
+              "population": "successful-only"
+            },
+            "k6": {
+              "iterations": 25506,
+              "errorRate": 0.0035285815102328866,
+              "p95": 69.2785985,
+              "rps": 1275.2696230775782,
+              "population": "name:checkout,expected_response:true",
+              "exit": 0
+            }
+          },
+          "skipped": {
+            "artillery": "not installed on this box"
+          },
+          "health": {
+            "before": {
+              "ok": true,
+              "http": "200",
+              "ms": 2.37
+            },
+            "after": {
+              "ok": true,
+              "http": "200",
+              "ms": 2.81
+            },
+            "baseline": {
+              "ok": true,
+              "http": "200",
+              "ms": 2.9
+            }
+          },
+          "target_ok": {
+            "ok": true,
+            "ratio": 1.19,
+            "drift": 0.97
+          }
+        },
+        {
+          "name": "dogfood-get-only",
+          "what": "the read rung — GET with no body, no capture",
+          "target": "apiV2",
+          "runners": {
+            "tflw": {
+              "iterations": 226080,
+              "errorRate": 0,
+              "p95": 5.4,
+              "rps": 11297.2216669998,
+              "population": "successful-only"
+            },
+            "k6": {
+              "iterations": 218171,
+              "errorRate": 0,
+              "p95": 5.251084049999997,
+              "rps": 10908.347801774311,
+              "population": "name:health,expected_response:true",
+              "exit": 0
+            }
+          },
+          "skipped": {
+            "artillery": "not installed on this box"
+          },
+          "health": {
+            "before": {
+              "ok": true,
+              "http": "200",
+              "ms": 2.23
+            },
+            "after": {
+              "ok": true,
+              "http": "200",
+              "ms": 2.32
+            },
+            "baseline": {
+              "ok": true,
+              "http": "200",
+              "ms": 2.9
+            }
+          },
+          "target_ok": {
+            "ok": true,
+            "ratio": 1.04,
+            "drift": 0.8
+          }
+        },
+        {
+          "name": "dogfood-post-uncontended",
+          "what": "the write rung with zero interpolation overhead — the one the drifting id broke twice",
+          "target": "apiV2",
+          "runners": {
+            "tflw": {
+              "iterations": 35178,
+              "errorRate": 0,
+              "p95": 33,
+              "rps": 1755.827302221113,
+              "population": "successful-only"
+            },
+            "k6": {
+              "iterations": 35673,
+              "errorRate": 0.0025229164914641325,
+              "p95": 31.225930649999995,
+              "rps": 1783.6182229685585,
+              "population": "name:cart-add,expected_response:true",
+              "exit": 0
+            }
+          },
+          "skipped": {
+            "artillery": "not installed on this box"
+          },
+          "health": {
+            "before": {
+              "ok": true,
+              "http": "200",
+              "ms": 2.17
+            },
+            "after": {
+              "ok": true,
+              "http": "200",
+              "ms": 2.37
+            },
+            "baseline": {
+              "ok": true,
+              "http": "200",
+              "ms": 2.9
+            }
+          },
+          "target_ok": {
+            "ok": true,
+            "ratio": 1.09,
+            "drift": 0.82
+          }
+        },
+        {
+          "name": "search-read",
+          "what": "catalog search under load",
+          "target": "apiV2",
+          "runners": {
+            "tflw": {
+              "iterations": 74200,
+              "errorRate": 0,
+              "p95": 15,
+              "rps": 3706.2937062937062,
+              "population": "successful-only"
+            },
+            "k6": {
+              "iterations": 73024,
+              "errorRate": 0,
+              "p95": 14.840249349999999,
+              "rps": 3651.1465395472533,
+              "population": "name:search,expected_response:true",
+              "exit": 0
+            }
+          },
+          "skipped": {},
+          "health": {
+            "before": {
+              "ok": true,
+              "http": "200",
+              "ms": 2.12
+            },
+            "after": {
+              "ok": true,
+              "http": "200",
+              "ms": 2.27
+            },
+            "baseline": {
+              "ok": true,
+              "http": "200",
+              "ms": 2.9
+            }
+          },
+          "target_ok": {
+            "ok": true,
+            "ratio": 1.07,
+            "drift": 0.78
+          }
+        },
+        {
+          "name": "ticket-write",
+          "what": "the rate-limited + uniquely-constrained write path",
+          "target": "apiV2",
+          "runners": {
+            "tflw": {
+              "iterations": 32211,
+              "errorRate": 0,
+              "p95": 34,
+              "rps": 1608.5393258426968,
+              "population": "successful-only"
+            },
+            "k6": {
+              "iterations": 30893,
+              "errorRate": 0.0030427604959052212,
+              "p95": 32.331568250000004,
+              "rps": 1544.615266313737,
+              "population": "name:ticket-create,expected_response:true",
+              "exit": 0
+            }
+          },
+          "skipped": {},
+          "health": {
+            "before": {
+              "ok": true,
+              "http": "200",
+              "ms": 2.14
+            },
+            "after": {
+              "ok": true,
+              "http": "200",
+              "ms": 3.25
+            },
+            "baseline": {
+              "ok": true,
+              "http": "200",
+              "ms": 2.9
+            }
+          },
+          "target_ok": {
+            "ok": true,
+            "ratio": 1.52,
+            "drift": 1.12
+          }
+        },
+        {
+          "name": "echo-get-only",
+          "what": "the runner-overhead floor: a local echo server, no database, no auth",
+          "target": "echo",
+          "runners": {
+            "tflw": {
+              "iterations": 252667,
+              "errorRate": 0,
+              "p95": 0.86,
+              "rps": 31555.76370675659,
+              "population": "successful-only"
+            },
+            "k6": {
+              "iterations": 637916,
+              "errorRate": 0,
+              "p95": 0.369141,
+              "rps": 79737.68970526342,
+              "population": "name:products,expected_response:true",
+              "exit": 0
+            }
+          },
+          "skipped": {
+            "artillery": "not installed on this box"
+          },
+          "health": {
+            "before": {
+              "ok": true,
+              "http": "200",
+              "ms": 3.05
+            },
+            "after": {
+              "ok": true,
+              "http": "200",
+              "ms": 2.59
+            },
+            "baseline": {
+              "ok": true,
+              "http": "200",
+              "ms": 2.36
+            }
+          },
+          "target_ok": {
+            "ok": true,
+            "ratio": 0.85,
+            "drift": 1.1
+          }
+        },
+        {
+          "name": "echo-post-only",
+          "what": "the same floor, with a body",
+          "target": "echo",
+          "runners": {
+            "tflw": {
+              "iterations": 231348,
+              "errorRate": 0,
+              "p95": 0.93,
+              "rps": 28889.610389610392,
+              "population": "successful-only"
+            },
+            "k6": {
+              "iterations": 642765,
+              "errorRate": 0,
+              "p95": 0.372011,
+              "rps": 80344.09367170365,
+              "population": "name:orders,expected_response:true",
+              "exit": 0
+            }
+          },
+          "skipped": {
+            "artillery": "not installed on this box"
+          },
+          "health": {
+            "before": {
+              "ok": true,
+              "http": "200",
+              "ms": 2.02
+            },
+            "after": {
+              "ok": true,
+              "http": "200",
+              "ms": 2.88
+            },
+            "baseline": {
+              "ok": true,
+              "http": "200",
+              "ms": 2.36
+            }
+          },
+          "target_ok": {
+            "ok": true,
+            "ratio": 1.43,
+            "drift": 1.22
+          }
+        },
+        {
+          "name": "generator-saturation-demo",
+          "what": "a demonstration that the generator, not the target, is the ceiling at high rates",
+          "target": "apiV2",
+          "runners": {
+            "tflw": {
+              "iterations": 150,
+              "errorRate": 0,
+              "p95": 20,
+              "rps": 49.61958319550116,
+              "population": "successful-only"
+            }
+          },
+          "skipped": {},
+          "health": {
+            "before": {
+              "ok": true,
+              "http": "200",
+              "ms": 2.43
+            },
+            "after": {
+              "ok": true,
+              "http": "200",
+              "ms": 2.54
+            },
+            "baseline": {
+              "ok": true,
+              "http": "200",
+              "ms": 2.9
+            }
+          },
+          "target_ok": {
+            "ok": true,
+            "ratio": 1.05,
+            "drift": 0.88
+          }
+        }
+      ]
+    }
+  },
+  "absent_runners": [
+    "artillery"
+  ],
+  "regressions": [],
+  "ok": true,
+  "compared_rungs": 7,
+  "uncomparable_rungs": [
+    "generator-saturation-demo"
+  ],
+  "verdict": "pass"
+}

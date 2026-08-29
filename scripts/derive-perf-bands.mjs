@@ -31,7 +31,7 @@
 // anything in [0.5, 1.5) makes the true ratio anywhere from 1.35 to 4.05. A band over that measures
 // the reporter's quantisation. So the rule is stated as a **condition, not a rung list** (`M131`).
 //
-// ## Where the quantum comes from, and why it is no longer a number in this file (`M160d`, `D812`)
+// ## Where the quantum comes from, and why it is no longer a number in this file (`M160d`, `D834`)
 //
 // It was one, and that was the defect. `QUANTUM_MS = 0.5` is a statement about **tflw's** behaviour
 // living in **this** repository, and tflw's `M160a` falsified it: durations are no longer rounded at
@@ -50,7 +50,7 @@
 // the pre-`D809` model rather than a guess: that build really did report whole milliseconds, so
 // `0.5 / p95` is exactly right for it. The absence *is* the signal.
 //
-// ## The bound belongs to the run, not to the checkout (`M160d`, `D813`)
+// ## The bound belongs to the run, not to the checkout (`M160d`, `D835`)
 //
 // The first version of this read the bound from the **installed** tflw and applied it to every
 // artifact on the command line. That is the same category error it had just fixed, pointed the
@@ -159,7 +159,7 @@ export function observationsFrom(artifact) {
       rpsRatio: tflw.rps / peer.rps,
       p95Ratio: tflw.p95 / peer.p95,
       tflwP95: tflw.p95,
-      // `D813` — the bound travels with the observation, because it describes the build that
+      // `D835` — the bound travels with the observation, because it describes the build that
       // produced it. `undefined` here is a pre-`M160d` artifact, and `reportingError` has an exact
       // model for that build rather than a default.
       durations: artifact.tflw?.durations,
@@ -199,20 +199,33 @@ export function derive(artifacts) {
     entry.rpsRatio = rps.band;
     if (!rps.band) notes[`${rung.name}.rpsRatio`] = rps.why;
 
+    // `D836` — coarse reporting disqualifies a run's **p95**, not its **rps**. Dropping the whole
+    // observation for it was the wider rule and it cost real signal: the founding set's third run
+    // is the only look at the `echo-*` rungs under a different box state, and it is what widened
+    // their `rpsRatio` bands to x1.81 from the x1.56 floor. A count of completed iterations does not
+    // become less true because the percentile beside it was rendered to a whole millisecond. This is
+    // `observationsFrom`'s per-rung rule one step further in — judge the datum, not the run it
+    // arrived in — and it is what lets a pre-`D809` artifact go on contributing after `D834`.
     const quantised = seen.filter((s) => reportingError(s.tflwP95, s.durations).share > MAX_QUANTISATION_SHARE);
-    if (quantised.length) {
-      entry.p95Ratio = null;
+    const usable = seen.filter((s) => !quantised.includes(s));
+    const p95 = bandFrom(usable.map((s) => s.p95Ratio));
+    entry.p95Ratio = p95.band;
+    if (!p95.band) {
+      // Two ways to have too few: never measured, or measured too coarsely to use. Say which — the
+      // first is a gap in the runs and the second is a statement about the build that made them.
       const errs = quantised.map((s) => reportingError(s.tflwP95, s.durations));
-      const worst = Math.max(...errs.map((e) => e.share));
-      notes[`${rung.name}.p95Ratio`] =
-        `not banded: tflw reported a p95 of ${quantised.map((s) => s.tflwP95).join('/')} ms, and its ` +
-        `reporting error (${errs[0].source}) is ${(worst * 100).toFixed(0)}% of the reading — over the ` +
-        `${(MAX_QUANTISATION_SHARE * 100).toFixed(0)}% share at which a band would fail on rounding rather than ` +
-        `on behaviour (M154f-12, M160d).`;
-    } else {
-      const p95 = bandFrom(seen.map((s) => s.p95Ratio));
-      entry.p95Ratio = p95.band;
-      if (!p95.band) notes[`${rung.name}.p95Ratio`] = p95.why;
+      notes[`${rung.name}.p95Ratio`] = quantised.length
+        ? `not banded: ${usable.length} of ${seen.length} run(s) usable — tflw reported a p95 of ` +
+          `${quantised.map((s) => s.tflwP95).join('/')} ms in the rest, and its reporting error ` +
+          `(${errs[0].source}) is ${(Math.max(...errs.map((e) => e.share)) * 100).toFixed(0)}% of the ` +
+          `reading, over the ${(MAX_QUANTISATION_SHARE * 100).toFixed(0)}% share at which a band would fail ` +
+          `on rounding rather than on behaviour (M154f-12, M160d).`
+        : p95.why;
+    } else if (quantised.length) {
+      notes[`${rung.name}.p95Ratio.contributors`] =
+        `banded on ${usable.length} of ${seen.length} run(s): the other ${quantised.length} reported a p95 ` +
+        `of ${quantised.map((s) => s.tflwP95).join('/')} ms too coarsely to use (M160d, D836). Their ` +
+        `rpsRatio still contributes — the throughput count is unaffected by how the percentile was rendered.`;
     }
     rungs[rung.name] = entry;
     entry._observed = { rps: rps.observed ?? null, runs: seen.length };
@@ -236,10 +249,17 @@ if (invokedDirectly) {
   const missing = Object.entries(rungs).filter(([, v]) => !v.rpsRatio).map(([k]) => k);
   const out = {
     ...existing,
-    _method: `Bands drawn by scripts/derive-perf-bands.mjs from ${files.length} clean runs: geometric ` +
+    _method: `Bands drawn by scripts/derive-perf-bands.mjs from ${files.length} run artifacts: geometric ` +
              `centre, half-width max(observed spread ^ 0.5 * ${K_MARGIN}, ${K_FLOOR}) capped at ${K_CAP}. ` +
-             `Re-derive rather than hand-editing.`,
-    _sources: files.map((f) => path.basename(f)),
+             `Contribution is per-rung AND per-metric, so an artifact can found one rung's band and not ` +
+             `another's, and can found a rpsRatio without founding the p95Ratio beside it — _notes says ` +
+             `where that happened. "Clean run" is deliberately not claimed here: the founding set has ` +
+             `held a partial contributor since the day it was established. Re-derive rather than hand-editing.`,
+    // Relative to the baseline, not a bare basename: the committed value has always carried the
+    // `founding-runs/` prefix, and a name with no directory cannot be pasted back into the re-derive
+    // command that `founding-runs/README.md` publishes. A provenance field that does not resolve is
+    // the thing `M154f-09` is a row about.
+    _sources: files.map((f) => path.relative(path.dirname(BASELINE_FILE), path.resolve(f))),
     established: missing.length === 0,
     rungs: Object.fromEntries(Object.entries(rungs).map(([k, v]) => {
       const { _observed, ...band } = v;
