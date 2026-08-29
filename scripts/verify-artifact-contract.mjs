@@ -62,6 +62,15 @@ const UNDERSTOOD_VERSION = 1;
  * cannot rename them, and rows for them would guard nothing while making the list look thorough.
  */
 const GRADER = 'scripts/verify-sarif-acceptance.mjs';
+/** The second consumer, and the first that reads something other than `findings.sarif`. */
+// `M160d`/`D813` — `durations` reaches its consumer in two hops, and the row names the hop a rename
+// would actually break. `perf-conformance.mjs` copies the whole block into each artifact it writes,
+// so the bound stays attached to the run it describes; that copy is by reference to the block and
+// would survive any rename inside it. `derive-perf-bands.mjs` is where the individual key names are
+// spelled out, so a renamed `maxRelativeError` silently returns `undefined` there, falls to the
+// legacy model, and suppresses a band for a reason that is no longer true — a green gate over a
+// wrong answer, which is `M136c-01` exactly.
+const BANDS = 'scripts/derive-perf-bands.mjs';
 const EXPECTED = [
   { path: 'sarif.runProperties.notApplicable', is: 'tflw/notApplicable', witness: `properties?.['tflw/notApplicable']`, reads: GRADER },
   { path: 'sarif.notApplicableFields.kind', is: 'kind', witness: 'n.kind', reads: GRADER },
@@ -72,6 +81,18 @@ const EXPECTED = [
   { path: 'sarif.resultProperties.endpoint', is: 'tflw/endpoint', witness: `res.properties?.['tflw/endpoint']`, reads: GRADER },
   { path: 'sarif.ruleProperties.securitySeverity', is: 'security-severity', witness: `descriptor.properties?.['security-severity']`, reads: GRADER },
   { path: 'sarif.partialFingerprint', is: 'tflwFindingV1', witness: 'res.partialFingerprints?.tflwFindingV1', reads: GRADER },
+  // `M160d` (`D812`) — not a name, and not from `findings.sarif`. tflw's *rounding rule*, which
+  // `derive-perf-bands.mjs` needs in order to decide whether a p95 is precise enough to band. It
+  // held that as a local `QUANTUM_MS = 0.5` until tflw's `M160a` made it false, and the rows above
+  // are the reason that is worth a row: this is `M136c-01`'s break in a second currency. Nothing
+  // failed at check time then either — the derivation simply went on suppressing bands on
+  // arithmetic that had stopped being true.
+  //
+  // `maxRelativeError` is a **number**, and the equality assertion is the point exactly as it is for
+  // the names: a bound that drifts from 0.0477 to 0.5 suppresses every band in the baseline and
+  // reads, from here, like a quiet policy change nobody made.
+  { path: 'durations.rule', is: 'D809', witness: `durations?.rule`, reads: BANDS },
+  { path: 'durations.maxRelativeError', is: 0.0477, witness: `durations?.maxRelativeError`, reads: BANDS },
 ];
 
 const problems = [];
@@ -142,6 +163,6 @@ if (problems.length > 0) {
 }
 
 console.log(
-  `✓ artifact contract v${contract.version}: all ${EXPECTED.length} SARIF names this repo reads are ` +
-    'present in the installed tflw, and each is really read by the grader named beside it',
+  `✓ artifact contract v${contract.version}: all ${EXPECTED.length} names and values this repo reads ` +
+    'are present in the installed tflw, and each is really read by the consumer named beside it',
 );
