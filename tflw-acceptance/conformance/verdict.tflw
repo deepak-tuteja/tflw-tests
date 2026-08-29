@@ -1,5 +1,4 @@
-# `M154e` / `C48`–`C49` — `cleanup` and `threshold`, the two constructs that decide what happens
-# *after* a workload rather than during it.
+# `M154e` / `C49` — `threshold`, the construct that decides a workload's verdict.
 #
 # **This file is meant to produce one red test.** That is its known answer, not a defect, and the
 # grader asserts the red as precisely as it asserts the greens. `tflw run` here exits non-zero by
@@ -25,49 +24,21 @@
 # breaches on every machine, 5000 ms passes on every machine, and neither bound is close enough to
 # 50 ms for scheduling jitter to reach it.
 #
-# ## `C48` — `cleanup`, and the manifest row that describes a different construct
-#
-# **Writing this plant found a tflw defect, filed as `M154e-01`.** It is recorded here because the
-# plant reads strangely otherwise, and because `D723` makes `tflw spec --json` the ground truth this
-# entire gate is built on — a wrong row there produces a plant that is confidently wrong, which is
-# `D734`'s worst case rather than its intended one.
-#
-# The manifest says: syntax `cleanup` + an indented block, *"steps that run once after a workload
-# finishes, whatever its verdict"*. All three of those are wrong, and `SPEC.md`'s own prose
-# (§ workload directives) contradicts the manifest table twelve lines further down the same file:
-#
-#   - **Syntax.** `cleanup` is a bare line. `ast.ts` carries it as a boolean on the test, and an
-#     indented block after it is `TF011`, "expected a step, found an indented block". There is no
-#     block form to write.
-#   - **What runs.** Not steps of its own — the *file's* `after each` hooks, which the run would
-#     otherwise skip. `D26`: teardown per iteration would double request volume and pollute the
-#     latency numbers the run exists to measure, so it is off by default and `cleanup` opts back in.
-#   - **When.** Not once after the workload — **once per iteration**, and only on an iteration's
-#     success path (`interpreter.ts:1067`, inside the `try`, after the `if (!exec.ok) throw`). So
-#     "whatever its verdict" is false twice over: wrong granularity, and a failing iteration skips
-#     it.
-#
-# The plant grades the construct that exists, not the one the manifest describes. `after each` below
-# hits a marker path; the first test opts in with `cleanup` and the second does not. The known
-# answer is therefore a **contrast**, which is what makes it a plant rather than a use: the opted-in
-# test lands one marker per successful iteration, and the test without the line lands **exactly
-# zero**. A build that ran teardown unconditionally — which is precisely what `D26` says must not
-# happen, and what the manifest's wording would lead someone to implement — turns the second
-# assertion red.
+# `C48` lived here too, until `M157f` moved it. It graded `cleanup` — a per-test line opting a
+# workload back into the file's `after` hooks — and the keyword no longer exists: `M157`'s `D781`
+# makes teardown the default and `D783` replaces the opt-in with a `teardown` config key. The plant
+# moved with it, to `teardown.tflw`, which grades the three-way contrast the key creates. This file
+# is now about `threshold` and nothing else, and its `after` hook went with `C48` rather than being
+# left behind to run 16 times for no plant's benefit.
 
-after
-  api GET /after-each-marker
-  expect status equals 200
-
-test "a satisfied threshold leaves the test green, and cleanup opts the after-each hook back in"
+test "a satisfied threshold leaves the test green"
   run 8 iterations across 2 users
   api GET /slow
   expect status equals 200
   threshold error rate is less than 1%
   threshold p95 duration is less than 5000ms
-  cleanup
 
-test "a breaching threshold turns the test red though every assertion passed, and no cleanup line means no teardown"
+test "a breaching threshold turns the test red though every assertion passed"
   run 8 iterations across 2 users
   api GET /slow
   expect status equals 200

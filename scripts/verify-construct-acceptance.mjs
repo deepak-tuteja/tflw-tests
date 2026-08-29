@@ -358,7 +358,7 @@ if (wanted('C3')) {
  *  opaque by tflw's own contract and must not be split apart. */
 const PLANT_CONSTRUCT = {
   C44: 'step:ramp', C45: 'step:hold', C46: 'step:step', C47: 'step:spike',
-  C48: 'step:cleanup', C49: 'step:threshold', C50: 'step:pause',
+  C48: 'config:key:teardown', C49: 'step:threshold', C50: 'step:pause',
 };
 
 /** The binned arrival curve, per path. `bin` is chosen per assertion — a `hold` reads naturally in
@@ -482,10 +482,9 @@ if (wanted('C44') || wanted('C45') || wanted('C46') || wanted('C47')) {
   }
 }
 
-if (wanted('C48') || wanted('C49')) {
-  for (const id of ['C48', 'C49']) {
-    if (!wanted(id)) continue;
-    const pl = plantFor(PLANT_CONSTRUCT[id]);
+if (wanted('C49')) {
+  {
+    const pl = plantFor(PLANT_CONSTRUCT.C49);
     console.log(`\n${pl.id} — ${pl.title}\n  target: ${pl.target}`);
   }
   const corpus = path.join(ROOT, 'tflw-acceptance', 'conformance');
@@ -498,14 +497,14 @@ if (wanted('C48') || wanted('C49')) {
     // run" would skip the only plant that proves a workload's verdict comes from its thresholds.
     const { report, output } = runCorpus(corpus, ['verdict.tflw']);
     if (!report) {
-      for (const id of ['C48', 'C49']) if (wanted(id)) fail(`${id} — no report\n${output.trim().split('\n').slice(-10).join('\n')}`);
+      fail(`C49 — no report\n${output.trim().split('\n').slice(-10).join('\n')}`);
     } else {
       const counted = await arrivals('__arrivals');
       const tests = report.tests ?? [];
       const green = tests.find((t) => (t.name ?? '').includes('a satisfied threshold'));
       const red = tests.find((t) => (t.name ?? '').includes('a breaching threshold'));
 
-      if (wanted('C49')) {
+      {
         recall('C49', green?.ok === true, `a workload whose p95 threshold is satisfied passes (got ${green ? (green.ok ? 'pass' : 'fail') : 'no such test'})`);
         recall('C49', red?.ok === false, `a workload whose p95 threshold breaches FAILS (got ${red ? (red.ok ? 'pass' : 'fail') : 'no such test'})`);
         // The sharp half. Both tests issue the same request against the same path and every
@@ -520,24 +519,75 @@ if (wanted('C48') || wanted('C49')) {
         precision('C49', bothSlow === 16, `both tests really ran: ${bothSlow} request(s) reached /slow (16 expected, 8 iterations each)`);
       }
 
-      if (wanted('C48')) {
-        // The manifest describes a construct that does not exist (`M154e-01`); this grades the one
-        // that does. `cleanup` opts a workload-bearing test back into the file's `after each` hook,
-        // per successful iteration (`interpreter.ts:1067`, `D26`). The contrast IS the plant: the
-        // opted-in test has 8 iterations, the test without the line has 8 more, and the marker path
-        // must see exactly the first 8.
-        const markers = counted.byPath['/after-each-marker'] ?? 0;
-        recall('C48', markers === 8, `the after-each hook ran once per iteration of the test that opted in: ${markers} marker(s), 8 expected`);
-        recall('C48', markers !== 16, `and NOT for the test that omitted \`cleanup\` — 16 would mean teardown ran unconditionally, which is exactly what D26 says must not happen under load`);
-        precision('C48', markers > 0, `the hook is reachable at all (a 0 here would make the assertion above vacuous rather than satisfied)`);
-      }
     }
   } catch (e) {
-    for (const id of ['C48', 'C49']) {
-      if (!wanted(id)) continue;
-      fail(`${id} could not run: ${e.message}`);
-      scores.get(id).skipped = e.message;
+    fail(`C49 could not run: ${e.message}`);
+    scores.get('C49').skipped = e.message;
+  } finally {
+    server?.kill();
+  }
+}
+
+// `M157f` (`D789`) — `C48`, re-pointed from the deleted `cleanup` keyword to the `teardown` config
+// key that replaced it. Its own block rather than a rider on `C49`'s, because it runs one file
+// **three times** at three levels of the key and `C49` runs a different file once. The contrast
+// across those three runs is the entire plant; a single run of any one of them proves nothing.
+if (wanted('C48')) {
+  const pl = plantFor(PLANT_CONSTRUCT.C48);
+  console.log(`\n${pl.id} — ${pl.title}\n  target: ${pl.target}`);
+  const corpus = path.join(ROOT, 'tflw-acceptance', 'conformance');
+  let server = null;
+  try {
+    server = await startArrivalServer(corpus);
+
+    /** One run of `teardown.tflw` at one level. Returns the marker count, the summary text and the
+     * first test's reported p95 — the three things the four clauses read. The arrival counter is
+     * reset per run, so each level's marker count is its own rather than a running total. */
+    const atLevel = async (flags) => {
+      await arrivals('__reset');
+      // Meant to end red — both tests breach by design — so the exit status is not read and the
+      // report is, exactly as `C49`'s own note explains for its file.
+      const { report, output } = runCorpus(corpus, ['teardown.tflw', ...flags]);
+      const counted = await arrivals('__arrivals');
+      const first = (report?.tests ?? []).find((t) => (t.name ?? '').includes('red by threshold'));
+      return { markers: counted.byPath['/after-each-marker'] ?? 0, output, p95: first?.metrics?.successful?.durations?.p95 ?? null, report };
+    };
+
+    const dflt = await atLevel([]);
+    const never = await atLevel(['--teardown', 'never']);
+    const onSuccess = await atLevel(['--teardown', 'on-success']);
+
+    if (!dflt.report || !never.report || !onSuccess.report) {
+      fail(`C48 — no report\n${(dflt.output || never.output || onSuccess.output).trim().split('\n').slice(-10).join('\n')}`);
+    } else {
+      // Clause 1. 8, not 4: the four iterations of the second test **failed**, and they tear down
+      // too. Before `M157b` the throw sat above the hook loop and this read 4.
+      recall('C48', dflt.markers === 8, `by default every iteration tears down, the failing ones included: ${dflt.markers} marker(s), 8 expected`);
+      // Clause 2, both halves — the count and the sentence. `D785` makes the announcement part of
+      // the contract, on the grounds that a config key set to debug one afternoon and committed is
+      // otherwise a run that leaks in silence forever.
+      recall('C48', never.markers === 0, `\`--teardown never\` runs no hook at all: ${never.markers} marker(s), 0 expected`);
+      recall('C48', /teardown: disabled/.test(never.output), `and says so on the summary — \`D785\`'s advisory line is missing from the output`);
+      // Clause 3, and the sharp one. The first test is RED (its threshold cannot be satisfied) while
+      // all four of its iterations PASS. A build reading the test's verdict rather than the
+      // iteration's answers 0 here.
+      recall('C48', onSuccess.markers === 4, `\`--teardown on-success\` tears down the passing iterations only: ${onSuccess.markers} marker(s), 4 expected`);
+      const firstRed = (onSuccess.report.tests ?? []).find((t) => (t.name ?? '').includes('red by threshold'));
+      recall('C48', firstRed?.ok === false, `and the test those four iterations belong to is itself RED — without that this clause cannot tell \`on success\` from "reads the run's verdict"`);
+      // Clause 4 — the one no plant here could make before `M157a`. Hook time is out of the
+      // reported duration, so the p95 must not move when the number of hooks per iteration does.
+      // Compared with a tolerance rather than for equality: these are real measurements against a
+      // zero-latency path, and asserting bit-equality would be asserting the absence of jitter.
+      const ps = [dflt.p95, never.p95, onSuccess.p95];
+      const spread = ps.every((v) => typeof v === 'number') ? Math.max(...ps) - Math.min(...ps) : null;
+      recall('C48', spread !== null && spread <= 5, `the reported p95 does not move with the number of hooks run — ${JSON.stringify(ps)} ms across the three levels (\`D782\`)`);
+      // Non-vacuity. A marker path nothing ever reaches would satisfy the `never` clause for the
+      // wrong reason, and every clause above it would be comparing zeroes.
+      precision('C48', dflt.markers > 0, `the hook is reachable at all (a 0 in the default run would make every clause above vacuous rather than satisfied)`);
     }
+  } catch (e) {
+    fail(`C48 could not run: ${e.message}`);
+    scores.get('C48').skipped = e.message;
   } finally {
     server?.kill();
   }

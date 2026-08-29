@@ -155,7 +155,7 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C45` | `hold` (`step:hold`) | workload | at full rate by its **second** 500ms bin — "a flat target … with no ramp-in" is the claim, and ramping is the only way to be wrong while landing the right total | a hold that ramps in, and a steady rate that drifts |
 | `C46` | `step` (`step:step`) | workload | 20/2s + 80/2s lands ~200, **which is what `hold 50 rps for 4s` lands too** — so the totals cannot discriminate and the plateaus and their 1:4 ratio are the claim | a staircase collapsed to its mean rate, or sloped instead of stepped |
 | `C47` | `spike` (`step:spike`) | workload | peak >3x baseline **and a tail that returns to it** — the recovery is the half a plain step up would also pass | a spike that holds its burst, and a burst that is a rounding artefact |
-| `C48` | `cleanup` (`step:cleanup`) | workload | a marker path sees exactly 8 — one per iteration of the test that opts in, **none** from its sibling that omits the line | teardown running under load unasked (`D26`), and an opt-in that is a no-op |
+| `C48` | `teardown` (`config:key:teardown`) | workload | one file run at three levels of the key: a marker path sees **8** by default (every iteration, the failing ones included), **0** at `never` with `ℹ teardown: disabled` on the summary, **4** at `on success` — and the reported p95 does not move across the three | a build that ignores the key, one that reinstates `D26`'s default-off gate, teardown skipping the iterations that failed, `on success` reading the *run*'s verdict instead of the iteration's, and hook time back in the reported duration |
 | `C49` | `threshold` (`step:threshold`) | workload | the same request, the same path, every assertion green — and the test bounded at 10ms is **red** while the one bounded at 5000ms is green | a verdict computed from the steps rather than the aggregate metrics |
 | `C50` | `pause` (`step:pause`) | workload | gaps ≥200ms against a <50ms control on an identical path, **and** a reported p50 under 50ms because the column is pause-excluded | a `pause` that is a no-op, and a build that stopped subtracting pacing from duration |
 | `C51` | `probe ciphers` (`config:probe:ciphers`) | security | a granted/withheld pair on one rule, against a host that **negotiates a modern suite** — granted, `sec/tls-weak-cipher` fires and names the suites tflw could not offer; withheld, it is silent and the passing assertion carries `judged only the suite this host gave` | a `probe ciphers` that opens no second handshake, and an opt-in honoured where it was not granted |
@@ -642,7 +642,7 @@ requirement arrives from the other side — the target must never be the constra
 | `C45` | Flatness is asserted at the **start**, not on average. `tflw spec` says "with no ramp-in", and ramping is the only way to be wrong about that while still landing 200. |
 | `C46` | Its total deliberately **collides** with `C45`'s. 20 rps for 2s plus 80 rps for 2s is 200, and so is a flat 50 rps for 4s — so a grader that only counted would pass a build that had collapsed the staircase into its mean. This is the row where the lazy instrument fails. |
 | `C47` | The peak alone is not the claim; a step up has a peak too. The recovery to baseline is what only a spike does, and `tflw spec` calls out that a spike mixes flat and ramped stages in any order — which a two-stage shape cannot demonstrate at all. |
-| `C48` | The plant is a **contrast between two sibling tests**, because the count alone means nothing: 8 markers is correct, 0 means the opt-in does nothing, and 16 means teardown ran unconditionally — precisely what `D26` forbids under load. See the note below: this row grades the construct that exists rather than the one the manifest describes. |
+| `C48` | The plant is a **contrast across three runs of one file**, because no single count means anything on its own: a build that ignored the key answers 8 three times and a build that reinstated the old default-off gate answers 0 three times, since no file can opt in any more. The sharp clause is `on success`: the first test is **red by threshold while all four of its iterations pass**, so keeping its teardown is what distinguishes *reads the iteration* from *reads the run* — a build doing the latter answers 0 and looks plausible. The fourth clause is one no plant here could make before `M157a`: the reported p95 is unchanged across all three levels, which is what proves hook time left the metric (`D782`). Re-pointed from `step:cleanup` by `M157f`/`D789` rather than deleted — `D724` forbids dropping coverage of a construct that still exists in changed form, and the ratchet would not have caught it. |
 | `C49` | Every `expect status equals 200` in **both** tests passes — the server really does answer 200 — and one of them is still red. So the verdict cannot have come from the assertions. The cost of this going unchecked is on the record: 2026-08-05, a perf rung that declared no threshold ran at a 100% error rate and reported PASS. |
 | `C50` | Two independent claims. The gap is the obvious one. The second — that tflw's reported duration **excludes** the pause, as its own column label says — is the one with consequences: a build that stopped subtracting pacing would leave every paced workload green while its thresholds silently measured the wrong quantity. |
 
@@ -655,6 +655,18 @@ prose contradicts its generated manifest table twelve lines further down the sam
 against tflw; `C48` grades the implemented construct. This is the failure mode `D734` was written
 for, arriving from the direction nobody expected — not a plant red for a real defect, but a plant
 that would have been *confidently wrong* had it been written from the manifest as `D723` intends.
+
+**Closed 2026-08-29 by tflw's `M157`, and not by correcting the sentence.** The row was filed
+rather than fixed because the repair was a choice between two readings of what `cleanup` was for and
+`D26` argued for the implemented one. `M157` measured `D26` instead of choosing: the gate existed to
+keep teardown's request volume out of the reported latency, and an **ungated `before` hook** was
+measured polluting the same percentile identically — 96 ms against a 37 ms control, with the dogfood
+suite running 61 bare `before` blocks against 4 bare `after`. So correcting the manifest sentence
+would have written down a rule the code does not keep. The keyword is gone (`D781`), hook time left
+the reported duration (`D782`), and a `teardown` config key replaced the opt-in (`D783`). `C48` was
+re-pointed at that key. **A second defect closed with it that the row never knew about**: the
+interpreter put the `after each` loop behind `if (!exec.ok) throw`, so a failing iteration leaked —
+measured at created 5 / closed 0 before, created 5 / closed 5 after.
 
 ### `C51`–`C58` — the security tier, rostered by reference
 
@@ -1342,11 +1354,13 @@ exists to catch, one level up. That gate checks `CONSTRUCTS.md` documents exactl
 manifest module defines, so a missing *row* is caught — a stale *sentence* was not. `M154g-03`'s
 class, on this side of the pair.
 
-`M154e-01` is likewise **not** a `blocked-on` marking, for the same reason `M154b-02` is not: `C48`
-is green. The defect is in the manifest's *description* of `cleanup`, not in `cleanup`, and the
-plant grades the construct the runtime implements. What the row would have blocked is a plant
-written the way `D723` says to write one — from the manifest — which is why it is recorded beside
-`C48` rather than under it.
+`M154e-01` was likewise **not** a `blocked-on` marking, for the same reason `M154b-02` is not: `C48`
+was green. The defect was in the manifest's *description* of `cleanup`, not in `cleanup`, and the
+plant graded the construct the runtime implements. What the row would have blocked is a plant
+written the way `D723` says to write one — from the manifest — which is why it was recorded beside
+`C48` rather than under it. Closed by `M157` (see above); the reasoning is kept because the
+distinction it draws — a row beside a plant rather than under it — is what the marking is for, and
+it outlives the row that occasioned it.
 
 `M154b-02` is deliberately **not** a `blocked-on` marking. `D734` reserves that for a plant that
 goes red for a known tflw defect, and `C2` is green; the defect sits beside the plant, not under it.

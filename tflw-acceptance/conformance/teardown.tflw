@@ -1,0 +1,60 @@
+# `M157f` / `C48` — `teardown`, the config key that decides when a workload's `after` hooks run.
+#
+# **This file is meant to produce two red tests**, and both reds are its known answer rather than a
+# defect. `verify-construct-acceptance.mjs` reads `report/results.json`, not the exit status.
+#
+# ## What this replaces, and why the plant changed shape
+#
+# `C48` graded `cleanup` until `M157`: a bare per-test line that opted a workload back into running
+# the file's `after` hooks, off by default. `M154e-01` was filed against it because `tflw spec --json`
+# described that construct wrongly in three separate ways — and the row was deliberately *not* fixed
+# in place, on the grounds that the repair was a choice between two readings of what `cleanup` was
+# for and `D26` argued for the implemented one.
+#
+# `M157` settled it by measuring `D26` rather than by picking a reading. `D26` justified the gate as
+# protecting a run's latency numbers from teardown's request volume; three 20-iteration arms on the
+# box put an **ungated `before` hook** at the same 96 ms p95 as the gated `after` hook, against a
+# 37 ms control. The gate protected the rare side and left the common one open. So the keyword is
+# gone (`D781`), hook time left the reported duration entirely (`D782`), and the behaviour the gate
+# provided moved to a three-valued config key (`D783`).
+#
+# ## The plant: one file, three runs, three different answers
+#
+# The contrast IS the plant, and it is now three-way rather than two-way. `/after-each-marker` is
+# hit once per iteration whose teardown runs, so the marker count answers the whole question:
+#
+#   - **default** (`teardown always`) -> **8**. Every iteration of both tests, including the four
+#     that failed. That last part is the half `M154e-01` did not know about: until `M157b` the
+#     interpreter threw on a failing body *above* the hook loop, so a run at a 5% error rate cleaned
+#     up after 95% of its iterations and leaked on precisely the 5% worth investigating.
+#   - **`--teardown never`** -> **0**, with `ℹ teardown: disabled` on the summary.
+#   - **`--teardown on success`** -> **4**. Only the first test's iterations, because only they
+#     passed.
+#
+# A build that ignored the key answers 8 three times; one that reinstated the old gate answers 0
+# three times, since no file can opt in any more.
+#
+# ## The sharp clause: `on success` reads the ITERATION, not the run
+#
+# The first test below is **red**, and every one of its four iterations **passes**. Its threshold is
+# `error rate is less than 0%`, which nothing can satisfy — so the test's verdict is red while its
+# iterations are green. Under `--teardown on success` all four still tear down, because a breached
+# `threshold` is a *run*-level judgement decided after every iteration has already finished, and
+# therefore after teardown has already run. A build that read the test's verdict instead of the
+# iteration's would answer 0 here and look plausible doing it.
+
+after
+  api GET /after-each-marker
+  expect status equals 200
+
+test "an iteration that passed tears down, even though the test is red by threshold"
+  run 4 iterations across 1 users
+  api GET /teardown-pass
+  expect status equals 200
+  threshold error rate is less than 0%
+
+test "an iteration that failed tears down too — the leak M154e-01 did not know it had"
+  run 4 iterations across 1 users
+  api GET /teardown-fail
+  expect status equals 500
+  threshold error rate is less than 1%

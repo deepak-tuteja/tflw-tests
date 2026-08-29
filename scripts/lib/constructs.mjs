@@ -991,15 +991,21 @@ export const PLANTS = [
   },
   {
     id: 'C48',
-    construct: 'step:cleanup',
-    family: 'step',
+    // `M157f` (`D789`) — re-pointed, not deleted. This row graded `step:cleanup`, the construct
+    // `M157` removed; deleting it would have dropped coverage of a construct that still exists in
+    // changed form, which `D724` forbids and the ratchet would not catch. What it grades now is
+    // strictly more than what it graded before: the old plant was a two-way contrast (opted in vs.
+    // not), this one is three-way and includes the failing-iteration case the old construct got
+    // wrong and `M154e-01` never knew about.
+    construct: 'config:key:teardown',
+    family: 'config',
     tier: 'workload',
-    title: 'cleanup opts a workload back into the after-each hook, and omitting it really does skip teardown',
-    target: 'tflw-acceptance/conformance/verdict.tflw + arrival-server.mjs — a marker path the file\'s `after each` hook hits',
-    evidence: { file: 'tflw-acceptance/conformance/verdict.tflw', pattern: '^\\s*cleanup\\s*$', min: 1 },
+    title: 'teardown decides when a workload iteration tears down, and `on success` reads the iteration rather than the run',
+    target: 'tflw-acceptance/conformance/teardown.tflw + arrival-server.mjs — one file run three times, at each level of the key',
+    evidence: { file: 'tflw-acceptance/conformance/teardown.tflw', pattern: '^\\s*api GET /after-each-marker\\s*$', min: 1 },
     graders: ['acceptance', 'coverage'],
-    knownAnswer: 'The marker path receives exactly 8 requests — one per iteration of the test that carries `cleanup`, and **none** from the sibling test that omits it. The contrast is the plant: 16 would mean teardown ran unconditionally, which is precisely what `D26` says must not happen under load, and 0 would mean the opt-in does nothing. **Graded against the construct that exists, not the one the manifest describes** — `tflw spec --json` gets this row wrong in three ways and the defect is filed as `M154e-01`.',
-    catches: 'teardown running under load when nothing asked for it (double request volume, polluted latency), and a `cleanup` line that is a no-op.',
+    knownAnswer: 'One file, eight iterations, three runs, three different marker counts — the contrast is the plant. **Default** -> **8**: every iteration of both tests, *including the four that failed*, which is the half `M154e-01` did not know about (until `M157b` the interpreter threw on a failing body above the hook loop, so a run at a 5% error rate cleaned up after 95% of its iterations and leaked on exactly the 5% worth investigating). **`--teardown never`** -> **0**, with `ℹ teardown: disabled` on the summary, and the exit code unchanged. **`--teardown on-success`** -> **4**, the first test\'s iterations only. The first test is **red by threshold while all four of its iterations pass**, so `on success` keeping them is the sharp clause: a breached `threshold` is a run-level judgement made after every iteration has finished, and a build reading the test\'s verdict instead of the iteration\'s would answer 0 and look plausible doing it. Fourth clause, and the one no plant here could make before: the reported **p95 is unchanged across all three runs**, which is what proves hook time left the metric (`D782`).',
+    catches: 'a build that ignores the key (8 three times), one that reinstates the old default-off gate (0 three times, since no file can opt in any more), teardown skipping the iterations that failed, `on success` reading the run\'s verdict instead of the iteration\'s, and hook time leaking back into the reported duration.',
     blockedOn: null,
   },
   {
