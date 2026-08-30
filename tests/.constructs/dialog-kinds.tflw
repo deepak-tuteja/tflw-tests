@@ -1,0 +1,255 @@
+# `M159f-c` — the three dialog kinds this repository had never raised, and the two claims that
+# were vacuous because of it.
+#
+# **This file is meant to pass.** It adds no construct to the roster: `accept dialog with` is
+# `step:accept` with more syntax, and `dialog message`/`dialog type` are value *subjects* inside
+# matcher rows (`CONSTRUCTS.md`, "Ground truth is the binary"). It is here because `C2`'s existing
+# plant and both sibling uses raise exactly one kind — `confirm` — and two things follow from that
+# which no amount of further confirm-testing can fix:
+#
+#   1. `dialog type` has a CLOSED SET of four values (`alert`, `confirm`, `prompt`, `beforeunload`)
+#      and this repository could produce one of them. An implementation that returned the literal
+#      `"confirm"` passed every dialog assertion in both repositories.
+#   2. `accept dialog with`'s only use here is `dialog-one-shot.tflw`'s `TF080` witness, which
+#      asserts the answer went NOWHERE — the text is ignored on a `confirm`, by design. So an
+#      implementation of `with` that parsed the value and never handed it to Playwright would pass
+#      that test *by construction*. The feature's happy path was not merely unproven, it was
+#      anti-proven, and only a `prompt` can tell the two apart.
+#
+# Its own `--env webv2Admin`, like `dialog-one-shot.tflw`: `web` is one base URL per env (SPEC
+# §3.2), and these fixtures are the admin console's.
+
+@constructs @dialog @mixed
+test "a `prompt` separates cancelled from answered-empty from answered, and the answer arrives"
+  # THE `prompt` KIND. One button, three armings, three outcomes, and the third is checked against
+  # the product itself rather than against the page that claims to have renamed it.
+  #
+  #   nothing armed            prompt() returns null   -> `cancelled`, name unchanged
+  #   `accept dialog`          prompt() returns ""     -> `empty`,     name unchanged
+  #   `accept dialog with "…"` prompt() returns "…"    -> the form submits, the name really changes
+  #
+  # The middle row is the one that costs a page state to build and it is the one worth having:
+  # SPEC §9.1 says a bare `accept dialog` answers with the EMPTY STRING and nothing outside tflw's
+  # own unit tests has ever checked it. Fold `""` into `null` in the fixture and an implementation
+  # that answered a cancel would be indistinguishable from one that answered empty.
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+  api GET /categories
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  # `unique uuid`, not `unique("…")`, for the reason `C2`'s plant records in full: the prefix form
+  # is a run-scoped counter and this database survives between runs.
+  let prefix = unique uuid
+  api POST /products body { name: "{prefix} zeta", price: 8.00, stock: 3, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as zetaId
+
+  open "/login"
+  fill form
+    | "Email"    | env(ADMIN_EMAIL) |
+    | "Password" | env(ADMIN_PW)    |
+  click button "Log in"
+  expect button "Log out" is visible
+
+  open "/products/{zetaId}"
+  expect css "#rename-state[data-state='idle']" is visible
+
+  # THE CONTROL. Nothing armed, so Playwright dismisses the prompt and `prompt()` returns null.
+  click button "Rename product"
+  expect css "#rename-state[data-state='cancelled']" is visible
+
+  # And this is the assertion the whole file exists for: a kind that is not `confirm`. Both
+  # subjects read the last dialog of this attempt, so they are describing the prompt just raised —
+  # the message carries the product's own `unique uuid` name, which no constant could satisfy.
+  expect dialog type equals "prompt"
+  expect dialog message equals "New name for {prefix} zeta?"
+
+  # ARMED, WITH NO ANSWER. `accept dialog` answers with `""`, which the page can tell apart from a
+  # cancel. A tflw that sent `null` — or that treated a bare accept as a dismiss — lands on
+  # `cancelled` above instead, a state this same test has already produced.
+  accept dialog
+  click button "Rename product"
+  expect css "#rename-state[data-state='empty']" is visible
+
+  # Neither of those renamed anything, asked of the resource rather than of the page.
+  api GET /products/{zetaId}
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  expect body.name equals "{prefix} zeta"
+
+  # ARMED, WITH AN ANSWER. The text interpolates (`D800`) and then crosses the browser, the form,
+  # the admin server and apiV2's PATCH before anything asserts it.
+  accept dialog with "{prefix} renamed"
+  click button "Rename product"
+  # A real navigation back to the detail page, rendered under the new name.
+  expect text "{prefix} renamed" is visible
+  expect css "#rename-state[data-state='idle']" is visible
+
+  # THE CLAIM. `accept dialog with` is exercised on the only kind that has anywhere to put an
+  # answer, and the answer is read back off the product. `dialog-one-shot.tflw`'s `TF080` witness
+  # asserts the opposite half — that the text is ignored by a `confirm` — and an implementation
+  # that never passed the answer through would satisfy that one and fail this one.
+  api GET /products/{zetaId}
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  expect body.name equals "{prefix} renamed"
+
+@constructs @dialog @mixed
+test "an `alert` is unaffected by which arming answered it, and `dialog type` moves off it"
+  # THE `alert` KIND, and the honest shape of a plant for it. An alert has ONE button, so accepting
+  # and dismissing it do the same thing to the page: there is no page state anywhere that can tell
+  # an armed handler from an unarmed one, and a plant claiming otherwise would be measuring
+  # Playwright's default rather than tflw. So this test asserts the sameness — three armings, three
+  # identical outcomes, the counter moving each time because the handler really did run — and puts
+  # its discriminating weight on the dialog itself.
+  #
+  # The second half is what a single-kind corpus could not do at all: raise an `alert` and then a
+  # `confirm` in one attempt and watch `dialog type` MOVE. A subject hardcoded to `"confirm"`
+  # passes every other dialog assertion in this repository and fails here.
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+  api GET /categories
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  # Two out-of-stock products under a prefix unique across runs, so the filtered list holds exactly
+  # these two and the alert's arithmetic is deterministic — the same fence `C2`'s plant owns, and
+  # for the same reason: the bulk-delete button below is scoped to this filter.
+  let prefix = unique uuid
+  api POST /products body { name: "{prefix} eta", price: 5.00, stock: 0, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  api POST /products body { name: "{prefix} theta", price: 6.00, stock: 0, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+
+  open "/login"
+  fill form
+    | "Email"    | env(ADMIN_EMAIL) |
+    | "Password" | env(ADMIN_PW)    |
+  click button "Log in"
+  expect button "Log out" is visible
+
+  open "/products?q={prefix}"
+  expect css "#stock-health-state[data-state='idle']" is visible
+
+  # Nothing armed. The alert is dismissed by default and the page carries on regardless.
+  click button "Check stock health"
+  expect css "#stock-health-state[data-checks='1']" is visible
+  expect dialog type equals "alert"
+  # Derived from the rows on this page, not a constant: the count and the total are the filter's.
+  expect dialog message equals "2 of 2 product(s) on this page are out of stock."
+
+  # Accepted. Same counter, one higher — the arming changed nothing about the page, which is the
+  # claim.
+  accept dialog
+  click button "Check stock health"
+  expect css "#stock-health-state[data-checks='2']" is visible
+
+  # Dismissed. Same again. `accept` and `dismiss` are indistinguishable here BY CONSTRUCTION, and
+  # this pair is the demonstration rather than an oversight: SPEC §9.1's own warning about arming
+  # an alert says a test that armed one and then asserted the page would pass with the line deleted.
+  dismiss dialog
+  click button "Check stock health"
+  expect css "#stock-health-state[data-checks='3']" is visible
+  expect dialog type equals "alert"
+
+  # AND NOW A DIFFERENT KIND, IN THE SAME ATTEMPT. Nothing armed, so the first `confirm()` is
+  # dismissed by default and the second is never raised — `C2`'s control state, reached here only
+  # to move the subject off `alert`.
+  click button "Delete 2 out-of-stock"
+  expect css "#bulk-delete-state[data-state='cancelled']" is visible
+  expect dialog type equals "confirm"
+  expect dialog message equals "Delete 2 out-of-stock product(s) matching this filter?"
+
+@constructs @dialog @mixed
+test "a `beforeunload` guard: dismiss stays, accept leaves, and a clean page raises nothing"
+  # THE `beforeunload` KIND — the fourth value of `dialog type`'s closed set, and the one tflw's
+  # `M159` predicted (prediction 5) would not be reachable at all: browsers gate it on a real user
+  # gesture and a headless click was not expected to qualify. **It does.** Measured on `fedora-box`
+  # 2026-08-30 against Playwright's bundled Chromium, first try, with the fixture written the way a
+  # real unsaved-changes guard is written. The prediction is recorded as falsified rather than the
+  # test being trimmed to fit it.
+  #
+  # Unlike an `alert`, the two armings do OPPOSITE things here — dismiss means "stay", accept means
+  # "leave" — and unlike a `confirm` the page cannot record which one it took, because the whole
+  # point is that the document is going away. The navigation itself is the observable.
+  #
+  # **The ACCEPT branch is the discriminating one, and the dismiss branch is not.** The browser's
+  # unhandled default is dismissal, so a dismissal and an empty queue both mean "stay" — the same
+  # property `M154b-01` filed and `C43` grades by ordering instead. Deleting the `accept dialog`
+  # below turns this test red (measured: the run stays on the detail page and `h1:text-is('Products')`
+  # finds nothing); deleting the `dismiss dialog` above would not. The dismissal earns its line by
+  # establishing that the kind is raised and reported at all, and the comment says so rather than
+  # letting a reader assume both halves carry weight.
+  #
+  # `dialog message` is deliberately not asserted: Chromium supplies its own text for this kind and
+  # ignores the page's, so an assertion on it would grade the browser's UI copy rather than tflw.
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+  api GET /categories
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  let prefix = unique uuid
+  api POST /products body { name: "{prefix} iota", price: 9.00, stock: 4, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as iotaId
+
+  api POST /auth/login body { email: env(USER_B_EMAIL), password: env(USER_B_PW) }
+  expect status equals 200
+  capture body.accessToken as userBToken
+  api POST /products/{iotaId}/reviews body { rating: 2, comment: "Arrived late." }
+    header "Authorization" is "Bearer {userBToken}"
+  expect status equals 201
+
+  open "/login"
+  fill form
+    | "Email"    | env(ADMIN_EMAIL) |
+    | "Password" | env(ADMIN_PW)    |
+  click button "Log in"
+  expect button "Log out" is visible
+
+  open "/products/{iotaId}"
+  expect text "Arrived late." is visible
+  # A real click into the field first. The guard is only meaningful after a gesture, and a value
+  # set without one is exactly the case a browser declines to prompt for.
+  click field "Reply"
+  fill field "Reply" with "Half-written, never posted."
+
+  # DISMISSED — "stay on this page". The navigation is refused. Asserted on the `h1`, exactly:
+  # `{prefix} iota` is a real row on the unfiltered list too, so a plain `text` assertion would
+  # have held on the page this branch claims we never reached.
+  dismiss dialog
+  click text "Products / Moderation"
+  expect dialog type equals "beforeunload"
+  expect css "h1:text-is('{prefix} iota')" is visible
+
+  # ACCEPTED — "leave". Same gesture, same guard, opposite outcome, and this is the pair no `alert`
+  # can offer.
+  accept dialog
+  click text "Products / Moderation"
+  expect css "h1:text-is('Products')" is visible
+
+  # THE CONTROL, and it has to come last. Same page, same link, nothing typed — so the guard is not
+  # armed and no dialog is raised at all. There is no step that can assert an absence, so the
+  # evidence is the arming below going UNCONSUMED: tflw reports that as `TF079` against its own
+  # line, and the acceptance grader asserts it there. Without this the two branches above would
+  # hold just as well against a guard that blocked every navigation unconditionally — a broken
+  # fixture, and a green test.
+  #
+  # Last, because an arming survives to the end of the attempt (`D803`): put this first and the
+  # leftover accept would be inherited by the dismiss branch's own dialog and answer it wrongly.
+  open "/products/{iotaId}"
+  accept dialog
+  click text "Products / Moderation"
+  expect css "h1:text-is('Products')" is visible

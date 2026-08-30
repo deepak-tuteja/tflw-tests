@@ -115,8 +115,10 @@ export const PLANTS = [
     construct: 'step:accept',
     family: 'step',
     tier: 'ui',
-    title: 'the dialog handler is armed, and the armings queue',
-    target: "webV2/admin — the bulk out-of-stock delete's two short-circuited `confirm()`s",
+    title: 'the dialog handler is armed, the armings queue, and the answer reaches the kind that takes one',
+    target:
+      "webV2/admin — the bulk out-of-stock delete's two short-circuited `confirm()`s, plus (`M159f-c`) " +
+      'the stock-health `alert()`, the rename `prompt()` and the unsaved-reply `beforeunload` guard',
     evidence: { file: 'tests/.constructs/dialog-one-shot.tflw', pattern: '^\\s*accept dialog\\s*$', min: 1 },
     graders: ['acceptance'],
     knownAnswer:
@@ -126,8 +128,29 @@ export const PLANTS = [
       '`cancelled-final`; with **two**, both are accepted, the form submits and both products are ' +
       'really gone (asked of the API, not of the page that claims it). A step that armed nothing ' +
       'would leave `cancelled` every time; a handler that stayed armed past its first dialog would ' +
-      'reach the third state from the second row.',
-    catches: 'a handler that stays armed, a step that arms nothing, and an arming queue that keeps only one.',
+      'reach the third state from the second row. ' +
+      '**And, since `M159f-c`, across the kinds** (`tests/.constructs/dialog-kinds.tflw`): a ' +
+      '`prompt` returns three distinguishable things and one button separates them — `null` ' +
+      'unarmed, `""` under a bare `accept dialog`, and the typed answer under `accept dialog ' +
+      'with`, which is read back off the *product* rather than off the page; an `alert` leaves ' +
+      'the same counter under all three armings, because it has one button and there is nothing ' +
+      'else to grade; and `dialog type` moves from `alert` to `confirm` inside one attempt, which ' +
+      'a single-kind corpus cannot show at all.',
+    catches:
+      'a handler that stays armed, a step that arms nothing, an arming queue that keeps only one, a ' +
+      '`dialog type` fixed at `confirm`, and an `accept dialog with` whose answer never leaves the ' +
+      'arming.',
+    // `M159f-c` — the second target, and the reason for it. Everything above raises ONE kind, and
+    // two claims were vacuous because of it: `dialog type` has a closed set of four values this
+    // repository could produce one of, and `accept dialog with`'s only use here is the `TF080`
+    // witness, which asserts that the answer went NOWHERE — so an implementation that parsed the
+    // value and never handed it to Playwright satisfied it by construction. Only a `prompt`
+    // separates those. `evidence` stays on `dialog-one-shot.tflw`: the static roster wants one
+    // file per row, and the kind plant is acceptance evidence for the same construct, not another.
+    //
+    // No roster row was added. `accept dialog with` is `step:accept` with more syntax, and
+    // `dialog message`/`dialog type` are value subjects inside matcher rows — which is why the
+    // total stayed at 180 where tflw's `D805` predicted 181.
     // `M154b-02` is CLOSED by tflw's `D797`: the third state was unreachable under a single slot —
     // two consecutive armings arm one handler, and the two dialogs come from one `click` with no
     // step boundary between them — and a queue makes it the ordinary reading of the same script.

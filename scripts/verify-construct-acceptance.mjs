@@ -304,6 +304,91 @@ if (wanted('C2') || wanted('C43')) {
       precision('C43', failedSteps.length === 0, 'no step failed');
     }
   }
+
+  // `M159f-c` — `C2`'s SECOND target, and its own `tflw run`.
+  //
+  // Everything above raises one dialog kind, `confirm`, because that is the only kind the
+  // double-confirm bulk delete has. Two claims were vacuous because of it, and neither can be
+  // repaired by more confirm-testing:
+  //
+  //   * `dialog type` has a closed set of four values and this repository could produce one, so a
+  //     subject hardcoded to `"confirm"` passed every dialog assertion in both repositories.
+  //   * `accept dialog with`'s only use here is the `TF080` witness above, which asserts the answer
+  //     went NOWHERE. An implementation that parsed the value and never handed it to Playwright
+  //     satisfied that test by construction. Only a `prompt` separates the two.
+  //
+  // A separate file and a separate run rather than more blocks in the plant above: these are three
+  // different fixtures on two different pages, and the run above is already seeding products for
+  // three tests. No new roster row — `accept dialog with` is `step:accept` with more syntax, and
+  // `dialog message`/`dialog type` are subjects inside matcher rows (`CONSTRUCTS.md`).
+  //
+  // Guarded on `C2` alone: every claim below is `step:accept`'s, and `--only C43` must not pay for
+  // a second stack run whose findings it does not record.
+  if (wanted('C2')) {
+    const KINDS = 'tests/.constructs/dialog-kinds.tflw';
+    const kinds = runCorpus(ROOT, ['--env', 'webv2Admin', KINDS]);
+    if (!kinds.report) {
+      fail(`C2's kind plant (${KINDS}) produced no report. Needs the stack, the admin console on :8091 and a browser.\n${kinds.output.trim().split('\n').slice(-12).join('\n')}`);
+    } else {
+      const kindTests = kinds.report.tests.filter((t) => t.kind === 'functional');
+      const [promptTest, alertTest, unloadTest] = kindTests;
+      recall('C2', kindTests.length === 3, `the kind plant carries one test per unexercised kind (got ${kindTests.length} of 3)`);
+
+      // --- `prompt`: the three answers a prompt can return, and the only one that reaches the app.
+      const pSteps = promptTest?.steps ?? [];
+      const pState = (key) => pSteps.some((st) => st.source.includes(`#rename-state[data-state='${key}']`) && st.ok);
+      recall('C2', pState('cancelled'), 'the control held — nothing armed, the prompt was dismissed and `prompt()` returned null');
+      recall('C2', pState('empty'),
+        'a bare `accept dialog` answered with the EMPTY STRING, which the page tells apart from a cancel — the half SPEC §9.1 states and nothing outside tflw’s unit tests had checked');
+      recall('C2', pSteps.some((st) => /^\s*expect dialog type equals "prompt"/.test(st.source) && st.ok),
+        'a kind that is not `confirm` was reported, so the subject is reading the dialog rather than a constant');
+      // The claim the `TF080` witness above cannot make: the answer arrived. Asked of the product,
+      // not of the page that just re-rendered under the new name.
+      const renamed = pSteps.filter((st) => /^\s*expect body\.name equals/.test(st.source) && st.ok);
+      recall('C2', renamed.length === 2 && renamed.some((st) => st.source.includes('renamed')),
+        `\`accept dialog with\` reached the application — the product’s own name changed (got ${renamed.length} of 2 name assertions)`);
+      recall('C2', promptTest?.ok === true, `the prompt plant passed (got ok=${promptTest?.ok})`);
+
+      // --- `alert`: three armings, three identical outcomes, and the subject moving off the kind.
+      const aSteps = alertTest?.steps ?? [];
+      const checks = aSteps.filter((st) => /#stock-health-state\[data-checks='[123]'\]/.test(st.source) && st.ok);
+      recall('C2', checks.length === 3,
+        `an \`alert\` is unaffected by which arming answered it — nothing armed, accepted and dismissed all left the same counter (got ${checks.length} of 3)`);
+      const types = aSteps.filter((st) => /^\s*expect dialog type equals/.test(st.source) && st.ok).map((st) => st.source.trim());
+      recall('C2', types.some((t) => t.includes('"alert"')) && types.some((t) => t.includes('"confirm"')),
+        `\`dialog type\` MOVED within one attempt, which no single-kind corpus could show (got ${JSON.stringify(types)})`);
+      recall('C2', alertTest?.ok === true, `the alert plant passed (got ok=${alertTest?.ok})`);
+
+      // --- `beforeunload`: reachable after all, and graded by the branch that is not the default.
+      //
+      // tflw's `M159` prediction 5 said a headless click would not qualify as the user gesture
+      // browsers gate this kind on. It does — measured 2026-08-30, first try. Asserted here rather
+      // than quietly enjoyed: the prediction is written down in `PLAN_M159_DIALOGS.md`, and this is
+      // the run that falsified it.
+      const uSteps = unloadTest?.steps ?? [];
+      recall('C2', uSteps.some((st) => /^\s*expect dialog type equals "beforeunload"/.test(st.source) && st.ok),
+        'the fourth value of the closed set was really raised by a headless run');
+      // The ACCEPT branch only. A dismissal and an empty queue both mean "stay" here — the browser's
+      // unhandled default — so the dismiss branch is `M154b-01`'s vacuous shape and is deliberately
+      // not graded as though it were not.
+      const left = uSteps.findIndex((st) => /^\s*expect css "h1:text-is\('Products'\)"/.test(st.source));
+      recall('C2', left > 0 && uSteps[left]?.ok === true && /^\s*accept dialog\s*$/.test(uSteps[left - 2]?.source ?? ''),
+        'accepting the guard LEFT the page, two steps under its own arming — the branch the default cannot satisfy');
+      // And the control: same page, same link, nothing typed, so no dialog is raised at all. No step
+      // can assert an absence, so the evidence is the arming going unconsumed — `TF079`, at its own
+      // line. Without it both branches above would hold against a guard that blocked every
+      // navigation unconditionally, which is a broken fixture and a green test.
+      const unloadWarnings = (unloadTest?.warnings ?? []).filter((w) => w.code === 'TF079');
+      const lastArm = [...uSteps].reverse().find((st) => /^\s*accept dialog\s*$/.test(st.source));
+      recall('C2', unloadWarnings.length === 1 && unloadWarnings[0].line === lastArm?.line,
+        `the clean-page control raised nothing, evidenced by TF079 at line ${lastArm?.line} (got ${JSON.stringify(unloadWarnings.map((w) => w.line))})`);
+      recall('C2', unloadTest?.ok === true, `the beforeunload plant passed (got ok=${unloadTest?.ok})`);
+
+      const kindFailures = [...pSteps, ...aSteps, ...uSteps].filter((st) => !st.ok);
+      precision('C2', kindFailures.length === 0,
+        `no step failed in the kind plant (got ${kindFailures.map((st) => `line ${st.line}: ${st.source}`).join('; ') || 'none'})`);
+    }
+  }
 }
 
 // =============================================================================

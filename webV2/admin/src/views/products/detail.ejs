@@ -17,7 +17,7 @@
       <p><span class="badge">replied</span> <%= r.replyText %></p>
     <% } %>
     <% if (currentUser.role === 'admin') { %>
-      <form method="post" action="/products/<%= product.id %>/reviews/<%= r.id %>/reply">
+      <form method="post" action="/products/<%= product.id %>/reviews/<%= r.id %>/reply" data-reply-form>
         <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
         <label for="reply-<%= r.id %>"><%= r.replyText ? 'Edit reply' : 'Reply' %></label>
         <textarea id="reply-<%= r.id %>" name="replyText" required><%= r.replyText ?? '' %></textarea>
@@ -28,9 +28,90 @@
 <% }) %>
 
 <% if (currentUser.role === 'admin') { %>
+  <%
+    // `M159f-c` — the `prompt` fixture, and the only place in this repository where an answer
+    // typed into a dialog reaches the application.
+    //
+    // A `prompt()` is the one kind with somewhere to put text, and it returns THREE distinguishable
+    // things — `null` when the dialog is cancelled, `""` when it is accepted empty, and the string
+    // when it is accepted with one. That maps exactly onto the three ways tflw can arm it, so this
+    // one button separates them all:
+    //
+    //   nothing armed / `dismiss dialog`  -> null   -> `cancelled`, the name unchanged
+    //   `accept dialog`                   -> ""     -> `empty`, the name unchanged
+    //   `accept dialog with "…"`          -> "…"    -> the rename really happens
+    //
+    // The middle row is why the empty case is handled rather than being folded into the first:
+    // `accept dialog` on its own answers with the empty string, which SPEC §9.1 states and nothing
+    // outside tflw's own unit tests has ever checked. Collapse `""` into `null` here and an
+    // implementation that answered a cancel would pass.
+    //
+    // The message carries the product's own name so that `expect dialog message` is reading THIS
+    // dialog rather than any string a constant could have satisfied.
+  %>
+  <form method="post" action="/products/<%= product.id %>/rename" onsubmit="return renamePrompt(this)">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+    <input type="hidden" name="name" id="rename-name" />
+    <button type="submit">Rename product</button>
+    <p id="rename-state" data-state="idle">No rename started.</p>
+  </form>
+  <script>
+    function renamePrompt(form) {
+      var state = form.querySelector('#rename-state');
+      var setState = function (key, text) {
+        state.setAttribute('data-state', key);
+        state.textContent = text;
+      };
+      var next = prompt('New name for ' + <%- JSON.stringify(product.name) %> + '?');
+      if (next === null) {
+        setState('cancelled', 'Cancelled at the name prompt. The name is unchanged.');
+        return false;
+      }
+      if (next.trim() === '') {
+        setState('empty', 'An empty name was given. The name is unchanged.');
+        return false;
+      }
+      form.querySelector('#rename-name').value = next;
+      setState('submitting', 'Renaming\u2026');
+      return true;
+    }
+  </script>
+<% } %>
+
+<% if (currentUser.role === 'admin') { %>
   <form method="post" action="/products/<%= product.id %>/delete" onsubmit="return confirm('Delete this product? This cannot be undone.')">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
     <button type="submit">Delete product</button>
   </form>
 <% } %>
+<script>
+  // `M159f-c` — the `beforeunload` fixture: an unsaved-reply guard, the ordinary reason a page
+  // raises this kind at all.
+  //
+  // It is the fourth value of `dialog type`'s closed set and the one that may not be reachable from
+  // a headless run: browsers gate `beforeunload` on a real user gesture and then on their own
+  // heuristics, and neither is something a test framework gets to decide. tflw's `M159` predicted
+  // this would be the plant that gives trouble. The fixture is written the way a real one would be
+  // regardless, and the plant that points at it records what actually happened rather than being
+  // shaped around a hoped-for answer.
+  //
+  // Submitting the reply CLEARS the flag, which is both correct behaviour and the reason
+  // `tests/.env-specific/webv2-admin.tflw`'s reply flow keeps working: it types into this textarea
+  // and then navigates by submitting the form it belongs to.
+  (function () {
+    var dirty = false;
+    document.addEventListener('input', function (e) {
+      if (e.target && e.target.closest && e.target.closest('form[data-reply-form]')) dirty = true;
+    });
+    document.addEventListener('submit', function () { dirty = false; }, true);
+    window.addEventListener('beforeunload', function (e) {
+      if (!dirty) return undefined;
+      e.preventDefault();
+      // Modern browsers ignore the text and show their own; both spellings are still what a page
+      // writes, and `returnValue` is what actually triggers the prompt in Chromium.
+      e.returnValue = 'You have an unsaved reply on this product.';
+      return e.returnValue;
+    });
+  })();
+</script>
 <%- include('../partials/foot') %>

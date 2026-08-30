@@ -119,7 +119,7 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | id | construct | tier | known answer | catches |
 |---|---|---|---|---|
 | `C1` | `check` (`step:check`) | api | six `check` rows, exactly two failed — `body.currency` and `body.falsy` by name — and the `expect` after them ran and passed | `check` regressing to `expect` semantics, or to no semantics |
-| `C2` | `accept dialog` (`step:accept`) | ui | three states of one click — nothing armed leaves `#bulk-delete-state` at `cancelled`, one `accept dialog` leaves it at `cancelled-final`, two accept both confirms and the products are really gone (asked of the API) | a handler that stays armed, a step that arms nothing, and a queue that keeps only one |
+| `C2` | `accept dialog` (`step:accept`) | ui | three states of one click — nothing armed leaves `#bulk-delete-state` at `cancelled`, one `accept dialog` leaves it at `cancelled-final`, two accept both confirms and the products are really gone (asked of the API); and across the kinds, a `prompt` returns `null` / `""` / the typed answer under the three armings, an `alert` leaves the same counter under all of them, and `dialog type` moves from `alert` to `confirm` in one attempt | a handler that stays armed, a step that arms nothing, a queue that keeps only one, a `dialog type` fixed at `confirm`, and an `accept dialog with` whose answer never leaves the arming |
 | `C3` | `run … iterations` (`step:run`) | workload | exactly 60 arrivals on `/shared` and exactly 60 on `/per-user`, counted by the server, under `--workers 1` and `--workers 4` alike | a mis-paced or miscounted generator that still reports green, and a dropped `per user` |
 | `C4` | `retry N` (`declaration:retry`) | api | both keys attempted **exactly 3 times** — one settles inside the budget, one is stopped one short of the answer it wanted — and the pre-failure step ran 3 times | an off-by-one retry budget, an unbounded retry, and a step-level retry wearing a test-level spelling |
 | `C5` | `after` / `after file` (`declaration:after`) | api | `c5-after-file` == 1 and `c5-after-test` == **2**, over a file whose second test ends red on purpose | a teardown that silently does not run, and the two hook scopes collapsing into one |
@@ -252,7 +252,7 @@ shared fixture id costs when it drifts: a 98% k6 failure at `M48` and a 100% tfl
 answer. `body.truthy` and `body.falsy` are the endpoint's own statement of the answer, so the two
 deliberate falsehoods are asserted against numbers the payload itself carries.
 
-### `C2` — the dialog handler is armed, and the armings queue
+### `C2` — the dialog handler is armed, the armings queue, and the answer arrives
 
 **Target.** `webV2/admin`'s bulk out-of-stock delete, whose form runs two `confirm()`s in one
 short-circuited handler and records which one it stopped at. **Plant.**
@@ -313,6 +313,68 @@ deliberately leaves an arming unconsumed that a later dialog in the same attempt
   unobservable in isolation (`M154b-01` stands, and the browser's unhandled default *is* dismissal);
   what closes the row is that **order** makes its effect visible. `expect dialog message` then reads
   confirm #1's text, which is true only if #2 was never raised — the half the page state cannot say.
+
+#### The other three kinds (`M159f-c`)
+
+**Target.** Three more `webV2/admin` features — the products list's stock-health `alert()`, the
+product detail's rename `prompt()`, and an unsaved-reply `beforeunload` guard. **Plant.**
+`tests/.constructs/dialog-kinds.tflw`, its own `tflw run` under the same `--env webv2Admin`.
+
+Everything above raises one kind, `confirm`, because that is the only kind the bulk delete has. Two
+claims were vacuous because of it, and **neither could be repaired by more confirm-testing**:
+
+- `dialog type` has a **closed set of four values** and this repository could produce one of them.
+  A subject hardcoded to `"confirm"` passed every dialog assertion in both repositories.
+- `accept dialog with`'s only use here is `dialog-one-shot.tflw`'s `TF080` witness, which asserts
+  that the answer went **nowhere** — the text is ignored on a `confirm`, by design. So an
+  implementation of `with` that parsed the value and never handed it to Playwright satisfied that
+  test *by construction*. The happy path was not merely unproven, it was **anti-proven**, and only a
+  `prompt` tells the two apart.
+
+`prompt` is the one that carries the weight, because it returns three distinguishable things and one
+button separates all three:
+
+| arming | `prompt()` returns | `#rename-state` | the product's name |
+|---|---|---|---|
+| none, or `dismiss dialog` | `null` | `cancelled` | unchanged |
+| `accept dialog` | `""` | `empty` | unchanged |
+| `accept dialog with "…"` | the answer | (navigates) | **renamed**, read back off the API |
+
+The middle row is why the fixture handles empty separately instead of folding it into cancel: SPEC
+§9.1 says a bare `accept dialog` answers with the empty string, and nothing outside tflw's own unit
+tests had ever checked it. Measured control: replacing `accept dialog with "…"` with a bare `accept
+dialog` lands on `empty` and the plant goes red at the renamed heading.
+
+`alert` is the honest one. It has **one button**, so accepting and dismissing it do the same thing to
+the page — there is no page state anywhere that can tell an armed handler from an unarmed one, and a
+plant claiming otherwise would be measuring Playwright's default. So the test asserts the *sameness*
+(three armings, the same counter moving each time, which is also what proves the handler ran) and
+puts its discriminating weight on the dialog itself: it raises an `alert` and then a `confirm` in one
+attempt and watches `dialog type` **move**. Measured control: making the fixture raise a `confirm`
+instead turns it red on the type.
+
+`beforeunload` was tflw `M159`'s **prediction 5 — that a headless click would not qualify as the user
+gesture browsers gate the kind on, and the plant would have to be documented rather than built.**
+It is falsified. A real click into the reply box, a real navigation, and the guard fires first try.
+The graded half is the **accept** branch — accept means *leave*, and the default dismissal means
+*stay*, so deleting the arming turns it red (measured). The dismiss branch is `M154b-01`'s vacuous
+shape and is deliberately not graded as if it were not; it earns its line by establishing that the
+kind is raised and reported at all. `dialog message` is not asserted for this kind: Chromium supplies
+its own text and ignores the page's, so an assertion on it would grade the browser's UI copy.
+
+The control is the third block, and it has to come last. Same page, same link, **nothing typed** — so
+no dialog is raised at all, and without it both branches above would hold just as well against a
+guard that blocked every navigation unconditionally. No step can assert an absence, so the evidence
+is the arming going unconsumed: **`TF079`, at its own line**, asserted by the acceptance grader.
+Last, because an arming survives to the end of the attempt (tflw `D803`) — put it first and the
+leftover would be inherited by the dismiss branch's own dialog and answer it wrongly.
+
+**No roster row was added, and that is the arithmetic tflw's `D805` predicted wrong.** It expected
+178 → 181, one row per new construct. `accept dialog with` is `step:accept` with more syntax, and
+`dialog message`/`dialog type` are value subjects inside matcher rows, so the total moved to 180 on
+the two new diagnostics alone. This is corpus strength rather than a roster obligation — which is
+exactly the case `D724` cannot see, and the reason a coverage percentage is not the same thing as
+coverage.
 
 ### `C3` — count-bounded load lands exactly the count it was given
 

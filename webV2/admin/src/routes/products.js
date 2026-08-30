@@ -60,6 +60,20 @@ router.post(
   }),
 );
 
+// `M159f-c` — the rename `prompt()` in `detail.ejs` guards, and the reason the answer is worth
+// carrying this far. The typed text crosses the browser, this form, this server and apiV2's PATCH
+// before anything asserts it, so `GET /products/:id` is a statement about the string the dialog
+// actually received rather than about the page that claims to have sent one. Redirects back to the
+// detail page so the new name is also the heading.
+router.post(
+  '/:id/rename',
+  verifyCsrf,
+  asyncRoute(async (req, res) => {
+    await apiRequest(req.session.auth, 'PATCH', `/products/${req.params.id}`, { name: req.body.name });
+    res.redirect(`/products/${req.params.id}`);
+  }),
+);
+
 // M43 (PLAN_WEBV2_M40.md decision 5): DELETE /products/:id is admin-only and already real —
 // wired up behind a confirm()-guarded form (detail.ejs) since EJS forms have no native DELETE
 // verb. Redirects to the list on success so the product's real absence is the assertion, not a
