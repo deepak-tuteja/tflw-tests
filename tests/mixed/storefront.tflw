@@ -379,6 +379,13 @@ test "the cart's Remove confirm() dialog: dismiss keeps the item, accept removes
   open "/cart"
   dismiss dialog
   click button "Remove Bulk Item 51"
+  # `M159f` / `M154b-01`. Without this line the block below is the whole assertion, and it holds
+  # identically with the `dismiss dialog` deleted: the browser's unhandled default IS dismissal, so
+  # "the row is still there" is true whether or not the step armed anything. `dialog message`
+  # (tflw `D798`) at least makes the dialog itself load-bearing — the confirm was raised and said
+  # what this flow says it says. The step's OWN effect is graded where it can be, by ordering, in
+  # `tests/.constructs/dialog-one-shot.tflw` (`C43`).
+  expect dialog message equals "Remove Bulk Item 51 from your cart?"
   expect css "th[scope='row']:text-is('Bulk Item 51')" is visible
 
   accept dialog

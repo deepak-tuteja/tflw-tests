@@ -59,7 +59,7 @@
 // demonstrably stopped working and machinery becomes worth its cost.
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -679,9 +679,111 @@ const dogfooded = new Set([
 ]);
 const assigned = assignedCodes();
 
-const uncovered = [...assigned].filter((code) => !dogfooded.has(code)).sort();
+/**
+ * `M159f` (`D806h`) — the codes no `tflw check` can emit, and where their proof lives instead.
+ *
+ * Every fixture in this file provokes a code by running the **checker**, and until tflw's `M159`
+ * that was the only kind of diagnostic there was. `TF080` fires when an `accept dialog with`'s
+ * answer reaches a dialog with nowhere to put it, and `TF079` when an arming no dialog ever
+ * consumed outlives its test — neither is decidable before a real page raises a real dialog, so
+ * this file's whole method is structurally unable to reach them and no fixture will ever exist.
+ *
+ * **Which codes those are is read from tflw, not decided here.** `tflw spec --json` publishes
+ * `phase: 'check' | 'run'` per diagnostic (tflw `D806d`), derived there from whether the row's
+ * evidence is a probe or a runtime test. A hard-coded set in this file would be the wordlist `D659`
+ * refuses: the next runtime code would ship and this gate would demand a fixture that cannot be
+ * written, or someone would add the code to the set and prove nothing at all.
+ *
+ * **This gate stays stack-free, so it delegates rather than proves.** Its value is that
+ * `npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs` answers in seconds with no
+ * Docker (`D351`); requiring a browser here to prove two codes would cost that for all sixty-eight.
+ * So a `run` code names the plant that provokes it and the gate that grades it, and this file
+ * checks the two halves a static read can check: the plant exists and contains the line that
+ * provokes the code, and the grading script names the code. `verify-construct-acceptance.mjs` does
+ * the rest, against a real report from a real browser.
+ *
+ * That is a pointer rather than a proof, and it is the same shape — with the same named weakness —
+ * as the `runtime` evidence tflw's own manifest carries for these two rows (`D806a`). What keeps it
+ * out of `D722`'s "a gate whose presence is not evidence" is that both halves resolve: a renamed
+ * plant, a deleted arming, or a grader that stopped asserting the code each turn this red.
+ */
+const RUNTIME_FIXTURES = {
+  TF079: {
+    plant: 'tests/.constructs/dialog-one-shot.tflw',
+    // The arming written *behind* the dismissal, which the form's short circuit leaves unconsumed.
+    provokes: /^\s*dismiss dialog\s*$\n\s*accept dialog\s*$/m,
+    gradedBy: 'scripts/verify-construct-acceptance.mjs',
+    as: 'C43 — the leftover arming the ordering block deliberately does not consume',
+  },
+  TF080: {
+    plant: 'tests/.constructs/dialog-one-shot.tflw',
+    provokes: /^\s*accept dialog with "/m,
+    gradedBy: 'scripts/verify-construct-acceptance.mjs',
+    as: 'C2 — `accept dialog with` against a `confirm`, which takes no answer',
+  },
+};
+
+// One reading of `tflw spec --json`, used by the phase split here and by the roster cross-check
+// below. Two calls would be two subprocesses and, worse, two answers that could differ.
+const spec = readSpec(CLI_ENTRY);
+const phaseByCode = new Map(
+  spec.constructs.filter((c) => c.family === 'diagnostic').map((c) => [c.name, c.phase]),
+);
+const runCodes = [...assigned].filter((code) => phaseByCode.get(code) === 'run').sort();
+const checkCodes = [...assigned].filter((code) => phaseByCode.get(code) !== 'run').sort();
+
+// A build that predates `D806d` emits no `phase` at all, and would silently classify every code as
+// check-time — which is the answer this gate gave before `M159` and is wrong the moment a runtime
+// code exists. Refused rather than defaulted: `M153b-01`'s lesson is that against a stale build this
+// gate must not give a confident wrong answer.
 ok(
-  `completeness: every TF0xx code the installed tflw assigns has a fixture here`,
+  `the installed tflw publishes a phase per diagnostic (tflw D806d)`,
+  [...assigned].every((code) => phaseByCode.get(code) === 'check' || phaseByCode.get(code) === 'run'),
+  `${[...assigned].filter((c) => !phaseByCode.has(c) || phaseByCode.get(c) === undefined).sort().join(', ')} carry no \`phase\` in \`tflw spec --json\`.\n` +
+    `    Either the build predates tflw's D806d — run \`npm run refresh-tflw\` against a sibling checkout that has it — or the\n` +
+    `    manifest stopped emitting the field, which is a contract break this gate must not paper over by assuming 'check'.`,
+);
+
+for (const code of runCodes) {
+  const entry = RUNTIME_FIXTURES[code];
+  ok(
+    `${code}: phase \`run\` — delegated to a runtime witness`,
+    Boolean(entry),
+    `tflw says ${code} is decided at run time and this file has no RUNTIME_FIXTURES entry for it. A code no \`tflw check\` can\n` +
+      `    emit cannot have a fixture here; it needs a plant whose report carries the warning, and a line in RUNTIME_FIXTURES\n` +
+      `    naming that plant and the gate that grades it.`,
+  );
+  if (!entry) continue;
+  const plantPath = path.join(ROOT, entry.plant);
+  const plantSource = existsSync(plantPath) ? readFileSync(plantPath, 'utf8') : null;
+  ok(
+    `${code}: its plant ${entry.plant} still provokes it`,
+    plantSource !== null && entry.provokes.test(plantSource),
+    plantSource === null
+      ? `${entry.plant} does not exist. The witness for ${code} was moved or deleted; the code is unproven until it is named again.`
+      : `${entry.plant} exists and no longer matches ${entry.provokes}. The line that provokes ${code} was edited away, so the\n` +
+        `    plant can pass without ever raising it — which is exactly the vacuous state this file exists to refuse.`,
+  );
+  const graderPath = path.join(ROOT, entry.gradedBy);
+  ok(
+    `${code}: ${entry.gradedBy} still asserts it`,
+    existsSync(graderPath) && readFileSync(graderPath, 'utf8').includes(code),
+    `${entry.gradedBy} does not name ${code}. The plant may still raise the warning, and nothing would be reading it —\n` +
+      `    a witness nobody grades is the half of this delegation that fails silently.`,
+  );
+}
+
+// Neither half may be empty. A `runCodes` that came back empty would make every assertion above
+// vacuous and this gate would go on reporting completeness for a manifest it had misread.
+ok(
+  `the phase split is non-empty on both sides`,
+  runCodes.length > 0 && checkCodes.length > 0,
+  `run: ${runCodes.length}, check: ${checkCodes.length} — one side is empty, so either the manifest changed shape or the read above is wrong.`,
+);
+
+const uncovered = checkCodes.filter((code) => !dogfooded.has(code)).sort();
+ok(
+  `completeness: every check-time TF0xx code the installed tflw assigns has a fixture here`,
   uncovered.length === 0,
   uncovered.length
     ? `no fixture for ${uncovered.join(', ')} — add one under tests/.checkonly/ (test dialect) or CONFIG_FIXTURES (config dialect).\n` +
@@ -689,6 +791,17 @@ ok(
       `    change for this repo's main, and there is no additive path. Check before you open either PR with:\n` +
       `        npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs`
     : '',
+);
+
+// And a `run` code may not be satisfied by a check fixture. The two proofs are not interchangeable:
+// accepting either for either is the design this gate rejected (tflw `D806d`), because it would let
+// a check-time rule be proved only by a runtime witness and never say so.
+const misfiled = runCodes.filter((code) => dogfooded.has(code)).sort();
+ok(
+  `no runtime-only code is claimed by a check fixture`,
+  misfiled.length === 0,
+  `${misfiled.join(', ')} is \`phase: run\` and has a fixture here. Either tflw's manifest is wrong about the phase, or the\n` +
+    `    fixture provokes some other code and is mislabelled — both are worth reading before deleting either.`,
 );
 
 const stale = [...dogfooded].filter((code) => !assigned.has(code)).sort();
@@ -705,8 +818,8 @@ ok(
 
 // --- the roster row that cites this script, checked in both directions (`D752`) -----------------
 //
-// `CONSTRUCTS.md`'s `C59` rosters tflw's whole diagnostic family — sixty-six constructs — by
-// pointing at this script instead of writing sixty-six rows (`D751`, `D763`). `D752` is what stops
+// `CONSTRUCTS.md`'s `C59` rosters tflw's whole diagnostic family — sixty-eight constructs — by
+// pointing at this script instead of writing sixty-eight rows (`D751`, `D763`). `D752` is what stops
 // that being a promise: the citation is checked from both ends, and against what this run actually
 // did rather than against the fixture tables' declarations.
 //
@@ -718,13 +831,12 @@ ok(
 // The cross-check is worth more than it looks, because the two sides are read out of the bundle by
 // two different means: `assignedCodes()` greps the §17 manifest for `code:` literals, while the
 // family below comes from `tflw spec --json`'s emitted construct list. They must agree.
-const spec = readSpec(CLI_ENTRY);
 const SELF = 'scripts/verify-check-diagnostics.mjs';
 const citingRosters = REFERENCE_ROSTERS.filter((r) => GRADERS[r.grader]?.script === SELF);
 ok(
   `${SELF} is cited by a roster row`,
   citingRosters.length > 0,
-  'no row in REFERENCE_ROSTERS cites this script, but this script proves 66 constructs — either the row was deleted, ' +
+  `no row in REFERENCE_ROSTERS cites this script, but this script proves or delegates ${assigned.size} constructs — either the row was deleted, ` +
     'in which case the diagnostic family is being graded and counted as unrostered, or the citation moved and nobody ' +
     'told the ledger',
 );
@@ -736,10 +848,16 @@ for (const roster of citingRosters) {
   // manifest entry's `name` field rather than from splitting the id apart.
   const claimed = (expansion.get(roster.id) ?? []).map((id) => manifestById.get(id)?.name).filter(Boolean);
 
-  const unproven = claimed.filter((code) => !witnessed.has(code)).sort();
+  // `M159f` (`D806h`) — a `phase: 'run'` code is claimed by `C59` like every other member of the
+  // family, and cannot be witnessed here by construction: nothing in this file runs a browser. It is
+  // proved by the delegation asserted above, so it is excluded from *this* check rather than from
+  // the roster. Excluding it from the roster instead would leave a shipped code counted as
+  // unrostered while a gate really does grade it, which is the direction `D752` exists to catch.
+  const claimedHere = claimed.filter((code) => phaseByCode.get(code) !== 'run');
+  const unproven = claimedHere.filter((code) => !witnessed.has(code)).sort();
   ok(
     `${roster.id}: every construct it rosters by reference was proved by this run`,
-    claimed.length > 0 && unproven.length === 0,
+    claimedHere.length > 0 && unproven.length === 0,
     claimed.length === 0
       ? `the \`${roster.family}\` family expanded to nothing against this build's manifest — the row covers no construct at all`
       : `${unproven.join(', ')} — rostered by ${roster.id}, and no fixture in this run saw a real \`tflw check\` emit it.\n` +
@@ -749,6 +867,16 @@ for (const roster of citingRosters) {
   );
 
   const unclaimed = [...witnessed].filter((code) => !claimed.includes(code)).sort();
+  // Both directions of the phase split, against the roster's own expansion: a `run` code must be in
+  // the family (so `C59` still counts it) and must not be in what this run witnessed.
+  const runInFamily = runCodes.filter((code) => claimed.includes(code)).sort();
+  ok(
+    `${roster.id}: the runtime-only codes are inside the family it rosters, and outside what this run proved`,
+    runInFamily.length === runCodes.length && runCodes.every((code) => !witnessed.has(code)),
+    `run codes ${runCodes.join(', ')}; in the family: ${runInFamily.join(', ') || 'none'}; witnessed here: ${runCodes.filter((c) => witnessed.has(c)).join(', ') || 'none'}.\n` +
+      `    A run code missing from the family would be graded by nothing and counted as rostered; one witnessed HERE would mean\n` +
+      `    \`tflw check\` emitted a code its own manifest says it cannot.`,
+  );
   ok(
     `${roster.id}: every code this run proved is inside the family it rosters`,
     unclaimed.length === 0,
@@ -763,8 +891,12 @@ if (violations > 0) {
   process.exit(1);
 }
 console.log(
-  `\nAll ${assigned.size} TF0xx diagnostic codes the installed tflw assigns are dogfooded against a real \`tflw check\`` +
+  `\n${checkCodes.length} of the ${assigned.size} TF0xx diagnostic codes the installed tflw assigns are dogfooded against a real \`tflw check\`` +
     ` (${Object.keys(FILE_FIXTURES).length} test-dialect fixtures, ${Object.keys(CONFIG_FIXTURES).length} config-dialect,` +
     ` ${ENV_FIXTURE_FILE} against ${ENV_FIXTURES.length} generated configs, ${ALLOWLIST_FIXTURE_FILE} against` +
-    ` ${ALLOWLIST_FIXTURES.length} more, and ${AUTHZ_TARGET_FIXTURE_FILE} against ${AUTHZ_TARGET_FIXTURES.length}).`,
+    ` ${ALLOWLIST_FIXTURES.length} more, and ${AUTHZ_TARGET_FIXTURE_FILE} against ${AUTHZ_TARGET_FIXTURES.length}).` +
+    (runCodes.length
+      ? `\nThe other ${runCodes.length} — ${runCodes.join(', ')} — are \`phase: run\` in tflw's own manifest and no \`tflw check\` can emit them;` +
+        ` each is delegated to a named plant and grader, checked here for existing and left to \`verify-construct-acceptance.mjs\` to prove.`
+      : ''),
 );

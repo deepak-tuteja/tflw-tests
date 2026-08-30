@@ -115,22 +115,47 @@ export const PLANTS = [
     construct: 'step:accept',
     family: 'step',
     tier: 'ui',
-    title: 'the dialog handler is armed, and is one-shot',
-    target: "webV2/admin — the bulk out-of-stock delete's two short-circuited `confirm()`s",
+    title: 'the dialog handler is armed, the armings queue, and the answer reaches the kind that takes one',
+    target:
+      "webV2/admin — the bulk out-of-stock delete's two short-circuited `confirm()`s, plus (`M159f-c`) " +
+      'the stock-health `alert()`, the rename `prompt()` and the unsaved-reply `beforeunload` guard',
     evidence: { file: 'tests/.constructs/dialog-one-shot.tflw', pattern: '^\\s*accept dialog\\s*$', min: 1 },
     graders: ['acceptance'],
     knownAnswer:
-      'Two states of the same click, and the pair is the claim. With nothing armed the first confirm ' +
-      'is dismissed by default and `#bulk-delete-state` reads `cancelled`; with one `accept dialog` ' +
-      'the first is accepted by the armed handler, the second falls through to the default, and the ' +
-      'state reads `cancelled-final`. A step that armed nothing would leave `cancelled` both times; ' +
-      'a handler that stayed armed would navigate away and produce neither.',
-    catches: 'a handler that stays armed, and a step that arms nothing.',
-    // The third state — both confirms accepted — is **unreachable**, not merely unasserted: see
-    // `M154b-02`. `blockedOn` stays null deliberately. `D734` reserves it for a plant that goes red
-    // for a known tflw defect, and this plant is green; the defect is next to it, not under it.
-    // Recording an unreachable case as a blocked assertion would make the row look like outstanding
-    // work when what it actually is, is a language gap with a ledger row.
+      'Three states of the same click, and the set is the claim. With nothing armed the first ' +
+      'confirm is dismissed by default and `#bulk-delete-state` reads `cancelled`; with one ' +
+      '`accept dialog` the first is accepted and the second falls through to the default, reading ' +
+      '`cancelled-final`; with **two**, both are accepted, the form submits and both products are ' +
+      'really gone (asked of the API, not of the page that claims it). A step that armed nothing ' +
+      'would leave `cancelled` every time; a handler that stayed armed past its first dialog would ' +
+      'reach the third state from the second row. ' +
+      '**And, since `M159f-c`, across the kinds** (`tests/.constructs/dialog-kinds.tflw`): a ' +
+      '`prompt` returns three distinguishable things and one button separates them — `null` ' +
+      'unarmed, `""` under a bare `accept dialog`, and the typed answer under `accept dialog ' +
+      'with`, which is read back off the *product* rather than off the page; an `alert` leaves ' +
+      'the same counter under all three armings, because it has one button and there is nothing ' +
+      'else to grade; and `dialog type` moves from `alert` to `confirm` inside one attempt, which ' +
+      'a single-kind corpus cannot show at all.',
+    catches:
+      'a handler that stays armed, a step that arms nothing, an arming queue that keeps only one, a ' +
+      '`dialog type` fixed at `confirm`, and an `accept dialog with` whose answer never leaves the ' +
+      'arming.',
+    // `M159f-c` — the second target, and the reason for it. Everything above raises ONE kind, and
+    // two claims were vacuous because of it: `dialog type` has a closed set of four values this
+    // repository could produce one of, and `accept dialog with`'s only use here is the `TF080`
+    // witness, which asserts that the answer went NOWHERE — so an implementation that parsed the
+    // value and never handed it to Playwright satisfied it by construction. Only a `prompt`
+    // separates those. `evidence` stays on `dialog-one-shot.tflw`: the static roster wants one
+    // file per row, and the kind plant is acceptance evidence for the same construct, not another.
+    //
+    // No roster row was added. `accept dialog with` is `step:accept` with more syntax, and
+    // `dialog message`/`dialog type` are value subjects inside matcher rows — which is why the
+    // total stayed at 180 where tflw's `D805` predicted 181.
+    // `M154b-02` is CLOSED by tflw's `D797`: the third state was unreachable under a single slot —
+    // two consecutive armings arm one handler, and the two dialogs come from one `click` with no
+    // step boundary between them — and a queue makes it the ordinary reading of the same script.
+    // It is asserted in a second `test` in the same file (`D806f`) because it is terminal: it
+    // deletes the products that make the button exist. `blockedOn` stays null and always did.
     blockedOn: null,
   },
   {
@@ -913,21 +938,26 @@ export const PLANTS = [
     construct: 'step:dismiss',
     family: 'step',
     tier: 'ui',
-    title: 'dismissal is unobservable directly, so the plant grades the arming it overwrites',
+    title: 'dismissal is unobservable in isolation, so the plant grades the order it is answered in',
     target: 'webV2 admin console — the bulk out-of-stock delete’s two confirms',
     evidence: { file: 'tests/.constructs/dialog-one-shot.tflw', pattern: '^\\s*dismiss dialog\\s*$', min: 1 },
     graders: ['acceptance', 'coverage'],
     knownAnswer:
-      'Closes `M154b-01`. `browser.ts:232` is `void (armed === \'accept\' ? dialog.accept() : ' +
-      'dialog.dismiss())`, so **`dismiss` and nothing-armed take the same branch** and the step is ' +
-      'genuinely indistinguishable from its absence by direct observation — which is why the two ' +
-      'uses elsewhere in this repository prove nothing and why the step sat on the ratchet WITH ' +
-      'uses. What it does that its absence cannot is overwrite a prior arming (a single slot, ' +
-      '`browser.ts:220`). So the plant arms `accept`, overwrites it with `dismiss`, and clicks ' +
-      'once with no dialog in between: a real `dismiss` leaves `cancelled`, a no-op leaves the ' +
-      'accept standing and produces `cancelled-final` — the state the preceding step in that same ' +
-      'test just demonstrated, so the wrong answer is reachable and not hypothetical.',
-    catches: 'a `dismiss dialog` that does not arm, which no direct observation can detect.',
+      'Closes `M154b-01`. **`dismiss` and nothing-armed take the same branch** — the browser\'s ' +
+      'unhandled default IS dismissal — so the step is indistinguishable from its absence by direct ' +
+      'observation, which is why the two uses elsewhere in this repository prove nothing. What a ' +
+      'QUEUE (tflw `D797`) makes visible is *which* dialog it answers: the plant writes the ' +
+      'dismissal FIRST, so confirm #1 is dismissed, the form returns false and confirm #2 is never ' +
+      'raised — `cancelled`, with the accept behind it left unconsumed. A `dismiss` that armed ' +
+      'nothing lets that accept slide onto confirm #1, and a STACK answers #1 with it too; both ' +
+      'land on `cancelled-final`, the state the preceding block of that same test just produced, so ' +
+      'the wrong answer is reachable rather than hypothetical. `dialog message` then reads the ' +
+      'FIRST confirm\'s text, which is only true if #2 was never raised.',
+    catches: 'a `dismiss dialog` that does not arm, an arming order that is a stack or a slot, and a queue that answers out of order.',
+    // `M159f` (`D806e`) replaced this row's mechanism, not its subject. It used to grade the
+    // OVERWRITE — the one thing a single slot let `dismiss` do that its absence could not — and
+    // `D797` deleted the slot. Measured red on 2026-08-30 at exactly that block, with `C2`'s two
+    // rows still green beside it: the plant was grading the old semantics, not finding a defect.
     blockedOn: null,
   },
   // --- M154e: the perf tier -------------------------------------------------------------------

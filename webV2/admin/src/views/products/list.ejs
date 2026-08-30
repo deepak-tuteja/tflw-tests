@@ -15,6 +15,46 @@
   <button type="submit">Filter</button>
 </form>
 
+<%
+  // `M159f-c` — the `alert` fixture, and the reason an alert needs a *feature* rather than a
+  // button that says "alert".
+  //
+  // A `confirm()` branches, so a test can grade the arming by what the page did afterwards. An
+  // `alert()` has one button: accepting and dismissing it do **the same thing** to the page, so
+  // there is no page state that can tell an armed handler from an unarmed one. That is not a
+  // shortcoming of this fixture, it is what `alert` *is*, and the plant that grades it
+  // (`tests/.constructs/dialog-kinds.tflw`) asserts exactly that — same counter under `accept`,
+  // under `dismiss`, and under nothing armed.
+  //
+  // What is left is the dialog itself, so the message has to be worth reading. It is derived from
+  // the rows actually on this page rather than being a constant: a `dialog message` that returned
+  // a fixed string, or the text of some earlier dialog, is caught by the arithmetic changing with
+  // the filter. The counter next to it is what proves the handler ran at all — an alert that
+  // blocked forever would never reach it.
+  //
+  // `outOfStock` is read by BOTH features on this page — this alert and the bulk delete below —
+  // so it is declared once, here, rather than twice with two predicates that could drift apart.
+  const outOfStock = products.filter(function (p) { return p.stock === 0; });
+  const stockHealth = outOfStock.length + ' of ' + products.length + ' product(s) on this page are out of stock.';
+%>
+<p>
+  <button type="button" onclick="checkStockHealth()">Check stock health</button>
+  <span id="stock-health-state" data-state="idle" data-checks="0">Stock health not checked.</span>
+</p>
+<script>
+  var stockHealthChecks = 0;
+  function checkStockHealth() {
+    alert(<%- JSON.stringify(stockHealth) %>);
+    // Deliberately AFTER the alert returns, and deliberately unconditional: there is nothing to
+    // branch on. Both facts are the plant's subject.
+    stockHealthChecks += 1;
+    var el = document.getElementById('stock-health-state');
+    el.setAttribute('data-state', 'acknowledged');
+    el.setAttribute('data-checks', String(stockHealthChecks));
+    el.textContent = 'Stock health acknowledged.';
+  }
+</script>
+
 <table>
   <thead>
     <tr><th>Name</th><th>Category</th><th>Price</th><th>Stock</th></tr>
@@ -57,7 +97,8 @@
   // order of the ledger removing. The line is not scaffolding bolted on for the test; a
   // two-step destructive confirmation telling you which step you are on is the honest form of
   // this feature (`D729`).
-  const outOfStock = products.filter(function (p) { return p.stock === 0; });
+  //
+  // `outOfStock` is declared above `M159f-c`'s stock-health alert, which reads it too.
 %>
 <% if (currentUser && currentUser.role === 'admin' && outOfStock.length) { %>
   <form method="post" action="/products/delete-out-of-stock" onsubmit="return bulkDeleteConfirm(this)">
