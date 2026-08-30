@@ -50,7 +50,9 @@ the plant still exists, it is just somebody else's and it is better than the one
 have written. Three conditions, all three machine-checked rather than promised — the cited gate is
 tracked, it is **gated**, and it derives its expected set from tflw's manifest rather than from a
 list of its own. `C51`–`C58` cite three such gates one construct at a time; `C59` cites one for
-sixty-six at once.
+sixty-eight at once — sixty-six of which it proves by provoking a real `tflw check`, and two of
+which (`TF079`, `TF080`) no `check` can emit at all, so it names the plant and the gate that prove
+them by running (`D806h`).
 
 Everything not rostered is on the **ratchet** in
 [`scripts/lib/constructs.mjs`](scripts/lib/constructs.mjs), which may only shrink.
@@ -71,11 +73,19 @@ exercises" would be false of a third of it, and a list nobody believes is a list
 
 The construct set is **not a list in this repository**. It comes from `tflw spec --json`, emitted by
 the vendored build — the same artifact every other grader here runs — so the checklist and the
-program under test cannot disagree. Since tflw's `M154c` that is **178 constructs**: 12
-declarations, 37 step keywords, 18 matchers, 15 generators, 6 locators, 24 config words, 66
+program under test cannot disagree. Since tflw's `M159` that is **180 constructs**: 12
+declarations, 36 step keywords, 18 matchers, 15 generators, 6 locators, 25 config words, 68
 diagnostic codes.
 
-It was **166** one milestone ago, and the twelve that arrived are worth a sentence because they are
+The two most recent moves are worth a line each, because neither is what the arithmetic looks like.
+`M157` **removed** a step keyword — `cleanup` — and put a config key in its place, `teardown`, which
+is why 37/24 became 36/25 with the total unchanged. `M159` added **two diagnostics** —
+`TF079` and `TF080` — and nothing else, although it added a good deal of language: `accept dialog
+with` is the same `step:accept` construct with more syntax, and `dialog message`/`dialog type` are
+value *subjects*, which live inside matcher rows rather than as constructs of their own. A milestone
+can grow the surface a reader has to learn without moving this number at all.
+
+It was **166** four milestones ago, and the twelve that arrived are worth a sentence because they are
 not new language. `M154a` built the manifest out of six tables and shipped without a seventh: the
 declaration dialect — `test`, `crawl`, `action`, `import`, `use`, `before`, `after`, and the five
 `test`-header clauses — was simply absent. Under `D723` and `D724` together that made a whole
@@ -109,7 +119,7 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | id | construct | tier | known answer | catches |
 |---|---|---|---|---|
 | `C1` | `check` (`step:check`) | api | six `check` rows, exactly two failed — `body.currency` and `body.falsy` by name — and the `expect` after them ran and passed | `check` regressing to `expect` semantics, or to no semantics |
-| `C2` | `accept dialog` (`step:accept`) | ui | two states of one click — nothing armed leaves `#bulk-delete-state` at `cancelled`, one `accept dialog` leaves it at `cancelled-final` | a handler that stays armed, and a step that arms nothing |
+| `C2` | `accept dialog` (`step:accept`) | ui | three states of one click — nothing armed leaves `#bulk-delete-state` at `cancelled`, one `accept dialog` leaves it at `cancelled-final`, two accept both confirms and the products are really gone (asked of the API) | a handler that stays armed, a step that arms nothing, and a queue that keeps only one |
 | `C3` | `run … iterations` (`step:run`) | workload | exactly 60 arrivals on `/shared` and exactly 60 on `/per-user`, counted by the server, under `--workers 1` and `--workers 4` alike | a mis-paced or miscounted generator that still reports green, and a dropped `per user` |
 | `C4` | `retry N` (`declaration:retry`) | api | both keys attempted **exactly 3 times** — one settles inside the budget, one is stopped one short of the answer it wanted — and the pre-failure step ran 3 times | an off-by-one retry budget, an unbounded retry, and a step-level retry wearing a test-level spelling |
 | `C5` | `after` / `after file` (`declaration:after`) | api | `c5-after-file` == 1 and `c5-after-test` == **2**, over a file whose second test ends red on purpose | a teardown that silently does not run, and the two hook scopes collapsing into one |
@@ -150,7 +160,7 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C40` | `scroll to` (`step:scroll`) | ui | an `IntersectionObserver` below a 2400px spacer, latched — because Playwright visibility ignores the viewport, so `is visible` on the marker would pass unscrolled | a `scroll to` that resolves the element and never scrolls |
 | `C41` | `screenshot` (`step:screenshot`) | ui | graded from the **report**, not the run: `captured` at `evidence full`, `not captured (evidence level)` below it, and the PNG's own IHDR reads 1280x720 | a step that reports a capture it did not make, and evidence gating that stopped working |
 | `C42` | `viewport` (`config:key:viewport`) | ui | a pair across two configs — 1280x720 unconfigured, 900x600 under a corpus config that sets it; differing in **both** dimensions | a `viewport` key that is parsed and never reaches `newContext` |
-| `C43` | `dismiss dialog` (`step:dismiss`) | ui | the step is indistinguishable from its absence, so the plant grades the **arming it overwrites**: `accept` → `dismiss` → one click must leave `cancelled` | a `dismiss dialog` that does not arm, which no direct observation can detect |
+| `C43` | `dismiss dialog` (`step:dismiss`) | ui | the step is indistinguishable from its absence, so the plant grades the **order it is answered in**: `dismiss` → `accept` → one click must leave `cancelled`, with confirm #2 never raised | a `dismiss dialog` that does not arm, an arming order that is a stack or a slot, and a queue that answers out of order |
 | `C44` | `ramp` (`step:ramp`) | workload | a triangle is half its rectangle: `ramp to 50 rps over 4s` lands ~100 where `hold` at the same rate and duration lands ~200 | a ramp implemented as a hold, and a ramp that starts at its target |
 | `C45` | `hold` (`step:hold`) | workload | at full rate by its **second** 500ms bin — "a flat target … with no ramp-in" is the claim, and ramping is the only way to be wrong while landing the right total | a hold that ramps in, and a steady rate that drifts |
 | `C46` | `step` (`step:step`) | workload | 20/2s + 80/2s lands ~200, **which is what `hold 50 rps for 4s` lands too** — so the totals cannot discriminate and the plateaus and their 1:4 ratio are the claim | a staircase collapsed to its mean rate, or sloped instead of stepped |
@@ -166,7 +176,7 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C56` | `crawl` (`declaration:crawl`) | security | graded by finding **provenance** — each plant reached *via* the crawl — and by the SPA the fetching spider cannot walk, asserted as a named decline with count 1 rather than a silent zero | a crawl that walks the logged-out shell and calls it the surface (tflw `M137f-01`), and a blind spot reported as a zero |
 | `C57` | `has no … security violations` (`matcher:has-no-security-violations`) | security | every ledger row names what must fire **and** what is in play at that floor and must be silent; plus `D445` precision (`baseline ∪ plants`, nothing elsewhere) and the `scanCoverage` census that makes silence sufficient | a rule that stops firing, a rule that fires where it should not, and a floor read as a band |
 | `C58` | `has no authorization violations` (`matcher:has-no-authorization-violations`) | security | probe sets graded as four numbers, over one human declared three times — cookie+`csrf from` completes, bearer completes, cookie without the clause is `inconclusive` | a probe set silently emptied until nobody can answer, and a destructive verb scored as a verdict |
-| `C59` | **the whole `diagnostic` family — 66 codes** (`diagnostic:TF001`…, by rule not by list) | check | every code the installed tflw assigns is provoked by a fixture and asserted to appear in real `tflw check` output, several against the silence they must not break; and the expected set is read out of **tflw's own §17 manifest**, so a code that ships without a fixture here is red on the day it merges | a diagnostic that stops firing, a fixture kept for a retired code, and 66 hand-written rows going stale silently while reading as evidence |
+| `C59` | **the whole `diagnostic` family — 68 codes, two of which no `tflw check` can emit** (`diagnostic:TF001`…, by rule not by list) | check | every code the installed tflw assigns is provoked by a fixture and asserted to appear in real `tflw check` output, several against the silence they must not break; and the expected set is read out of **tflw's own §17 manifest**, so a code that ships without a fixture here is red on the day it merges | a diagnostic that stops firing, a fixture kept for a retired code, and 68 hand-written rows going stale silently while reading as evidence |
 | `C60` | `equals` (`matcher:equals`) | api | `body.price` is `42` and `body.truthy` is `4`, so `not equals 4` is red for an `equals` written as a prefix comparison — the implementation that passes all 1581 other uses here; plus case (`"Known-Answer"`) and whitespace (`"known-answer "`) | an `equals` that folds case, trims, or compares prefixes |
 | `C61` | `contains` (`matcher:contains`) | api | `"plan"` is a substring of the element `"plant"` and not an element of `body.tags`, so `not contains "plan"` is red for an implementation that searched the stringified array; the string half is asserted from the middle of the value | a `contains` that searches stringified JSON, and one anchored at either end |
 | `C62` | `matches "<regex>"` (`matcher:matches-regex`) | api | every one of the 31 existing uses is a literal, so `String.includes` passes them all — `matches "EUR|USD"` is the one assertion that separates a regex engine from a substring search; `not matches "^eur$"` adds case, `^known-[a-z]+$` adds anchoring | a `matches` implemented as a substring search |
@@ -242,58 +252,67 @@ shared fixture id costs when it drifts: a 98% k6 failure at `M48` and a 100% tfl
 answer. `body.truthy` and `body.falsy` are the endpoint's own statement of the answer, so the two
 deliberate falsehoods are asserted against numbers the payload itself carries.
 
-### `C2` — the dialog handler is armed, and is one-shot
+### `C2` — the dialog handler is armed, and the armings queue
 
 **Target.** `webV2/admin`'s bulk out-of-stock delete, whose form runs two `confirm()`s in one
 short-circuited handler and records which one it stopped at. **Plant.**
 `tests/.constructs/dialog-one-shot.tflw`.
 
-`accept dialog` arms a **one-shot** handler; without it Playwright dismisses every dialog silently.
-A single-confirm flow can only distinguish *armed* from *not armed*, so it proves the step fires and
-says nothing about how long it stays armed. Two confirms give three outcomes, and **tflw can reach
-exactly two of them**:
+`accept dialog` arms a handler for the **next** native dialog; armings queue, one dialog each, in
+order (tflw `D797`), and without one the browser dismisses silently. A single-confirm flow can only
+distinguish *armed* from *not armed*. Two confirms give four outcomes, and since `M159` tflw can
+reach all of them:
 
 | arming | dialog 1 | dialog 2 | `#bulk-delete-state` | products |
 |---|---|---|---|---|
 | none — *the control* | dismissed by default | never shown | `cancelled` | intact |
-| `accept dialog` once — *the plant* | accepted by the handler | dismissed by default | `cancelled-final` | intact |
-| `accept dialog` twice | accepted | accepted | (navigates) | **unreachable — `M154b-02`** |
+| `accept dialog` once | accepted by the handler | dismissed by default | `cancelled-final` | intact |
+| `dismiss` then `accept` — *`C43`* | dismissed by the arming | never shown | `cancelled` | intact, one arming left over |
+| `accept dialog` twice | accepted | accepted | (navigates) | **deleted** |
 
-The claim is the **pair**, not either row. Same page, same button, different arming, different
-state: a step that armed nothing would leave `cancelled` both times, and a handler that stayed armed
-past its first dialog would navigate away and produce neither. Taken alone the control measures
-Playwright rather than tflw, and taken alone the plant cannot rule out a sticky handler.
+The claim is the **set**, not any one row. Same page, same button, different arming, different
+state: a step that armed nothing would leave `cancelled` every time, and a handler that stayed armed
+past its first dialog would reach the fourth state from the second row.
 
-Without the status line the two would be indistinguishable from outside the browser — nothing was
-deleted either way — and the assertion would hold whether or not `accept dialog` did anything. That
-is a vacuous check, the class `M141`/`D538` spent an order of the ledger removing, and it is why the
-status line is part of the feature rather than scaffolding: a two-step destructive confirmation that
-tells you which step you are on is the honest form of it (`D729`).
+Without the status line the first two would be indistinguishable from outside the browser — nothing
+was deleted either way — and the assertion would hold whether or not `accept dialog` did anything.
+That is a vacuous check, the class `M141`/`D538` spent an order of the ledger removing, and it is
+why the status line is part of the feature rather than scaffolding: a two-step destructive
+confirmation that tells you which step you are on is the honest form of it (`D729`).
 
 The bulk action is scoped to `stock === 0` **and** to the list page's own filter, in both
 directions. A plant that damages the fixtures every other test reads is not a plant, it is an
-outage.
+outage. The fourth row deletes only the two products that test created under a `unique uuid` prefix.
 
-**Two findings came out of this row's first run, and neither is worked around.**
+**`M154b-02` is closed, and the row it filed is the reason the fourth state exists.** It was
+*unreachable*, not merely unasserted: `armedDialog` was a single slot, so two consecutive
+`accept dialog` steps armed one handler, and the two dialogs come from a single `click` with no step
+boundary between them to arm again. Nothing refused the program — tflw accepted a script and
+silently did half of it. tflw's `D797` made the arming a queue and the same script now means what a
+reader always thought it meant. It is asserted in a **second `test`** in the same file (`D806f`),
+because it is terminal: it deletes the products that make the button exist, and the block before it
+deliberately leaves an arming unconsumed that a later dialog in the same attempt would inherit
+(`D803`).
 
-- **`M154b-02` (S3)** — the third state is *unreachable*, not merely unasserted.
-  `BrowserPageState.armedDialog` is a single slot rather than a queue, so two consecutive
-  `accept dialog` steps arm one handler; and the two dialogs arrive from a single `click`, so there
-  is no step boundary at which to arm again. Nothing refuses the program, so tflw accepts a script
-  and silently does not do what it says. Asserting it here would be a plant that is *wrong* rather
-  than a plant that is *blocked* — the distinction `D734` exists to keep visible — so it is a ledger
-  row and this file grades what the language actually promises.
-- **`M154b-01` (S4)** — the two `dismiss dialog` uses already in this repository are vacuous by
-  construction, and this milestone does not fix them because they may not be fixable in the tests:
-  Playwright's default *is* dismissal, so no observable distinguishes the step from its absence.
-  Filed rather than quietly rostered, which is why `step:dismiss` stays on the ratchet.
+**Two more things this row cost, both worth carrying.**
 
-One more thing this row cost, worth carrying: the plant first used `unique("C2 Dialog Plant")` for
-its fixture prefix and collided with its own previous run. `unique("prefix")` promises
-collision-safety *"across tests/workers/retries"* and that list does not include **runs** — it is a
-run-scoped counter, and the database survives between runs. tflw's contract says exactly what it
-covers; the plant had assumed one word more. `unique uuid` guarantees distinctness and is what the
-plant uses now.
+- The plant first used `unique("C2 Dialog Plant")` for its fixture prefix and collided with its own
+  previous run. `unique("prefix")` promises collision-safety *"across tests/workers/retries"* and
+  that list does not include **runs** — it is a run-scoped counter, and the database survives
+  between runs. tflw's contract says exactly what it covers; the plant had assumed one word more.
+  `unique uuid` guarantees distinctness and is what the plant uses now.
+- **A plant grades the semantics it was written against, and a language can change under it.**
+  `C43` — the third row of the table, and `dismiss dialog`'s own claim — used to grade the one thing
+  a single slot let a dismissal do that its absence could not: **overwrite a prior arming**. `D797`
+  deleted the slot, so that block went red against tflw's `M159` branch on 2026-08-30 — at exactly
+  that block, with `C2`'s other rows green beside it. Nothing had regressed; the plant was grading
+  semantics the language no longer had. The replacement (`D806e`) grades what a queue *does*
+  promise, by writing the dismissal **first**: a real one answers confirm #1 and the form stops
+  there, while a `dismiss` that armed nothing — or a stack — lets the accept behind it take confirm
+  #1 and lands on `cancelled-final`, the state the row above just produced. Dismissal is still
+  unobservable in isolation (`M154b-01` stands, and the browser's unhandled default *is* dismissal);
+  what closes the row is that **order** makes its effect visible. `expect dialog message` then reads
+  confirm #1's text, which is true only if #2 was never raised — the half the page state cannot say.
 
 ### `C3` — count-bounded load lands exactly the count it was given
 
@@ -728,7 +747,7 @@ no fixture at all when somebody finally compared the two numbers. Its header sta
 the consequence plainly: a tflw milestone that assigns a code is **a breaking change for this
 repository's `main` with no additive path**, and the fixture has to land in the companion PR.
 
-Sixty-six hand-written rows would have restated that as sixty-six claims *nothing* enforces. The
+Sixty-eight hand-written rows would have restated that as sixty-eight claims *nothing* enforces. The
 roster would have got longer while the evidence got weaker, which is the failure this whole ledger
 was opened to stop.
 
@@ -748,7 +767,7 @@ bookkeeping, because the two sides read the bundle by different means: `assigned
 ever disagree, this is where it surfaces.
 
 All four failure directions were run before this row was written: the family renamed upstream (the
-row covers nothing and 66 constructs fall to unaccounted), the citation moved to another grader (the
+row covers nothing and 68 constructs fall to unaccounted), the citation moved to another grader (the
 diagnostics gate reports that nothing rosters what it proves), the cited gate made ungated
 (`M137e-01`'s rule fires — *a row pointing at a gate nobody runs reads as evidence while nothing
 evaluates it*), and one code's fixture deleted (`C59` names `TF001` beside the completeness check's

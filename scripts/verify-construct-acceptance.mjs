@@ -204,8 +204,18 @@ if (wanted('C2') || wanted('C43')) {
     scores.get('C2').skipped = 'no report';
     if (wanted('C43')) scores.get('C43').skipped = 'no report';
   } else {
-    const test = report.tests.find((t) => t.kind === 'functional');
+    // `M159f` — the file is TWO tests now (`D806f`): the first holds the three non-destructive
+    // states, the second the one that deletes. Taking `[0]` and `[1]` by position rather than by
+    // name, and asserting the count, because a file that silently lost its second test would
+    // otherwise be graded as a passing first test and nothing would say the third state stopped
+    // being checked.
+    const functional = report.tests.filter((t) => t.kind === 'functional');
+    const test = functional[0];
+    const deleteTest = functional[1];
+    const answerTest = functional[2];
     const steps = test?.steps ?? [];
+    const deleteSteps = deleteTest?.steps ?? [];
+    const warningsOf = (t) => t?.warnings ?? [];
     const hasStep = (needle) => steps.some((s) => s.source.includes(needle) && s.ok);
 
     // Recall: **both** states of the same click ran and held. Naming them individually rather than
@@ -220,40 +230,77 @@ if (wanted('C2') || wanted('C43')) {
     recall('C2', steps.filter((s) => s.source.includes('#bulk-delete-state')).length >= 3, 'all three state assertions are still in the plant (idle, cancelled, cancelled-final) — the contrast is what carries the claim');
     recall('C2', test?.ok === true, `the plant passed (got ok=${test?.ok})`);
 
-    const failedSteps = steps.filter((s) => !s.ok);
+    // `M154b-02`, closed by tflw's `D797` and asserted here for the first time: two armings, two
+    // dialogs from one click, and the delete really happens. Graded on the API's 404s rather than
+    // on the page's own banner — under the single slot every assertion up to and including the
+    // click passed while both products were still there, which is precisely why the claim is made
+    // against the resource and not against the rendered claim about it.
+    recall('C2', functional.length === 3, `the plant still carries all three of its tests (got ${functional.length} functional)`);
+    recall('C2', deleteSteps.filter((s) => /^\s*accept dialog\s*$/.test(s.source)).length === 2,
+      `the deleting test arms twice (got ${deleteSteps.filter((s) => /^\s*accept dialog\s*$/.test(s.source)).length})`);
+    recall('C2', deleteSteps.some((s) => s.source.includes("p[data-state='bulk-deleted']") && s.ok),
+      'the form actually submitted — the banner is the list page’s own render after a real navigation');
+    recall('C2', deleteSteps.filter((s) => /^\s*expect status equals 404\s*$/.test(s.source) && s.ok).length === 2,
+      `both products are gone, asked of the API (got ${deleteSteps.filter((s) => /^\s*expect status equals 404\s*$/.test(s.source) && s.ok).length} of 2 404s)`);
+    recall('C2', deleteTest?.ok === true, `the deleting test passed (got ok=${deleteTest?.ok})`);
+
+    // `D806h` — `TF080`'s runtime witness, and the only kind of proof a code no `tflw check` can
+    // emit is able to have here. `verify-check-diagnostics.mjs` delegates the two `phase: 'run'`
+    // codes to this gate by name; these two `recall`s are what that delegation resolves to, and a
+    // deleted assertion here is caught there by the file-and-code cross-check rather than silently
+    // leaving a code unproven.
+    recall('C2', warningsOf(answerTest).some((w) => w.code === 'TF080'),
+      `\`accept dialog with\` on a confirm produced TF080 (got ${JSON.stringify(warningsOf(answerTest).map((w) => w.code))})`);
+    recall('C2', answerTest?.ok === true && answerTest?.steps?.some((st) => /^\s*expect status equals 404\s*$/.test(st.source) && st.ok),
+      'and the dialog was accepted anyway — the product is gone, so the answer was ignored rather than the step');
+
+    const failedSteps = [...steps, ...deleteSteps, ...(answerTest?.steps ?? [])].filter((s) => !s.ok);
     precision('C2', failedSteps.length === 0, `no step failed (got ${failedSteps.map((s) => `line ${s.line}: ${s.source}`).join('; ') || 'none'})`);
 
     if (wanted('C43')) {
-      // The overwrite, graded by ADJACENCY rather than by presence — the same lesson `C26` cost
-      // this milestone. `dismiss dialog` only means anything here if it sits between an `accept
-      // dialog` and a click with NO dialog in between: the slot holds one arming
-      // (`browser.ts:220`) and any intervening dialog would consume the accept, at which point the
-      // `dismiss` is arming an empty slot and the row proves nothing again.
-      // Anchored on the DISMISSAL and read outwards, never on the first `accept dialog` — that
-      // one is `C2`'s arming, several steps earlier, and anchoring there is how this check failed
-      // on its first run. The same first-match trap `C26` cost this milestone, in a grader written
-      // after learning it.
+      // `M159f` (`D806e`) — the order, graded by ADJACENCY, which is the same lesson `C26` cost
+      // this milestone and the reason the old overwrite grader was written this way too. The claim
+      // is that the DISMISSAL is written first and the accept behind it: reversed, this is `C2`'s
+      // one-shot row and proves nothing about `dismiss`.
+      //
+      // Anchored on the dismissal and read outwards, never on the first `accept dialog` — that one
+      // is `C2`'s arming, several steps earlier, and anchoring there is how the previous version of
+      // this check failed on its first run.
       const dismissed = steps.findIndex((st) => /^\s*dismiss dialog\s*$/.test(st.source));
-      const armed = dismissed > 0 && /^\s*accept dialog\s*$/.test(steps[dismissed - 1]?.source ?? '') ? dismissed - 1 : -1;
+      const armedAfter = dismissed >= 0 && /^\s*accept dialog\s*$/.test(steps[dismissed + 1]?.source ?? '') ? dismissed + 1 : -1;
       const clicked = steps.findIndex((st, i) => i > dismissed && /^\s*click button "Delete 2 out-of-stock"/.test(st.source));
 
       recall('C43', dismissed > 0 && steps[dismissed]?.ok === true, 'the `dismiss dialog` step itself ran and passed');
-      // The state AFTER the overwrite, located by position rather than by substring: the plant's
-      // own control asserts `cancelled` too, three steps earlier, so a `.some()` over the file
+      // The state AFTER the ordered pair, located by position rather than by substring: the plant's
+      // own control asserts `cancelled` too, several steps earlier, so a `.some()` over the file
       // would be satisfied by a step that has nothing to do with this row.
       const settled = steps.find((st, i) => i > clicked && st.source.includes('#bulk-delete-state'));
       recall('C43', /data-state='cancelled'\]/.test(settled?.source ?? '') && settled?.ok === true,
-        `the click after the overwrite settled at 'cancelled' (got ${settled ? settled.source.trim() : 'no state assertion after it'})`);
+        `the click after the dismissal settled at 'cancelled' (got ${settled ? settled.source.trim() : 'no state assertion after it'})`);
+      // The last dialog of the attempt is confirm #1, which is only true if #2 was never raised —
+      // the half the page state cannot tell you, since `cancelled` is also what a first-confirm
+      // dismissal by the DEFAULT would leave.
+      const message = steps.find((st, i) => i > clicked && /^\s*expect dialog message\b/.test(st.source));
+      recall('C43', /matching this filter\?/.test(message?.source ?? '') && message?.ok === true,
+        `the last dialog was confirm #1, so confirm #2 was never raised (got ${message ? message.source.trim() : 'no dialog message assertion after the click'})`);
       // And the wrong answer is reachable in this very run — `cancelled-final` is what a no-op
-      // `dismiss` would have produced, and `C2`'s own step just produced it. Without this the row
-      // would be asserting that a state it never saw is different from one it did.
+      // `dismiss`, a stack, or a slot would each have produced, and `C2`'s own step just produced
+      // it. Without this the row would assert that a state it never saw is different from one it did.
       recall('C43', steps.some((st) => st.source.includes("data-state='cancelled-final'") && st.ok),
         'the contrasting state `cancelled-final` was actually reached in this run, so the wrong answer is not hypothetical');
+      // `D806g`/`D806h` — the accept written behind the dismissal is never consumed, on purpose, and
+      // tflw reports that as `TF079` against its own line. It is this row's second claim rather than
+      // a side effect: the leftover exists **because** the dismissal answered confirm #1 and the
+      // form stopped there, so the warning and the `cancelled` state are two readings of one fact.
+      // Anchored on the line, so a warning raised by some other arming would not satisfy it.
+      const unused = warningsOf(test).filter((w) => w.code === 'TF079');
+      recall('C43', unused.length === 1 && unused[0].line === steps[armedAfter]?.line,
+        `TF079 named the leftover accept at line ${steps[armedAfter]?.line} (got ${JSON.stringify(unused.map((w) => w.line))})`);
 
-      precision('C43', armed >= 0 && dismissed === armed + 1,
-        `the step immediately before the dismissal is \`accept dialog\` (armed@${armed}, dismissed@${dismissed})`);
-      precision('C43', clicked === dismissed + 1,
-        `the step immediately after it is the click, so no dialog consumed the arming in between (clicked@${clicked})`);
+      precision('C43', armedAfter >= 0 && armedAfter === dismissed + 1,
+        `the step immediately after the dismissal is \`accept dialog\` (dismissed@${dismissed}, armed@${armedAfter})`);
+      precision('C43', clicked === armedAfter + 1,
+        `the click follows the pair with nothing between it and them (clicked@${clicked})`);
       precision('C43', failedSteps.length === 0, 'no step failed');
     }
   }

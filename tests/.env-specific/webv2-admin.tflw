@@ -229,6 +229,13 @@ test "the admin product detail's Delete confirm() dialog: dismiss keeps it, acce
   click button "Delete product"
   # dismissing cancels the form's own onsubmit — no navigation happens, so the detail page (and its
   # heading) is still exactly what proves the product survived, not just that nothing errored.
+  #
+  # `M159f` / `M154b-01`: the heading assertion alone holds with the `dismiss dialog` deleted, since
+  # the browser's unhandled default is dismissal too. `dialog message` (tflw `D798`) makes the
+  # dialog load-bearing — it was raised, and it said what this flow says it says. The step's own
+  # effect is graded by ordering in `tests/.constructs/dialog-one-shot.tflw` (`C43`), which is the
+  # only place a queue makes it visible.
+  expect dialog message equals "Delete this product? This cannot be undone."
   expect css "h1:text-is('{productName}')" is visible
 
   accept dialog

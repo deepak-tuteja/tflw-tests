@@ -1,37 +1,33 @@
-# `M154b` / `C2` — the known-answer plant for `accept dialog`, and specifically for the two halves
-# of its contract: *"arm a one-shot handler accepting the next native dialog; without it Playwright
-# auto-dismisses silently"*.
+# `M154b` / `C2`, rewritten by `M159f` — the known-answer plant for `accept dialog` and
+# `dismiss dialog`, and for the contract tflw's `D797` sharpened: *"arm a handler accepting the next
+# native dialog; armings queue, one dialog each, in order; without one the browser auto-dismisses
+# silently"*.
 #
 # **This file is meant to pass.** It is a plant because each assertion distinguishes a real tflw
-# regression from correct behaviour, which the two `accept dialog` uses already in this repository
-# do not:
+# regression from correct behaviour, which the two dialog uses already in this repository do not:
 #
 #   `tests/mixed/storefront.tflw` and `tests/.env-specific/webv2-admin.tflw` each pair a
 #   `dismiss dialog` with an `accept dialog` on a single confirm. The `accept` half is real — the
 #   default is dismissal, so the delete cannot happen unless the step armed something. The `dismiss`
-#   half proves nothing at all: Playwright dismisses an unhandled dialog anyway, so that assertion
+#   half proves nothing at all: the browser dismisses an unhandled dialog anyway, so that assertion
 #   holds identically whether or not `dismiss dialog` did anything. Filed as `M154b-01`, and
-#   **closed by `C43`** at the end of this test: the step is unobservable *directly*, but it
-#   overwrites a prior arming, and that is observable.
+#   **closed by the ORDER block below** (`D806e`) — the step is unobservable in isolation, and it is
+#   observable in a queue, because which dialog it answers depends on where it was written.
 #
 # The target is `webV2/admin`'s bulk out-of-stock delete, whose form runs two `confirm()`s in one
-# short-circuited handler and records which one it stopped at. The plant asserts **two states of the
-# same click**, and the pair is what carries the claim — either one alone would be vacuous:
+# short-circuited handler and records which one it stopped at. Four states of the same button, and
+# the set is what carries the claim — any one of them alone would be vacuous:
 #
-#   nothing armed        #1 dismissed by default, #2 never shown   -> data-state="cancelled"
-#   `accept dialog` once #1 accepted, #2 dismissed by default      -> data-state="cancelled-final"
+#   nothing armed          #1 dismissed by default, #2 never shown    -> `cancelled`
+#   `accept` once          #1 accepted, #2 dismissed by default       -> `cancelled-final`
+#   `dismiss` then `accept` #1 dismissed, #2 never shown              -> `cancelled` + a leftover arming
+#   `accept` twice         both accepted                              -> the form submits, both products gone
 #
-# Same page, same button, different arming, different state. A step that armed nothing would leave
-# `cancelled` both times; a handler that stayed armed past its first dialog would navigate away and
-# produce neither.
-#
-# **The third state — both confirms accepted, the products really deleted — is not asserted, and
-# not because it was hard.** It is unreachable: `armedDialog` is a single slot rather than a queue
-# (`packages/runtime/src/browser.ts:220`), so two consecutive `accept dialog` steps arm one handler,
-# and the two dialogs come from a single `click` with no step boundary between them to arm again.
-# That is `M154b-02`, found on this plant's first run. Asserting it here would be a plant that is
-# *wrong* rather than a plant that is *blocked* — the distinction `D734` exists to keep visible —
-# so the case is a ledger row and this file grades what the language actually promises.
+# **The fourth was unreachable until `D797`** and is `M154b-02`: `armedDialog` was a single slot, so
+# two consecutive `accept dialog` steps armed one handler, and the two dialogs come from a single
+# `click` with no step boundary between them to arm again. Nothing refused the program — tflw
+# accepted a script and silently did half of it. It is asserted here now, in a test of its own
+# (`D806f`), because it is terminal: it deletes the products that make the button exist.
 
 @constructs @dialog @mixed
 test "one `accept dialog` accepts exactly one dialog; with none armed the first is dismissed"
@@ -89,27 +85,39 @@ test "one `accept dialog` accepts exactly one dialog; with none armed the first 
   click button "Delete 2 out-of-stock"
   expect css "#bulk-delete-state[data-state='cancelled-final']" is visible
 
-  # `M154d` / `C43` — THE OVERWRITE, and the answer to `M154b-01` filed in this file's own header.
+  # `M159f` / `C43` — THE ORDER, and what replaced the overwrite this block used to grade.
   #
-  # `dismiss dialog` is indistinguishable from its absence by direct observation: `browser.ts:232`
-  # is `void (armed === 'accept' ? dialog.accept() : dialog.dismiss())`, so *dismiss* and *nothing
-  # armed* take the same branch and produce the same state. That is why the two `dismiss dialog`
-  # uses elsewhere in this repository prove nothing, and why the step sat on the ratchet with uses.
+  # Until `D797` an arming was a single **slot**, so `dismiss dialog` did one thing its absence
+  # could not: overwrite a prior arming. That is what this block graded, and the queue removed the
+  # mechanism — measured red on 2026-08-30, at this block alone, because the accept is no longer
+  # discarded (dialog 1 accepted, dialog 2 dismissed by the second arming, `cancelled-final`).
   #
-  # But the step does one thing its absence cannot: it **overwrites a prior arming**
-  # (`interpreter.ts:3407` assigns `browser.page.armedDialog = which`, and line 220 says the slot
-  # holds exactly one). So arm `accept`, overwrite it with `dismiss`, and click *once* — with no
-  # dialog in between to consume the first arming. A real `dismiss` leaves `cancelled`; a `dismiss`
-  # that did nothing leaves the accept standing and produces `cancelled-final`, which is the state
-  # the step immediately above this one just demonstrated. The wrong answer is named, and it is a
-  # state this very test has already reached, so the contrast is not hypothetical.
+  # The replacement grades the property the queue actually promises — *each arming is consumed by
+  # exactly one dialog, IN ORDER* — by putting the dismissal FIRST:
   #
-  # The slot is empty entering this block — the click above consumed the accept on dialog #1 and
-  # dialog #2 re-cleared it — so `accept dialog` here really does arm, rather than inheriting.
-  accept dialog
+  #   real            #1 dismissed -> the form returns false, #2 is never raised   -> `cancelled`
+  #   a no-op dismiss #1 takes the ACCEPT, #2 falls through to the default         -> `cancelled-final`
+  #   a stack         #1 takes the accept as well                                  -> `cancelled-final`
+  #
+  # `cancelled-final` is the state the block immediately above just produced, so the wrong answer is
+  # reachable in this very run rather than hypothetical. One block, three wrong implementations —
+  # strictly more than the overwrite, which could only tell a real `dismiss` from a no-op one.
+  #
+  # **Dismissal is still unobservable in isolation, and `M154b-01`'s finding stands.** The browser's
+  # unhandled default IS dismissal, so `accept, dismiss` and a lone `accept` both land on
+  # `cancelled-final`. What closes the row is that ORDER makes the step's effect visible without
+  # needing a state the default cannot reach.
   dismiss dialog
+  accept dialog
   click button "Delete 2 out-of-stock"
   expect css "#bulk-delete-state[data-state='cancelled']" is visible
+
+  # `M159b` / `D798` — and this is what makes the line above say something the state alone cannot.
+  # `dialog message` reads the last dialog of this attempt: with the dismissal consumed by confirm
+  # #1 the run never sees confirm #2, so the last message is the FIRST confirm's. Under any of the
+  # three wrong implementations above, confirm #2 was raised and this reads its text instead.
+  expect dialog message equals "Delete 2 out-of-stock product(s) matching this filter?"
+  expect dialog type equals "confirm"
 
   # Neither state deleted anything, and this line would hold under both — which is why it is here as
   # a fence on the bulk route's blast radius and not as the claim about `accept dialog`.
@@ -119,3 +127,116 @@ test "one `accept dialog` accepts exactly one dialog; with none armed the first 
   api GET /products/{betaId}
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 200
+
+  # `M159f` / `D806g` — THE ACCEPT ABOVE IS NEVER CONSUMED, ON PURPOSE.
+  #
+  # The dismissal answered confirm #1 and the form stopped there, so the `accept dialog` written
+  # after it is still queued when this test ends. tflw reports that as `warning[TF079]` against its
+  # own line, and this plant is the only place in this repository that produces one — which is the
+  # only kind of proof a code no `tflw check` can emit is able to have here (tflw `D802`, `D806d`).
+  # The acceptance grader asserts the warning by code AND by line; nothing in the .tflw file can,
+  # because a warning is not a step and does not change a verdict.
+  #
+  # Deliberately not "fixed" by arming in the other order: the leftover is the evidence.
+
+@constructs @dialog @mixed
+test "two armings answer two dialogs raised by one click, and the delete really happens"
+  # `M154b-02`, closed. Both `confirm()`s come from a single `click`, so no step can sit between
+  # them and two consecutive armings is the only spelling this language has. Under the single slot
+  # the second arming overwrote the first, the second dialog fell through to the default dismissal,
+  # and nothing anywhere refused the program — tflw accepted a script and silently did not do what
+  # it said.
+  #
+  # A SECOND TEST rather than a fourth block of the one above, for two reasons that are both about
+  # state rather than taste. This case is terminal — the products are deleted and the button they
+  # made appear goes with them — and the block above deliberately leaves an arming unconsumed, which
+  # under `D803` a later dialog in the same attempt would inherit.
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+  api GET /categories
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  let prefix = unique uuid
+  api POST /products body { name: "{prefix} gamma", price: 5.00, stock: 0, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as gammaId
+  api POST /products body { name: "{prefix} delta", price: 6.00, stock: 0, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as deltaId
+
+  open "/login"
+  fill form
+    | "Email"    | env(ADMIN_EMAIL) |
+    | "Password" | env(ADMIN_PW)    |
+  click button "Log in"
+  expect button "Log out" is visible
+
+  open "/products?q={prefix}"
+  expect css "#bulk-delete-state[data-state='idle']" is visible
+
+  accept dialog
+  accept dialog
+  click button "Delete 2 out-of-stock"
+  # The form submitted, so this is a real navigation and a fresh render — the banner is the list
+  # page's own, not a state the script could have written.
+  expect css "p[data-state='bulk-deleted']" is visible
+  expect text "Deleted 2 out-of-stock product(s)." is visible
+
+  # And the products are actually gone, asked of the API rather than of the page that just claimed
+  # it. Under the old slot both of these still returned 200 while every assertion above `click`
+  # passed, which is exactly why the claim is made here.
+  api GET /products/{gammaId}
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 404
+  api GET /products/{deltaId}
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 404
+
+@constructs @dialog @mixed
+test "`accept dialog with` answers a confirm that has no answer to take, and says so"
+  # `M159f` / `D806h` — the repository's witness for **`TF080`**, and the reason a runtime-only code
+  # needs one at all. `verify-check-diagnostics.mjs` proves every diagnostic by provoking it with a
+  # real `tflw check`; `TF079` and `TF080` are the two codes no `check` can emit (tflw `D801`,
+  # `D802`, and `phase: 'run'` in `tflw spec --json` since `D806d`), so their proof is a passing
+  # plant whose report carries the warning. The acceptance grader asserts it; nothing in this file
+  # can, because a warning is not a step and does not change a verdict.
+  #
+  # The claim `TF080` makes is exactly what this test demonstrates: only a `prompt` has an input to
+  # fill, the browser silently discards `promptText` for every other kind, and the dialog is
+  # accepted **as if no `with` had been written** — so the product really is deleted, and the answer
+  # really did go nowhere.
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+  api GET /categories
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  capture body[0].id as categoryId
+
+  let prefix = unique uuid
+  api POST /products body { name: "{prefix} epsilon", price: 7.00, stock: 3, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as epsilonId
+
+  open "/login"
+  fill form
+    | "Email"    | env(ADMIN_EMAIL) |
+    | "Password" | env(ADMIN_PW)    |
+  click button "Log in"
+  expect button "Log out" is visible
+
+  open "/products/{epsilonId}"
+  accept dialog with "delete it please"
+  click button "Delete product"
+  # The `with` was ignored and the accept was not: the form's own onsubmit returned true, so this is
+  # a real navigation to the list page.
+  expect css "h1:text-is('Products')" is visible
+  api GET /products/{epsilonId}
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 404
