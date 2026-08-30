@@ -2140,10 +2140,16 @@ export const PLANTS = [
       + '10ms"*), which is the strongest available statement that the number was read. Two things stop '
       + 'it being vacuous. `slow-override.tflw` is the identical request carrying its own `timeout 5s` '
       + 'clause (SPEC §5.1) and **passes under the tight config**, so what was proven is a default a '
-      + 'step can overrule, not a hard-wired refusal to wait. And the plant asserts the spellings the '
-      + 'parser accepts: `timeout api 5s` is `TF010`, against a manifest sentence that documents it — '
-      + '`M154g-10`, asserted as measured so the day tflw implements it this row goes red on purpose.',
-    catches: 'a `timeout` key parsed and never applied, a per-step override that stopped winning, and the manifest\'s `timeout api`/`timeout browser` spelling silently becoming real.',
+      + 'step can overrule, not a hard-wired refusal to wait. And since `M155`/`D768` the plant grades '
+      + 'the **narrowing**, as a swapped pair: `timeout step 5s, api 10ms` must fail the request that '
+      + '`timeout step 10ms, api 5s` passes. Either config alone is satisfied by a resolver reading '
+      + 'only one of the two keys — the tight one passes on a resolver that ignores `step`, the loose '
+      + 'one on a resolver that never narrowed anything — so it is their disagreement, on identical '
+      + 'corpora one number-swap apart, that says the narrow key is read AND that the broad key '
+      + 'stopped reaching HTTP. This leg replaces the old `M154g-10` one, which asserted `timeout api '
+      + '5s` was a `TF010` and was written to go red on purpose the day tflw implemented the spelling. '
+      + 'It did.',
+    catches: 'a `timeout` key parsed and never applied, a per-step override that stopped winning, and a `timeout api`/`timeout browser` that resolves but reaches nothing — or that reaches the other transport.',
     blockedOn: null,
   },
   {

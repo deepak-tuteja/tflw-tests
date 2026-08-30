@@ -2579,13 +2579,28 @@ if (KEY_IDS.some((id) => wanted(id))) {
         'and under the tight config the step with its own `timeout 5s` still passes — a default a step can overrule, not a refusal to wait');
       precision('C99', /FAIL 1\/2/.test(tight),
         'exactly one of the two tests failed under the tight config, so the override is the difference between them and not the run');
-      // `M154g-10`, asserted as measured. The manifest documents `timeout api`/`timeout browser`;
-      // the parser's `TIMEOUT_TARGETS` is `step`/`expect`/`wait`. Written down here so that the day
-      // tflw implements the spelling, this row goes red on purpose rather than silently agreeing.
-      useConfig(tDir, 'timeout-api-spelling.config');
-      const spelled = runCheck(['slow.tflw'], { cwd: tDir });
-      precision('C99', /error\[TF010\]/.test(spelled),
-        `\`timeout api 5s\` is refused by the parser against a manifest that documents it (got: ${spelled.trim().split('\n')[0] || '(no output)'}) — \`M154g-10\``);
+      // The narrowing (`M155`/`D768`), and it replaces this row's old `M154g-10` leg. That leg
+      // asserted `timeout api 5s` was a `TF010` — the manifest documented a spelling the parser did
+      // not have — and it was written to go red on purpose the day tflw implemented it. `M155`
+      // implemented it, so what stands here now is the behaviour rather than its absence.
+      //
+      // **Written as a swapped pair on purpose.** `timeout step 5s, api 10ms` must fail the request
+      // that `timeout step 10ms, api 5s` passes. Either config alone is satisfied by a resolver
+      // reading only one of the two keys: the tight one passes on a resolver that ignores `step`
+      // entirely, and the loose one passes on a resolver that ignores `api` and simply never
+      // narrowed anything. It is their disagreement, on identical corpora one number-swap apart,
+      // that says the narrow key is read AND that the broad key stopped reaching HTTP.
+      useConfig(tDir, 'timeout-narrow-tight.config');
+      const narrowTight = runRun([], { cwd: tDir });
+      useConfig(tDir, 'timeout-narrow-loose.config');
+      const narrowLoose = runRun([], { cwd: tDir });
+
+      recall('C99', /request timed out after 10ms/.test(narrowTight),
+        '`timeout api 10ms` bounds the request even though `timeout step` is 5s beside it, so the narrow key wins for HTTP');
+      recall('C99', /PASS 2\/2/.test(narrowLoose),
+        'and the same corpus is green with the two numbers swapped — `timeout step 10ms` no longer reaches an HTTP request at all');
+      precision('C99', /FAIL 1\/2/.test(narrowTight),
+        'exactly one of the two tests failed under the narrowed config, so the per-step override still overrules `timeout api` as it overruled `timeout step`');
     }
 
     // ---- C100: an absence, proven against something that would have recorded a presence --------
