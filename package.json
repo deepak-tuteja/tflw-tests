@@ -45,7 +45,8 @@
     "verify:construct-coverage": "node scripts/verify-construct-coverage.mjs",
     "verify:redaction:self-test": "node scripts/verify-redaction.mjs --self-test",
     "verify:construct-acceptance": "node scripts/verify-construct-acceptance.mjs",
-    "verify:construct-acceptance:gate": "node scripts/verify-construct-acceptance.mjs --gate"
+    "verify:construct-acceptance:gate": "node scripts/verify-construct-acceptance.mjs --gate",
+    "list:mutation-candidates": "node scripts/list-mutation-candidates.mjs"
   },
   "dependencies": {
     "tflw": "file:vendor/tflw-0.1.0.tgz"
