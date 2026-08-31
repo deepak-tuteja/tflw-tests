@@ -360,8 +360,8 @@ export const PLANTS = [
     knownAnswer:
       'A link, a `menuitem` and a bare `<div>` all carry the identical accessible text "Archive ' +
       'shipment", and each writes its own token. The answer is `button/true`. A `button` locator ' +
-      'that had degenerated into a text search reports a decoy\u2019s token or hard-errors on ' +
-      'ambiguity \u2014 and would still pass all ninety-three existing uses, which name things that ' +
+      'that had degenerated into a text search reports a decoy’s token or hard-errors on ' +
+      'ambiguity — and would still pass all ninety-three existing uses, which name things that ' +
       'are unique on their page.',
     catches: 'a `button` locator that stopped resolving by role.',
     blockedOn: null,
@@ -379,7 +379,7 @@ export const PLANTS = [
       'Only the `<p>` renders "Restock queued" as text; four decoys carry it somewhere a content ' +
       'match must not look. The answer is `text/true`, and any attribute starting to match makes ' +
       'the step ambiguous rather than merely wrong. The decoy input is deliberately `type="text"`: ' +
-      'Playwright\u2019s text engine matches `input[type=button|submit]` by `value` **by design**, so ' +
+      'Playwright’s text engine matches `input[type=button|submit]` by `value` **by design**, so ' +
       'making it a submit would turn a correct engine red.',
     catches: 'a `text` locator that widened past rendered text content.',
     blockedOn: null,
@@ -394,7 +394,7 @@ export const PLANTS = [
     evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: '^\\s*fill field "Ship to"', min: 1 },
     graders: ['acceptance', 'coverage'],
     knownAnswer:
-      '`field` is a closed three-step cascade \u2014 label, then placeholder, then `role=textbox` \u2014 ' +
+      '`field` is a closed three-step cascade — label, then placeholder, then `role=textbox` — ' +
       'checked in that fixed order every poll (`D6`, `browser.ts:579`). The label input must receive ' +
       '`GLASGOW` and the placeholder decoy must still hold `UNTOUCHED`. **An order that flipped would ' +
       'pass all sixty-five existing `fill field` uses in this repository**, because no other page ' +
@@ -413,7 +413,7 @@ export const PLANTS = [
     graders: ['acceptance', 'coverage'],
     knownAnswer:
       'Zero uses before this file. Both lists hold a button named "Remove", so an unscoped click on ' +
-      'it is ambiguous **by construction** \u2014 the pair of assertions can only pass if `list` picked ' +
+      'it is ambiguous **by construction** — the pair of assertions can only pass if `list` picked ' +
       'the list its accessible name names. Answers `list/items` then `list/suppliers`, in that order; ' +
       'either one alone would be satisfied by a locator that ignored the name.',
     catches: 'a `list` locator that resolves any role=list rather than the named one.',
@@ -430,7 +430,7 @@ export const PLANTS = [
     graders: ['acceptance', 'coverage'],
     knownAnswer:
       'The four buttons are identical in text and role, so `:nth-child(3)` is the entire answer. ' +
-      '`css/3`. A resolution that quietly took the first match reports `css/1` \u2014 a failure mode ' +
+      '`css/3`. A resolution that quietly took the first match reports `css/1` — a failure mode ' +
       'invisible to all sixty-nine existing `css` uses, which select things that are unique anyway.',
     catches: 'a `css` locator that stopped honouring structural position.',
     blockedOn: null,
@@ -446,7 +446,7 @@ export const PLANTS = [
     graders: ['acceptance', 'coverage'],
     knownAnswer:
       'Zero uses before this file. Playwright auto-detects a selector beginning with `//` or `..` as ' +
-      'XPath, **so an implementation that forgot `browser.ts:590`\u2019s `xpath=` prefix would still pass ' +
+      'XPath, **so an implementation that forgot `browser.ts:590`’s `xpath=` prefix would still pass ' +
       'an xpath test written the usual way.** The expression here opens with `(`, which defeats the ' +
       'auto-detect and would be parsed as CSS; `last()` is the second half, since CSS cannot express ' +
       'it over a parenthesised group. Answer `xpath/4`.',
@@ -466,7 +466,7 @@ export const PLANTS = [
       'Twenty-five uses before this file and none of them could fail for the right reason: each ' +
       'scopes to a container whose inner locator would have resolved uniquely on the whole page ' +
       'anyway, so a `within` that scoped to nothing would pass them all. Here the inner ' +
-      '`click button "Remove"` is ambiguous at page scope \u2014 tflw hard-errors on N>1 (`D7`) \u2014 so a ' +
+      '`click button "Remove"` is ambiguous at page scope — tflw hard-errors on N>1 (`D7`) — so a ' +
       'lost scope is a red step, not a wrong element.',
     catches: 'a `within` that resolves its scope and then searches outside it.',
     blockedOn: null,
@@ -514,7 +514,7 @@ export const PLANTS = [
     evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: 'has value "', min: 2 },
     graders: ['acceptance', 'coverage'],
     knownAnswer:
-      '**Zero uses in this repository before this file** \u2014 a shipped matcher nothing exercised. ' +
+      '**Zero uses in this repository before this file** — a shipped matcher nothing exercised. ' +
       'The two assertions are a pair by design: `GLASGOW` on one input and `UNTOUCHED` on the other, ' +
       'so a `has value` that returned true unconditionally fails the second, and one that read the ' +
       '`value` *attribute* rather than the live `.value` property fails the first (React sets the ' +
@@ -1034,7 +1034,7 @@ export const PLANTS = [
     target: 'tflw-acceptance/conformance/teardown.tflw + arrival-server.mjs — one file run three times, at each level of the key',
     evidence: { file: 'tflw-acceptance/conformance/teardown.tflw', pattern: '^\\s*api GET /after-each-marker\\s*$', min: 1 },
     graders: ['acceptance', 'coverage'],
-    knownAnswer: 'One file, eight iterations, three runs, three different marker counts — the contrast is the plant. **Default** -> **8**: every iteration of both tests, *including the four that failed*, which is the half `M154e-01` did not know about (until `M157b` the interpreter threw on a failing body above the hook loop, so a run at a 5% error rate cleaned up after 95% of its iterations and leaked on exactly the 5% worth investigating). **`--teardown never`** -> **0**, with `ℹ teardown: disabled` on the summary, and the exit code unchanged. **`--teardown on-success`** -> **4**, the first test\'s iterations only. The first test is **red by threshold while all four of its iterations pass**, so `on success` keeping them is the sharp clause: a breached `threshold` is a run-level judgement made after every iteration has finished, and a build reading the test\'s verdict instead of the iteration\'s would answer 0 and look plausible doing it. Fourth clause, and the one no plant here could make before: the reported **p95 is unchanged across all three runs**, which is what proves hook time left the metric (`D782`).',
+    knownAnswer: 'One file, eight iterations, three runs, three different marker counts — the contrast is the plant. **Default** -> **8**: every iteration of both tests, *including the four that failed*, which is the half `M154e-01` did not know about (until `M157b` the interpreter threw on a failing body above the hook loop, so a run at a 5% error rate cleaned up after 95% of its iterations and leaked on exactly the 5% worth investigating). **`--teardown never`** -> **0**, with `ℹ teardown: disabled` on the summary, and the exit code unchanged. **`--teardown on-success`** -> **4**, the first test\'s iterations only. The first test is **red by threshold while all four of its iterations pass**, so `on success` keeping them is the sharp clause: a breached `threshold` is a run-level judgement made after every iteration has finished, and a build reading the test\'s verdict instead of the iteration\'s would answer 0 and look plausible doing it. Fourth clause, and the one no plant here could make before: the reported **p95 is unchanged across all three runs against a hook that costs 50 ms**, which is what proves hook time left the metric (`D782`). The hook’s cost is half the clause (`M157g`) — it is a null result, and against the zero-latency marker it used to hit, the effect it denies was one local request, smaller than its own tolerance. Unchanged is evidence only when changed would have been visible: the metric reads 59 ms for a 50 ms request placed *inside* the iteration, and 6.6 ms with the same 50 ms hanging off it.',
     catches: 'a build that ignores the key (8 three times), one that reinstates the old default-off gate (0 three times, since no file can opt in any more), teardown skipping the iterations that failed, `on success` reading the run\'s verdict instead of the iteration\'s, and hook time leaking back into the reported duration.',
     blockedOn: null,
   },
