@@ -263,6 +263,31 @@ this decision expires. That is the condition; it is deliberately not tied to a m
   For a fast local pass there is `npm run regression:smoke`: one Docker restart, `--tag smoke` plus
   the cheapest restart-agnostic checks. It is **not** a substitute for the sweep and is not a gate.
 
+## Writing a browser test: own the rows you assert on
+
+**A test creates the records it puts in a cart or reviews. It does not drive a seeded fixture by
+name** (`D819`, `M162`). The seeded `Bulk Item …` catalog is fine to *read* — filter it, page
+through it, assert a count against it. It is not fine to consume.
+
+This is a convention and deliberately **not** a gate (`D822`), because the condition that catches it
+is "run one file six times without dropping the database", and a CI job that did that would cost
+more than the defect and be switched off the first time it made a build take an hour. So it is
+written here instead, with the reason, measured on 2026-08-31:
+
+- A seeded product's `stock` is finite (`Bulk Item 100` starts at 20), **the seed never replenishes
+  it** — `apiV2/src/seed/seed.ts` skips any name that already exists, so `restart` does nothing and
+  only `node cli.mjs stop` (`down -v`) restores it — and every checkout decrements it.
+- `tests/mixed/storefront.tflw` consumed four units of one product per run. On the **sixth**
+  consecutive run against one stack the storefront rendered the add-to-cart control `disabled`, and
+  four tests each spent the full 30-second actionability timeout. The file went from 18 s to 134 s
+  and two acceptance plants went red for a reason that had nothing to do with what they grade.
+- A review is worse: it cannot be undone at all. The 409 is keyed on `(userId, productId)` and
+  `apiV2` has no `DELETE` for a review at any route, so a test that reviews a fixed product as a
+  fixed user gets **one** run per stack — and cannot even be looped to investigate a flake in it.
+
+If you are about to assert a stateful outcome on something you did not create, that is the moment to
+create it instead. `tests/ui/storefront/review-submission.tflw` is the pattern.
+
 ## The cross-repo pair — the gate that belongs to two repositories
 
 ```sh
