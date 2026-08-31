@@ -2,7 +2,7 @@
   "name": "testflow-tests",
   "version": "0.1.0",
   "private": true,
-  "description": "Purpose-built realistic e-commerce API (NestJS+Postgres, Dockerized) for tflw (testFlow) — its dogfood/acceptance target and DSL gap-discovery instrument.",
+  "description": "Purpose-built realistic e-commerce API (NestJS+Postgres, Dockerized) for tflw (testFlow) \u2014 its dogfood/acceptance target and DSL gap-discovery instrument.",
   "type": "module",
   "repository": {
     "type": "git",
@@ -46,7 +46,8 @@
     "verify:redaction:self-test": "node scripts/verify-redaction.mjs --self-test",
     "verify:construct-acceptance": "node scripts/verify-construct-acceptance.mjs",
     "verify:construct-acceptance:gate": "node scripts/verify-construct-acceptance.mjs --gate",
-    "list:mutation-candidates": "node scripts/list-mutation-candidates.mjs"
+    "list:mutation-candidates": "node scripts/list-mutation-candidates.mjs",
+    "discover:mutation-kills": "node scripts/discover-mutation-kills.mjs"
   },
   "dependencies": {
     "tflw": "file:vendor/tflw-0.1.0.tgz"
