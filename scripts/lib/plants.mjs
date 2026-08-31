@@ -60,15 +60,30 @@ const VULN_ROUTES = { pathPrefix: '/v1/vuln/' };
 
 /** The scripts that grade this ledger, and whether an automated pass runs them.
  *
- *  `gated` is the field with teeth. `verify-input-acceptance.mjs` grades `V10`–`V14` by ledger row and
- *  is invoked by hand and by nothing else (its own line 625 says so); `verify-security-acceptance.mjs`
- *  was in that state too until `M139-5` split it, which is the entire content of `M137e-01`. A row
- *  whose only graders are ungated is graded by nobody on any day nobody was looking. */
+ *  `gated` is the field with teeth. `verify-security-acceptance.mjs` ran by hand and by nothing else
+ *  until `M139-5` split it, which is the entire content of `M137e-01`. A row whose only graders are
+ *  ungated is graded by nobody on any day nobody was looking.
+ *
+ *  **`input` was stale here for the whole of `M154g`, and `M163e`'s audit (`D828`) is what found it.**
+ *  `M154g` step 5 (`D765`) gated Tier 3's grader — `input-acceptance` has been a `regression.mjs`
+ *  phase since — and `lib/constructs.mjs`'s `GRADERS` was updated to say so while this copy was not.
+ *  Two tables carrying one fact, and the one that went stale is the one
+ *  `verify-security-acceptance.mjs` reads for its "graded only by ungated script(s)" check.
+ *
+ *  **The damage was available rather than done, and the distinction is measured, not assumed.** That
+ *  check fires only when *every* grader on a plant is ungated; five plants name `input` (`V10`-`V14`)
+ *  and none names it alone, so the false verdict had no subject. The next plant graded solely by
+ *  Tier 3 would have been reported as graded by nobody — a gate telling the truth's opposite, in the
+ *  exact words `M137e-01` exists to prevent.
+ *
+ *  Corrected rather than deduplicated. One table fed from the other is the right shape and is not
+ *  this milestone's to build: they hold different key sets for different ledgers, and merging them
+ *  is a change to both callers. Filed instead (`M163-02`). */
 export const GRADERS = {
   security: { script: 'scripts/verify-security-acceptance.mjs --gate', phase: 'security-acceptance-gate', gated: true },
   sarif: { script: 'scripts/verify-sarif-acceptance.mjs', phase: 'sarif-acceptance', gated: true },
   hidden: { script: 'scripts/verify-vuln-slice-hidden.mjs', phase: 'vuln-slice-hidden-check', gated: true },
-  input: { script: 'scripts/verify-input-acceptance.mjs', phase: null, gated: false },
+  input: { script: 'scripts/verify-input-acceptance.mjs', phase: 'input-acceptance', gated: true },
 };
 
 export const PLANTS = [

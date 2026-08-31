@@ -169,7 +169,7 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C49` | `threshold` (`step:threshold`) | workload | the same request, the same path, every assertion green — and the test bounded at 10ms is **red** while the one bounded at 5000ms is green | a verdict computed from the steps rather than the aggregate metrics |
 | `C50` | `pause` (`step:pause`) | workload | gaps ≥200ms against a <50ms control on an identical path, **and** a reported p50 under 50ms because the column is pause-excluded | a `pause` that is a no-op, and a build that stopped subtracting pacing from duration |
 | `C51` | `probe ciphers` (`config:probe:ciphers`) | security | a granted/withheld pair on one rule, against a host that **negotiates a modern suite** — granted, `sec/tls-weak-cipher` fires and names the suites tflw could not offer; withheld, it is silent and the passing assertion carries `judged only the suite this host gave` | a `probe ciphers` that opens no second handshake, and an opt-in honoured where it was not granted |
-| `C52` | `probe mutating` (`config:probe:mutating`) | security | two verbs, one probe set, one variable: the `DELETE` is `4 probed — 1 inconclusive, 3 refused` and yields no verdict, the idempotent `PUT` is `4 probed — 2 leaked, 1 inconclusive, 1 refused` and finds the leak | a `probe mutating` that sends nothing while the assertion stays green, and a destructive verb scored as a verdict |
+| `C52` | `probe mutating` (`config:probe:mutating`) | security | two verbs, one probe set, one variable: the `DELETE` is `4 probed — 1 inconclusive, 3 refused` and yields no verdict, the idempotent `PUT` is `4 probed — 2 leaked, 1 inconclusive, 1 refused` and finds the leak — plus the withheld half, the same `DELETE` under a target granting nothing coming back `4 not probed` with each decline naming the missing word (`M163c`) | a `probe mutating` that sends nothing while the assertion stays green, and a destructive verb scored as a verdict |
 | `C53` | `authorized target` (`config:key:authorized`) | security | three refusals and their three silences before anything is sent — `TF060` on a base the affirmation does not name, `TF065` on a public target with no command-line affirmation, `TF066` on one naming an origin the run never scans | a scan reaching a host nobody affirmed, and an affirmation accepted for an origin the run never touches |
 | `C54` | `evidence` (`config:key:evidence`) | security | the same `screenshot` step, no `--evidence` anywhere: `captured` with a 1280x720 IHDR under a config that sets `evidence full`, `not captured (evidence level)` under one that sets nothing | an `evidence` key parsed and never reaching the runtime — `C42`'s defect one key over |
 | `C55` | `redact` (`config:key:redact`) | security | five PII values fetched **directly from apiV2**, present in no step's `request.body`, `response.bodyText` or `detail`; each of those three field kinds actually present in the run, including a request body carrying a covered field (`M154g` — until then there was none, on any step, in any run); and `[redacted]` in both `results.json` and `report.html`, so a pattern matching nothing cannot pass by having nothing to leak | a `redact` that stopped covering printed `detail` or stopped reaching `redactRequest`, a ground-truth set that silently shrank, and a vacuously-passing leak check |
@@ -768,14 +768,25 @@ being a promise — the reference is checked in both directions, so a roster row
 answer no grader states, and a grader table cannot quietly stop answering a construct the roster
 says it answers.
 
-**`C52` is narrower than it looks, and the reason is worth reading before trusting any row here.**
-The obvious known answer for `probe mutating` is the granted/withheld contrast: the same `DELETE`
-comes back *probed and answered* under a target that grants the opt-in and *`4 not probed`* under one
-that does not, each decline naming the missing word. That contrast is graded, exactly, and it lives
-in this script's **ungated** half — `D493` drew the gate line above `APPLICABILITY_PROBES`, so the
-withheld half asserts and exits non-zero and runs only when somebody types the command. So the row
-claims what the gated half proves instead: two verbs under the same four principals, differing only
-in whether the verb destroys what it touches. Filed as `M154f-01`.
+**`C52` was narrower than it looked, and `M163c` widened it back.** The known answer for
+`probe mutating` is the granted/withheld contrast: the same `DELETE` comes back *probed and
+answered* under a target that grants the opt-in and *`4 not probed`* under one that does not, each
+decline naming the missing word. `M154f-01` found that contrast graded exactly — and graded in this
+script's **ungated** half, because `D493` had drawn the gate line above `APPLICABILITY_PROBES`. So
+the row was narrowed to what the gated half proved instead: two verbs under the same four
+principals, differing only in whether the verb destroys what it touches.
+
+`M163b` moved that probe loop above the gate line (`D823`), so the withheld half is now asserted by
+the same automated phase as everything else here, and the row claims the whole contrast again. **The
+claim was never wrong — the grader was unreachable**, and `verify-construct-coverage.mjs` was right
+to refuse a plant whose graders are all ungated rather than let the roster carry a row nothing ran.
+Narrowing the claim was the correct move while that was true and the wrong thing to leave standing
+once it was fixable; `M154f-01` said so and is closed by this.
+
+The measured cost of making it reachable was **1.09 s** on `fedora-box` — the phase went from
+~1.65 s to ~3.3 s (`D824`, `M163a`). `M154f-01` had deferred the move on the assumption that "a
+Tier 2 probe run costs a corpus run per probe"; it costs a *single-file* run per probe, and nobody
+had measured it.
 
 **The one new plant is `C54`, and it exists because the census was measuring the wrong thing.**
 `evidence` looked well covered — four files mention it, and `C41` already grades what the *level*
