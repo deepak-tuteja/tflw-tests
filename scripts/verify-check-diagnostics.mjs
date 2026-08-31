@@ -363,6 +363,28 @@ const CONFIG_FIXTURES = {
   // Coupled with its tflw half and red until that half merges (D350/D382). The local pre-flight is
   // `npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs` (D351).
   TF076: 'env local default\n  api shop "http://localhost:4001"\n  header "X-Tenant" is "acme" for shp\n',
+  // tflw `M165` (`D829`-`D832`): a config key declared **twice in one block**. The second assigns
+  // and the first reaches nothing — `resolveConfig` walks a block's entries in order and the last
+  // write wins — so before this the config plainly said one thing and the run did another, with no
+  // diagnostic anywhere.
+  //
+  // **The fixture is `workers` and it has to be a single-valued key, which is the whole content of
+  // the rule.** Four keys are exempt because they accumulate rather than override — `header`,
+  // `allow hosts`, `authorized target` and `redact` — and a fixture doubling any of those would be
+  // asserting the opposite of what it looks like it asserts. tflw grades that exemption set against
+  // `resolveConfig`'s own behaviour (`config-key-arity.test.ts`) rather than against a written list,
+  // and this row deliberately does not restate the set: it proves the code exists and fires, and the
+  // membership question is measured where the resolver is.
+  //
+  // **Both declarations are inside `defaults`, and that is not tidiness.** `D832` makes the rule
+  // per-block: a key set in `defaults` and again in an `env` is the reason both blocks exist, so it
+  // stays silent and the env wins. Written across the two blocks this fixture would report nothing
+  // at all — the same last-one-assigns mechanism, one line apart in `resolve.ts`, and opposite in
+  // the rule.
+  //
+  // Coupled with its tflw half and red until that half merges (D350/D382). The local pre-flight is
+  // `npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs` (D351).
+  TF081: 'defaults\n  workers 2\n  workers 4\n\nenv local default\n  api "http://localhost:4001"\n',
 };
 
 const scratchDir = mkdtempSync(path.join(tmpdir(), 'tflw-check-config-'));
