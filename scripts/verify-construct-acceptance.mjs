@@ -708,11 +708,26 @@ if (wanted('C48')) {
       recall('C48', firstRed?.ok === false, `and the test those four iterations belong to is itself RED — without that this clause cannot tell \`on success\` from "reads the run's verdict"`);
       // Clause 4 — the one no plant here could make before `M157a`. Hook time is out of the
       // reported duration, so the p95 must not move when the number of hooks per iteration does.
-      // Compared with a tolerance rather than for equality: these are real measurements against a
-      // zero-latency path, and asserting bit-equality would be asserting the absence of jitter.
+      // Compared with a tolerance rather than for equality: these are real measurements, and
+      // asserting bit-equality would be asserting the absence of jitter.
+      //
+      // **`M157g` — the tolerance and the hook's cost are one decision, and the first version got
+      // it backwards.** This is a null result: it says a number does *not* move. A null result is
+      // evidence only if the movement it denies would have been visible, and `/after-each-marker`
+      // was a zero-latency path — so a build that put hook time straight back into the reported
+      // duration would have moved the p95 by one local request, 1-3 ms, under a 5 ms tolerance.
+      // The clause was green on `fedora-box` and could not have failed there for the right reason;
+      // on GitHub's hosted runners it failed three times in four on jitter alone (spreads 5.5, 9,
+      // 12 ms), which is how it was found — a clause too tight for its noise and too loose for its
+      // effect at the same time.
+      //
+      // The repair raised the effect rather than loosening the test: the hook now costs 50 ms, so a
+      // `D782` regression moves the p95 by ~50 ms per iteration. 20 ms then sits above the worst
+      // jitter observed (12 ms) and well below the effect, and the clause can fail for the reason
+      // it is written for on either machine.
       const ps = [dflt.p95, never.p95, onSuccess.p95];
       const spread = ps.every((v) => typeof v === 'number') ? Math.max(...ps) - Math.min(...ps) : null;
-      recall('C48', spread !== null && spread <= 5, `the reported p95 does not move with the number of hooks run — ${JSON.stringify(ps)} ms across the three levels (\`D782\`)`);
+      recall('C48', spread !== null && spread <= 20, `the reported p95 does not move with the number of hooks run — ${JSON.stringify(ps)} ms across the three levels, against a 50ms hook (\`D782\`)`);
       // Non-vacuity. A marker path nothing ever reaches would satisfy the `never` clause for the
       // wrong reason, and every clause above it would be comparing zeroes.
       precision('C48', dflt.markers > 0, `the hook is reachable at all (a 0 in the default run would make every clause above vacuous rather than satisfied)`);
