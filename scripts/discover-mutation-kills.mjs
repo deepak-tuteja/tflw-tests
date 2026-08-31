@@ -76,10 +76,15 @@ import { fileURLToPath } from 'node:url';
 
 import { siblingRoot, readMutations, editsOf, bundleInputs, classify, anchorState } from './lib/mutations.mjs';
 import { plantsFor } from './lib/constructs.mjs';
+import { resolveTflw } from './lib/tflw-bin.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const SIB = siblingRoot();
-const CLI = path.join(ROOT, 'node_modules', 'tflw', 'dist', 'cli.cjs');
+// `released` — the vendored tarball, which is the build the plants actually run and therefore the
+// only one whose identity answers "is this mutation installed?". Asked through the resolver rather
+// than by hand so the question is declared, which is what `verify-tflw-resolution.mjs` exists to
+// require; it caught the hand-built path in this file's first draft.
+const { entry: CLI } = resolveTflw('released', { label: 'mutation-discovery' });
 const OUT_DIR = path.join(ROOT, 'tflw-acceptance', 'mutation');
 const MATRIX = path.join(OUT_DIR, 'kill-matrix.jsonl');
 const META = path.join(OUT_DIR, 'run-meta.json');
