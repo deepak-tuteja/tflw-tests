@@ -109,12 +109,17 @@ function runCorpus(cwd, args) {
 // about the checker, and the files that would state them by running do not compile. Nothing is
 // spawned against a stack here, so these legs grade identically with the stack down — which is
 // also how they get dry-run while the box is busy.
-function runCheck(args, { cwd = ROOT } = {}) {
+// `env` since `M156f`: `C95`'s fourth and fifth legs turn on whether a variable is set, and the
+// advisory note `tflw check` grew in tflw's `M156c` is the only thing in the check path that reads
+// the environment at all. Same shape as `runRun` above, and merged rather than added beside it so
+// there is one way to run each command.
+function runCheck(args, { cwd = ROOT, env = {} } = {}) {
   const r = spawnSync(process.execPath, [TFLW_BIN, 'check', '--no-color', ...args], {
     cwd,
     encoding: 'utf8',
     shell: false,
     maxBuffer: 16 * 1024 * 1024,
+    env: { ...process.env, ...env },
   });
   return `${r.stdout ?? ''}${r.stderr ?? ''}`;
 }
@@ -2461,13 +2466,31 @@ if (DIRECTIVE_IDS.some((id) => wanted(id))) {
       const both = runRun([], { cwd: reqDir, env: { C95_TOKEN: 'c95', C95_UNUSED: 'c95' } });
       recall('C95', !/missing required environment variable/.test(both) && /blocked-ports/.test(both),
         'with both set the same run reaches the transport and dies at port 9 — "refused before it started" told from "ran and failed" without a stack');
-      // The finding. `tflw spec --json` summarises this construct as "a missing secret fails at
-      // check time rather than mid-suite". The guarantee is real and it is a run-start one; the
-      // sentence is wrong. Asserted as measured (`M154g-11`), so the day tflw moves the gate this
-      // row goes red on purpose rather than silently agreeing with its manifest.
+      // ---- THE REVERSAL (`M156f.1`) ----------------------------------------------------------
+      // This row used to end here, asserting a **silence**: `tflw check` reported "no problems
+      // found" over the identical config while the manifest promised a missing secret "fails at
+      // check time". That was measured, filed as `M154g-11`, and dispositioned *"the repair is the
+      // sentence, never the gate"*. **That disposition was wrong and tflw's `M156` reversed it**
+      // (`D774`): the guarantee was deliverable statically, with no secret and no socket, and the
+      // half that was missing was the implementation rather than the wording.
+      //
+      // What the old leg is worth keeping as a warning: `clean()` is `/no problems found/`, and the
+      // note added below does **not** disturb that string. So the retired assertion would still be
+      // passing today, in a row whose claim had inverted underneath it — the exact failure this
+      // corpus exists to catch, sitting inside the corpus. Rewritten rather than deleted for that
+      // reason.
+      //
+      // Two legs now, and they are a pair. The first says the note fires; the second says it fires
+      // for *unset* and not for *declared*, which is the distinction `D776` turns on and the one a
+      // reader would most plausibly get wrong. Without the second, a note printed unconditionally
+      // passes.
       const checked = runCheck(['kept.tflw'], { cwd: reqDir });
-      precision('C95', clean(checked),
-        `\`tflw check\` reports no problems over the identical config, against a manifest that promises check-time refusal (got: ${firstLine(checked)}) — \`M154g-11\``);
+      recall('C95', clean(checked) && /require env: 2 of 2 not set here/.test(checked)
+          && /C95_TOKEN/.test(checked) && /C95_UNUSED/.test(checked),
+        `\`tflw check\` over the identical config now says so — an advisory note naming both variables, beside "no problems found" and an exit 0 (\`D779\`, reversing \`M154g-11\`) (got: ${firstLine(checked)})`);
+      const checkedSet = runCheck(['kept.tflw'], { cwd: reqDir, env: { C95_TOKEN: 'c95', C95_UNUSED: 'c95' } });
+      precision('C95', clean(checkedSet) && !/require env:/.test(checkedSet),
+        `and with both set the note is absent entirely — it reports *unset*, never *declared*, so it cannot be satisfied by a line printed unconditionally (got: ${firstLine(checkedSet)})`);
     }
 
     // ---- C96: discovery skips the folder, an explicit path does not --------------------------

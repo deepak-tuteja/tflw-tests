@@ -1,0 +1,28 @@
+# undeclared-env-ref.tflw — CHECK-ONLY FIXTURE (`M156e`, tflw `M156a`/`D774`): an `env(NAME)` that no
+# `require env` line declares (`TF077`: checker, error).
+#
+# Run explicitly (dot-directory — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/undeclared-env-ref.tflw
+#
+# **This fixture is graded against the repository's own real `tflw.config`**, the same as every other
+# file-dialect fixture here, and that is what makes it a fair test rather than a tautology: the
+# config declares twenty-six names, so `C156_ROGUE` is undeclared *against a config that declares a
+# great many things*, not against an empty one. If someone ever adds `C156_ROGUE` to that line this
+# goes green for the wrong reason, which is why the name is milestone-scoped and obviously not a
+# credential anyone would want.
+#
+# The rule is about **declaration, not value**. `C156_ROGUE` being unset in the environment is
+# irrelevant here and stays irrelevant: `tflw check` does no prediction about the environment
+# (`D775`), so a name that *is* set but undeclared reports exactly the same. That is the half of
+# `require env` this code adds — the run-start gate only ever protected names the author remembered
+# to write down, so an undeclared reference sailed past `check`, past the gate, and died at this step
+# mid-suite. `D774` is the disposition that made it code rather than a corrected sentence.
+#
+# The second step is a control and it is the point of the file. `env(ADMIN_EMAIL)` is declared, and
+# must report nothing — a fixture where every `env()` is undeclared cannot tell a rule that reads the
+# declared set from one that flags `env()` on sight.
+
+test "an undeclared env reference, beside a declared one"
+  api GET /health
+  expect body.status equals env(C156_ROGUE)
+  expect body.status equals env(ADMIN_EMAIL)
