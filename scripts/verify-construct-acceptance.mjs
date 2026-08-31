@@ -708,11 +708,26 @@ if (wanted('C48')) {
       recall('C48', firstRed?.ok === false, `and the test those four iterations belong to is itself RED — without that this clause cannot tell \`on success\` from "reads the run's verdict"`);
       // Clause 4 — the one no plant here could make before `M157a`. Hook time is out of the
       // reported duration, so the p95 must not move when the number of hooks per iteration does.
-      // Compared with a tolerance rather than for equality: these are real measurements against a
-      // zero-latency path, and asserting bit-equality would be asserting the absence of jitter.
+      // Compared with a tolerance rather than for equality: these are real measurements, and
+      // asserting bit-equality would be asserting the absence of jitter.
+      //
+      // **`M157g` — the tolerance and the hook's cost are one decision, and the first version got
+      // it backwards.** This is a null result: it says a number does *not* move. A null result is
+      // evidence only if the movement it denies would have been visible, and `/after-each-marker`
+      // was a zero-latency path — so a build that put hook time straight back into the reported
+      // duration would have moved the p95 by one local request, 1-3 ms, under a 5 ms tolerance.
+      // The clause was green on `fedora-box` and could not have failed there for the right reason;
+      // on GitHub's hosted runners it failed three times in four on jitter alone (spreads 5.5, 9,
+      // 12 ms), which is how it was found — a clause too tight for its noise and too loose for its
+      // effect at the same time.
+      //
+      // The repair raised the effect rather than loosening the test: the hook now costs 50 ms, so a
+      // `D782` regression moves the p95 by ~50 ms per iteration. 20 ms then sits above the worst
+      // jitter observed (12 ms) and well below the effect, and the clause can fail for the reason
+      // it is written for on either machine.
       const ps = [dflt.p95, never.p95, onSuccess.p95];
       const spread = ps.every((v) => typeof v === 'number') ? Math.max(...ps) - Math.min(...ps) : null;
-      recall('C48', spread !== null && spread <= 5, `the reported p95 does not move with the number of hooks run — ${JSON.stringify(ps)} ms across the three levels (\`D782\`)`);
+      recall('C48', spread !== null && spread <= 20, `the reported p95 does not move with the number of hooks run — ${JSON.stringify(ps)} ms across the three levels, against a 50ms hook (\`D782\`)`);
       // Non-vacuity. A marker path nothing ever reaches would satisfy the `never` clause for the
       // wrong reason, and every clause above it would be comparing zeroes.
       precision('C48', dflt.markers > 0, `the hook is reachable at all (a 0 in the default run would make every clause above vacuous rather than satisfied)`);
@@ -2579,13 +2594,28 @@ if (KEY_IDS.some((id) => wanted(id))) {
         'and under the tight config the step with its own `timeout 5s` still passes — a default a step can overrule, not a refusal to wait');
       precision('C99', /FAIL 1\/2/.test(tight),
         'exactly one of the two tests failed under the tight config, so the override is the difference between them and not the run');
-      // `M154g-10`, asserted as measured. The manifest documents `timeout api`/`timeout browser`;
-      // the parser's `TIMEOUT_TARGETS` is `step`/`expect`/`wait`. Written down here so that the day
-      // tflw implements the spelling, this row goes red on purpose rather than silently agreeing.
-      useConfig(tDir, 'timeout-api-spelling.config');
-      const spelled = runCheck(['slow.tflw'], { cwd: tDir });
-      precision('C99', /error\[TF010\]/.test(spelled),
-        `\`timeout api 5s\` is refused by the parser against a manifest that documents it (got: ${spelled.trim().split('\n')[0] || '(no output)'}) — \`M154g-10\``);
+      // The narrowing (`M155`/`D768`), and it replaces this row's old `M154g-10` leg. That leg
+      // asserted `timeout api 5s` was a `TF010` — the manifest documented a spelling the parser did
+      // not have — and it was written to go red on purpose the day tflw implemented it. `M155`
+      // implemented it, so what stands here now is the behaviour rather than its absence.
+      //
+      // **Written as a swapped pair on purpose.** `timeout step 5s, api 10ms` must fail the request
+      // that `timeout step 10ms, api 5s` passes. Either config alone is satisfied by a resolver
+      // reading only one of the two keys: the tight one passes on a resolver that ignores `step`
+      // entirely, and the loose one passes on a resolver that ignores `api` and simply never
+      // narrowed anything. It is their disagreement, on identical corpora one number-swap apart,
+      // that says the narrow key is read AND that the broad key stopped reaching HTTP.
+      useConfig(tDir, 'timeout-narrow-tight.config');
+      const narrowTight = runRun([], { cwd: tDir });
+      useConfig(tDir, 'timeout-narrow-loose.config');
+      const narrowLoose = runRun([], { cwd: tDir });
+
+      recall('C99', /request timed out after 10ms/.test(narrowTight),
+        '`timeout api 10ms` bounds the request even though `timeout step` is 5s beside it, so the narrow key wins for HTTP');
+      recall('C99', /PASS 2\/2/.test(narrowLoose),
+        'and the same corpus is green with the two numbers swapped — `timeout step 10ms` no longer reaches an HTTP request at all');
+      precision('C99', /FAIL 1\/2/.test(narrowTight),
+        'exactly one of the two tests failed under the narrowed config, so the per-step override still overrules `timeout api` as it overruled `timeout step`');
     }
 
     // ---- C100: an absence, proven against something that would have recorded a presence --------

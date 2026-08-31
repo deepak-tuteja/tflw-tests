@@ -270,6 +270,32 @@ const server = createServer((req, res) => {
     }, 50);
     return;
   }
+  // `M157g` — the second deliberately-slow path, and it exists for the same reason `/slow` above
+  // does, one clause further on. `C48`'s fourth clause grades `D782`: hook time leaves the reported
+  // iteration duration, so the reported p95 must NOT move when the number of hooks per iteration
+  // does. That is a **null result**, and a null result is only evidence if the effect it denies
+  // would have been visible. This path was zero-latency, so the effect being denied was one local
+  // request — 1-3 ms — against a tolerance of 5 ms and a hosted runner's jitter of up to 12 ms
+  // (measured: three of four GitHub runs of the clause failed on noise alone, spreads 5.5, 9 and
+  // 12 ms, while `fedora-box` passed every time). The clause could not have distinguished a build
+  // that put hook time back into the duration from one that did not, on any machine.
+  //
+  // 50 ms, matching `/slow`, and for the same argument: far above any scheduling jitter, far below
+  // any timeout. A regression of `D782` now moves the reported p95 by ~50 ms per iteration and the
+  // clause's tolerance can sit above the noise floor without becoming vacuous. **Raise the effect,
+  // do not loosen the test** — loosening it toward the jitter would have kept the clause green and
+  // left it measuring nothing, which is what it was already doing.
+  //
+  // Nothing else requests this path (`teardown.tflw`'s `after` hook is its only caller), so the
+  // delay is scoped to the one plant that needs it and costs it 400 ms in the `always` arm.
+  if (path === '/after-each-marker') {
+    count(path, req);
+    setTimeout(() => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end('{"ok":true,"marker":true}');
+    }, 50);
+    return;
+  }
   // Counted on *arrival*, before any work and before the response is written. A counter incremented
   // on the way out would undercount anything the process failed to answer, which is the opposite of
   // what this measures: the question is what tflw issued, not what it got back.

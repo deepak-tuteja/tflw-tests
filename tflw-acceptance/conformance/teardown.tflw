@@ -34,6 +34,16 @@
 # A build that ignored the key answers 8 three times; one that reinstated the old gate answers 0
 # three times, since no file can opt in any more.
 #
+# ## The hook is deliberately expensive (`M157g`)
+#
+# `/after-each-marker` sleeps 50 ms, matching `/slow`, and that is load-bearing rather than
+# incidental. The fourth clause the grader reads is a **null result** — `D782` says hook time leaves
+# the reported iteration duration, so the p95 must not move as the hook count goes 8 -> 0 -> 4 — and
+# a null result only means something if the movement it denies would have been visible. Against a
+# zero-latency marker the denied effect was one local request, smaller than the jitter it was being
+# compared under. Now a build that put hook time back into the duration moves the p95 by ~50 ms per
+# iteration and the clause can fail for its own reason.
+#
 # ## The sharp clause: `on success` reads the ITERATION, not the run
 #
 # The first test below is **red**, and every one of its four iterations **passes**. Its threshold is
