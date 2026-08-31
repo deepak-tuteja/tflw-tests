@@ -212,7 +212,7 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C92` | `env` (`config:directive:env`) | check | a nine-cell grid: `api extra` clean under the env that declares it, `TF026` under the one that does not, and the `default` marker's no-flag output **byte-identical** to `--env one`. `--env nosuch` is refused naming both envs | an `--env` that selects nothing and leaves the first env active, a `default` marker parsed and ignored, and named services resolved from the union of every env |
 | `C93` | `defaults` (`config:directive:defaults`) | check | one `allow hosts` line in `defaults` fires `TF036` under **both** envs; the identical line moved into `env one` leaves that env unchanged and silences the other. Plus `TF022` for a second `defaults` block, over a config whose env is inside its own allowlist so no other code can fire | a `defaults` block honoured only for the default env, an env-level setting leaking to its siblings, and a duplicate block taking a silent last-wins reading |
 | `C94` | `session` (`config:directive:session`) | check | `session scoped for env one` and `session everywhere` are identical but for the clause: under `--env two` the first is a `TF028` quoting its own clause back, the second is clean. `C80` already grades `as`; this is the half `as` cannot see | a `for env` clause parsed and ignored, and a session table built from the wrong env |
-| `C95` | `require` (`config:directive:require`) | check | refused naming both variables with neither set; refused naming **`C95_UNUSED` alone** — which the config references nowhere — with the other set; past the gate and dead at port 9 with both. And `tflw check` says *no problems found* over the identical config, against a manifest that promises check-time refusal (`M154g-11`) | a `require env` guarding only interpolated variables, a refusal arriving after the first request, and the manifest sentence or the behaviour quietly moving under the other |
+| `C95` | `require` (`config:directive:require`) | check | refused naming both variables with neither set; refused naming **`C95_UNUSED` alone** — which the config references nowhere — with the other set; past the gate and dead at port 9 with both. And `tflw check` over the identical config prints an advisory note naming both unset variables beside *no problems found* and an exit 0, which **vanishes** once they are set — `D779`, reversing this row's own `M154g-11` | a `require env` guarding only interpolated variables, a refusal arriving after the first request, the note regressing to silence or hardening into a refusal that breaks `check` in a secretless CI job, and a note printed unconditionally instead of for the variables actually unset |
 | `C96` | `exclude` (`config:directive:exclude`) | check | **1 file checked** with the line and **2** without, over an unchanged two-file corpus — and naming the excluded file explicitly checks it under **both** configs, which is the manifest's own *"names a folder rather than a file"* clause asserted rather than paraphrased | an `exclude` that stops filtering discovery, and one that hardens into a refusal so a named file can no longer be checked |
 | `C97` | `api` (`config:key:api`) | api | `api GET /alpha` under a base whose own URL carries `/base` arrives at **`/base/alpha`** — a bare-origin base could not tell *joined* from *replaced* — and `api second GET /gamma` arrives at `/second/gamma`. Exactly three requests, and nowhere else | a base URL whose path is discarded, a named service resolved to the default base, and a step fanned out to every declared service |
 | `C98` | `header` (`config:key:header`) | api | the manifest says *"on every `api` step"*, and **every** is what a total cannot check: the server records each arrival's headers separately, so one `defaults` line is seen on all three. `header … for second` arrives on that service and is **absent** from the other two | a header attached to the first request of a run rather than to each, and per-service scoping that decorates instead of narrowing |
@@ -1182,20 +1182,44 @@ declaring `api extra` in `env two` took `C92` to 2/3 recall, deleting `for env o
 1/3, swapping the shared config for the per-env one took `C93` to 3/4 and 1/2, deleting the
 `exclude` line took `C96` to 2/3, and dropping the unreferenced variable took `C95` to 1/3.
 
-**`C95` is the row that found something.** `tflw spec --json` summarises `require` as *"environment
-variables that must be set before a run starts, so a missing secret fails at **check time** rather
-than mid-suite"*. The guarantee is real — the run is refused before a socket exists, and the
-refusal names the variable nothing in the config references, so it is a precondition on the
-environment rather than a check on use sites. But `tflw check` over that same config reports *"1
-file checked, no problems found"*.
+**`C95` is the row that found something — and then got its own finding overturned.** `tflw spec
+--json` summarises `require` as *"environment variables that must be set before a run starts, so a
+missing secret fails at **check time** rather than mid-suite"*. The guarantee is real — the run is
+refused before a socket exists, and the refusal names the variable nothing in the config
+references, so it is a precondition on the environment rather than a check on use sites. But `tflw
+check` over that same config reported *"1 file checked, no problems found"*.
 
-The sentence is wrong against tflw's **own principle**, which is what makes this worth a row rather
-than a typo. `cli.ts:1520` gates the required secrets inside the run path, under the comment
-*"`check` never reaches this — no execution, no need for real credentials"*, and `P#75` makes doing
-no I/O the reason `tflw check` can run in CI with no secrets in the first place. Moving the gate to
-check time would contradict both. So the repair here is the sentence, never the behaviour — and the
-row asserts the silence as measured, which means the day anybody does move it this plant goes red on
-purpose. Filed as `M154g-11`.
+This row filed that as `M154g-11` and argued the repair was **the sentence, never the gate**:
+`cli.ts:1520` gates the secrets inside the run path under the comment *"`check` never reaches this
+— no execution, no need for real credentials"*, and `P#75` makes doing no I/O the reason `tflw
+check` runs in CI with no secrets at all. Moving the gate, the argument went, would contradict both.
+
+**tflw's `M156` reversed it, and the reversal is left visible here on purpose.** Two things the
+argument had not checked. `P#75` forbids touching a live **API**, not the filesystem (`D777`), and
+`loadAndValidate` had been resolving the environment — `.env` file included — for *both* commands
+since M87, so nothing new had to be read. And the far larger point: the gate only ever protected
+the names an author remembered to *declare*. An `env(NAME)` no `require env` covers was invisible
+to it, and died mid-suite on whichever iteration reached it first — the manifest's own failure
+mode, with `require env` present and correct.
+
+`D774` is the rule that decided it, and it is the reusable part: *a divergence is a documentation
+defect when the sentence describes a guarantee nothing could deliver at acceptable cost, and an
+implementation defect when the guarantee is deliverable and merely absent — and the evidence is a
+costed route, not a preference.* What settled it was not the argument but a count. Switching the new
+`TF077` on turned **nine of tflw's own documentation samples red**, and reported **sixteen**
+undeclared variables in *this* suite across three files that had been green for a year. The docs
+were not describing a guarantee the code failed to keep; they were teaching the defect.
+
+What replaces the retired leg is a **pair**: the check now prints an advisory note naming the unset
+variables beside *no problems found* and an exit 0 — a note rather than a gate (`D779`), because
+erroring would break §3.2's promise that `check` runs without secrets — and, with both set, the note
+is **absent**, which is `D776` and is what stops the first leg being satisfied by a line printed
+unconditionally.
+
+One thing worth carrying out of the rewrite. The retired assertion was `clean()`, which is
+`/no problems found/` — and the note does not disturb that string. **It would still be passing
+today**, in a row whose claim had inverted underneath it. A gate that survives the reversal of the
+thing it asserts is the failure this corpus exists to catch, found inside the corpus.
 
 The rest of the `config` family — eleven keys and the two Tier 3 probes — is not here. The keys need
 a running target and in several cases a paired config with a stack behind it, which is a different

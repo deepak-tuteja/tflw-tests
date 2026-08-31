@@ -267,6 +267,24 @@ const FILE_FIXTURES = {
   // Coupled with its tflw half and red until that half merges (D350/D382). The local pre-flight is
   // `npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs` (D351).
   TF075: 'expression-nested-too-deeply.tflw',
+  // tflw `M156` (`D774`-`D780`): an `env(NAME)` no `require env` line declares. The row that
+  // produced it, `M154g-11`, was filed as *correct the sentence* — the manifest promised a missing
+  // secret "fails at check time" and `tflw check` said nothing — and `D774` reversed that
+  // disposition on evidence rather than preference: the guarantee was deliverable, statically, with
+  // no secret and no socket, so the absent half was the implementation.
+  //
+  // **This repository is where that was demonstrated.** Against the unfixed tree the new code
+  // reported **60** violations here — 50 under bare discovery and 10 more in `tests/.env-specific/`
+  // — every one of them a real hole in the suite's own declaration, in three files that had been
+  // green for a year. The fix was `tflw.config`'s three `require env` lines, not a suppression.
+  //
+  // The fixture carries a **declared** reference beside the undeclared one. Without it the file
+  // cannot tell a rule that reads the declared set from one that flags `env()` on sight, and that
+  // is precisely the mistake this code would be if it were written wrong.
+  //
+  // Coupled with its tflw half and red until that half merges (D350/D382). The local pre-flight is
+  // `npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs` (D351).
+  TF077: 'undeclared-env-ref.tflw',
 };
 
 for (const [code, file] of Object.entries(FILE_FIXTURES)) {
@@ -363,6 +381,30 @@ const CONFIG_FIXTURES = {
   // Coupled with its tflw half and red until that half merges (D350/D382). The local pre-flight is
   // `npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs` (D351).
   TF076: 'env local default\n  api shop "http://localhost:4001"\n  header "X-Tenant" is "acme" for shp\n',
+  // tflw `M156` (`D778`): `"{env(NAME)}"` inside a string literal. This language has `{var}`
+  // interpolation and it has `env(NAME)` as a value, and the braced spelling looks exactly like both
+  // while being neither — it is eight-plus characters of literal text, and it ships over the wire.
+  //
+  // **Config dialect deliberately, because that is where the real instance was.** This repository's
+  // own `tests/.checkonly/config-directives/require.config` was written this way, and its header
+  // comment said the variable "reaches a header" for as long as the fixture existed. It reached
+  // nothing. `"Bearer {env(TOKEN)}"` is the natural spelling of the commonest thing anyone does with
+  // a secret and it fails as a 401 with nothing anywhere pointing at the cause.
+  //
+  // **A warning, not an error, and `D775` is why**: it asks whether the author meant the text, which
+  // is a question about intent rather than an observation about a name nothing declares. `TF077`
+  // structurally cannot see this case — a braced `env()` is not a reference the parser produces —
+  // which is the whole reason the two codes shipped together rather than one.
+  //
+  // Note what this fixture reaches that tflw's own probe harness does not: `M156-01` records that
+  // the harness's `wrap: 'config'` branch composes a hand-listed subset of the passes `tflw check`
+  // runs, and did not run either pass that emits this code. This runs the real binary, so it is the
+  // stronger of the two gates on exactly this row.
+  //
+  // Coupled with its tflw half and red until that half merges (D350/D382). The local pre-flight is
+  // `npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs` (D351).
+  TF078:
+    'defaults\n  header "X-Token" is "Bearer {env(C156_TOKEN)}"\n\nenv local default\n  api "http://localhost:4001"\n',
   // tflw `M165` (`D829`-`D832`): a config key declared **twice in one block**. The second assigns
   // and the first reaches nothing — `resolveConfig` walks a block's entries in order and the last
   // write wins — so before this the config plainly said one thing and the run did another, with no

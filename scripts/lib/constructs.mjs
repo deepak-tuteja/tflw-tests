@@ -2033,27 +2033,37 @@ export const PLANTS = [
     construct: 'config:directive:require',
     family: 'config',
     tier: 'check',
-    title: 'the run is refused before a socket exists, the unreferenced variable is required just as hard, and `tflw check` says nothing',
+    title: 'the run is refused before a socket exists, the unreferenced variable is required just as hard, and `tflw check` now says so up front',
     target: '`require.config` — two required variables, one of them referenced nowhere, over an `api` base on a port the fetch standard blocks',
     evidence: { file: 'tests/.checkonly/config-directives/require.config', pattern: '^require env C95_TOKEN, C95_UNUSED$', min: 1 },
     run: 'kept.tflw',
     graders: ['acceptance'],
     knownAnswer:
-      'Three legs, and the third is the finding. **Neither set:** the run is refused naming both ' +
-      'variables. **`C95_TOKEN` set:** still refused, naming `C95_UNUSED` **alone** — and that one ' +
-      'is referenced nowhere in the config, so the directive is a precondition on the environment ' +
-      'rather than a check on use sites. **Both set:** the same run reaches the transport and dies ' +
-      'on port 9 (*"no socket was opened"*), which is how "refused before it started" is told from ' +
-      '"ran and failed" without a stack. **The third leg asserts a silence tflw\'s own manifest ' +
-      'denies**: the summary for this construct reads *"a missing secret fails at **check time** ' +
-      'rather than mid-suite"*, and `tflw check` over the identical config reports *"1 file ' +
-      'checked, no problems found"*. The guarantee users get is real and is a run-start one; the ' +
-      'sentence describing it is wrong, and it is wrong against tflw\'s own principle rather than ' +
-      'against an accident: `cli.ts:1520` gates the secrets in the *run* path under the comment ' +
-      '*"`check` never reaches this — no execution, no need for real credentials"*, and `P#75` ' +
-      'makes doing no I/O the reason `tflw check` can run in CI without secrets at all. So the ' +
-      'repair is the sentence, never the gate. Asserted as measured and filed as `M154g-11`.',
-    catches: 'a `require env` that only guards the variables something interpolates, a refusal that arrives after the first request instead of before it, and the manifest sentence quietly becoming true or the behaviour quietly changing under it.',
+      'Five legs, and the last two are a reversal this row previously argued against. **Neither ' +
+      'set:** the run is refused naming both variables. **`C95_TOKEN` set:** still refused, naming ' +
+      '`C95_UNUSED` **alone** — and that one is referenced nowhere in the config, so the directive ' +
+      'is a precondition on the environment rather than a check on use sites. **Both set:** the ' +
+      'same run reaches the transport and dies on port 9 (*"no socket was opened"*), which is how ' +
+      '"refused before it started" is told from "ran and failed" without a stack. ' +
+      '**This row used to end by asserting a silence.** `tflw spec --json` summarised `require` as ' +
+      '*"a missing secret fails at **check time** rather than mid-suite"*, `tflw check` over the ' +
+      'identical config reported *"no problems found"*, and the row filed that as `M154g-11` with ' +
+      'the disposition *"the repair is the sentence, never the gate"* — reasoning from `P#75`, ' +
+      'which makes doing no I/O the reason `tflw check` runs in CI with no secrets. **That ' +
+      'disposition was wrong and tflw\'s `M156` reversed it.** `D777` establishes that `P#75` ' +
+      'forbids touching a live API rather than the filesystem, and `loadAndValidate` had been ' +
+      'resolving the environment — `.env` included — for *both* commands since M87. `D774` states ' +
+      'the rule that decides such a divergence: documentation defect when the guarantee costs more ' +
+      'than it is worth, implementation defect when it is deliverable and merely absent, and the ' +
+      'evidence is a costed route rather than a preference. **Leg four:** the check now prints an ' +
+      'advisory note naming both unset variables, beside *"no problems found"* and an exit 0 — a ' +
+      'note and not a gate (`D779`), because erroring would break §3.2\'s promise that `check` runs ' +
+      'without secrets. **Leg five:** with both set the note vanishes, so it reports *unset* and ' +
+      'never *declared*, which is `D776` and is what stops leg four passing on a line printed ' +
+      'unconditionally. The separate defect — an `env(NAME)` no `require env` covers, invisible to ' +
+      'the run-start gate — became `TF077`, and its own fixture is ' +
+      '`tests/.checkonly/undeclared-env-ref.tflw`. This suite had **sixteen** of them.',
+    catches: 'a `require env` that only guards the variables something interpolates, a refusal that arrives after the first request instead of before it, the check-time note regressing to silence or hardening into a refusal that would break `tflw check` in a secretless CI job, and a note printed unconditionally rather than for the variables actually unset.',
     blockedOn: null,
   },
   {
