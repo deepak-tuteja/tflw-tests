@@ -5,11 +5,27 @@
 # tflw browser capability against a real corner of a real app, no mocking of the app under test
 # (`stub` stays reserved for genuinely third-party dependencies, §9.7's house style).
 #
-# **Known, accepted flake**: the reviews test below submits alice's first-ever review of
-# "Bulk Item 1" itself (both the success and the duplicate-409 case, self-contained, in one test —
-# it doesn't rely on any pre-existing seeded review). A manual rerun against the same still-live
-# stack (no restart) will 409 on the *first* submission too, since that review now already exists.
-# A fresh `node cli.mjs stop && start` (or a single CI run) is clean every time.
+# **This file used to be single-use per stack, and is not any more (`M162`, 2026-08-31).** Two
+# separate accumulation defects lived here, with two different thresholds, which is why the symptom
+# read as an unmeasurable range rather than a bug:
+#
+#   - **Run 2**: the reviews test 409'd on what should have been its first submission, because it
+#     reviewed the seeded `Bulk Item 1` as alice and a review cannot be undone — `apiV2` has no
+#     `DELETE` for one at any route, and `/v1/lifecycle/reset` clears in-memory counters only.
+#   - **Run 6**: `click button "Add to cart"` began spending its full 30 s actionability timeout in
+#     four tests at once. `Bulk Item 100` seeds with `stock` 20 (`seed.ts:293`), the seed skips
+#     names that already exist so it is **never replenished** (`seed.ts:281` — a `restart` does not
+#     help, only `down -v`), checkout decrements it (`orders.service.ts:186`), and this file
+#     consumed four units per run. At zero the storefront disables the control
+#     (`ProductPage.tsx:63`), and a disabled button is not a fast failure.
+#
+# Both are fixed the same way and it is the rule the file next door already followed: **every test
+# here creates the rows it puts in a cart or reviews** (`D819`). A created product carries its own
+# stock and its own empty review list, so nothing this file does to it can be inherited by the next
+# run. Measured after the repair: see PROGRESS.md / `M162e`.
+#
+# If you add a test that adds to a cart, give it its own product. The seeded `Bulk Item …` rows are
+# fine to *read*; they are not fine to consume.
 #
 # Product ids are **not** hardcoded: apiV2's seed script assigns fresh random UUIDs on every
 # restart (stable *names* like "Bulk Item 100", not stable ids), so tests that need a direct
@@ -43,11 +59,48 @@ after file
 
 @mixed
 test "row-scoped add-to-cart on a page of a dozen identical buttons, with its async toast"
-  root("Bulk Item 100")
-  within css "[aria-label='Bulk Item 100']"
+  # `M162b` (`D819`) — **this test creates the row it puts in a cart.** It drove the seeded
+  # `Bulk Item 100` until 2026-08-31, and that is a finite resource: the seed gives it `stock` 20
+  # (`apiV2/src/seed/seed.ts:293`), the seed never replenishes it (`seed.ts:281` skips a name that
+  # already exists, so only `cli.mjs stop`'s `down -v` restores it), and every checkout decrements
+  # it (`orders.service.ts:186`). This file consumed four units per run, so the sixth consecutive
+  # run on one stack met `disabled={product.stock === 0}` (`webV2/src/pages/ProductPage.tsx:63`)
+  # and `click button "Add to cart"` spent the full 30 s actionability timeout. A product this test
+  # makes carries its own stock and cannot be drained by a previous run.
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as ownToken
+  api GET /categories
+    header "Authorization" is "Bearer {ownToken}"
+  expect status equals 200
+  capture body[0].id as ownCategoryId
+  api POST /products body { name: unique("Cart Item"), price: 9.99, stock: 25, categoryId: {ownCategoryId} }
+    header "Authorization" is "Bearer {ownToken}"
+  expect status equals 201
+  capture body.id as ownId
+  # **`unique(...)` is collision-safe within a run, not across one** (`M162e`, measured 2026-08-31).
+  # It renders `Cart Item-0`, and the counter restarts at 0 on the next run — so against a database
+  # that outlives the run, which is the whole condition this milestone exists for, the second run
+  # creates a *second* `Cart Item-0`. This test then locates a catalog row by its accessible name
+  # and finds two: `ambiguous locator … matched 2 elements`, runs 2 through 8. SPEC promises
+  # collision-safety "across tests/workers/retries" and never claimed more, so the assumption was
+  # this test's, not the generator's. Only the server can mint an identifier unique across runs, and
+  # it already did — so the row is renamed to carry its own id. Tests that address a product by
+  # `/products/{id}` (the stub and checkout flows below) never needed this and do not do it.
+  api PATCH /products/{ownId} body { name: "Cart Item {ownId}" }
+    header "Authorization" is "Bearer {ownToken}"
+  expect status equals 200
+  capture body.name as ownName
+  # The catalog's Search is not debounced (`CatalogPage.tsx:75` sets `query` on every keystroke and
+  # the effect at :30 refetches), so the click below lands on a page filtered to this one row.
+  # **That was already true of `Bulk Item 100`** — the name matched exactly one product — so the
+  # title's "a page of a dozen identical buttons" describes a page this test stopped visiting long
+  # before `M162`. Recorded, not renamed: the scoping this asserts is real, the phrase is stale.
+  root("{ownName}")
+  within css "[aria-label='{ownName}']"
     click button "Add to cart"
-  expect text "Added 1 × Bulk Item 100 to your cart." is visible
-  log "row-scoped add-to-cart toast confirmed for Bulk Item 100"
+  expect text "Added 1 × {ownName} to your cart." is visible
+  log "row-scoped add-to-cart toast confirmed for {ownName}"
   # M50 (PLAN_WEBV2_M45.md): explicit `screenshot "<name>"` had zero dogfood anywhere — every
   # screenshot this suite ever captured before was an implicit failure-screenshot. Captured here,
   # a genuine passing moment worth a named artifact, not fabricated just to exercise the step.
@@ -55,14 +108,33 @@ test "row-scoped add-to-cart on a page of a dozen identical buttons, with its as
 
 @mixed
 test "the Quick View modal traps focus, adds to cart, and closes on Escape"
-  root("Bulk Item 1")
-  within css "[aria-label='Bulk Item 1']"
+  # `M162b` (`D819`) — this test creates the row it puts in a cart, for the reason spelled out on
+  # the first such block above: seeded stock is finite, never replenished, and drained by checkout.
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as qvToken
+  api GET /categories
+    header "Authorization" is "Bearer {qvToken}"
+  expect status equals 200
+  capture body[0].id as qvCategoryId
+  api POST /products body { name: unique("Cart Item"), price: 9.99, stock: 25, categoryId: {qvCategoryId} }
+    header "Authorization" is "Bearer {qvToken}"
+  expect status equals 201
+  capture body.id as qvId
+  # Renamed to carry its own id, for the reason spelled out on the first such block above:
+  # `unique(...)`'s counter restarts each run, and this test locates a catalog row by name.
+  api PATCH /products/{qvId} body { name: "Quick View Item {qvId}" }
+    header "Authorization" is "Bearer {qvToken}"
+  expect status equals 200
+  capture body.name as qvName
+  root("{qvName}")
+  within css "[aria-label='{qvName}']"
     click button "Quick view"
   expect button "Close" is visible
   within css "[role='dialog']"
     fill field "Quantity" with "1"
     click button "Add to cart"
-  expect text "Added 1 × Bulk Item 1 to your cart." is visible
+  expect text "Added 1 × {qvName} to your cart." is visible
   # `M154d` / `C26`, and this is a repair rather than an addition. The `press "Escape"` used to sit
   # directly here, followed by `expect button "Close" is hidden` — and that pair **asserted
   # nothing**: `ProductQuickViewModal.tsx`'s `handleAdd` calls `onClose()` on a successful add, so
@@ -72,7 +144,7 @@ test "the Quick View modal traps focus, adds to cart, and closes on Escape"
   expect button "Close" is hidden
   # Re-open it, and *now* press the key. The modal really does close on Escape —
   # `handleKeyDown` has always had the branch — it had simply never been the thing under test.
-  within css "[aria-label='Bulk Item 1']"
+  within css "[aria-label='{qvName}']"
     click button "Quick view"
   expect button "Close" is visible
   press "Escape"
@@ -80,14 +152,25 @@ test "the Quick View modal traps focus, adds to cart, and closes on Escape"
 
 @mixed
 test "a full checkout — product page, cart, the iframe payment widget, and the real network request"
-  api GET /products?q=Bulk%20Item%20100&pageSize=1
+  # `M162b` (`D819`) — this test creates the row it puts in a cart, for the reason spelled out on
+  # the first such block above: seeded stock is finite, never replenished, and drained by checkout.
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
   expect status equals 200
-  capture body[0].id as bulk100Id
+  capture body.accessToken as coToken
+  api GET /categories
+    header "Authorization" is "Bearer {coToken}"
+  expect status equals 200
+  capture body[0].id as coCategoryId
+  api POST /products body { name: unique("Cart Item"), price: 9.99, stock: 25, categoryId: {coCategoryId} }
+    header "Authorization" is "Bearer {coToken}"
+  expect status equals 201
+  capture body.id as coId
+  capture body.name as coName
   login(env(USER_A_EMAIL), env(USER_A_PW))
-  open "/products/{bulk100Id}"
+  open "/products/{coId}"
   expect button "Log out" is visible
   within css "#product-heading"
-    expect text "Bulk Item 100" is visible
+    expect text "{coName}" is visible
   fill field "Quantity" with "1"
   click button "Add to cart"
   # `click` dispatches and moves on — it doesn't wait for the async `POST /cart/items` the handler
@@ -95,9 +178,9 @@ test "a full checkout — product page, cart, the iframe payment widget, and the
   # permanent: `open "/cart"` fetches the cart exactly once, an empty cart makes CartPage.tsx
   # render "Your cart is empty" and return before the table exists, and nothing refetches — so the
   # retry below spends its whole timeout on a page that can no longer change. Settle on the toast.
-  expect text "Added 1 × Bulk Item 100 to your cart." is visible
+  expect text "Added 1 × {coName} to your cart." is visible
   open "/cart"
-  expect css "th[scope='row']:text-is('Bulk Item 100')" is visible
+  expect css "th[scope='row']:text-is('{coName}')" is visible
   checkout()
   # webV2's cart page posts to `/cart/checkout` (CartPage.tsx's `handleCheckout`), not `/orders`
   # directly — the server creates the order internally and the client only does a follow-up
@@ -117,18 +200,29 @@ test "the payment gateway's real fetch is stubbed — a method-mismatch passes t
   #   - a stubbed 500 surfaces as a real page-level error inside the iframe, not silently swallowed.
   #   - the stub's own response is still observable via `request to`/`status of request to`, exactly
   #     like a real network response would be.
-  api GET /products?q=Bulk%20Item%20100&pageSize=1
+  # `M162b` (`D819`) — this test creates the row it puts in a cart, for the reason spelled out on
+  # the first such block above: seeded stock is finite, never replenished, and drained by checkout.
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
   expect status equals 200
-  capture body[0].id as bulk100Id
+  capture body.accessToken as sbToken
+  api GET /categories
+    header "Authorization" is "Bearer {sbToken}"
+  expect status equals 200
+  capture body[0].id as sbCategoryId
+  api POST /products body { name: unique("Cart Item"), price: 9.99, stock: 25, categoryId: {sbCategoryId} }
+    header "Authorization" is "Bearer {sbToken}"
+  expect status equals 201
+  capture body.id as sbId
+  capture body.name as sbName
   login(env(USER_A_EMAIL), env(USER_A_PW))
-  open "/products/{bulk100Id}"
+  open "/products/{sbId}"
   fill field "Quantity" with "1"
   click button "Add to cart"
   # The same settle the checkout test above needs, and the expensive one to skip: the wait below
   # is `within frame`, and that iframe only exists on a non-empty cart — so a lost race burns the
   # full frame timeout before failing, which is exactly how it presented in CI: a 30s payment-widget
   # timeout that re-ran green, reading as iframe flake rather than the add-to-cart race it was.
-  expect text "Added 1 × Bulk Item 100 to your cart." is visible
+  expect text "Added 1 × {sbName} to your cart." is visible
   open "/cart"
   stub GET "https://payments.example.test/v1/authorize" respond status 200 body { token: "tok_wrong_method" }
   stub POST "https://payments.example.test/v1/authorize" respond status 500 body { error: "gateway down" }
@@ -143,12 +237,34 @@ test "the payment gateway's real fetch is stubbed — a method-mismatch passes t
 
 @mixed
 test "cart rows are drag-drop reorderable, verified row by row"
-  api GET /products?q=Bulk%20Item%20100&pageSize=1
+  # `M162b` (`D819`) — this test creates the row it puts in a cart, for the reason spelled out on
+  # the first such block above: seeded stock is finite, never replenished, and drained by checkout.
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
   expect status equals 200
-  capture body[0].id as bulk100Id
-  api GET /products?q=Bulk%20Item%2010&pageSize=1
+  capture body.accessToken as dragAToken
+  api GET /categories
+    header "Authorization" is "Bearer {dragAToken}"
   expect status equals 200
-  capture body[0].id as bulk10Id
+  capture body[0].id as dragACategoryId
+  api POST /products body { name: unique("Drag Row A"), price: 9.99, stock: 25, categoryId: {dragACategoryId} }
+    header "Authorization" is "Bearer {dragAToken}"
+  expect status equals 201
+  capture body.id as dragAId
+  capture body.name as dragAName
+  # …and the second row, so the drag reorders two products this test owns rather than two whose
+  # presence in the cart it merely assumed. `C31`'s claim is the *pair* and their order.
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as dragBToken
+  api GET /categories
+    header "Authorization" is "Bearer {dragBToken}"
+  expect status equals 200
+  capture body[0].id as dragBCategoryId
+  api POST /products body { name: unique("Drag Row B"), price: 9.99, stock: 25, categoryId: {dragBCategoryId} }
+    header "Authorization" is "Bearer {dragBToken}"
+  expect status equals 201
+  capture body.id as dragBId
+  capture body.name as dragBName
   # user A's cart is a real, persistent server-side resource that survives across every test in
   # this suite (SPEC §10's identity-not-state isolation) — an earlier test's own `add to cart`
   # (e.g. T1) can leave a row already sitting in this cart, breaking this test's row-by-row
@@ -160,16 +276,16 @@ test "cart rows are drag-drop reorderable, verified row by row"
   api POST /cart/checkout
     header "Authorization" is "Bearer {flushToken}"
   login(env(USER_A_EMAIL), env(USER_A_PW))
-  open "/products/{bulk100Id}"
+  open "/products/{dragAId}"
   expect button "Log out" is visible
   fill field "Quantity" with "1"
   click button "Add to cart"
-  expect text "Added 1 × Bulk Item 100 to your cart." is visible
-  open "/products/{bulk10Id}"
+  expect text "Added 1 × {dragAName} to your cart." is visible
+  open "/products/{dragBId}"
   expect button "Log out" is visible
   fill field "Quantity" with "1"
   click button "Add to cart"
-  expect text "Added 1 × Bulk Item 10 to your cart." is visible
+  expect text "Added 1 × {dragBName} to your cart." is visible
   # `click` dispatches the click and moves on — it doesn't wait for the async `POST /cart/items`
   # the handler fires, so the API check right below needs a real settle signal first (the same
   # `role="status"` toast T1 waits on), or it can race the request and see only 1 item.
@@ -192,27 +308,74 @@ test "cart rows are drag-drop reorderable, verified row by row"
   checkout()
 
 @mixed
-# KNOWN INTERMITTENT (`M154h-01`). This failed once on CI — 2026-08-26, PR #46's first core leg,
-# `FAIL 322/323 · seed 187458591` — on the SECOND assertion only, after waiting out its settle
-# timeout, and a re-run of the same commit went green. The mechanism is not diagnosed and no fix is
-# guessed here. What is worth knowing before you touch it: this is the only test covering the
-# duplicate-409 path, and the only review test aimed at a product it does not create. Its sibling in
-# `tests/ui/storefront/review-submission.tflw` makes a `unique(...)` product in `before` precisely so
-# it can never depend on a product's own "already reviewed" state. If it flakes for you, capture the
-# run rather than retrying past it.
+# STILL INTERMITTENT, NOT REPRODUCED (`M154h-01`, `M162a`/`D818`, `D821`). The header this replaces
+# said the mechanism was undiagnosed and asked for a measurement rather than a guess. The
+# measurement ran on 2026-08-31 and **did not reproduce it**, so the row stays open and this header
+# stays with it — now carrying the bound instead of the absence of one.
+#
+#   - The original: CI 2026-08-26, PR #46's first core leg, `FAIL 322/323 · seed 187458591`, on the
+#     SECOND assertion only, 6710 ms — it waited out its settle timeout. A re-run of the same commit
+#     went green.
+#   - The loop: 120 iterations on `fedora-box`, one stack, sequential. 60 against the seeded product
+#     with its review count growing 0 -> 59, 60 against a product each iteration created.
+#     **120/120 green.** Median 1566 ms / 1599 ms; the slowest single iteration of either arm was
+#     1795 ms, against the 6710 ms the CI failure took. Trend across the accumulating arm:
+#     -0.17 ms per iteration, i.e. flat.
+#   - **A clean 120 is not proof of absence** and nothing here claims one. What it rules out is a
+#     defect frequent enough to show up in 120 consecutive trials on one machine.
+#
+# **The measurement's real finding was that this test could not be measured.** The 409 is
+# `@Unique(['userId', 'productId'])` and `apiV2` has no `DELETE` for a review at any route, so a
+# fixed reviewer against a fixed product gets exactly ONE usable iteration per stack lifetime —
+# confirmed live, the shipped form of this test passed on run 1 and failed on runs 2 through 8 of
+# the same stack. Both arms had to register their own reviewer to exist at all. A test that owns
+# neither side of the pair it asserts on is not merely fragile; it is uninvestigable.
+#
+# So the product below is created by this test (`D819`) and the reviewer stays alice: a fresh
+# product makes the (user, product) pair fresh, which is all the 409 keys on.
 test "reviews: a first submission succeeds, a duplicate 409s through the shadow-DOM rating widget"
-  root("Bulk Item 1")
-  within css "[aria-label='Bulk Item 1']"
+  # `M162b` (`D819`) — this test creates the product it reviews, for the reason spelled out on the
+  # first such block above, plus the one in this test's own header.
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as rvToken
+  api GET /categories
+    header "Authorization" is "Bearer {rvToken}"
+  expect status equals 200
+  capture body[0].id as rvCategoryId
+  api POST /products body { name: unique("Review Item"), price: 9.99, stock: 25, categoryId: {rvCategoryId} }
+    header "Authorization" is "Bearer {rvToken}"
+  expect status equals 201
+  capture body.id as rvId
+  # Renamed to carry its own id, for the reason spelled out on the first such block above:
+  # `unique(...)`'s counter restarts each run, and this test locates a catalog row by name.
+  api PATCH /products/{rvId} body { name: "Review Item {rvId}" }
+    header "Authorization" is "Bearer {rvToken}"
+  expect status equals 200
+  capture body.name as rvName
+  root("{rvName}")
+  within css "[aria-label='{rvName}']"
     click text "Reviews"
   within css "star-rating:not([readonly])"
     click button "5 stars"
   fill field "Comment (optional)" with "Exactly as described."
   click button "Submit review"
-  expect text "Exactly as described." is visible
+  # **Scoped to the list, and that is a repair rather than a tidy-up (`M162a` §8.6).** Unscoped,
+  # this asserted a string the test had just typed into `#review-comment` itself — and
+  # `ProductReviewsPage.tsx:126` clears that field only after a *successful* POST, so on any run
+  # where the submission failed the text was still sitting in the input. The subject was present
+  # whether or not the application had done anything. It surfaced as tflw refusing an ambiguous
+  # locator (SPEC §9.3, "matched 2 elements") rather than as a false green, so the guard caught it —
+  # but an assertion that depends on the ambiguity guard to be honest is asserting the wrong thing.
+  # `.review-list` is the app's own output (`ProductReviewsPage.tsx:185`).
+  within css ".review-list"
+    expect text "Exactly as described." is visible
   within css "star-rating:not([readonly])"
     click button "4 stars"
   fill field "Comment (optional)" with "Still great."
   click button "Submit review"
+  # Not scoped: this string is the server's, echoed into the error region, and is nowhere in any
+  # field this test fills — so it has no second source to be confused with.
   expect text "you have already reviewed this product" is visible
 
 @mixed
@@ -371,6 +534,14 @@ test "the cart's Remove confirm() dialog: dismiss keeps the item, accept removes
   # T4's own flush precondition (cart rows are drag-drop reorderable test, above): a 422 "cart is
   # empty" here is expected and fine when nothing carried over from an earlier test.
 
+  # **The one deliberate exception to `D819`, and it is measured rather than argued.** This test
+  # adds a seeded product to a cart and asserts a stateful outcome on it — but it is the only one
+  # that *restores* what it changes: the whole point is the confirm dialog, and its accept leg
+  # issues the real DELETE. Over the eight-run experiment of `M162a` §8.3, `Bulk Item 51`'s stock
+  # read 61 before and after every single run — the only seeded product that never moved. It
+  # consumes nothing, so it cannot drain. If its accept leg ever breaks, the item is left in the
+  # cart, `after file` checks it out, and the drain begins at 1 per run — which is a broken test
+  # failing, not a silent debt.
   root("Bulk Item 51")
   within css "[aria-label='Bulk Item 51']"
     click button "Add to cart"

@@ -27,4 +27,11 @@ test "submitting a star-rating review through the shadow-DOM widget shows it in 
     click button "4 stars"
   fill field "Comment (optional)" with "Solid, does the job."
   click button "Submit review"
-  expect text "Solid, does the job." is visible
+  # Scoped to the list (`M162`, and the same repair the mixed file's review test took). Unscoped,
+  # this asserted a string the test had just typed into `#review-comment` itself, and
+  # `ProductReviewsPage.tsx:126` clears that field only after a *successful* POST — so the subject
+  # was on the page whether or not the submission worked. It has never gone wrong here, because
+  # this test creates its product and its submission therefore always succeeds; that is an
+  # accident of the happy path, not a property of the assertion. `.review-list` is the app's output.
+  within css ".review-list"
+    expect text "Solid, does the job." is visible

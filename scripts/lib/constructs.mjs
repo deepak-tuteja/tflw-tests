@@ -699,7 +699,14 @@ export const PLANTS = [
       'the API first rather than assumed from insertion order. So a `drag` that dropped nothing ' +
       'leaves row 1 where it was and fails the first assertion; one that moved both rows, or moved ' +
       'the wrong one, fails the second. A single-row assertion would pass for a table that had ' +
-      'merely re-rendered.',
+      'merely re-rendered. **The fixture owns both rows** (`M162b`, `D819`/`D820`): the test ' +
+      'creates two products of its own and adds those, rather than driving the seeded ' +
+      '`Bulk Item 100`/`Bulk Item 10`. That is not tidiness. Seeded stock is finite (20), the seed ' +
+      'never replenishes it, and every checkout decrements it, so on the **sixth** consecutive run ' +
+      'of this file against one stack the storefront disabled the add-to-cart control and this ' +
+      'test died in a 30 s actionability timeout *before reaching either assertion* — which is ' +
+      'exactly the `got 0` this row used to report (`M154g-06`, threshold measured 2026-08-31). A ' +
+      'known answer that depends on how many times the suite has run is not a known answer.',
     catches: 'a `drag` that fires no drop, or reorders something else.',
     blockedOn: null,
   },
@@ -735,7 +742,11 @@ export const PLANTS = [
       'gateway-declined message and `status of request to … with method "POST"` must equal 500. A ' +
       'stub that matched on URL alone would serve the GET row, the payment would appear to ' +
       'succeed, and the token name in the report says which rule fired. The host resolves nowhere: ' +
-      'without interception the request fails outright rather than passing by accident.',
+      'without interception the request fails outright rather than passing by accident. **The ' +
+      'fixture owns the row it checks out** (`M162b`, `D819`/`D820`) — it creates its own product ' +
+      'instead of driving the seeded `Bulk Item 100`. This row failed beside `C31` for a reason ' +
+      'that had nothing to do with `stub`: both drove the same drained fixture, and both died on ' +
+      '`click button "Add to cart"` before a stub was ever registered (`M154g-06`).',
     catches: 'a `stub` that ignores the method, or that never intercepts.',
     blockedOn: null,
   },
