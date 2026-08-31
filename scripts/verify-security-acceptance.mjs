@@ -87,13 +87,40 @@ const corpus = join(repoRoot, 'tflw-acceptance', 'security');
  * gaps are recorded and accepted (D295's four, D495's one), so gating it would add either a red that
  * no fix closes or a green nobody reads.
  *
- * What `--gate` skips, and why none of it is a hole:
- *   - `APPLICABILITY_PROBES` — D285's third state, which exists to feed the coverage table.
- *   - the D295 and D319 tables, their named-gap prose, and D319's per-site cost line.
- *   - D347's public-target gate, which needs no stack and **is already gated elsewhere**: its TF065
- *     and TF066 refusals are asserted by `scripts/verify-check-diagnostics.mjs` (:431), itself a
- *     `regression.mjs` phase. What this block adds over that is the third invocation — the control
- *     that stops the first two being vacuous — and that is evidence a human reads, not a signal.
+ * **`D823` (`M163b`) re-drew the line on the property it was always about.** `D493`'s reasoning is
+ * kept verbatim for what it was written for — a coverage table whose gaps are accepted has no
+ * verdict and must not be gated — but that reasoning had swept up two blocks that *do* assert a
+ * known answer and *can* genuinely go red. Those were above no automated pass at all. The criterion
+ * is now stated as the thing it tests: **does this section assert a known answer that can fail, or
+ * does it enumerate coverage whose gaps are recorded and accepted?** Assertions run under `--gate`;
+ * enumerations do not.
+ *
+ * What `--gate` runs, having moved (`M163b`):
+ *   - `APPLICABILITY_PROBES` — D285's third state. It feeds the coverage table, which is why `D493`
+ *     read it as reporting; but it also calls `fail()` seven ways, including `D311`'s withheld
+ *     opt-in half, and a listing that exists to be fed is not thereby unable to assert.
+ *   - D347's public-target gate. It **is** partly gated elsewhere — its TF065/TF066 refusals are
+ *     asserted by `scripts/verify-check-diagnostics.mjs` (:431), a `regression.mjs` phase — but the
+ *     third invocation, the control that stops the first two being vacuous, is asserted by nothing
+ *     else. "Already covered" was true of two thirds of the block and the third was the load-bearing
+ *     one.
+ *
+ * What `--gate` still skips, and why none of it is a hole:
+ *   - the D295 and D319 tables, their named-gap prose, and D319's per-site cost line. No verdict:
+ *     gating them would add a red no fix closes (D295's four gaps, D495's one) or a green nobody
+ *     reads.
+ *
+ * **The cost was measured before the move, not after** (`D824`, `M163a`, on `fedora-box`, 6 runs of
+ * each form against one `VULN_MODE=1` stack). The gated half was 1624-1656 ms; the probes are
+ * 1090-1103 ms and the public-target gate ~340 ms, so `--gate` roughly doubles to ~3.1 s. The two
+ * coverage tables cost **0-1 ms** — they are `console.log` over data the gated half already
+ * collected, so leaving them out saves nothing and was never the reason to.
+ *
+ * `M154f-01` assumed "a Tier 2 probe run costs a corpus run per probe" and deferred the move on it.
+ * It does not: `runCorpus(probe.env, [name])` runs **one file**, not a corpus. The premise the
+ * deferral rested on was never measured, and it was wrong in the direction that made the work look
+ * expensive — the same shape as `D764`/`M154g-13`, where the gate nobody ran turned out to be half
+ * the price of the gate everybody ran.
  */
 const GATE = process.argv.includes('--gate');
 
@@ -458,6 +485,16 @@ const APPLICABILITY_PROBES = [
     // moved the default half's numbers too. Worth recording because the failure was a `3` that had
     // been correct for two milestones and became wrong without being edited — exactly the shape the
     // paragraph below warns about, arriving from the other direction.
+    // **`M163c` tried to register `config:probe:mutating` here and measured that it does nothing.**
+    // The two `secureLocal` ledger rows above (`V8`, `V9`) already declare that construct and both
+    // are graded above the gate line, so `CONSTRUCTS_ANSWERED` has held it all along — `D752`'s
+    // direction 1 was never what narrowed `C52`. A second declarer would have made `D752` *less*
+    // sensitive, not more: direction 1 fires when a rostered construct is answered by nobody, and
+    // two independent answerers mean deleting either one no longer trips it. The negative control
+    // is what said so — setting this to `[]` left `--gate` green while the same control on the
+    // `expectProbes` count below turned it red. The withheld half is asserted; it is asserted by
+    // `expectProbes` and `expectDeclines`, not by a roster registration. `D722`: presence is not
+    // evidence, including the presence of a line this milestone added.
     expectProbes: { total: 4, 'not probed': 4 },
     // `M136c`. The counts line says *three were not probed*; this says **which three, and why**, in
     // the channel `M136a` added — and it is the contrast that makes D311's control legible. The
@@ -1681,65 +1718,6 @@ for (const plant of plantsFor('security')) {
   console.log(`  ✓ ${plant.id} positive — ${found.length} finding(s) on its ${plant.subject}, every ledger rule present at its stated severity (${wanted.map(([r, sev]) => `${r} ${sev}`).join(', ')})`);
 }
 
-// --- D752: the construct index, both directions ------------------------------
-//
-// Inside the gated half deliberately. A cross-check that only ran when somebody typed the command
-// would be a claim about a claim, and this whole mechanism exists so that `CONSTRUCTS.md`'s five
-// security rows are not that.
-{
-  const rostered = constructPlantsFor('security');
-  const rosteredIds = new Set(rostered.map((p) => p.construct));
-
-  // Direction 1 — the roster points at something this run did not do. The failure mode is a row that
-  // reads as evidence after the assertion behind it was deleted, renamed or moved to the ungated
-  // half, which is exactly what `M154f-01` records happening to `probe mutating`'s other half.
-  for (const plant of rostered) {
-    if (!CONSTRUCTS_ANSWERED.has(plant.construct)) {
-      fail(
-        `${plant.id} rosters \`${plant.construct}\` against this script (CONSTRUCTS.md), and nothing in this run answered it.\n` +
-          '    A roster row is a claim that a known answer was checked. Either the assertion that answered it\n' +
-          '    was removed or renamed, or it moved below the `--gate` line — and a row pointing below that line\n' +
-          '    is a row nothing evaluates. Restore the assertion, or move the construct back to `RATCHET`.',
-      );
-    }
-  }
-
-  // Direction 2 — this script answers a construct no roster row names. Harmless on its own and worth
-  // failing anyway: the roster's whole claim is that it is complete for what it covers, and an
-  // unindexed answer is evidence nobody can find. It is also how a construct silently gets graded
-  // twice, once here and once by a plant somebody wrote because the coverage was not visible.
-  for (const id of CONSTRUCTS_ANSWERED) {
-    if (!rosteredIds.has(id)) {
-      fail(
-        `this run answered \`${id}\` and no row in CONSTRUCTS.md names it against this script.\n` +
-          '    Add the row (`D724`/`D752`), or drop the claim from the table that made it.',
-      );
-    }
-  }
-
-  if (failures === 0) {
-    console.log(
-      `\n✓ D752 — the construct index resolves both ways: ${rostered.length} rostered construct(s) ` +
-        `(${rostered.map((p) => p.id).join(', ')}), ${CONSTRUCTS_ANSWERED.size} answered by this run, no drift`,
-    );
-  }
-}
-
-// --- the gate stops here (M139-5, D493) --------------------------------------
-//
-// Everything above this line asserts; everything below it reports. Under `--gate` this is the end of
-// the run, and this exit status is the whole of what `regression.mjs`'s `security-acceptance-gate`
-// phase means.
-if (GATE) {
-  console.log(
-    failures === 0
-      ? '\n\u2713 security acceptance (gated half): every graded case matched the ledger, and nothing fired outside (baseline \u222a plants)'
-      : `\n\u2717 security acceptance (gated half): ${failures} mismatch(es)`,
-  );
-  console.log('  (the coverage tables are the other half \u2014 run without `--gate` to print them.)');
-  process.exit(failures === 0 ? 0 : 1);
-}
-
 // --- the third state, from D285's listing ------------------------------------
 
 /** Written into the corpus directory rather than passed on stdin, because the corpus directory *is*
@@ -1842,6 +1820,135 @@ for (const probe of APPLICABILITY_PROBES) {
   console.log(
     `✓ [${probe.env}] D285 fired and the census named ${stoodDown.length} rules that stood down, exactly as the ledger says`,
   );
+}
+
+// --- D347: the public-target gate, three invocations, zero packets ----------------------------
+//
+// **The only case in this file graded on a refusal rather than on a report**, and the only one that
+// needs no stack at all. `public-target/scan.tflw` is one unmodified file run three times against
+// one unmodified config; the only thing that changes is the command line, which is the whole of
+// D21 §3.2(3) — the affirmation this gate wants is precisely the one no file in the repository is
+// allowed to make.
+//
+// Nothing here reaches a host. The target is `.invalid` (RFC 2606, guaranteed never to resolve),
+// and it is usable as evidence only because tflw classifies an address **literally**: a DNS-based
+// classifier could not answer at all, while the literal one says `public` with no lookup. The
+// offline corpus and the no-DNS decision are one decision, not two.
+//
+// **The third case is what stops the first two being vacuous.** A control that refused everything
+// would score identically on cases 1 and 2. Case 3 has to reach a *different* failure — a
+// connection attempt — and the assertion is therefore two-sided: the gate's code must be absent,
+// and the run must have got far enough to try the socket.
+console.log('\nD347 — the public-target gate, three invocations of one file:\n');
+{
+  const scan = join('public-target', 'scan.tflw');
+  const cases = [
+    {
+      label: 'no affirmation',
+      flags: [],
+      wants: 'TF065',
+    },
+    {
+      label: 'an affirmation for an origin this run never scans',
+      flags: ['--allow-public-target', 'https://other.example.invalid'],
+      wants: 'TF066',
+    },
+    {
+      label: 'the affirmation this run needs',
+      flags: ['--allow-public-target', 'https://staging.example.invalid'],
+      wants: null,
+    },
+  ];
+  for (const { label, flags, wants } of cases) {
+    const args = [TFLW_BIN, 'run', '--env', 'publicTarget', '--no-color', ...flags, scan];
+    const r = spawnSync(process.execPath, args, { cwd: corpus, encoding: 'utf8', shell: false, env: CHILD_ENV });
+    const out = `${r.stdout ?? ''}${r.stderr ?? ''}`;
+    if (wants) {
+      if (out.includes(`[${wants}]`)) console.log(`  ✓ ${label} → refused, ${wants}`);
+      else fail(`[publicTarget] ${label} should have been refused with ${wants}; got: ${out.trim().split('\n').slice(-3).join(' / ')}`);
+      // Refused means refused *before* anything is attempted. A run that reported the code and then
+      // went on to try the host would satisfy a presence check and defeat the control.
+      if (/ECONNREFUSED|ENOTFOUND|EAI_AGAIN|getaddrinfo/i.test(out)) {
+        fail(`[publicTarget] ${label} reported ${wants} but still attempted a connection — the gate must refuse before the socket`);
+      }
+    } else {
+      if (out.includes('[TF065]') || out.includes('[TF066]')) {
+        fail(`[publicTarget] ${label} was still refused by the gate — the affirmation matches the origin this env scans`);
+      } else if (/ENOTFOUND|EAI_AGAIN|getaddrinfo|could not be established|fetch failed/i.test(out)) {
+        console.log('  ✓ the affirmation this run needs → gate passed, run failed at the connection (which is the evidence)');
+      } else {
+        fail(`[publicTarget] ${label} neither refused nor reached a connection attempt — the gate cannot be shown to have let anything through: ${out.trim().split('\n').slice(-3).join(' / ')}`);
+      }
+    }
+  }
+  console.log('\n  (zero packets: `.invalid` is RFC 2606-reserved, and the address class is read from');
+  console.log('   the URL as written — this corpus never resolves a name, let alone contacts a host.)');
+}
+
+// --- D752: the construct index, both directions ------------------------------
+//
+// Inside the gated half deliberately. A cross-check that only ran when somebody typed the command
+// would be a claim about a claim, and this whole mechanism exists so that `CONSTRUCTS.md`'s five
+// security rows are not that.
+{
+  const rostered = constructPlantsFor('security');
+  const rosteredIds = new Set(rostered.map((p) => p.construct));
+
+  // Direction 1 — the roster points at something this run did not do. The failure mode is a row that
+  // reads as evidence after the assertion behind it was deleted, renamed or moved to the ungated
+  // half, which is exactly what `M154f-01` records happening to `probe mutating`'s other half.
+  for (const plant of rostered) {
+    if (!CONSTRUCTS_ANSWERED.has(plant.construct)) {
+      fail(
+        `${plant.id} rosters \`${plant.construct}\` against this script (CONSTRUCTS.md), and nothing in this run answered it.\n` +
+          '    A roster row is a claim that a known answer was checked. Either the assertion that answered it\n' +
+          '    was removed or renamed, or it moved below the `--gate` line — and a row pointing below that line\n' +
+          '    is a row nothing evaluates. Restore the assertion, or move the construct back to `RATCHET`.',
+      );
+    }
+  }
+
+  // Direction 2 — this script answers a construct no roster row names. Harmless on its own and worth
+  // failing anyway: the roster's whole claim is that it is complete for what it covers, and an
+  // unindexed answer is evidence nobody can find. It is also how a construct silently gets graded
+  // twice, once here and once by a plant somebody wrote because the coverage was not visible.
+  for (const id of CONSTRUCTS_ANSWERED) {
+    if (!rosteredIds.has(id)) {
+      fail(
+        `this run answered \`${id}\` and no row in CONSTRUCTS.md names it against this script.\n` +
+          '    Add the row (`D724`/`D752`), or drop the claim from the table that made it.',
+      );
+    }
+  }
+
+  if (failures === 0) {
+    console.log(
+      `\n✓ D752 — the construct index resolves both ways: ${rostered.length} rostered construct(s) ` +
+        `(${rostered.map((p) => p.id).join(', ')}), ${CONSTRUCTS_ANSWERED.size} answered by this run, no drift`,
+    );
+  }
+}
+
+// --- the gate stops here (M139-5, D493; line re-drawn by D823, M163b) --------
+//
+// Everything above this line asserts; everything below it reports. Under `--gate` this is the end of
+// the run, and this exit status is the whole of what `regression.mjs`'s `security-acceptance-gate`
+// phase means.
+//
+// **That first sentence was the intent from M139-5 and became true here.** D285's third state and
+// D347's public-target gate sat below it while calling `fail()` eleven ways between them — asserting
+// in a half described as reporting, reachable only by a human typing the command without a flag.
+// D493 was not wrong about coverage tables; it was imprecise about its own criterion, and two
+// blocks fell on the wrong side of an imprecision. See the docblock at the top for the criterion as
+// it now reads, and D824 for what the move cost.
+if (GATE) {
+  console.log(
+    failures === 0
+      ? '\n\u2713 security acceptance (gated half): every graded case matched the ledger, nothing fired outside (baseline \u222a plants), D285\u2019s third state held and the public-target gate refused twice and let the control through'
+      : `\n\u2717 security acceptance (gated half): ${failures} mismatch(es)`,
+  );
+  console.log('  (the coverage tables are the other half \u2014 run without `--gate` to print them.)');
+  process.exit(failures === 0 ? 0 : 1);
 }
 
 // --- the coverage table, gaps included ---------------------------------------
@@ -1950,69 +2057,6 @@ console.log('\nD319 — what the tier cost this run:\n');
   console.log('   The average is below the per-site figure because `csrf.tflw`\'s assertion names two');
   console.log('   owners, and an owner is not probed — plus its derived token-withheld probe, which is');
   console.log('   a real request this line does not count because D457 keeps it out of `probes`.)');
-}
-
-// --- D347: the public-target gate, three invocations, zero packets ----------------------------
-//
-// **The only case in this file graded on a refusal rather than on a report**, and the only one that
-// needs no stack at all. `public-target/scan.tflw` is one unmodified file run three times against
-// one unmodified config; the only thing that changes is the command line, which is the whole of
-// D21 §3.2(3) — the affirmation this gate wants is precisely the one no file in the repository is
-// allowed to make.
-//
-// Nothing here reaches a host. The target is `.invalid` (RFC 2606, guaranteed never to resolve),
-// and it is usable as evidence only because tflw classifies an address **literally**: a DNS-based
-// classifier could not answer at all, while the literal one says `public` with no lookup. The
-// offline corpus and the no-DNS decision are one decision, not two.
-//
-// **The third case is what stops the first two being vacuous.** A control that refused everything
-// would score identically on cases 1 and 2. Case 3 has to reach a *different* failure — a
-// connection attempt — and the assertion is therefore two-sided: the gate's code must be absent,
-// and the run must have got far enough to try the socket.
-console.log('\nD347 — the public-target gate, three invocations of one file:\n');
-{
-  const scan = join('public-target', 'scan.tflw');
-  const cases = [
-    {
-      label: 'no affirmation',
-      flags: [],
-      wants: 'TF065',
-    },
-    {
-      label: 'an affirmation for an origin this run never scans',
-      flags: ['--allow-public-target', 'https://other.example.invalid'],
-      wants: 'TF066',
-    },
-    {
-      label: 'the affirmation this run needs',
-      flags: ['--allow-public-target', 'https://staging.example.invalid'],
-      wants: null,
-    },
-  ];
-  for (const { label, flags, wants } of cases) {
-    const args = [TFLW_BIN, 'run', '--env', 'publicTarget', '--no-color', ...flags, scan];
-    const r = spawnSync(process.execPath, args, { cwd: corpus, encoding: 'utf8', shell: false, env: CHILD_ENV });
-    const out = `${r.stdout ?? ''}${r.stderr ?? ''}`;
-    if (wants) {
-      if (out.includes(`[${wants}]`)) console.log(`  ✓ ${label} → refused, ${wants}`);
-      else fail(`[publicTarget] ${label} should have been refused with ${wants}; got: ${out.trim().split('\n').slice(-3).join(' / ')}`);
-      // Refused means refused *before* anything is attempted. A run that reported the code and then
-      // went on to try the host would satisfy a presence check and defeat the control.
-      if (/ECONNREFUSED|ENOTFOUND|EAI_AGAIN|getaddrinfo/i.test(out)) {
-        fail(`[publicTarget] ${label} reported ${wants} but still attempted a connection — the gate must refuse before the socket`);
-      }
-    } else {
-      if (out.includes('[TF065]') || out.includes('[TF066]')) {
-        fail(`[publicTarget] ${label} was still refused by the gate — the affirmation matches the origin this env scans`);
-      } else if (/ENOTFOUND|EAI_AGAIN|getaddrinfo|could not be established|fetch failed/i.test(out)) {
-        console.log('  ✓ the affirmation this run needs → gate passed, run failed at the connection (which is the evidence)');
-      } else {
-        fail(`[publicTarget] ${label} neither refused nor reached a connection attempt — the gate cannot be shown to have let anything through: ${out.trim().split('\n').slice(-3).join(' / ')}`);
-      }
-    }
-  }
-  console.log('\n  (zero packets: `.invalid` is RFC 2606-reserved, and the address class is read from');
-  console.log('   the URL as written — this corpus never resolves a name, let alone contacts a host.)');
 }
 
 console.log(failures === 0 ? '\n✓ security acceptance: every graded case matched the ledger' : `\n✗ security acceptance: ${failures} mismatch(es)`);

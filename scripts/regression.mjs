@@ -269,6 +269,36 @@ const PHASES = [
     name: 'construct-acceptance',
     cmd: 'node scripts/verify-construct-acceptance.mjs --gate',
   },
+  // `M163e` (`D828`). **The fourth grader found running in no automated pass, and the first found by
+  // looking rather than by tripping over it.** `M137e-01` was `verify-security-acceptance.mjs`,
+  // `D764`/`M154g-13` was `verify-input-acceptance.mjs`, `M154g-02` was `measure-construct-evidence
+  // .mjs`'s missing half — each surfaced while somebody was working on that script for another
+  // reason. `D828` made the audit a pass over every script in `scripts/` instead, and this is what it
+  // returned: `verify-screenshot-step.mjs` had **no `regression.mjs` phase, no `package.json` entry,
+  // no CI reference and no mention in any document** — the one script here with zero callers of any
+  // kind. It states four known answers, asserts them and exits non-zero, and it has done that since
+  // `M50` while running nowhere.
+  //
+  // **Cost measured before placing it, not after** — the `M163a` habit. 1.83-2.02 s on `fedora-box`
+  // across three runs, against `security-acceptance-gate`'s 1.70-1.99 s in the same state, so what it
+  // actually costs a leg is the stack restart every phase pays regardless. `D825`'s second tier is
+  // for a grader too slow to run every time; this is not one, and inventing a tier for it would be
+  // the flag `D825` refuses wearing a nicer name.
+  //
+  // Seventh hand placement, and the first where **count and theme agree**, which is worth recording
+  // because the previous six all had to break a tie by argument. Bins were `core` 10, `tooling` 10,
+  // `safety` 9, `security-ui` 9. Theme puts it in `safety`: this grader runs one test out of
+  // `tests/mixed/storefront.tflw` and `--tag mixed` is already a `safety` phase, so a red here is
+  // read next to a red in the leg that runs the rest of that file. Count agrees — `safety` is one of
+  // the two smallest. The re-pack seven placements have now deferred still needs the CI timings
+  // nobody has pulled.
+  //
+  // No `stackEnv`: it needs webV2 and apiV2 and nothing planted. It grades `released` (the vendored
+  // tarball), which is the same build `regression.mjs` itself grades — see this file's own line 23.
+  {
+    name: 'screenshot-step-check',
+    cmd: 'node scripts/verify-screenshot-step.mjs',
+  },
   // `M154h` (`D758`, `D761`). The perf ladder, measured — and the **only** phase in this file that
   // deliberately does not run in CI.
   //
@@ -363,7 +393,7 @@ const PHASES = [
 const PHASE_GROUPS = {
   core: ['full suite', '--tag orderOps', '--tag smoke,catalogOps', 'demo-fail-check', '--tag orgOps', '--tag inventoryOps', 'migrate-check', 'secure-local-check', 'security-acceptance-gate', 'input-acceptance'],
   tooling: ['--tag api', 'watch-check', 'pick-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check', 'security-target-check', 'sarif-acceptance', 'construct-acceptance'],
-  safety: ['--tag identityOps', '--tag mixed', '--tag smoke,orderOps', '--tag adminOps', '--tag catalogOps', 'safety-flags-check', 'check-diagnostics', 'artifact-contract', 'safety-redaction-check'],
+  safety: ['--tag identityOps', '--tag mixed', '--tag smoke,orderOps', '--tag adminOps', '--tag catalogOps', 'safety-flags-check', 'check-diagnostics', 'artifact-contract', 'safety-redaction-check', 'screenshot-step-check'],
   'security-ui': ['--tag smoke,identityOps', 'cli-flags-check', '--tag smoke,adminOps', '--tag ui', 'webv2-admin-check', '--tag smoke,inventoryOps', 'logging-check', 'mtls-rejection', 'vuln-slice-hidden-check'],
 };
 

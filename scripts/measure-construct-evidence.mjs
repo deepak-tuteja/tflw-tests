@@ -1,5 +1,8 @@
 #!/usr/bin/env node
-// `M154g` step 1 — measure the cheap/expensive split, rather than assert it.
+// `M154g` step 1 — corpus shape per construct. Half a measurement, and it says so.
+//
+// **The behavioural half (`--probe`) was specified, never implemented, and deleted by `D826`
+// (`M163d`) rather than built.** See "So the measurement is a negative test" below.
 //
 // WHY THIS SCRIPT EXISTS. `M154g`'s scoping divides the unrostered remainder into a cheap end (the
 // workhorses: "the evidence exists and the claim is missing") and an expensive end (the twelve
@@ -16,21 +19,39 @@
 // at the plant that already fails. If no, an observable has to be built first, and that is the
 // expensive end wherever it actually falls.
 //
-// So the measurement is a negative test, one construct at a time:
+// The measurement was designed as a negative test, one construct at a time:
 //
-//   1. find the corpus sites that use the construct           (`--discover`, static, no stack)
-//   2. perturb ONE site so the construct's contribution is wrong, on a scratch copy of the corpus
-//   3. run the files that cover it, and record whether anything went red
+//   1. find the corpus sites that use the construct           (static, no stack)      <- built
+//   2. perturb ONE site so the construct's contribution is wrong, on a scratch copy   <- never built
+//   3. run the files that cover it, and record whether anything went red              <- never built
 //
-// Step 3 needs the apiV2 stack and a quiet box, so the two halves are separate verbs. Discovery
-// alone already settles some of the list — a construct with no sites at all cannot be cheap,
-// whatever its occurrence count in tflw's own manual says — but discovery alone is NOT the
-// measurement, and this script refuses to print a cheap/expensive verdict from it. That refusal is
-// the point: reporting shape as if it were behaviour is the substitution the milestone exists to
-// avoid, and it is exactly what `M154f` caught its own graders doing.
+// **Steps 2 and 3 were `--probe`, and `D826` (`M163d`) deleted the verb instead of building it.**
+// Only step 1 was ever implemented. `--probe` was parsed by nothing — `argv` reads `--json` and
+// `--only` and neither verb — so `--discover` and `--probe` produced byte-identical output, and the
+// run closed by printing *"Run --probe on a quiet box with the stack up to turn shape into
+// behaviour"*: a script instructing its reader to run a verb it does not implement. That is
+// `M154g`'s own subject committed by `M154g`'s own instrument, one milestone after `M154f` caught
+// three graders doing it (`M154g-02`).
 //
-//   node scripts/measure-construct-evidence.mjs --discover [--json]
-//   node scripts/measure-construct-evidence.mjs --probe [--only <id>] [--json]
+// **It was deleted rather than finished because its consumer no longer exists, not because it is
+// expensive.** `--probe` existed to sequence the rostering of the unrostered remainder — measure
+// which constructs are cheap to roster, do those first. That remainder is empty: the roster is
+// complete, `RATCHET` holds no entries and `RATCHET_CEILING` is 0. A cheap/expensive split computed
+// now would sequence nothing. The work got done by hand and came out right, which is evidence about
+// that plan and not a general licence — recorded here so the next reader of `M154g` step 1 learns
+// it from this paragraph rather than from an empty verb.
+//
+// **What this script still does, and what that is worth today.** It reports corpus *shape* — site
+// counts per construct — and it refuses to call that behaviour. Since `RATCHET` is empty it
+// currently iterates nothing and reports zeros; that is the correct answer to the question it asks,
+// not a malfunction. The `find` patterns are kept deliberately: `D827` names the roster-vacuity gate
+// (`M164`) as the instrument this repository actually lacks, and it wants them.
+//
+// Discovery alone was never the measurement, and this script still refuses to print a
+// cheap/expensive verdict from it. That refusal is the point: reporting shape as if it were
+// behaviour is the substitution the milestone exists to avoid.
+//
+//   node scripts/measure-construct-evidence.mjs [--only <id>] [--json]
 //
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -41,6 +62,37 @@ const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const argv = process.argv.slice(2);
 const JSON_OUT = argv.includes('--json');
 const only = argv.includes('--only') ? argv[argv.indexOf('--only') + 1] : null;
+
+// `M163d`. **Deleting a verb silently is the same defect one layer down.** `--probe` and
+// `--discover` were both accepted-by-being-ignored before this milestone — `argv` read neither, so
+// the two produced byte-identical output and the script closed by telling the reader to run one of
+// them. Removing the words from the usage block would leave anyone with the old invocation in their
+// shell history, or in `M154g`'s plan, getting a plausible zeros report and no indication that the
+// verb is gone. Named refusal instead: the flags that were never implemented say so, and any other
+// unknown flag is refused rather than absorbed.
+{
+  const RETIRED = { '--probe': 'D826 (M163d)', '--discover': 'D826 (M163d) — discovery is now the only mode, so the flag is redundant' };
+  const KNOWN = new Set(['--json', '--only']);
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--only') { i++; continue; }
+    if (KNOWN.has(a)) continue;
+    if (a in RETIRED) {
+      console.error(`${a} was removed by ${RETIRED[a]}.`);
+      if (a === '--probe') {
+        console.error('  It was specified and never implemented: it perturbed nothing, ran nothing, and its');
+        console.error('  output was byte-identical to a bare run. Deleted rather than built because the');
+        console.error('  remainder it existed to sequence is empty (RATCHET_CEILING is 0). This script reports');
+        console.error('  corpus shape only, and no instrument here turns that into behaviour.');
+      }
+      console.error('  usage: node scripts/measure-construct-evidence.mjs [--only <id>] [--json]');
+      process.exit(2);
+    }
+    console.error(`unknown flag: ${a}`);
+    console.error('usage: node scripts/measure-construct-evidence.mjs [--only <id>] [--json]');
+    process.exit(64);
+  }
+}
 
 /**
  * How each construct is spotted in the corpus, and how it would be broken.
@@ -58,22 +110,22 @@ const only = argv.includes('--only') ? argv[argv.indexOf('--only') + 1] : null;
  */
 const PROBES = {
   // --- declaration (9) ---
-  'declaration:test':        { find: /^\s*test\s+"/,                     break: null, note: 'the block itself; breaking it is not a perturbation but a deletion' },
-  'declaration:action':      { find: /^\s*action\s+\w+\s*\(/,            break: { re: /\bgive\b/, with: 'give' }, note: 'body returns; perturb the give' },
-  'declaration:import':      { find: /^\s*import\s+"/,                   break: null },
-  'declaration:use':         { find: /^\s*use\s+"/,                      break: null },
-  'declaration:before':      { find: /^\s*before\b/,                     break: null },
-  'declaration:tags':        { find: /^\s*@[A-Za-z]/,                    break: null },
-  'declaration:with-each':   { find: /^\s*with\s+each\b/,                break: null },
-  'declaration:as':          { find: /^\s*test\s+.*\bas\s+\w/,           break: null, approximate: true },
-  'declaration:concurrency': { find: /^\s*test\s+.*\b(parallel|sequential)\b/, break: null, approximate: true },
+  'declaration:test':        { find: /^\s*test\s+"/, note: 'the block itself; breaking it is not a perturbation but a deletion' },
+  'declaration:action':      { find: /^\s*action\s+\w+\s*\(/, note: 'body returns; perturb the give' },
+  'declaration:import':      { find: /^\s*import\s+"/ },
+  'declaration:use':         { find: /^\s*use\s+"/ },
+  'declaration:before':      { find: /^\s*before\b/ },
+  'declaration:tags':        { find: /^\s*@[A-Za-z]/ },
+  'declaration:with-each':   { find: /^\s*with\s+each\b/ },
+  'declaration:as':          { find: /^\s*test\s+.*\bas\s+\w/, approximate: true },
+  'declaration:concurrency': { find: /^\s*test\s+.*\b(parallel|sequential)\b/, approximate: true },
   // --- step (6) ---
-  'step:api':      { find: /^\s*api\s+/,     break: null },
-  'step:wait':     { find: /^\s*wait\s+/,    break: null },
-  'step:expect':   { find: /^\s*expect\s+/,  break: null },
-  'step:let':      { find: /^\s*let\s+/,     break: null },
-  'step:capture':  { find: /^\s*capture\s+/, break: null },
-  'step:log':      { find: /^\s*log\s+/,     break: null },
+  'step:api':      { find: /^\s*api\s+/ },
+  'step:wait':     { find: /^\s*wait\s+/ },
+  'step:expect':   { find: /^\s*expect\s+/ },
+  'step:let':      { find: /^\s*let\s+/ },
+  'step:capture':  { find: /^\s*capture\s+/ },
+  'step:log':      { find: /^\s*log\s+/ },
   // --- matcher (9) ---
   'matcher:equals':            { find: /\bequals\b/ },
   'matcher:contains':          { find: /\bcontains\b/ },
@@ -162,7 +214,8 @@ function discover() {
       sites: sites.length,
       files: [...new Set(sites.map((s) => s.file))].length,
       examples: sites.slice(0, 3),
-      // The ONLY verdict discovery is allowed to reach. Everything else waits for `--probe`.
+      // The ONLY verdict this script is allowed to reach. There is no second one: `--probe` was
+      // specified, never implemented, and deleted by `D826` rather than built.
       verdict: sites.length === 0 ? 'expensive:no-sites' : 'unmeasured',
     });
   }
@@ -185,8 +238,17 @@ if (JSON_OUT) {
     }
   }
   const none = rows.filter((r) => r.verdict === 'expensive:no-sites');
+  // `M163d`. Zero is the honest answer and not an empty report: `discover()` iterates `RATCHET`,
+  // the roster is complete, and `RATCHET` holds no entries. Said out loud so a future reader does
+  // not read zeros as a broken scan.
+  if (rows.length === 0) {
+    console.log('\nNo targets: `RATCHET` is empty (the roster is complete, `RATCHET_CEILING` is 0),');
+    console.log('so this script has nothing to measure the shape of. That is the state, not a failure.');
+  }
   console.log(`\n${rows.length} unrostered non-diagnostic constructs measured for sites.`);
   console.log(`${none.length} have NO corpus site at all — those cannot be cheap, whatever their usage count elsewhere.`);
   console.log(`${rows.length - none.length} remain UNMEASURED: a site count is corpus shape, not evidence.`);
-  console.log(`Run --probe on a quiet box with the stack up to turn shape into behaviour.`);
+  // `D826`/`M163d`. This line used to read "Run --probe on a quiet box with the stack up to turn
+  // shape into behaviour" — a verb this script never implemented, instructing the reader to run it.
+  console.log(`Shape only. Nothing in this repository turns these site counts into behaviour (D826).`);
 }

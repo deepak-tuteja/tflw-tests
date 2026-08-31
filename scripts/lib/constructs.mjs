@@ -1135,10 +1135,15 @@ export const PLANTS = [
       '1` and finds the leak. That is a controlled comparison rather than two observations, and it ' +
       'de-confounds the `DELETE`: "could not be judged" is otherwise equally consistent with *nobody ' +
       'in the probe set could have answered anyway*. The opt-in genuinely deletes orders, which is ' +
-      'the argument for requiring the word rather than a side effect of it. **The withheld half — ' +
-      'the identical `DELETE` under a target that grants nothing, coming back `4 not probed` with ' +
-      'each decline naming the missing word — is graded, and graded well, in this script\'s ' +
-      '*ungated* half, so it is not part of this row\'s claim.** See `M154f-01`.',
+      'the argument for requiring the word rather than a side effect of it. **The withheld half is ' +
+      'part of this claim again (`M163c`, `D823`).** The identical `DELETE` under a target that ' +
+      'grants nothing comes back `4 not probed`, each decline naming the missing word, and since ' +
+      '`M163b` moved D285\'s probe loop above the `--gate` line that half is asserted by the same ' +
+      'automated phase as everything else here. The construct\'s known answer is the *contrast* ' +
+      'between a target that grants the opt-in and one that withholds it, and neither half alone ' +
+      'is it. `M154f-01` narrowed this row to the two-verb comparison because the withheld half ' +
+      'was then graded only by a half no automated pass ran — the claim was never wrong, the ' +
+      'grader was unreachable, and `M163b` fixed the grader instead of weakening the claim.',
     catches: 'a `probe mutating` that sends nothing while the assertion stays green, and a destructive verb scored as a verdict when a replay cannot judge it.',
     blockedOn: null,
   },
