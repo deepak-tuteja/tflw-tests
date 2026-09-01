@@ -156,6 +156,13 @@ const WINDOW = flag('--window') !== null ? Number(flag('--window')) : 20;
 const OUT_DIR = flag('--out') ? path.resolve(flag('--out')) : path.join(homedir(), '.tflw-mutation');
 const MATRIX = path.join(OUT_DIR, 'kill-matrix.jsonl');
 const META = path.join(OUT_DIR, 'run-meta.json');
+// `M164c`. A kill records WHICH plants went red and nothing about HOW, and those are two
+// different findings. The acceptance grader prints both — a plant whose fixture never ran says
+// `(skipped: no report)` and has an empty tally, a plant whose own known answer came out false
+// says `recall 2/3` — and the census kept only the glyph. `D842` cannot be decided from the
+// glyph: a plant that asserted nothing cannot have been covered by anything. So the grader's
+// own page is kept for every killing mutation, which is ten files, not 271.
+const TRANSCRIPTS = path.join(OUT_DIR, 'transcripts');
 
 /**
  * `TFLW_DISCOVER_CONTROL=break` / `=noop` — force the `unbuildable` verdict's two paths on the
@@ -482,6 +489,10 @@ for (const [i, m] of todo.entries()) {
     row = run.missing.length > 0
       ? { id: m.id, state: 'unbuildable', reason: `roster table short by ${run.missing.length} plant(s)`, killed: [] }
       : { id: m.id, state: run.red.length > 0 ? 'killed' : 'survived', killed: run.red, rosterSeconds: run.secs, bundle: id };
+    if (row.state === 'killed') {
+      mkdirSync(TRANSCRIPTS, { recursive: true });
+      writeFileSync(path.join(TRANSCRIPTS, `${m.id}.txt`), run.out);
+    }
   }
   const problems = revertMutation(applied.entry);
   inFlight = null;
