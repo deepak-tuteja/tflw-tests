@@ -89,7 +89,7 @@ const SIB = siblingRoot();
 const { entry: CLI } = resolveTflw('released', { label: 'mutation-discovery' });
 
 // ── argv ─────────────────────────────────────────────────────────────────────────────────────
-const KNOWN = new Set(['--limit', '--only', '--baseline-only', '--status', '--out', '--help']);
+const KNOWN = new Set(['--limit', '--only', '--baseline-only', '--status', '--out', '--window', '--help']);
 const argv = process.argv.slice(2);
 for (const a of argv) {
   if (a.startsWith('--') && !KNOWN.has(a.split('=')[0])) {
@@ -117,6 +117,8 @@ if (has('--help')) {
       '  --baseline-only    run the baseline roster and stop',
       '  --status           report how far the recorded matrix has got, and stop',
       '  --out <dir>        where the matrix and run metadata live (default: ~/.tflw-mutation)',
+      '  --window <n>       re-verify the baseline every n candidates, and recycle the stack',
+      '                     (default 20; 0 disables, which is how the first census corrupted itself)',
       '  --help             this text',
       '',
       '  env TFLW_DISCOVER_CONTROL=break|noop   force an `unbuildable` path on the first candidate',
@@ -128,6 +130,7 @@ const LIMIT = flag('--limit') ? Number(flag('--limit')) : Infinity;
 const ONLY = flag('--only') ? new Set(flag('--only').split(',')) : null;
 const BASELINE_ONLY = has('--baseline-only');
 const STATUS = has('--status');
+const WINDOW = flag('--window') !== null ? Number(flag('--window')) : 20;
 
 /**
  * Where the matrix lives, and why it is NOT under `tflw-acceptance/`.
@@ -285,6 +288,14 @@ if (existsSync(MATRIX)) {
 }
 const record = (row) => { appendFileSync(MATRIX, `${JSON.stringify(row)}\n`); done.set(row.id, row); };
 
+/**
+ * A recorded id counts as done unless its most recent row RETRACTS it. Retraction exists because a
+ * verdict can be invalidated after the fact by something the verdict itself could not see — see
+ * `D848`. The row is appended rather than deleted so the matrix stays append-only and the
+ * retraction is part of the record instead of a gap in it.
+ */
+const settled = (id) => done.has(id) && done.get(id).state !== 'retracted';
+
 // ── candidates ────────────────────────────────────────────────────────────────────────────────
 const { mutations, file: registryFile } = await readMutations(SIB);
 let candidates = classify(mutations, bundleInputs(SIB)).filter((c) => c.reachable).map((c) => c.m);
@@ -293,7 +304,7 @@ if (ONLY) candidates = candidates.filter((m) => ONLY.has(m.id));
 if (STATUS) {
   const tally = { killed: 0, survived: 0, unbuildable: 0, skipped: 0 };
   for (const row of done.values()) tally[row.state] = (tally[row.state] ?? 0) + 1;
-  const left = candidates.filter((m) => !done.has(m.id)).length;
+  const left = candidates.filter((m) => !settled(m.id)).length;
   console.log(`matrix: ${MATRIX}`);
   console.log(`recorded ${done.size} of ${candidates.length} candidate(s) — ${left} remaining`);
   console.log(`  killed ${tally.killed}  survived ${tally.survived}  unbuildable ${tally.unbuildable}  skipped ${tally.skipped}`);
@@ -347,15 +358,94 @@ writeFileSync(META, `${JSON.stringify({
 console.log(`  baseline green: ${GRADED.length} plant(s) produced their known answers\n`);
 if (BASELINE_ONLY) process.exit(0);
 
+/**
+ * Drift, and why the baseline is a BRACKET rather than a precondition (`D848`).
+ *
+ * The baseline ran once, before the sweep, and read as a guarantee. It is not one. Every candidate
+ * runs the full roster against a live 7-container stack, and that stack accumulates state — so the
+ * tree can be pristine and the roster still go red for reasons no mutation caused.
+ *
+ * Measured 2026-09-01, and it had already corrupted a chunk. Candidates 1-38 were clean; from 39
+ * onward **every** candidate reported killing exactly `C23`, `C36`, `C37` and nothing else. Those
+ * three plants share one browser scenario whose first step is `expect status equals 201`, and it
+ * had begun answering `409` — the accumulated-state signature `M162-01` names. Eight consecutive
+ * rows recorded a kill set that belonged to the stack, not to the mutation, and the run exited 0
+ * with a matrix that looked richer for it. **A false kill is the dangerous direction here**: it
+ * makes a plant look discriminating, which is the exact claim `M164` exists to test.
+ *
+ * A precondition cannot catch this, because the condition it checks is true when it is checked and
+ * false later. So the window is closed at both ends: a green baseline opens it, a green baseline
+ * closes it, and only then are the verdicts inside it trusted. If the closing baseline is red with
+ * set `R`, every `killed` row in the window whose kills are a subset of `R` is **retracted** — its
+ * verdict is indistinguishable from drift, which is not the same as knowing it was wrong.
+ *
+ * Then the stack is recycled. `cli.mjs stop` is `docker compose down -v`, which drops the postgres
+ * volume, so `start` begins from a clean database — the ephemeral-per-run isolation model the stack
+ * was designed around, and which a multi-hour sweep silently violates by staying up.
+ *
+ * The window size is a COST parameter, not a correctness one, which is the point of bracketing: too
+ * large only means more work redone when drift is found, never a wrong verdict kept.
+ */
+function recycleStack() {
+  const t = Date.now();
+  const opts = { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 };
+  const stop = spawnSync('node', ['cli.mjs', 'stop'], opts);
+  const start = spawnSync('node', ['cli.mjs', 'start'], opts);
+  return { code: stop.status === 0 && start.status === 0 ? 0 : 1, secs: Number(((Date.now() - t) / 1000).toFixed(1)) };
+}
+
+/** Close a window: re-vendor the (already reverted) tree, re-run the roster, retract what drift could explain. */
+function closeWindow(ids) {
+  if (ids.length === 0) return true;
+  console.log(`\n── closing a window of ${ids.length} candidate(s): re-verifying the baseline ...`);
+  const rv = refresh();
+  if (rv.code !== 0) {
+    console.error(`✗ the window's closing re-vendor failed (exit ${rv.code}) — cannot validate ${ids.length} verdict(s).`);
+    process.exit(1);
+  }
+  const nowId = bundleIdentity();
+  if (nowId !== BASE_ID) {
+    console.error(`✗ the tree is not back at baseline (${nowId} vs ${BASE_ID}) — refusing to validate.`);
+    process.exit(1);
+  }
+  const run = runRoster();
+  if (run.missing.length > 0) {
+    console.error(`✗ the closing roster did not grade ${run.missing.length} plant(s) — refusing to validate.`);
+    process.exit(1);
+  }
+  if (run.red.length === 0) {
+    console.log(`  baseline still green after ${run.secs}s — ${ids.length} verdict(s) stand`);
+    return true;
+  }
+  const R = new Set(run.red);
+  console.log(`  ! baseline DRIFTED: ${run.red.length} plant(s) red with nothing mutated — ${run.red.join(', ')}`);
+  let retracted = 0;
+  for (const id of ids) {
+    const row = done.get(id);
+    if (!row || row.state !== 'killed') continue;
+    if (!row.killed.every((p) => R.has(p))) continue;
+    record({
+      id, file: row.file ?? null, milestone: row.milestone ?? null, state: 'retracted',
+      reason: `every plant it killed (${row.killed.join(', ')}) was also red on an unmutated tree at the close of its window`,
+      previous: row.state, previousKilled: row.killed, killed: [], driftRed: run.red,
+      at: new Date().toISOString(),
+    });
+    retracted += 1;
+  }
+  console.log(`  retracted ${retracted} verdict(s); they will be re-run against a fresh stack`);
+  return false;
+}
+
 // ── the sweep ─────────────────────────────────────────────────────────────────────────────────
 let inFlight = null;
 const cleanup = () => { if (inFlight) { revertMutation(inFlight); inFlight = null; } };
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { cleanup(); process.exit(130); });
 process.on('uncaughtException', (e) => { cleanup(); console.error(e); process.exit(1); });
 
-const todo = candidates.filter((m) => !done.has(m.id)).slice(0, LIMIT);
+const todo = candidates.filter((m) => !settled(m.id)).slice(0, LIMIT);
 console.log(`sweeping ${todo.length} candidate(s)\n`);
 const startedAt = Date.now();
+const windowIds = [];
 
 for (const [i, m] of todo.entries()) {
   const label = `[${i + 1}/${todo.length}] ${m.id}`;
@@ -408,7 +498,24 @@ for (const [i, m] of todo.entries()) {
     : row.reason;
   const eta = ((Date.now() - startedAt) / (i + 1)) * (todo.length - i - 1) / 60000;
   console.log(`${label} ${glyph} ${detail}   [${eta.toFixed(0)}m left]`);
+
+  windowIds.push(m.id);
+  if (WINDOW > 0 && windowIds.length >= WINDOW && i < todo.length - 1) {
+    closeWindow(windowIds);
+    windowIds.length = 0;
+    console.log('── recycling the stack (down -v + up), so the next window starts on a clean database ...');
+    const rc = recycleStack();
+    if (rc.code !== 0) {
+      console.error(`✗ the stack did not come back (exit ${rc.code}). Stopping rather than sweeping against a dead target.`);
+      process.exit(1);
+    }
+    console.log(`  stack recycled in ${rc.secs}s\n`);
+  }
 }
+
+// The tail of the sweep gets the same bracket as every other window — otherwise the last few
+// verdicts are exactly the ones nothing validates, which is where the drift was found.
+if (WINDOW > 0) closeWindow(windowIds);
 
 // ── close ─────────────────────────────────────────────────────────────────────────────────────
 //
