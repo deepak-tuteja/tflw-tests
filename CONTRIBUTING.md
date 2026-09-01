@@ -193,6 +193,18 @@ xvfb-run -a npm run regression -- --group security-ui
   The census itself is in `tflw-acceptance/mutation/` and is a measurement with a date on it, not a
   baseline. Re-running it needs the box, the stack and about seven hours: `npm run
   discover:mutation-kills`.
+  **What this gate cannot tell you, stated because it is the interesting half.** It compares two
+  committed files, so it never re-measures a kill. If tflw's session scoping regressed tomorrow,
+  `C94`'s own acceptance plant would catch the regression — that is what the plant is for — but the
+  *claim that `C94` discriminates* is verified once, by hand, on the census date. `M164`'s seventh
+  acceptance clause asked for an automated re-measurement and is recorded **not met** rather than
+  reworded to fit what shipped (`D853`).
+  So the reader reports how stale it is instead of pretending otherwise (`D854`): it derives the
+  sweep's wall clock from the matrix rows' own stamps and compares the census's two denominators —
+  tflw's registry size and this repository's graded-plant count — against the live ones, naming any
+  drift. That line informs and does not fail, because a mutation added in tflw is the right change
+  and reddening this repository's CI for it would leave the person who tripped it with a
+  seven-hour box run as their only remedy.
 - **`npm run verify:provenance`** — **nothing in this repository's prose points somewhere a reader
   cannot follow.** Three claims, checked as one because they are one claim from the reader's side.
   Eight markdown links pointed at `../testFlow/…`, and a relative link cannot climb above a

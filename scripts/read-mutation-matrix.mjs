@@ -18,6 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PLANTS, plantsFor } from './lib/constructs.mjs';
 import { COVERS } from './lib/mutation-covers.mjs';
+import { readMutations, siblingRoot } from './lib/mutations.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DIR = path.join(ROOT, 'tflw-acceptance', 'mutation');
@@ -117,6 +118,47 @@ console.log(`  assertion-collateral ${String(buckets['assertion-collateral'].len
 console.log(`  refusal-only         ${String(buckets['refusal-only'].length).padStart(3)}  only ever red because its fixture was refused — it has never asserted a false answer`);
 console.log(`  never-red            ${String(buckets['never-red'].length).padStart(3)}  no candidate mutation made it red at all`);
 for (const [name, ids] of Object.entries(buckets)) if (name !== 'refusal-only' && ids.length > 0) console.log(`    ${name}: ${ids.join(', ')}`);
+
+// ── how old this measurement is, measured rather than asserted (`D854`) ───────────────────────
+//
+// `D851` refused the ratchet, so nothing re-runs the census — and a committed measurement nothing
+// re-measures is `D767`'s shape exactly, one level up from a count. What is cheap is asking whether
+// the census's *denominators* still hold: the registry it was taken against, and the roster it
+// graded. Both are one import away and neither needs a stack.
+//
+// This REPORTS and does not fail, deliberately. Failing would make every mutation tflw adds turn
+// this repository's CI red until somebody spends seven hours on the box — a gate punishing the
+// wrong repository for the right change. `verify-ledger.mjs`'s citation-staleness line already
+// takes this shape here ("this informs; it does not fail"), and this is the same claim: the drift
+// is visible in the artefact's own output rather than in a plan nobody checks out.
+const stamps = [...matrix.values()].map((r) => r.at).filter(Boolean).sort();
+console.log(`\ncensus taken ${meta.startedAt?.slice(0, 10) ?? '?'} on the ${meta.machine}`);
+if (stamps.length > 1) {
+  const hours = (Date.parse(stamps[stamps.length - 1]) - Date.parse(stamps[0])) / 3.6e6;
+  // Derived from the rows' own stamps rather than read off `run-meta`, for `D849`'s reason: the
+  // meta block is written once per invocation and a resumed sweep is several of them.
+  console.log(`  ${hours.toFixed(1)} h wall clock across ${stamps.length} recorded row(s), resumes included`);
+}
+try {
+  const { mutations } = await readMutations();
+  const grew = mutations.length - (meta.registryTotal ?? mutations.length);
+  console.log(
+    grew === 0
+      ? `  registry unchanged at ${mutations.length} mutation(s) since the census`
+      : `  registry has ${grew > 0 ? 'grown' : 'shrunk'} by ${Math.abs(grew)}: ${meta.registryTotal} at census time, ${mutations.length} now — ` +
+        `${grew > 0 ? `${grew} mutation(s) have never been tried against the roster` : 'the census covers mutations that no longer exist'}`,
+  );
+} catch (e) {
+  console.log(`  registry not readable from ${siblingRoot()} — cannot say whether it has moved (${String(e.message).split('\n')[0]})`);
+}
+const plantGrew = GRADED.length - (meta.gradedPlants ?? GRADED.length);
+console.log(
+  plantGrew === 0
+    ? `  roster unchanged at ${GRADED.length} acceptance-graded plant(s) since the census`
+    : `  roster has ${plantGrew > 0 ? 'grown' : 'shrunk'} by ${Math.abs(plantGrew)}: ${meta.gradedPlants} at census time, ${GRADED.length} now — ` +
+      `${plantGrew > 0 ? `${plantGrew} plant(s) have never been in a census` : 'the census graded plants that no longer exist'}`,
+);
+console.log('  This informs; it does not fail. Re-run `npm run discover:mutation-kills` on the box to close the gap.');
 
 console.log(
   failures === 0
