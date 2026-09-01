@@ -68,10 +68,12 @@
 //   node scripts/discover-mutation-kills.mjs --only bom-col,log-file-mkdir
 //   node scripts/discover-mutation-kills.mjs --baseline-only
 //   node scripts/discover-mutation-kills.mjs --status
+//   node scripts/discover-mutation-kills.mjs --out /tmp/sweep   (default: ~/.tflw-mutation)
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 import { siblingRoot, readMutations, editsOf, bundleInputs, classify, anchorState } from './lib/mutations.mjs';
@@ -85,9 +87,6 @@ const SIB = siblingRoot();
 // than by hand so the question is declared, which is what `verify-tflw-resolution.mjs` exists to
 // require; it caught the hand-built path in this file's first draft.
 const { entry: CLI } = resolveTflw('released', { label: 'mutation-discovery' });
-const OUT_DIR = path.join(ROOT, 'tflw-acceptance', 'mutation');
-const MATRIX = path.join(OUT_DIR, 'kill-matrix.jsonl');
-const META = path.join(OUT_DIR, 'run-meta.json');
 
 // ── argv ─────────────────────────────────────────────────────────────────────────────────────
 const KNOWN = new Set(['--limit', '--only', '--baseline-only', '--status', '--out', '--help']);
@@ -103,10 +102,57 @@ const flag = (name) => {
   return i === -1 ? null : argv[i + 1];
 };
 const has = (name) => argv.includes(name);
+
+// `--help` was in `KNOWN` from the first draft with nothing reading it, so asking for usage passed
+// validation and started a multi-hour sweep under the box lock. `KNOWN` looks like a list of
+// supported flags and is only a list of spellings that avoid exit 64; two of its six entries did
+// nothing. Anything added there needs a reader, and this is the reader for one of them.
+if (has('--help')) {
+  console.log(
+    [
+      'usage: node scripts/discover-mutation-kills.mjs [options]',
+      '',
+      '  --limit <n>        stop after n candidates this invocation (default: all)',
+      '  --only <a,b,...>   sweep only these mutation ids',
+      '  --baseline-only    run the baseline roster and stop',
+      '  --status           report how far the recorded matrix has got, and stop',
+      '  --out <dir>        where the matrix and run metadata live (default: ~/.tflw-mutation)',
+      '  --help             this text',
+      '',
+      '  env TFLW_DISCOVER_CONTROL=break|noop   force an `unbuildable` path on the first candidate',
+    ].join('\n'),
+  );
+  process.exit(0);
+}
 const LIMIT = flag('--limit') ? Number(flag('--limit')) : Infinity;
 const ONLY = flag('--only') ? new Set(flag('--only').split(',')) : null;
 const BASELINE_ONLY = has('--baseline-only');
 const STATUS = has('--status');
+
+/**
+ * Where the matrix lives, and why it is NOT under `tflw-acceptance/`.
+ *
+ * It was, for exactly one run. `exec.mjs` rsyncs both trees to the box with `--delete`, and the
+ * matrix is a file the box has and this Mac does not, so **the next chunk's own invocation deletes
+ * the matrix it was going to resume from**. Measured 2026-09-01: six recorded candidates, nine
+ * minutes of box time, destroyed by a `--status` call — the one command whose entire job is to
+ * report how far the sweep got. It then printed `recorded 0 of 271` and exited 0. `D840` makes the
+ * JSONL matrix the mechanism by which a chunked sweep resumes; sited in the synced tree, that
+ * mechanism is inert, and inert in the silent direction.
+ *
+ * Excluding the path in `exec.mjs` would work — that is what `.tflw-exec-lockhash` and
+ * `nginx/certs/` do there, for the same `--delete` reason. It is deliberately **not** the fix here.
+ * `exec.mjs` is untracked (`D14`), machine-local, and read by no gate, so a correctness property of
+ * a tracked script would depend on a file that ships nowhere and that nothing checks. The docblock
+ * listing those two prior wipes is in the same file that failed to prevent this third one.
+ *
+ * So the default sits outside every rsynced tree, in a per-user state directory that is the same
+ * shape on both machines. `--out <dir>` overrides it, and now actually does: it was in `KNOWN` from
+ * the first draft and never read, so `--out` parsed, validated, and silently wrote to the default.
+ */
+const OUT_DIR = flag('--out') ? path.resolve(flag('--out')) : path.join(homedir(), '.tflw-mutation');
+const MATRIX = path.join(OUT_DIR, 'kill-matrix.jsonl');
+const META = path.join(OUT_DIR, 'run-meta.json');
 
 /**
  * `TFLW_DISCOVER_CONTROL=break` / `=noop` — force the `unbuildable` verdict's two paths on the
