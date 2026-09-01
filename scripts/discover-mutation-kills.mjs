@@ -305,8 +305,11 @@ const settled = (id) => done.has(id) && done.get(id).state !== 'retracted';
 
 // ── candidates ────────────────────────────────────────────────────────────────────────────────
 const { mutations, file: registryFile } = await readMutations(SIB);
-let candidates = classify(mutations, bundleInputs(SIB)).filter((c) => c.reachable).map((c) => c.m);
-if (ONLY) candidates = candidates.filter((m) => ONLY.has(m.id));
+// The full reachable set is kept separate from what THIS invocation will run, because `run-meta`
+// records the census's denominator and `--only` must not shrink it. A replay of ten mutations that
+// rewrote `candidates: 10` would leave a committed artefact claiming a ten-mutation census.
+const allCandidates = classify(mutations, bundleInputs(SIB)).filter((c) => c.reachable).map((c) => c.m);
+let candidates = ONLY ? allCandidates.filter((m) => ONLY.has(m.id)) : allCandidates;
 
 if (STATUS) {
   const tally = { killed: 0, survived: 0, unbuildable: 0, skipped: 0 };
@@ -352,11 +355,24 @@ if (base.red.length > 0) {
   console.error('  Every mutation in the sweep would record these as killed. Fix the baseline first.');
   process.exit(1);
 }
+// `M164e`. This block runs once per INVOCATION, and a 7-hour sweep is several invocations, so a
+// naive `startedAt: new Date()` records the last resume's start and calls it the run's. The
+// committed `run-meta.json` said `16:29` for a sweep whose first row is stamped `09:42` — six and a
+// half hours of a measurement quietly missing from the artefact that dates it. An earlier
+// `startedAt` is therefore carried forward, and `updatedAt` says when this chunk began.
+//
+// `registryTotal` is here because `candidates` alone cannot answer *how much of the registry has
+// never been tried*: 271 of 311 reads as complete without the denominator, which is the shape
+// `D767` keeps finding. `read-mutation-matrix.mjs` compares both against the live sibling and
+// reports the drift (`D854`).
+const priorMeta = existsSync(META) ? JSON.parse(readFileSync(META, 'utf8')) : null;
 writeFileSync(META, `${JSON.stringify({
   machine: process.env.TFLW_EXEC_MACHINE ?? (process.platform === 'darwin' ? 'mac' : 'box'),
-  startedAt: new Date().toISOString(),
+  startedAt: priorMeta?.startedAt ?? new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
   registry: path.relative(SIB, registryFile),
-  candidates: candidates.length,
+  candidates: allCandidates.length,
+  registryTotal: mutations.length,
   gradedPlants: GRADED.length,
   baselineBundle: BASE_ID,
   baselineRosterSeconds: base.secs,

@@ -1,8 +1,10 @@
 {
   "machine": "box",
-  "startedAt": "2026-09-01T16:29:19.751Z",
+  "startedAt": "2026-09-01T09:42:38.783Z",
+  "updatedAt": "2026-09-01T16:29:19.751Z",
   "registry": "scripts/mutate.mjs",
   "candidates": 271,
+  "registryTotal": 311,
   "gradedPlants": 102,
   "baselineBundle": "8a17551fad75ee97",
   "baselineRosterSeconds": 88.4,
