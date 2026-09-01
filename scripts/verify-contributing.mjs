@@ -121,6 +121,14 @@ const CLASSIFIED = [
   {
     wf: 'ci.yml',
     job: 'acceptance-check',
+    cmd: 'npm run read:mutation-matrix:gate',
+    class: 'gate',
+    local: 'npm run read:mutation-matrix:gate',
+    why: "the hand-authored half of `M164b`'s kill matrix — `scripts/lib/mutation-covers.mjs`, one line of reasoning per relation (`D842`) — is held to the measured half in `tflw-acceptance/mutation/kill-detail.json`, in both directions. A contributor gate rather than ci-only because it reads three committed files, runs no stack and takes milliseconds, and because a hand-maintained table nothing reads is `D767` by definition. It deliberately asserts **nothing** about how much of the roster is covered: `D851` measured that at one plant of 102 and refused to pin it",
+  },
+  {
+    wf: 'ci.yml',
+    job: 'acceptance-check',
     cmd: 'npm run verify:contributing',
     class: 'gate',
     local: 'npm run verify:contributing',

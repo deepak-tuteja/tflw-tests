@@ -72,6 +72,7 @@ npm run verify:tflw-resolution
 npm run verify:provenance
 npm run verify:construct-coverage
 npm run verify:redaction:self-test
+npm run read:mutation-matrix:gate
 ```
 
 **And when a tflw milestone assigns or changes a `TF0xx` diagnostic code**, before opening either
@@ -175,6 +176,23 @@ xvfb-run -a npm run regression -- --group security-ui
   said the whole trace was clean. `M154f` had already caught a recurrence guard passing a case
   deliberately broken to test it; a gate written and never failed is decoration, and this is the
   cheapest place to keep that from being true again.
+- **`npm run read:mutation-matrix:gate`** — **the hand-authored half of the mutation kill matrix
+  still describes the measured half.** `M164b` applied all 271 of tflw's bundle-reachable mutations
+  and recorded which roster plants went red; `M164c` re-ran the ten that killed anything and split
+  those kills by *how* the plant died. 195 of 207 were the mutated build refusing the plant's
+  fixture at check time — the plant produced no report and asserted nothing — and **six** were the
+  plant running, producing its known answer, and the answer being false. Those six are labelled by
+  hand in `scripts/lib/mutation-covers.mjs`, one line of reasoning each (`D842`), and this gate
+  refuses in both directions: a measured assertion-kill with no label, or a label for a relation
+  that no longer happens.
+  Why it exists rather than a coverage ratchet: the measured covering set is **one mutation
+  protecting one plant of 102**, and `D851` declined to pin that — a job named for roster vacuity
+  that asserted only `C94`'s session scoping would claim far less than its name. This asserts
+  nothing about coverage. It only keeps a hand-maintained table from drifting away from the
+  measurement it annotates, which is the seam `D767` keeps finding.
+  The census itself is in `tflw-acceptance/mutation/` and is a measurement with a date on it, not a
+  baseline. Re-running it needs the box, the stack and about seven hours: `npm run
+  discover:mutation-kills`.
 - **`npm run verify:provenance`** — **nothing in this repository's prose points somewhere a reader
   cannot follow.** Three claims, checked as one because they are one claim from the reader's side.
   Eight markdown links pointed at `../testFlow/…`, and a relative link cannot climb above a

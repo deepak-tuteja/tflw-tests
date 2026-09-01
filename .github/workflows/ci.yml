@@ -212,6 +212,20 @@ jobs:
         run: npm run verify:redaction:self-test
         working-directory: testFlow-tests
 
+      # M164c (`D842`, `D849`-`D851`). The census in `tflw-acceptance/mutation/` is a measurement
+      # with a date on it, not a baseline — `D851` declines to gate on how much of the roster is
+      # covered, because the measured answer is one plant of 102 and a job named for roster vacuity
+      # that pinned that number would assert far less than its name.
+      #
+      # What it does gate is the seam `D767` keeps finding: `lib/mutation-covers.mjs` is
+      # hand-authored, one line of reasoning per relation, and `kill-detail.json` is measured. This
+      # refuses in BOTH directions — an `assertion` kill with no label, and a label for a relation
+      # that no longer happens. It reads three committed files, runs no stack, and takes
+      # milliseconds; it is here rather than in a regression phase for exactly that reason.
+      - name: The hand-authored mutation covers table matches the measured kill matrix
+        run: npm run read:mutation-matrix:gate
+        working-directory: testFlow-tests
+
   # Round 3 decision 16 (PLAN_CI.md, 2026-08-03 grill-me): the 30-phase sweep used to run
   # sequentially in one job (~34min). Split into a 4-leg GH Actions job matrix — real per-phase
   # timings pulled from run 30802717073 (2026-08-03) were greedy-LPT bin-packed into
