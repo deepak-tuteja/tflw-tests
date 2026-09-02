@@ -6,11 +6,17 @@
 // matching what CI needs per PLAN_CI.md decision 8. E5 (PLAN_ENTERPRISE_REGRESSION.md) adds the
 // LAYER_TAGS axis (`--tag api`/`--tag ui`/`--tag mixed`, alone-phases only, no smoke cross — see
 // LAYER_TAGS's own comment below for why). `M154h` adds `perf-ladder` (`D758`), the first phase in
-// this file that deliberately does not run in CI. Current total: 31 phases — **30 grouped, which is
-// what CI's four legs run, plus one `localOnly`** — and PHASES below is the source of truth for the
-// exact count, not this comment; don't let this number drift the way README.md's once did (fixed in
-// E2a). Everything else in this repository that names the sweep is naming the grouped sweep
-// and stays true; only this file counts the array.
+// this file that deliberately does not run in CI. **The size of the sweep is not stated here, and
+// not anywhere else in the tracked tree either** (`D767`, `M167`): `PHASES` below is the list,
+// `PHASE_GROUPS` is held to it by the partition guard, and the runner prints the number it actually
+// measured at the end of a run. `npm run verify:sweep-size` is what keeps that true.
+//
+// What this comment used to say is worth keeping as a shape rather than as text. It named its own
+// failure mode — "don't let this number drift the way README.md's once did" — and had drifted by
+// nine regardless, eight days after `M154g`/`D767` recorded the number deleted from this very file
+// (`M166-02`). It also asserted that nothing else in the repository counted the array; five other
+// tracked files were counting it, in three disagreeing numbers. A guard pointed at one file is what
+// let that stand.
 //
 // Every phase gets its own fresh Docker restart first. Necessary, not just cautious: `unique(...)`
 // resets its counter each `tflw run` invocation, but Postgres data persists across invocations —
@@ -378,7 +384,7 @@ const PHASES = [
 // M139-5 adds `security-acceptance-gate` to `core`, the fourth such placement and on the same terms
 // with one measurement behind it: its graded work is ~2s on the box, so what it actually costs a leg
 // is the stack restart every phase pays regardless. That makes bin *count* the only proxy worth
-// using here, and `core` — 8 phases, the unique smallest — the placement. Four hand-placed phases is
+// using here, and `core` — the unique smallest at 8 — the placement. Four hand-placed phases is
 // past the point where the re-pack above should still be deferred.
 //
 // M154g step 5 adds `input-acceptance` to `core`, the sixth hand placement, and this one is placed on

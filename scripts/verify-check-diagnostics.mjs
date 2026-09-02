@@ -34,7 +34,7 @@
 // script was green and correct throughout, and eleven SARIF entries failed in an acceptance phase.
 //
 // `refresh-tflw` re-packs from the local tflw checkout, so this answers in seconds, on your own
-// machine, with no Docker, no 32-phase sweep, no PR and no merge. **This is the whole of the fix
+// machine, with no Docker, no regression sweep, no PR and no merge. **This is the whole of the fix
 // for `M130-07`, and it is a discipline rather than machinery** — nothing forces anyone to run it,
 // and that is a decision (D350) rather than an omission.
 //
