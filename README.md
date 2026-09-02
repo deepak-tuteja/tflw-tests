@@ -151,8 +151,8 @@ of `*-check`/`*-rejection` phases proving specific CLI verbs/flags/fixtures that
 used to be the only evidence for: `mtls-rejection`, `safety-redaction-check`, `demo-fail-check`,
 `cli-flags-check`, `migrate-check`, `watch-check`, `safety-flags-check`, `check-diagnostics`,
 `pick-check`, `logging-check`, `report-overflow-check`, `ui-admin-check` (E2 + E3's own
-`orgs.tflw`), `webv2-admin-check` (pre-E3 housekeeping, + E3's own `orgs-mixed.tflw`) — 30 phases
-total, plus `perf-ladder`, the one phase that is **local-only and never runs in CI**: the measured half of
+`orgs.tflw`), `webv2-admin-check` (pre-E3 housekeeping, + E3's own `orgs-mixed.tflw`) — and then
+`perf-ladder`, the one phase that is **local-only and never runs in CI**: the measured half of
 the perf gate, which needs `fedora-box`, k6 and exclusive use of the machine, and reports
 `⊘ skipped` anywhere else rather than a pass. Six of its eight rungs drive apiV2 and two drive a
 managed echo target it starts itself, so it takes the same fresh restart as everything else. Each
@@ -171,9 +171,9 @@ script wins.
 restart, then `--tag smoke` (a mixed sample across all three layers) plus `demo-fail-check`/
 `cli-flags-check`/`check-diagnostics`, the cheapest restart-agnostic `*-check` phases. Not a
 replacement for the full sweep above — reserve that for changes that touch `testFlow`
-itself (a new tflw release is exactly the kind of cross-cutting change 30 independent phases exist
-to catch), or let CI catch it on push to `main`. Exits non-zero on any failure; archives its
-reports into `report-by-phase/` the same way the full sweep does.
+itself (a new tflw release is exactly the kind of cross-cutting change the sweep's independent
+phases exist to catch), or let CI catch it on push to `main`. Exits non-zero on any failure;
+archives its reports into `report-by-phase/` the same way the full sweep does.
 
 ### webV2 — browser-arc dogfood target (webV2-0)
 

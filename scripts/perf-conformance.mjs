@@ -822,8 +822,8 @@ const PROFILES = {
   // `D760` — the sweep runs `sweep`, not `full`, and the omission is `curve`.
   //
   // `full` is what the disarmed unit ran, and it is the right profile for a run whose whole purpose
-  // is the measurement. As a *phase* the arithmetic is different: the sweep already costs ~30 phases
-  // each paying a Docker restart, and `curve` is the breaking-point search — the longest leg, the
+  // is the measurement. As a *phase* the arithmetic is different: the sweep already costs dozens of
+  // phases each paying a Docker restart, and `curve` is the breaking-point search — the longest leg, the
   // most sensitive to a neighbour, and the one whose answer moves least between two commits on a
   // branch. `ladder` is the leg that catches a regression (7 rungs, ratio bands, ~4 min measured)
   // and `functional` is 55s and proves the perf constructs still work at all. Adding those two to a

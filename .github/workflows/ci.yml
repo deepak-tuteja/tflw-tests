@@ -55,7 +55,7 @@ jobs:
       # (`M138b-01`). The reason it is not being *fixed* instead is in CONTRIBUTING.md and is a
       # decision about what apiV2 is: a dogfood target, kept deliberately reshapeable so it can grow
       # whatever surface tflw needs next. Unit tests would pin the thing that is supposed to move.
-      # Its assurance is the 30-phase `.tflw` sweep below, asserted from outside over HTTP.
+      # Its assurance is the `.tflw` sweep below, asserted from outside over HTTP.
       #
       # `--fix` came off `lint` in the same change: an autofixing linter's failure surface is only
       # the unfixable subset, so the job reported on a tree it had just silently rewritten.
@@ -226,7 +226,19 @@ jobs:
         run: npm run read:mutation-matrix:gate
         working-directory: testFlow-tests
 
-  # Round 3 decision 16 (PLAN_CI.md, 2026-08-03 grill-me): the 30-phase sweep used to run
+      # `M167` (`D767`, `D857`). `D504` keeps the phase *list* out of prose; `D767` extended that to
+      # the count, which is the same copy compressed. `M154g` removed seven occurrences across four
+      # named files and pointed `verify:contributing` at one of them — and eight days later the count
+      # was still in six files, in three disagreeing numbers, one of them a file that repair's own
+      # close-claim lists as finished (`M166-02`). This is that guard widened to the set the repair
+      # actually had: every tracked file, not a list somebody wrote down. Quoting a stale count is
+      # allowed and asserting one is not, which is why `CONTRIBUTING.md` can still show the sentence
+      # that carried the defect. Static, milliseconds, and it runs its own guards on every invocation.
+      - name: No tracked file states how many phases the sweep has
+        run: npm run verify:sweep-size
+        working-directory: testFlow-tests
+
+  # Round 3 decision 16 (PLAN_CI.md, 2026-08-03 grill-me): the sweep used to run
   # sequentially in one job (~34min). Split into a 4-leg GH Actions job matrix — real per-phase
   # timings pulled from run 30802717073 (2026-08-03) were greedy-LPT bin-packed into
   # scripts/regression.mjs's PHASE_GROUPS, landing all 4 legs within ~8.0-8.7min of *sweep* time
@@ -317,7 +329,7 @@ jobs:
         run: npx playwright install chromium
         working-directory: testFlow-tests
 
-      # decisions 5-8 + Round 3 decision 16: this matrix leg's slice of the 30 phases only
+      # decisions 5-8 + Round 3 decision 16: this matrix leg's slice of the sweep only
       # (`--group`, scripts/regression.mjs), each its own fresh Docker restart, archived per-phase
       # into report-by-phase/ as it goes. `--verbose` (and the resulting GitHub Actions
       # ::group::/::endgroup:: log grouping, tflw decision 111.8) is auto-detected from

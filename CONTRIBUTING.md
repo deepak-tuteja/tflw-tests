@@ -68,6 +68,7 @@ npm run verify:external-targets
 npm run verify:perf-parity
 npm run verify:perf-baseline
 npm run verify:contributing
+npm run verify:sweep-size
 npm run verify:tflw-resolution
 npm run verify:provenance
 npm run verify:construct-coverage
@@ -205,6 +206,26 @@ xvfb-run -a npm run regression -- --group security-ui
   drift. That line informs and does not fail, because a mutation added in tflw is the right change
   and reddening this repository's CI for it would leave the person who tripped it with a
   seven-hour box run as their only remedy.
+- **`npm run verify:sweep-size`** — **no tracked file says how many phases the sweep has.** `D504`
+  keeps the phase *list* out of prose because a copy of it would be a copy with no guard. A count is
+  that same copy compressed, and `D767` deleted it for exactly that reason after `M154g-14` found
+  three sentences here claiming 30 while `PHASES` held 38.
+  It drifted again anyway, and *how* is the reason this gate exists rather than a third correction.
+  `M154g`'s repair named **four files** and removed seven occurrences; the guard it left behind reads
+  **one** of them, this document. Eight days later the count was still in **six** files, in three
+  disagreeing numbers — and one of the six is `scripts/regression.mjs`, which that repair's own
+  close-claim lists as finished (`M166-02`; `git log -L 9,9` puts the line's last write two days
+  *before* the repair, so the pass missed a line already sitting there). The stale sentence was also
+  the warning: it ended *"don't let this number drift the way README.md's once did"*, and README had
+  drifted again. **A repair spanning six files with a guard covering one looks complete for exactly
+  as long as nobody counts.**
+  So the guard is now the whole tracked tree rather than a list somebody wrote down. It forbids a
+  numeral bound to `phase`/`phases` with at most one word between them, and **exempts text inside
+  double quotes** (`D857`): the paragraph above quotes the sentence that carried the defect, and a
+  rule that forced that to be paraphrased would delete the evidence in the name of the finding. You
+  may quote a stale count; you may not assert one. It states its own limits in its header — a size
+  written without the word, or spelled out, gets past it — and it runs its guards, negative controls
+  included, on every invocation rather than behind a flag.
 - **`npm run verify:provenance`** — **nothing in this repository's prose points somewhere a reader
   cannot follow.** Three claims, checked as one because they are one claim from the reader's side.
   Eight markdown links pointed at `../testFlow/…`, and a relative link cannot climb above a

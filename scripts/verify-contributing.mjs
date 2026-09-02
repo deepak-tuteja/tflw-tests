@@ -129,6 +129,14 @@ const CLASSIFIED = [
   {
     wf: 'ci.yml',
     job: 'acceptance-check',
+    cmd: 'npm run verify:sweep-size',
+    class: 'gate',
+    local: 'npm run verify:sweep-size',
+    why: "`M167` (`D767`, `D857`) — no tracked file states how many phases the regression sweep has. `D504` keeps the phase list out of prose because a copy has no guard; a count is that copy compressed and drifted three times regardless. `M154g` deleted seven occurrences across four files and this file's guard was pointed at one of them; `M166-02` found the count still in six files, in three disagreeing numbers, one of them a file that repair's close-claim names as finished. A contributor gate rather than ci-only because it is milliseconds and because the person who will next write the number is the one editing the prose. Quoting a stale count is allowed — `CONTRIBUTING.md` shows the sentence that carried the defect — and asserting one is not",
+  },
+  {
+    wf: 'ci.yml',
+    job: 'acceptance-check',
     cmd: 'npm run verify:contributing',
     class: 'gate',
     local: 'npm run verify:contributing',
