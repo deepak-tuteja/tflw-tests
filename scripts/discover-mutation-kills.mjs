@@ -78,6 +78,7 @@ import { fileURLToPath } from 'node:url';
 
 import { siblingRoot, readMutations, editsOf, bundleInputs, classify, anchorState } from './lib/mutations.mjs';
 import { plantsFor } from './lib/constructs.mjs';
+import { claimDigest, patchDigest, aggregate, shapeOfRosterOutput } from './lib/census-shape.mjs';
 import { resolveTflw } from './lib/tflw-bin.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -160,6 +161,10 @@ const WINDOW = flag('--window') !== null ? Number(flag('--window')) : 20;
 const OUT_DIR = flag('--out') ? path.resolve(flag('--out')) : path.join(homedir(), '.tflw-mutation');
 const MATRIX = path.join(OUT_DIR, 'kill-matrix.jsonl');
 const META = path.join(OUT_DIR, 'run-meta.json');
+// `M168-09`. The roster and the registry a census was measured against, recorded as content rather
+// than as a count. Its own file rather than a field on `run-meta.json`, which is a nine-line header
+// a human reads and which 418 digests would drown (`D-M168-09-5`).
+const SHAPE = path.join(OUT_DIR, 'census-shape.json');
 // `M164c`. A kill records WHICH plants went red and nothing about HOW, and those are two
 // different findings. The acceptance grader prints both — a plant whose fixture never ran says
 // `(skipped: no report)` and has an empty tally, a plant whose own known answer came out false
@@ -227,7 +232,10 @@ function runRoster() {
   }
   const missing = GRADED.filter((id) => !seen.has(id));
   const red = GRADED.filter((id) => seen.get(id) === '✗');
-  return { code: r.status, secs: Number(((Date.now() - t) / 1000).toFixed(1)), seen, missing, red, out };
+  // `M168-09`. The same table, one column further along: `recall 4/4  precision 3/3`. The
+  // DENOMINATORS only — the numerator is the measurement and moving it is the whole point of a
+  // mutation, so only a baseline's shape is meaningful and only a baseline records it.
+  return { code: r.status, secs: Number(((Date.now() - t) / 1000).toFixed(1)), seen, missing, red, out, shape: shapeOfRosterOutput(out) };
 }
 
 // ── the journal (tflw's own) ──────────────────────────────────────────────────────────────────
@@ -297,7 +305,20 @@ if (existsSync(MATRIX)) {
     try { const row = JSON.parse(line); done.set(row.id, row); } catch { /* a torn last line from a kill -9; re-run overwrites it */ }
   }
 }
-const record = (row) => { appendFileSync(MATRIX, `${JSON.stringify(row)}\n`); done.set(row.id, row); };
+/**
+ * `M168-09`. The roster a row was measured against, stamped onto the row.
+ *
+ * `M168-02`'s carry is that *a verdict is a statement about a mutation **and the roster it was
+ * measured against**, and the matrix keys it by the mutation alone*. Recording the roster once per
+ * census is the second half of that sentence; stamping it per row is the whole sentence, and costs
+ * one field. Set at baseline, so the retraction rows written before it carry `null` — which is
+ * correct: a retraction is not a measurement of anything.
+ */
+let ROSTER_STAMP = null;
+const record = (row) => {
+  appendFileSync(MATRIX, `${JSON.stringify(ROSTER_STAMP ? { ...row, rosterStamp: ROSTER_STAMP } : row)}\n`);
+  done.set(row.id, row);
+};
 
 /**
  * A recorded id counts as done unless its most recent row RETRACTS it. Retraction exists because a
@@ -451,6 +472,37 @@ writeFileSync(META, `${JSON.stringify({
   baselineRosterSeconds: base.secs,
   revendorSeconds: r.secs,
 }, null, 2)}\n`);
+
+/**
+ * `M168-09`. The census's own denominators, recorded as content.
+ *
+ * Two maps and one aggregate. `plants[id].claim` is a digest of the whole plant record — every
+ * field is a claim, and picking a subset is a judgement that can be wrong toward *unchanged*
+ * (`D-M168-09-1`). `plants[id].shape` is the clause count the grader just printed, which nothing
+ * cheap can recompute later, so it is recorded here and compared only by the next baseline
+ * (`D-M168-09-4`). `registry[id]` digests the patch itself — `find`/`replace`/`edits` — because a
+ * registry that rewrites one mutation keeps its count while every verdict keyed to that id starts
+ * answering a different question.
+ *
+ * Written at every baseline, including `--baseline-only`, which is what makes this cheap to
+ * refresh: ~95 s against the seven hours a census costs.
+ */
+const plantShape = {};
+for (const p of plantsFor('acceptance')) {
+  plantShape[p.id] = { claim: claimDigest(p), shape: base.shape.get(p.id) ?? null };
+}
+const registryShape = Object.fromEntries(mutations.map((m) => [m.id, patchDigest(m)]));
+ROSTER_STAMP = aggregate({ plants: plantShape, registry: registryShape });
+writeFileSync(SHAPE, `${JSON.stringify({
+  at: new Date().toISOString(),
+  aggregate: ROSTER_STAMP,
+  plants: plantShape,
+  registry: registryShape,
+}, null, 2)}\n`);
+const unshaped = Object.values(plantShape).filter((s) => !s.shape).length;
+console.log(`  roster fingerprint ${ROSTER_STAMP} — ${Object.keys(plantShape).length} plant(s), `
+  + `${Object.keys(registryShape).length} registry entr(ies)${unshaped > 0 ? `, ${unshaped} with no clause shape in the table` : ''}`);
+
 console.log(`  baseline green: ${GRADED.length} plant(s) produced their known answers\n`);
 if (BASELINE_ONLY) process.exit(0);
 

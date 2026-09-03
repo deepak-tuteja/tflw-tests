@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { PLANTS, plantsFor } from './lib/constructs.mjs';
 import { COVERS } from './lib/mutation-covers.mjs';
 import { readMutations, siblingRoot } from './lib/mutations.mjs';
+import { claimDigest, patchDigest, diffDigests } from './lib/census-shape.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DIR = path.join(ROOT, 'tflw-acceptance', 'mutation');
@@ -139,25 +140,93 @@ if (stamps.length > 1) {
   // meta block is written once per invocation and a resumed sweep is several of them.
   console.log(`  ${hours.toFixed(1)} h wall clock across ${stamps.length} recorded row(s), resumes included`);
 }
+// `M168-09`. The denominators are compared by CONTENT, not by cardinality.
+//
+// Both lines here used to be a difference of two integers, and both could be false while being
+// arithmetically correct. `M168-02` is the proof: it took `C108` from four graded clauses to seven,
+// added no construct id, and this printed `roster unchanged at 102 acceptance-graded plant(s)` in
+// the same run that re-measured a verdict *precisely because the roster had moved*. The registry
+// half is the same shape and worse, because the registry lives in tflw on its own merge cadence and
+// a mutation's `find`/`replace` bodies are the patch itself.
+//
+// Three outcomes, and they are not one finding: **added** has never been in a census, **removed**
+// leaves verdicts about something that no longer exists, and **changed** is the dangerous one — the
+// verdict is still keyed to a live id and now means something else.
+const shapePath = path.join(DIR, 'census-shape.json');
+const shape = fs.existsSync(shapePath) ? JSON.parse(fs.readFileSync(shapePath, 'utf8')) : null;
+const name = (ids) => (ids.length > 8 ? `${ids.slice(0, 8).join(', ')} +${ids.length - 8} more` : ids.join(', '));
+
+const liveClaims = new Map(plantsFor('acceptance').map((p) => [p.id, claimDigest(p)]));
+if (!shape) {
+  const plantGrew = GRADED.length - (meta.gradedPlants ?? GRADED.length);
+  console.log(`  roster: no fingerprint recorded — this census predates \`M168-09\`, so all it can compare is the count`
+    + ` (${meta.gradedPlants ?? '?'} at census time, ${GRADED.length} now${plantGrew === 0 ? ', which a plant whose clauses moved would not change' : ''})`);
+} else {
+  const d = diffDigests(shape.plants ? Object.fromEntries(Object.entries(shape.plants).map(([k, v]) => [k, v.claim])) : {}, liveClaims);
+  console.log(
+    d.changed.length + d.added.length + d.removed.length === 0
+      ? `  roster unchanged: ${d.unchanged} plant(s) hash identically to the fingerprint taken ${shape.at?.slice(0, 10)}`
+      : `  roster has MOVED since ${shape.at?.slice(0, 10)}: ${d.changed.length} plant(s) changed${d.changed.length ? ` (${name(d.changed)})` : ''}`
+        + `${d.added.length ? `, ${d.added.length} added (${name(d.added)})` : ''}`
+        + `${d.removed.length ? `, ${d.removed.length} removed (${name(d.removed)})` : ''}`
+        + ` — ${d.unchanged} unchanged`,
+  );
+  // The verdicts that are demonstrably about a plant that has moved. A *survived* verdict may have
+  // gone stale too and nothing here can tell which one — that is the whole census — so this names
+  // only what it can name, and says what it is leaving out.
+  const moved = new Set([...d.changed, ...d.removed]);
+  const suspect = [...matrix.values()].filter((r) => (r.killed ?? []).some((id) => moved.has(id)));
+  if (suspect.length > 0) {
+    console.log(`    ${suspect.length} recorded verdict(s) name a moved plant — re-measure them with:`);
+    console.log(`    npm run discover:mutation-kills -- --remeasure ${suspect.map((r) => r.id).join(',')} --why "<what changed>"`);
+    console.log(`    (a \`survived\` verdict can go stale the same way and this cannot say which — that answer is a whole census)`);
+  }
+}
+
 try {
   const { mutations } = await readMutations();
-  const grew = mutations.length - (meta.registryTotal ?? mutations.length);
-  console.log(
-    grew === 0
-      ? `  registry unchanged at ${mutations.length} mutation(s) since the census`
-      : `  registry has ${grew > 0 ? 'grown' : 'shrunk'} by ${Math.abs(grew)}: ${meta.registryTotal} at census time, ${mutations.length} now — ` +
-        `${grew > 0 ? `${grew} mutation(s) have never been tried against the roster` : 'the census covers mutations that no longer exist'}`,
-  );
+  const livePatches = new Map(mutations.map((m) => [m.id, patchDigest(m)]));
+  if (!shape) {
+    const grew = mutations.length - (meta.registryTotal ?? mutations.length);
+    console.log(`  registry: no fingerprint recorded — count only`
+      + ` (${meta.registryTotal ?? '?'} at census time, ${mutations.length} now`
+      + `${grew === 0 ? ', which a registry that rewrote one entry in place would not change' : ''})`);
+  } else {
+    const d = diffDigests(shape.registry ?? {}, livePatches);
+    console.log(
+      d.changed.length + d.added.length + d.removed.length === 0
+        ? `  registry unchanged: ${d.unchanged} mutation(s) hash identically to the fingerprint`
+        : `  registry has MOVED: ${d.changed.length} patch(es) rewritten in place${d.changed.length ? ` (${name(d.changed)})` : ''}`
+          + `${d.added.length ? `, ${d.added.length} never tried (${name(d.added)})` : ''}`
+          + `${d.removed.length ? `, ${d.removed.length} no longer exist (${name(d.removed)})` : ''}`
+          + ` — ${d.unchanged} unchanged`,
+    );
+  }
 } catch (e) {
   console.log(`  registry not readable from ${siblingRoot()} — cannot say whether it has moved (${String(e.message).split('\n')[0]})`);
 }
-const plantGrew = GRADED.length - (meta.gradedPlants ?? GRADED.length);
-console.log(
-  plantGrew === 0
-    ? `  roster unchanged at ${GRADED.length} acceptance-graded plant(s) since the census`
-    : `  roster has ${plantGrew > 0 ? 'grown' : 'shrunk'} by ${Math.abs(plantGrew)}: ${meta.gradedPlants} at census time, ${GRADED.length} now — ` +
-      `${plantGrew > 0 ? `${plantGrew} plant(s) have never been in a census` : 'the census graded plants that no longer exist'}`,
-);
+
+// Per-row, because `M168-02`'s carry is that a verdict is a statement about a mutation AND the
+// roster it was measured against. The stamp is an aggregate over both maps, so it can be compared
+// to the shape file but NOT recomputed here: half of it is the grader's measured clause counts, and
+// recomputing those needs a seven-container stack. Hence *matches the fingerprint* rather than
+// *matches the tree*.
+const rowStamps = new Map();
+for (const r of matrix.values()) rowStamps.set(r.rosterStamp ?? null, (rowStamps.get(r.rosterStamp ?? null) ?? 0) + 1);
+const unstamped = rowStamps.get(null) ?? 0;
+if (unstamped > 0) {
+  console.log(`  ${unstamped} of ${matrix.size} verdict(s) carry no roster stamp — measured before \`M168-09\`, so their staleness cannot be determined at all`);
+}
+for (const [s, n] of rowStamps) {
+  if (s === null) continue;
+  console.log(`  ${n} verdict(s) stamped ${s}${shape ? (s === shape.aggregate ? ' — the current fingerprint' : ' — an EARLIER fingerprint than the one recorded') : ''}`);
+}
+// The residue, stated rather than left to be found. `verify-construct-acceptance.mjs` holds the
+// predicate inside each `recall(…)`/`precision(…)`, and no scheme for attributing that source text
+// back to a plant id avoids mis-attributing setup code to the previous plant — a false *unchanged*,
+// the one direction that must not happen. So a threshold loosened from `<= 6` to `<= 60` still
+// reports the roster unchanged. The clause COUNT is covered, and only by the next baseline.
+console.log('  A clause whose predicate changed without changing its plant record or its count is not visible here (`M168-09` §4).');
 console.log('  This informs; it does not fail. Re-run `npm run discover:mutation-kills` on the box to close the gap.');
 
 console.log(

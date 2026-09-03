@@ -1,0 +1,732 @@
+{
+  "at": "2026-09-03T11:57:17.580Z",
+  "aggregate": "a3c0523a8616",
+  "plants": {
+    "C1": {
+      "claim": "5d8a4bcd27a1",
+      "shape": "4/2"
+    },
+    "C2": {
+      "claim": "85d124bec249",
+      "shape": "24/2"
+    },
+    "C3": {
+      "claim": "5ea4fc7615cd",
+      "shape": "5/4"
+    },
+    "C4": {
+      "claim": "7a62cecc8c59",
+      "shape": "6/5"
+    },
+    "C5": {
+      "claim": "fe939855b9ad",
+      "shape": "4/3"
+    },
+    "C6": {
+      "claim": "ef918bf2593d",
+      "shape": "2/2"
+    },
+    "C7": {
+      "claim": "e3f909aed6ee",
+      "shape": "2/1"
+    },
+    "C8": {
+      "claim": "880ce8e16435",
+      "shape": "1/2"
+    },
+    "C9": {
+      "claim": "dd4817a49344",
+      "shape": "1/2"
+    },
+    "C10": {
+      "claim": "8792238b065d",
+      "shape": "1/2"
+    },
+    "C11": {
+      "claim": "8cbea2557e48",
+      "shape": "2/2"
+    },
+    "C12": {
+      "claim": "0cd38638d10b",
+      "shape": "2/5"
+    },
+    "C13": {
+      "claim": "1a469946c1e9",
+      "shape": "2/1"
+    },
+    "C14": {
+      "claim": "52529042634b",
+      "shape": "2/1"
+    },
+    "C15": {
+      "claim": "cdc4f987015d",
+      "shape": "2/1"
+    },
+    "C16": {
+      "claim": "0509d97a03a6",
+      "shape": "3/1"
+    },
+    "C17": {
+      "claim": "9676e1421737",
+      "shape": "2/2"
+    },
+    "C18": {
+      "claim": "c2b4fbc6a02b",
+      "shape": "2/2"
+    },
+    "C19": {
+      "claim": "8f63e320752d",
+      "shape": "3/3"
+    },
+    "C20": {
+      "claim": "d5c5253c04a0",
+      "shape": "3/2"
+    },
+    "C21": {
+      "claim": "45642d74f585",
+      "shape": "2/1"
+    },
+    "C22": {
+      "claim": "ca3333ba122e",
+      "shape": "2/1"
+    },
+    "C23": {
+      "claim": "aa21a15180d0",
+      "shape": "2/3"
+    },
+    "C24": {
+      "claim": "048241fc55b3",
+      "shape": "3/2"
+    },
+    "C25": {
+      "claim": "fa9b1a0aadad",
+      "shape": "3/2"
+    },
+    "C26": {
+      "claim": "5adf6058652b",
+      "shape": "2/3"
+    },
+    "C27": {
+      "claim": "06c7fde7a26b",
+      "shape": "3/2"
+    },
+    "C28": {
+      "claim": "034baa2cf423",
+      "shape": "2/1"
+    },
+    "C29": {
+      "claim": "777565307f8b",
+      "shape": "2/1"
+    },
+    "C30": {
+      "claim": "6eedd60bdabf",
+      "shape": "3/3"
+    },
+    "C31": {
+      "claim": "6f2f83a640b9",
+      "shape": "3/2"
+    },
+    "C32": {
+      "claim": "528e8dc1209e",
+      "shape": "3/2"
+    },
+    "C33": {
+      "claim": "b2434652b8d1",
+      "shape": "4/3"
+    },
+    "C34": {
+      "claim": "07c27f4742cf",
+      "shape": "3/2"
+    },
+    "C35": {
+      "claim": "73fe10c7b12b",
+      "shape": "4/2"
+    },
+    "C36": {
+      "claim": "5d91c65df0fc",
+      "shape": "3/2"
+    },
+    "C37": {
+      "claim": "066fcebd5d36",
+      "shape": "2/3"
+    },
+    "C38": {
+      "claim": "0f1515fc3a59",
+      "shape": "3/3"
+    },
+    "C39": {
+      "claim": "7d7547386a2d",
+      "shape": "3/4"
+    },
+    "C40": {
+      "claim": "31639ef5c3fe",
+      "shape": "3/3"
+    },
+    "C41": {
+      "claim": "9b627aa2f581",
+      "shape": "6/5"
+    },
+    "C42": {
+      "claim": "c2ca922ce085",
+      "shape": "4/4"
+    },
+    "C43": {
+      "claim": "38281676788f",
+      "shape": "5/3"
+    },
+    "C44": {
+      "claim": "3f823347da0d",
+      "shape": "3/2"
+    },
+    "C45": {
+      "claim": "bbc4f12339da",
+      "shape": "2/2"
+    },
+    "C46": {
+      "claim": "97c6f1f65a8a",
+      "shape": "3/2"
+    },
+    "C47": {
+      "claim": "d3348bec6e0d",
+      "shape": "3/2"
+    },
+    "C48": {
+      "claim": "b44e43b8fe7d",
+      "shape": "6/1"
+    },
+    "C49": {
+      "claim": "06dfeae5c6e1",
+      "shape": "3/1"
+    },
+    "C50": {
+      "claim": "f8365bd00bf1",
+      "shape": "3/1"
+    },
+    "C54": {
+      "claim": "b482be9a8dfd",
+      "shape": "4/4"
+    },
+    "C60": {
+      "claim": "a3fd80d9b280",
+      "shape": "6/2"
+    },
+    "C61": {
+      "claim": "0541133d1aa5",
+      "shape": "3/1"
+    },
+    "C62": {
+      "claim": "505c18611328",
+      "shape": "2/1"
+    },
+    "C63": {
+      "claim": "8dd3d1c30c3c",
+      "shape": "2/1"
+    },
+    "C64": {
+      "claim": "57e81310d574",
+      "shape": "2/1"
+    },
+    "C65": {
+      "claim": "bea748a19fd6",
+      "shape": "3/1"
+    },
+    "C66": {
+      "claim": "b96beebf739d",
+      "shape": "3/1"
+    },
+    "C67": {
+      "claim": "8f81ace549a4",
+      "shape": "3/2"
+    },
+    "C68": {
+      "claim": "088d2818cc71",
+      "shape": "5/3"
+    },
+    "C69": {
+      "claim": "1d7eccc99007",
+      "shape": "5/2"
+    },
+    "C70": {
+      "claim": "256318c37008",
+      "shape": "3/1"
+    },
+    "C71": {
+      "claim": "4a92eb492e19",
+      "shape": "4/1"
+    },
+    "C72": {
+      "claim": "202b9784f2db",
+      "shape": "3/1"
+    },
+    "C73": {
+      "claim": "b63f087a742b",
+      "shape": "3/2"
+    },
+    "C74": {
+      "claim": "10eeb37f382b",
+      "shape": "4/2"
+    },
+    "C75": {
+      "claim": "7f176941c0a1",
+      "shape": "6/2"
+    },
+    "C76": {
+      "claim": "c6b26d55a0bb",
+      "shape": "5/2"
+    },
+    "C77": {
+      "claim": "466f19d05cb0",
+      "shape": "3/3"
+    },
+    "C78": {
+      "claim": "da616191fa59",
+      "shape": "4/2"
+    },
+    "C79": {
+      "claim": "c479e60dc899",
+      "shape": "4/2"
+    },
+    "C80": {
+      "claim": "a4fd8c2bcfeb",
+      "shape": "3/2"
+    },
+    "C81": {
+      "claim": "a3c4ee4bfe76",
+      "shape": "4/2"
+    },
+    "C82": {
+      "claim": "f0d4503b6086",
+      "shape": "4/2"
+    },
+    "C83": {
+      "claim": "50afd2251191",
+      "shape": "3/2"
+    },
+    "C84": {
+      "claim": "c3a73dabde63",
+      "shape": "4/2"
+    },
+    "C85": {
+      "claim": "a45741f891dd",
+      "shape": "5/2"
+    },
+    "C86": {
+      "claim": "902f1d16ab94",
+      "shape": "6/2"
+    },
+    "C87": {
+      "claim": "0747d3f8da95",
+      "shape": "3/2"
+    },
+    "C88": {
+      "claim": "0a848a7579e4",
+      "shape": "4/2"
+    },
+    "C89": {
+      "claim": "226627ae0c8c",
+      "shape": "2/2"
+    },
+    "C90": {
+      "claim": "4c5816a79f70",
+      "shape": "3/2"
+    },
+    "C91": {
+      "claim": "5cf8dd17f7fd",
+      "shape": "4/2"
+    },
+    "C92": {
+      "claim": "5d17f0819355",
+      "shape": "3/3"
+    },
+    "C93": {
+      "claim": "0374af3013e2",
+      "shape": "4/2"
+    },
+    "C94": {
+      "claim": "9d14b1b76295",
+      "shape": "3/1"
+    },
+    "C95": {
+      "claim": "eda33e0bf620",
+      "shape": "4/1"
+    },
+    "C96": {
+      "claim": "bdcfeb8b25ec",
+      "shape": "3/1"
+    },
+    "C97": {
+      "claim": "524460af571b",
+      "shape": "2/2"
+    },
+    "C98": {
+      "claim": "10a7e0a89561",
+      "shape": "3/2"
+    },
+    "C99": {
+      "claim": "421b76c2a727",
+      "shape": "5/2"
+    },
+    "C100": {
+      "claim": "714a92e65677",
+      "shape": "3/2"
+    },
+    "C101": {
+      "claim": "2023846118c1",
+      "shape": "2/1"
+    },
+    "C102": {
+      "claim": "12d516b0b13d",
+      "shape": "2/2"
+    },
+    "C103": {
+      "claim": "47e711a37db4",
+      "shape": "3/1"
+    },
+    "C104": {
+      "claim": "27f0a63fc06f",
+      "shape": "2/2"
+    },
+    "C105": {
+      "claim": "95a05b4da2ef",
+      "shape": "2/2"
+    },
+    "C106": {
+      "claim": "e5b3ad4f8913",
+      "shape": "2/1"
+    },
+    "C107": {
+      "claim": "a9a29e29ae15",
+      "shape": "2/1"
+    },
+    "C108": {
+      "claim": "9804a7670592",
+      "shape": "4/3"
+    },
+    "C112": {
+      "claim": "afdc483fcd54",
+      "shape": "4/3"
+    },
+    "C113": {
+      "claim": "05ca5d558b24",
+      "shape": "4/2"
+    }
+  },
+  "registry": {
+    "bom-col": "edbce7fd22c1",
+    "unicode-escape-recovery": "1b53dfbcce47",
+    "bom-not-hidden-exempt": "c2ee0547635a",
+    "unlexable-drops-at": "dc6aa411eec7",
+    "unlexable-drops-hash": "161d50bcb69c",
+    "unlexable-drops-quote": "25acb2d20827",
+    "max-run-chars-unbounded": "1d6de34e63af",
+    "max-unexpected-unbounded": "e36634ff4d66",
+    "invisible-requoted": "7c6cf751e319",
+    "cut-short-dropped": "4770a21e9a04",
+    "tab-under-tf003": "14dfa0a7a4f2",
+    "duration-any-adjacent-word": "f4bfa901c5a9",
+    "duration-table-gains-hours": "c394a5f81b45",
+    "date-check-before-duration": "b559e17487ed",
+    "m98c-02-both-halves": "d38556ed774e",
+    "number-rule-broadened": "56c4ff8df6ac",
+    "unknown-escape-silent": "2c7782fa3aca",
+    "unclosed-bracket-outermost": "9fea8b15e11b",
+    "unclosed-bracket-silent": "a6b37951549d",
+    "empty-tag-on-every-tag": "2c5ae8f1ffc4",
+    "anchor-never-moves": "7f27b1819a97",
+    "anchor-ignores-extent": "b429882ab2a0",
+    "anchor-blank-only": "38fe7d114a80",
+    "anchor-no-floor": "e5a77cfdf7fd",
+    "anchor-keeps-trailing-space": "9851a553ab22",
+    "anchor-own-line-no-clamp": "c2e6e8852865",
+    "anchor-locator-unmoved": "9351b60e26b8",
+    "anchor-caret-width": "84138c236227",
+    "backoff-hold-kind": "e4ac310eb5f6",
+    "backoff-constant-concurrency": "46ccbf67e334",
+    "leaked-fixture-server": "945abbd180bf",
+    "imports-drop-body": "3123d802e45a",
+    "cycle-imported-shadowing": "81429d582d3f",
+    "cycle-anchor-foreign-span": "6e2fad9df55f",
+    "config-directive-list": "e7fb6c343349",
+    "cli-reference-section": "478bdf94908f",
+    "session-source-lines": "2dbb332c857d",
+    "oauth2-session-ctx": "31f935b013e7",
+    "aborted-badge": "8076bd87f8f1",
+    "aborted-threshold-verdict": "93af79303109",
+    "browser-close-rethrow": "00df0be17eff",
+    "log-file-mkdir": "2ad2a4a22fc9",
+    "log-file-stderr-mirror": "e2cbc8963329",
+    "diagnostic-example-wrong-code": "5964ef8f50f6",
+    "diagnostic-example-not-derived": "20ff74e1985a",
+    "ok-ignores-no-verdict": "27c86c24092b",
+    "verdict-not-restamped-after-splice": "68a359caabe7",
+    "badge-drops-inconclusive": "c2d6346e9895",
+    "comparison-coerces-operands": "2426beea1902",
+    "base-url-ignores-service-prefix": "158001f2e1ba",
+    "base-url-treats-undefined-as-false": "b542ac82898b",
+    "capturable-ignores-of-modifier": "1c0157c2bdba",
+    "mask-rule-inverted": "99a8fb6e4cf0",
+    "config-files-resolve-against-cwd": "58704a87cc32",
+    "config-files-are-errors": "1adad6123fa7",
+    "refresh-billed-to-endpoint": "d72b041b68ff",
+    "failed-refresh-billed-to-endpoint": "251fbbb661e2",
+    "demo-never-starts": "c2ed898b2d0e",
+    "demo-outlives-the-run": "c5d2cceb8496",
+    "demo-url-not-threaded-to-workers": "20ca3db482e6",
+    "install-browsers-silent-success": "6ca3c54bcf0f",
+    "reserved-scheme-passes-through": "3efd39d6ae90",
+    "assertion-diagnosis-never-fires": "40816e02ed0d",
+    "diagnosis-ignores-the-resolved-element": "f165456a080e",
+    "passing-assertion-gets-annotated": "fd2ed3090bc5",
+    "wait-until-diagnosis-dropped": "347f56b421c8",
+    "saturation-lag-arm-never-fires": "b0c6382e77c7",
+    "saturation-cpu-arm-never-fires": "6a493698aee7",
+    "saturation-ignores-the-min-window": "f6ec7c924b7d",
+    "text-diagnosis-offers-structural-css-paths": "a61813d43585",
+    "unnamed-arm-dropped-for-every-kind": "56ea7923ff7a",
+    "open-model-back-to-fetch": "9cce956dd7ab",
+    "open-model-agents-per-arrival": "5db7ec2547cd",
+    "open-model-maxsockets-bounded": "4e328a3d58e1",
+    "untitled-uri-back-to-filepath": "8aba4830441d",
+    "untitled-buffer-silently-skipped": "b820c6c2bb59",
+    "pathless-buffer-gets-a-synthetic-path": "3cff8c78d8b1",
+    "rename-name-unvalidated": "c7cf54974bca",
+    "preparerename-answers-the-first-span": "4d8c71f7206f",
+    "step-completion-without-its-detail": "0211a7f5f02e",
+    "blank-line-completion-keeps-the-probe-character": "2187a8d4a7e3",
+    "blank-line-completion-answers-at-column-zero": "ebaf72767317",
+    "step-hover-without-the-grammar-guard": "76433db721f3",
+    "imported-action-labelled-for-every-file": "2f0cb9776e06",
+    "docs-index-groups-sorted-alphabetically": "4faaf39f7dad",
+    "report-failure-first-on-a-green-run": "f5fec546844a",
+    "filter-highlighted-but-never-applied": "cd4b28b61220",
+    "evidence-collapsed-on-the-failing-step-too": "767fdda4a64d",
+    "final-attempt-always-reads-passed": "edd313c2bc9d",
+    "retry-count-never-printed": "f24a4935dcf4",
+    "last-run-filter-recorded-as-empty-string": "675e219d159a",
+    "ambiguity-count-from-a-second-query": "5fe932f25fb3",
+    "ambiguity-list-without-discriminators": "e0c7b6bba0f4",
+    "nearest-matches-not-deduped": "8c32fd25525d",
+    "suggestion-offered-without-its-ambiguity-caveat": "27b16595cad4",
+    "speculative-line-replaces-the-final-diagnosis": "31dc9c560986",
+    "blocked-port-hint-reads-undicis-prose": "8a83d35a3e79",
+    "suggest-threshold-back-on-the-typed-word": "b34f2646a19f",
+    "warning-handler-installed-without-delegation": "aa8a40e138de",
+    "absolute-url-lexes-outside-method-position": "0060c5e917fa",
+    "absolute-api-target-still-gets-the-base-prepended": "1cc9ec9ec5e1",
+    "absolute-open-target-still-gets-the-web-base-prepended": "eb6463a1a5e8",
+    "tf058-fires-when-no-config-was-resolved": "e4ebf19af2c7",
+    "tf051-demands-a-base-url-for-an-absolute-step": "fb33b2cbee35",
+    "literal-operand-reads-interpolated-text": "a847e5bf5d7d",
+    "random-range-rejects-equal-bounds": "db35ce2eee40",
+    "decode-test-rederived-in-the-checker": "06611ebad072",
+    "hold-window-invents-a-budget": "0d44e48aa6a5",
+    "hold-window-is-an-error": "a610fd896bbf",
+    "data-table-extension-is-case-sensitive": "f9f87dd7d1d8",
+    "applicability-collapses-to-pass": "4f9978009d12",
+    "floor-filters-findings-not-rules": "0550a1f89f75",
+    "no-power-to-fail-passes": "c8e759f0fea5",
+    "authz-no-power-to-fail-passes": "0db7b824cbae",
+    "input-no-power-to-fail-passes": "3bc52672afc2",
+    "input-disclosure-control-not-subtracted": "f9e6c30c12c5",
+    "input-class-optin-ignored": "0a8fe4f0e494",
+    "input-stack-frame-raw-newline-only": "68042d1e89df",
+    "gate-drops-withheld-findings": "288e54e136b9",
+    "seeded-findings-gate": "eea5bb357343",
+    "fingerprint-hashes-the-detail": "f20bc1f0099b",
+    "seeded-findings-lose-their-provenance": "568adfc229f4",
+    "baseline-prunes-stale-entries": "15a81507e18c",
+    "session-findings-dropped": "92341864fb84",
+    "request-headers-not-lowercased": "ab097fba3ef5",
+    "authorized-target-accepts-wildcards": "136f1d290ce0",
+    "tls-probe-floor-left-at-default": "8862a4545c8d",
+    "tls-probe-ignores-insecure-in-cache-key": "cb14db503305",
+    "tls-probe-authorized-target-unchecked": "2b65bc240e21",
+    "tls-facts-absent-counts-as-applicable": "e87117c34ddc",
+    "tls-version-old-fires-on-unknown-protocol": "b6769d317ca3",
+    "probe-opens-a-connection-the-floor-discarded": "463cfb9e5878",
+    "negated-pass-hides-its-findings": "42b4918fa4c2",
+    "degraded-probe-not-announced": "414e63f3d2e5",
+    "a-half-asked-question-reported-as-a-clean-answer": "a1918a581291",
+    "the-ceiling-goes-unprinted": "0c8a8ea3594f",
+    "unaskable-folded-into-refused": "407d1d7da66d",
+    "enumeration-without-the-affirmation": "d17efe230fb8",
+    "enumeration-verifies-the-certificate-after-all": "08dc5694d810",
+    "enumeration-goes-concurrent": "1895d5b4d84d",
+    "kb-prose-rendered-unescaped": "c53c3f20cefa",
+    "unknown-rule-drops-the-finding": "0b091a19c6b9",
+    "sarif-written-when-nothing-scanned": "ebfca75cdc38",
+    "sarif-includes-seeded-findings": "ef7228df9b7f",
+    "sarif-suppresses-below-floor": "8a92d8f64818",
+    "sarif-declares-every-rule": "2569e3f9a653",
+    "sarif-uri-relative-to-cwd": "0e808f7631d5",
+    "input-tier-blind-spot-not-reported": "d9c9daf1e88f",
+    "blind-spot-swallows-inconclusive": "48ed88ba1328",
+    "sarif-drops-the-subject-half": "ecccffe02ae8",
+    "sarif-subject-id-not-namespaced": "8fdda909cf68",
+    "dialect-ignored-by-token-pass": "266c661719f2",
+    "config-words-never-consulted": "0b8fae41084b",
+    "semantic-tokens-assume-test-dialect": "35f1419b8544",
+    "lsp-selector-drops-config-dialect": "17220775b3da",
+    "config-language-never-activates": "58ad5ced8b87",
+    "config-completion-outer-guard-wins": "03ec89924e0e",
+    "config-completion-ignores-the-block": "73ca637d1aef",
+    "probe-completion-offers-a-bare-word-at-line-start": "a796576e314a",
+    "untyped-cursor-probe-runs-last": "7aa77a23ee5c",
+    "sarif-contract-promises-a-key-nothing-emits": "a0fea4e0a415",
+    "contract-never-reaches-the-consumer": "adf9d3f4beb5",
+    "enabled-payloads-classes-default": "4810a9d0f1d1",
+    "coverage-comment-denies-the-gate": "8864b23a1929",
+    "shard-count-of-stale": "d97e98f78c87",
+    "csrf-attached-to-safe-methods": "a027a13756fd",
+    "csrf-token-miss-binds-undefined": "56a30575dfb1",
+    "csrf-owner-token-not-identity": "e67b9edc3592",
+    "csrf-supplied-does-not-close-d325": "bd857a59ba54",
+    "csrf-probe-shares-the-authz-list": "fc2d5e061d0b",
+    "csrf-unreached-probe-reads-as-clean": "eba77b7cd576",
+    "crawl-discloses-after-it-has-sent": "ddc267dfa889",
+    "crawl-scores-a-validators-refusal": "1aa829f115f7",
+    "crawl-reads-its-own-refusal-as-clean": "2097580bd3a8",
+    "crawl-write-not-gated-by-probe-mutating": "56382d260379",
+    "crawl-base-ignores-the-document": "bd085ca95613",
+    "crawl-document-declared-base-ignored": "f3f1e4024f6b",
+    "crawl-reached-nothing-reads-green": "86d9329e9c39",
+    "crawl-404-always-blames-a-path-parameter": "e8bb6bc66a57",
+    "public-collection-is-a-critical-bola": "66b122c3c8e3",
+    "public-collection-suppressed-silently": "da6b726b9264",
+    "repro-emitted-for-a-suppressed-leak": "72c2e3552466",
+    "crawl-empty-surface-reads-green": "dc26e5072135",
+    "crawl-drops-what-it-could-not-build": "6eaaeb4ae489",
+    "crawl-exclude-matched-against-the-invented-path": "9473e721edc5",
+    "crawl-via-reaches-the-fingerprint": "9930d8cc8ffa",
+    "input-repro-reasserts-the-scan-matcher": "b8ff368e307b",
+    "input-repro-asserts-the-payload-it-echoed": "abc4c8f433e0",
+    "input-repro-dials-the-observed-request": "340d94e0c851",
+    "input-repro-emits-an-absolute-url": "3ba6f201ca5e",
+    "repro-path-re-applies-the-base-prefix": "b478bb1f3fe6",
+    "repro-omits-the-env-it-came-from": "610be0ae0358",
+    "input-repro-single-backslash": "6ac9983f37ab",
+    "input-repro-oversized-names-a-status": "487f959b051e",
+    "input-repro-body-without-content-type": "040eb7d3daa1",
+    "repro-key-drops-the-invariant": "9df67e9c63ff",
+    "repro-hides-that-tflw-invented-the-request": "a5ae4334002a",
+    "repro-claims-every-request-was-invented": "1c4da547b28f",
+    "input-repro-drops-the-crawl-provenance-at-the-emit-site": "cbfc939f81ad",
+    "spider-truncation-stops-announcing-itself": "c45905d46e46",
+    "spider-blind-spot-becomes-an-empty-site": "19b8fb9bbc6e",
+    "spider-invents-a-value-and-does-not-say-so": "045cd1630cd7",
+    "a-chain-forgets-the-cookie-it-was-just-given": "e98e5dc2bfaf",
+    "reversed-date-bounds-check-clean": "0727648b49db",
+    "setting-value-floor-unchecked": "afe4184b04ed",
+    "setting-value-fraction-unchecked": "903d27f16013",
+    "reserved-scheme-typo-runs": "aabee58023a2",
+    "duplicate-table-column-accepted": "c7112d719335",
+    "row-case-name-column-typo-silent": "8e4379dddd03",
+    "unparseable-import-reported-nowhere": "48bbdae19e9e",
+    "imported-body-calls-unresolved": "4a6e11a5da65",
+    "malformed-api-step-loses-its-response-scope": "c23d1ea8bef5",
+    "malformed-step-blinds-the-whole-variable-world": "a2b2313c1d3e",
+    "call-argument-trailing-comma-refused": "5f062c1b1b59",
+    "action-parameter-trailing-comma-refused": "25d1b14ec733",
+    "spelled-out-unit-refused-as-duration": "1a3db7ead72d",
+    "adjacency-dropped-with-the-union": "f5f4f347ee1c",
+    "spelled-out-unit-must-touch-its-number": "e86b3f4027e4",
+    "abbreviated-date-bound-invisible-to-tf054": "d2d164712ada",
+    "spelled-out-duration-not-a-number": "5f09e7415644",
+    "api-body-must-be-an-object": "2af8b4a80021",
+    "stub-body-must-be-an-object": "f9cc2b5f4b59",
+    "body-refusal-forgets-the-array": "526e95cd8ae0",
+    "array-body-unwalked-by-the-checker": "3eeb7185915f",
+    "stub-array-body-unwalked-by-the-checker": "fb992f13251f",
+    "array-body-not-navigable": "2362e936f33e",
+    "array-body-flattened-to-an-object": "9abae2530b4e",
+    "wait-budget-parsed-then-discarded": "4f2c87ca46df",
+    "request-timeout-eats-the-wait-budget": "793d25ff1ad8",
+    "wait-budget-not-taught-at-end-of-step": "f3082435a942",
+    "tf055-reads-the-env-over-the-step": "34c028f56c2b",
+    "tf055-reach-not-widened": "0d378e21d243",
+    "tf055-stops-naming-the-env": "d16682a6dc1d",
+    "ui-wait-ignores-its-own-budget": "9f33e7b7c9ed",
+    "api-wait-ignores-its-own-budget": "286c93e1b582",
+    "wait-until-admits-anything": "27a2e5d021c6",
+    "pollable-ignores-the-of-clause": "e135dd6bd004",
+    "pollable-admits-the-response-scope": "00fd4535e2ae",
+    "one-refusal-for-two-mistakes": "d4d583ba9868",
+    "snapshot-can-be-waited-on": "33f72626fa3d",
+    "tf042-still-cannot-see-a-wait": "85e633d6b28a",
+    "tf042-misses-a-nested-wait": "aa2b6b42db4c",
+    "wait-reader-picks-the-subject-over-the-ref": "80349fedf808",
+    "wait-page-arm-never-rescans": "a4c18cbf2e53",
+    "wait-network-arm-never-rereads": "60dda9735cc9",
+    "session-scope-never-narrows": "69b2fd4308ca",
+    "session-scope-drops-the-unscoped": "d35379b8fa24",
+    "out-of-scope-map-always-empty": "25eb553b456e",
+    "check-session-body-sees-every-session": "da50a7f08b58",
+    "tf074-never-fires": "812a5788aa2f",
+    "tf074-underlines-the-declaration": "d5cd0ed54d09",
+    "tf028-forgets-the-scoping-hint": "e90150f26d7c",
+    "env-scope-clause-never-parsed": "8d4dabf939a8",
+    "env-scope-takes-only-one-name": "a47e4e2f436a",
+    "late-env-scope-silent": "95eadc637fd3",
+    "lsp-session-check-ignores-env-scope": "b9aa8d58e5b4",
+    "for-without-env-unnamed": "3551174b57bb",
+    "oauth2-names-all-three-regardless": "53a4ac7c35e1",
+    "oauth2-help-always-restates-the-block": "a22f1016d944",
+    "endline-noun-always-step": "a459d31282cf",
+    "config-loop-never-claims-directive": "dbac9c5ff9d9",
+    "top-level-loop-never-reclaims": "983d799755bb",
+    "step-hints-offered-in-every-dialect": "158b5dd04e49",
+    "timeout-hint-offered-in-config": "17fbed55376d",
+    "bare-word-run-gets-the-keyword-wall": "2cec295639b5",
+    "one-word-is-a-call-shape": "eed2a2ccf7d2",
+    "word-run-need-not-fill-the-line": "082e25abcf6f",
+    "unary-depth-unbounded": "c4acf7ecad11",
+    "unary-depth-never-unwinds": "01a1d9a762c9",
+    "header-span-taken-after-the-newline": "e1476f191fdf",
+    "wait-until-second-raise-anchors-past-the-block": "c00ee7ef77a2",
+    "fill-form-header-span-spans-the-block": "73b99c2e869c",
+    "empty-block-anchors-past-the-block": "f684e7da1844",
+    "lsp-loses-the-header-anchor": "0bf2a238128e",
+    "ungradable-threshold-passes": "940411ff1d4d",
+    "saturation-flips-a-gradable-threshold": "a0563f14bc57",
+    "header-scope-clause-unchecked": "1f89a7c59b87",
+    "header-scope-checked-per-env-instead-of-the-union": "d7105440762a",
+    "require-env-guards-only-the-first-name-on-the-line": "71d6870bbb93",
+    "log-level-filters-the-record-instead-of-the-console": "d4b285402a02",
+    "log-destination-console-reaches-the-html-report-too": "ac21568f88f4",
+    "sequential-tests-batch-with-each-other": "57963c330c56",
+    "insecure-arms-the-tls-switch-only-on-the-second-acquire": "005083984fe1",
+    "signal-handlers-removed": "5d84447569d0",
+    "journal-opened-after-the-write": "a333bd6e09ab",
+    "stale-journal-left-alone": "87c554300907",
+    "unknown-option-ignored": "477aaf18d2e0",
+    "node-test-context-inherited": "0d7835701335",
+    "root-suite-collapsed": "5b8cf597e094",
+    "registry-count-guard-off": "4f0bb29eb0da",
+    "live-sweep-treated-as-stale": "8a522b59d832",
+    "ansi-not-stripped": "937e16545c80",
+    "journal-restore-errors-escape": "1553f5896fd8",
+    "coverage-guard-off": "f65be900d902",
+    "coverage-clause-dropped-from-the-tally": "cbb434d9a6ab",
+    "shard-partition-drops-a-chunk": "a65d5cb9d0a9",
+    "empty-shard-runs-clean": "bf7eab0267e4",
+    "overflow-reported-as-a-hang": "8ac4aa403cbc",
+    "cross-workspace-mutation-scored-stale": "9817f704e3db",
+    "baseline-cost-never-measured": "56de992c88c4",
+    "shard-budget-is-the-limit-itself": "8991f784334c",
+    "plan-claims-guessed-when-git-is-absent": "a5dae5eb923b",
+    "helper-resolution-back-to-a-character-window": "922579ff7347",
+    "conformance-forgets-the-orphan-direction": "ba9776d57e42",
+    "the-ci-tier-prints-the-green-it-did-not-earn": "f03a53e476db",
+    "the-fence-exemption-goes-blanket": "d7dea987c4ba",
+    "the-wrapped-tail-flips-code-span-parity": "fe5139a1138e",
+    "the-slug-hyphenates-before-it-deletes": "9889c02774d4",
+    "a-mention-of-a-fragment-is-treated-as-an-address": "7ad5bd1bd44a",
+    "a-heading-collision-is-resolved-instead-of-refused": "d73b88ec7f44",
+    "the-pin-is-collected-but-never-merged": "1eb0681f4aee",
+    "a-sibling-file-is-published-under-this-repositorys-name": "f706920e4a32",
+    "the-label-rule-reaches-forward-from-any-bold-lead": "9e8a4d4daf42",
+    "a-fenced-line-is-read-as-prose": "1e6c67c33052",
+    "an-exemption-outlives-the-page-it-describes": "52dac9a728a4",
+    "the-notation-is-matched-case-insensitively": "a5ddeec78379"
+  }
+}
