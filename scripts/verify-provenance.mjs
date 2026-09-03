@@ -113,8 +113,20 @@ export function escapingLinks(path, text) {
  */
 const RANGE = /(?<![\w#])([DM])(\d{1,3})[a-z]?\s*[-–—]\s*(?:[DM])?(\d{1,3})[a-z]?\b/g;
 
-/** A ledger row: `M138b-01`. Names a row, not the milestone — see `citationsLoose`. */
-const ROW = /(?<![\w#])(M\d{1,3}[a-z]?\d?|D\d{2,3}[a-z]?)-\d+\b/g;
+/**
+ * A ledger row: `M138b-01`. Names a row, not the milestone — see `citationsLoose`.
+ *
+ * `M164-10`: the D-form is `D\d{1,3}` for the same reason `CITATION` above is, and the divergence
+ * runs the *other* way here. tflw's collector carries no `(?!-\d)` at all, so it reads `D4` out of
+ * `D4-1` and pins it; at `D\d{2,3}` this rule could not take that prefix back, and the pin then held
+ * an identifier `citationsLoose` did not — the same unclearable stale-pin red `M154d` describes,
+ * arriving from the side where the *gate* is the narrow one rather than the collector. Both
+ * directions were reproduced against the two implementations before either was changed.
+ *
+ * Measured: no tracked file here writes a single-digit D-form row today, and this rule only ever
+ * adds to the loose set, so widening it can clear a false red and cannot create one.
+ */
+const ROW = /(?<![\w#])(M\d{1,3}[a-z]?\d?|D\d{1,3}[a-z]?)-\d+\b/g;
 
 /**
  * Every identifier a file cites, with the ones it has claimed for itself removed.
