@@ -2375,8 +2375,16 @@ export const PLANTS = [
       + 'were ignored in favour of one hard-coded base would light up a whole column instead. This is '
       + 'the key `env webv2Admin` exists for, and until now the only thing establishing that it worked '
       + 'was that the admin suite passed, which is equally consistent with both apps being served '
-      + 'from one port.',
-    catches: 'a `web` base ignored for a bare path, and an env switch that moves the `api` base without moving the browser\'s.',
+      + 'from one port. '
+      + 'The grid has a third column for the case where the key must do NOTHING: an absolute `open` '
+      + 'target is the address itself, so the base is not consulted and the same step reaches the '
+      + 'same application under both `web` lines — the one cell where moving that line must not move '
+      + 'the verdict. Widened at `M168-02`, after the mutation that states it had already existed '
+      + 'since `M125b1` and this plant had never been red: the boundary of a key is part of what the '
+      + 'key means, and leaving it unstated was an omission rather than a decision.',
+    catches: 'a `web` base ignored for a bare path, an env switch that moves the `api` base without moving the browser\'s, '
+      + 'and a `web` base prepended to an absolute `open` target — which composes an address a catch-all SPA route SERVES, '
+      + 'so the run fails later and somewhere else instead of at the step that was wrong.',
     blockedOn: null,
   },
 

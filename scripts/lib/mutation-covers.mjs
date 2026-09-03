@@ -264,6 +264,43 @@ export const COVERS = {
         + "`session-scope-drops-the-unscoped` in the first batch.",
     },
   },
+
+  // ── `M168-02`, 2026-09-03 ───────────────────────────────────────────────────────────────────
+  //
+  // Not a new mutation. `absolute-open-target-still-gets-the-web-base-prepended` has been in tflw's
+  // registry since `M125b1`; the census measured it on 2026-09-01 and it **survived, killing
+  // nothing**, because the only two plants for `config:key:web` both `open "/"` and the mutation
+  // changes behaviour for absolute targets alone. What changed here is the roster, not the registry
+  // — `C108` gained a third column — and re-measuring it needed `--remeasure`, because a settled
+  // verdict is skipped by `settled()` and `--only` narrows the candidates *before* that filter runs.
+  //
+  // `C108.catches` was **widened at `M168-02`, after this mutation already existed**, which is the
+  // one thing about this relation a reader should be told without having to dig for it. The argument
+  // for doing it: the boundary of a key — what `web` does *not* govern — is part of what the key
+  // means, and `M125b1`'s own source comment says `FU-18` filed two halves, both about the web base.
+  // `PLAN_M168` §5.2 forbids choosing the *mutation* to fit the suite; the mutation here predates the
+  // claim by ten milestones.
+  'absolute-open-target-still-gets-the-web-base-prepended': {
+    // grader: `✗ C108 recall — an absolute open target reaches the console while the web base names the storefront`
+    //         `✗ C108 precision — the one config line that inverts a bare path's verdict leaves the absolute target's alone`
+    C108: {
+      covers: true,
+      why:
+        "`recall 3/4, precision 2/3`, and the four clauses that held are the original diagonal — the mutation deletes "
+        + "the `isAbsoluteUrl` early return from `resolveWebUrl` and leaves bare-path composition untouched, so `open \"/\"` "
+        + "still resolves against the base under both configs. What went false is the third column and the contrast clause "
+        + "built on it, which is `C108.catches` clause three verbatim: *a `web` base prepended to an absolute `open` "
+        + "target*. **The direction of the fixture turned out to be load-bearing, and not for the reason it was chosen.** "
+        + "It was written against the console's port under the storefront's base because a prepended base is *quiet* "
+        + "there — `webV2/nginx.conf`'s `try_files $uri /index.html` serves the composed "
+        + "`http://localhost:8090/http://localhost:8091/` as a 200 with the SPA shell, the `FU-18` defect verbatim. The "
+        + "measured reason is stronger: the **other** leg passed under the mutation. The admin console redirects an "
+        + "unknown path to `/login`, whose heading is the very text that leg asserts, so `http://localhost:8091/http://"
+        + "localhost:8091/` renders a page that satisfies it. Both applications swallow a garbage path; only one of them "
+        + "swallows it into a page that lacks the answer. A fixture written only in the console-base direction would have "
+        + "passed under this mutation and killed nothing.",
+    },
+  },
 };
 
 /** Flattened `[{ mutation, plant, covers, why }]`, for callers that want the relation list. */

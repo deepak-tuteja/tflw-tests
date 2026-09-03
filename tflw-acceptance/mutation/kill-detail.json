@@ -1263,5 +1263,15 @@
         "recall: the same two marked `sequential` never did (got: {\"peakWaiting\":2,\"gatePaired\":2,\"gateAlone\":0,\"holdMs\":1500,\"gateN\":2})"
       ]
     }
+  },
+  "absolute-open-target-still-gets-the-web-base-prepended": {
+    "C108": {
+      "kind": "assertion",
+      "tally": "3/4 / 2/3",
+      "failed": [
+        "recall: an absolute `open` target reaches the console while the `web` base names the storefront, so a configured base is not prepended to an address",
+        "precision: the one config line that inverts a bare path's verdict leaves the absolute target's alone, so what the `web` key governs is exactly the paths that need a base"
+      ]
+    }
   }
 }

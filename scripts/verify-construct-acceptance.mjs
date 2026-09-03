@@ -2887,6 +2887,30 @@ if (TARGET_IDS.some((id) => wanted(id))) {
         'the storefront file\'s verdict inverts when only the `web` line moves, so the base URL is what the bare path resolved against');
       precision('C108', passed(console8091.admin) !== passed(store.admin),
         'and so does the console file\'s, so neither result is one application answering both ports');
+
+      // ---- the third column: the one cell where the key must do NOTHING (`M168-02`) -----------
+      // `absolute-open-target-still-gets-the-web-base-prepended` deletes the `isAbsoluteUrl` early
+      // return from `resolveWebUrl`, and no run of the two files above could ever have noticed it:
+      // both `open "/"`, and the mutation changes behaviour for absolute targets only. The census
+      // measured exactly that — it built, ran a full roster and survived, killing nothing.
+      //
+      // A separate corpus rather than a third file in `wDir`: these configs carry the `allow hosts`
+      // an absolute target requires of the UNMUTATED build, and the diagonal's inputs must not move
+      // or the committed baseline stops reproducing.
+      const aDir = corpus('web-absolute', ['open-absolute-console.tflw'], 'web-storefront-allow.config');
+      const absUnderStore = runRun(['open-absolute-console.tflw'], { cwd: aDir });
+      useConfig(aDir, 'web-admin-allow.config');
+      const absUnderAdmin = runRun(['open-absolute-console.tflw'], { cwd: aDir });
+
+      recall('C108', passed(absUnderStore),
+        'an absolute `open` target reaches the console while the `web` base names the storefront, so a configured base is not prepended to an address');
+      recall('C108', passed(absUnderAdmin),
+        'and reaches the same console once the `web` line moves to that console\'s own port — the same step, the same application, a different base');
+      // Stated as both legs PASSING rather than as their two verdicts agreeing. Two failures agree
+      // as well, and two failures are exactly what the mutation produces — phrased as `===` this
+      // clause would stay green through the defect it exists to state.
+      precision('C108', passed(store.front) !== passed(console8091.front) && passed(absUnderStore) && passed(absUnderAdmin),
+        'the one config line that inverts a bare path\'s verdict leaves the absolute target\'s alone, so what the `web` key governs is exactly the paths that need a base');
     }
   } catch (e) {
     for (const id of TARGET_IDS) if (wanted(id)) { fail(`${id} could not run: ${e.message}`); scores.get(id).skipped = e.message; }

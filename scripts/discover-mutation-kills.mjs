@@ -89,7 +89,7 @@ const SIB = siblingRoot();
 const { entry: CLI } = resolveTflw('released', { label: 'mutation-discovery' });
 
 // ── argv ─────────────────────────────────────────────────────────────────────────────────────
-const KNOWN = new Set(['--limit', '--only', '--baseline-only', '--status', '--out', '--window', '--help']);
+const KNOWN = new Set(['--limit', '--only', '--baseline-only', '--status', '--out', '--window', '--remeasure', '--why', '--help']);
 const argv = process.argv.slice(2);
 for (const a of argv) {
   if (a.startsWith('--') && !KNOWN.has(a.split('=')[0])) {
@@ -114,6 +114,10 @@ if (has('--help')) {
       '',
       '  --limit <n>        stop after n candidates this invocation (default: all)',
       '  --only <a,b,...>   sweep only these mutation ids',
+      '  --remeasure <a,b,...>  retract these settled verdicts so a changed roster can be measured',
+      '                     against them again; needs --why. `--only` alone will NOT re-run a',
+      '                     recorded id — it narrows the candidates before `settled()` filters them',
+      '  --why <text>       what changed, recorded on each retraction row',
       '  --baseline-only    run the baseline roster and stop',
       '  --status           report how far the recorded matrix has got, and stop',
       '  --out <dir>        where the matrix and run metadata live (default: ~/.tflw-mutation)',
@@ -325,6 +329,55 @@ console.log(`registry:   ${registryFile}`);
 console.log(`candidates: ${candidates.length} reachable of ${mutations.length}`);
 console.log(`graded plants: ${GRADED.length}`);
 console.log(`matrix:     ${MATRIX} (${done.size} already recorded)\n`);
+
+/**
+ * `--remeasure` — retract settled verdicts so a CHANGED ROSTER can be measured against them again.
+ *
+ * `M168-02` is what named the hole. A verdict is a statement about a mutation **and the roster it
+ * was measured against**, and this matrix keys it by the mutation alone; when a plant changes, every
+ * verdict measured against the old plant is stale. Until this flag there was no way to say so:
+ * `settled()` skips any recorded id, `--only` narrows `candidates` BEFORE that filter runs, and the
+ * sole producer of a `retracted` row was `closeWindow` reacting to baseline drift. So the exact
+ * command `M168-02` set as its own closing condition swept nothing and exited 0.
+ *
+ * Retraction rather than deletion, and through this script rather than by hand, for the same reason
+ * the matrix is append-only at all: why a verdict stopped counting belongs in the record. A
+ * hand-appended row would be `M168-04` over again — a repair applied to an artefact while the
+ * mechanism that regenerates it keeps the bad input.
+ *
+ * `--why` is required. A retraction carrying no cause cannot be told from a mistake, and this is the
+ * one operation in the census that discards a measurement somebody paid box time for.
+ */
+const REMEASURE = flag('--remeasure') ? new Set(flag('--remeasure').split(',')) : null;
+if (REMEASURE) {
+  const why = flag('--why');
+  if (!why) {
+    console.error('--remeasure needs --why "<what changed>": a retraction with no stated cause cannot be told from a mistake');
+    process.exit(64);
+  }
+  const reachable = new Set(allCandidates.map((m) => m.id));
+  const unknown = [...REMEASURE].filter((id) => !reachable.has(id));
+  if (unknown.length > 0) {
+    console.error(`--remeasure names ${unknown.length} id(s) that are not reachable candidates: ${unknown.join(', ')}`);
+    process.exit(64);
+  }
+  let retracted = 0;
+  for (const id of REMEASURE) {
+    if (!settled(id)) {
+      console.log(`  --remeasure ${id}: not settled, nothing to retract`);
+      continue;
+    }
+    const row = done.get(id);
+    record({
+      id, file: row.file ?? null, milestone: row.milestone ?? null, state: 'retracted',
+      reason: `remeasure: ${why}`,
+      previous: row.state, previousKilled: row.killed ?? [], killed: [],
+      at: new Date().toISOString(),
+    });
+    retracted += 1;
+  }
+  console.log(`  retracted ${retracted} settled verdict(s) for re-measurement — ${why}\n`);
+}
 
 refuseIfJournalOpen();
 
