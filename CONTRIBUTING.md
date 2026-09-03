@@ -74,6 +74,7 @@ npm run verify:provenance
 npm run verify:construct-coverage
 npm run verify:redaction:self-test
 npm run read:mutation-matrix:gate
+npm run verify:argv-contract
 ```
 
 **And when a tflw milestone assigns or changes a `TF0xx` diagnostic code**, before opening either
@@ -206,6 +207,29 @@ xvfb-run -a npm run regression -- --group security-ui
   drift. That line informs and does not fail, because a mutation added in tflw is the right change
   and reddening this repository's CI for it would leave the person who tripped it with a
   seven-hour box run as their only remedy.
+- **`npm run verify:argv-contract`** — **the census script's flags are validated and read from one
+  table, and the cases proving it are held against the implementation they replaced.**
+  `discover-mutation-kills.mjs` decides whether a retraction's stated cause is recorded, whether a
+  capped sweep is capped, and whether the baseline bracket runs at all. Until `M164-04` it validated
+  with a set of spellings and read with index arithmetic over raw `argv` — two independently written
+  things that nothing made agree — so each flag could be wrong in its own way, and four of nine
+  were. An eighteen-word `--why` recorded one word (observed live, in `M164-03`'s own retraction);
+  `--limit=5` validated and was read by nothing, so a capped sweep ran uncapped; `--limit` with a
+  forgotten value became `NaN`, and `.slice(0, NaN)` is empty, so the sweep swept **zero**
+  candidates and exited 0; `--window` with a forgotten value became `NaN`, and `NaN > 0` is false,
+  so **the baseline bracket was silently disabled** — the state that script's own help text names as
+  "how the first census corrupted itself".
+  Not one of those printed a diagnostic, which is why the gate's own cases are the interesting part.
+  Each declares whether it *discriminates* — comes out differently under the previous
+  implementation, which is reimplemented in the file — or is a regression guard, and the gate
+  refuses if a case marked either way is actually the other. That check has already fired twice
+  against its own author: once on an unfaithful model of the old parser, once on a case classified
+  as a repair demonstration that the old parser also passed. It also enforces the rule the old
+  block's comment could only state — a flag declared in the spec and read by no `flag()`/`has()`
+  call is refused, which is exactly how `--help` and `--out` each shipped as decoration.
+  A contributor gate rather than ci-only because it is milliseconds, needs no stack, and the person
+  who will next add a flag is the one who should learn immediately that spelling it is not wiring
+  it.
 - **`npm run verify:sweep-size`** — **no tracked file says how many phases the sweep has.** `D504`
   keeps the phase *list* out of prose because a copy of it would be a copy with no guard. A count is
   that same copy compressed, and `D767` deleted it for exactly that reason after `M154g-14` found

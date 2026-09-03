@@ -80,6 +80,7 @@ import { siblingRoot, readMutations, editsOf, bundleInputs, classify, anchorStat
 import { plantsFor } from './lib/constructs.mjs';
 import { claimDigest, patchDigest, aggregate, shapeOfRosterOutput } from './lib/census-shape.mjs';
 import { resolveTflw } from './lib/tflw-bin.mjs';
+import { parseArgv, BOOLEAN, VALUE, REST } from './lib/argv.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const SIB = siblingRoot();
@@ -90,24 +91,38 @@ const SIB = siblingRoot();
 const { entry: CLI } = resolveTflw('released', { label: 'mutation-discovery' });
 
 // ── argv ─────────────────────────────────────────────────────────────────────────────────────
-const KNOWN = new Set(['--limit', '--only', '--baseline-only', '--status', '--out', '--window', '--remeasure', '--why', '--help']);
-const argv = process.argv.slice(2);
-for (const a of argv) {
-  if (a.startsWith('--') && !KNOWN.has(a.split('=')[0])) {
-    console.error(`unknown flag: ${a}\nknown: ${[...KNOWN].join(' ')}`);
-    process.exit(64);
-  }
-}
-const flag = (name) => {
-  const i = argv.indexOf(name);
-  return i === -1 ? null : argv[i + 1];
+// `M164-04`. The spec is the single source: `scripts/lib/argv.mjs` derives both the validation and
+// the readers from it, so a flag cannot be spelled here without being read. It replaces a `KNOWN`
+// set of spellings plus index arithmetic over raw `argv` — two independently written things that
+// nothing made agree, and four of the nine entries were wrong in four different ways. The module's
+// docblock has the table; `--why` is `rest` because it is the only free-prose flag and because no
+// quoting at the call site survives the offload path.
+const SPEC = {
+  '--limit': VALUE,
+  '--only': VALUE,
+  '--baseline-only': BOOLEAN,
+  '--status': BOOLEAN,
+  '--out': VALUE,
+  '--window': VALUE,
+  '--remeasure': VALUE,
+  '--why': REST,
+  '--help': BOOLEAN,
 };
-const has = (name) => argv.includes(name);
+const argv = process.argv.slice(2);
+const parsed = parseArgv(argv, SPEC);
+if (!parsed.ok) {
+  console.error(parsed.error);
+  process.exit(64);
+}
+const flag = (name) => parsed.values[name] ?? null;
+const has = (name) => parsed.values[name] === true;
 
-// `--help` was in `KNOWN` from the first draft with nothing reading it, so asking for usage passed
-// validation and started a multi-hour sweep under the box lock. `KNOWN` looks like a list of
-// supported flags and is only a list of spellings that avoid exit 64; two of its six entries did
-// nothing. Anything added there needs a reader, and this is the reader for one of them.
+// `--help` was in the old `KNOWN` set from the first draft with nothing reading it, so asking for
+// usage passed validation and started a multi-hour sweep under the box lock. That set looked like a
+// list of supported flags and was only a list of spellings that avoid exit 64; two of its six
+// entries did nothing. `M164-04` found two more and made the rule structural instead of advisory —
+// `SPEC` above is the only place a flag exists, and `verify:argv-contract` refuses a key in it that
+// no reader in this file consumes. This is the reader for one of them.
 if (has('--help')) {
   console.log(
     [
@@ -118,7 +133,10 @@ if (has('--help')) {
       '  --remeasure <a,b,...>  retract these settled verdicts so a changed roster can be measured',
       '                     against them again; needs --why. `--only` alone will NOT re-run a',
       '                     recorded id — it narrows the candidates before `settled()` filters them',
-      '  --why <text>       what changed, recorded on each retraction row',
+      '  --why <text...>    what changed, recorded on each retraction row. Takes every word up to',
+      '                     the next --flag, because no quoting at the call site survives the',
+      '                     offload path (`exec.mjs` joins argv with spaces and the local shell',
+      '                     has already eaten the quotes). One token was recorded until `M164-04`',
       '  --baseline-only    run the baseline roster and stop',
       '  --status           report how far the recorded matrix has got, and stop',
       '  --out <dir>        where the matrix and run metadata live (default: ~/.tflw-mutation)',
@@ -155,8 +173,9 @@ const WINDOW = flag('--window') !== null ? Number(flag('--window')) : 20;
  * listing those two prior wipes is in the same file that failed to prevent this third one.
  *
  * So the default sits outside every rsynced tree, in a per-user state directory that is the same
- * shape on both machines. `--out <dir>` overrides it, and now actually does: it was in `KNOWN` from
- * the first draft and never read, so `--out` parsed, validated, and silently wrote to the default.
+ * shape on both machines. `--out <dir>` overrides it, and now actually does: it was in the flag
+ * list from the first draft and never read, so `--out` parsed, validated, and silently wrote to the
+ * default.
  */
 const OUT_DIR = flag('--out') ? path.resolve(flag('--out')) : path.join(homedir(), '.tflw-mutation');
 const MATRIX = path.join(OUT_DIR, 'kill-matrix.jsonl');
