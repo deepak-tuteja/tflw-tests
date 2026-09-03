@@ -103,8 +103,25 @@ export const COVERS = {
     },
   },
   'absolute-api-target-still-gets-the-base-prepended': {
-    // grader: `✗ C100 recall — and exactly one request arrived when "localhost" was added …`
+    // grader: `✗ C97  recall 2/4  precision 3/4` (`M164-03`, 2026-09-03)
+    //         `✗ C100 recall — and exactly one request arrived when "localhost" was added …`
     //         `✗ C100 precision — the socket counter rose only in the permitted leg (1 -> 1) …`
+    C97: {
+      covers: true,
+      why:
+        'the plant\'s own construct and its own claim. `config:key:api` is the base-URL key and this mutation is the '
+        + 'base-URL composition, so `D842`\'s question — is the clause that went false this plant\'s claim about this '
+        + 'plant\'s construct — is answered by the construct name alone. Three of eight clauses went false and the '
+        + 'arithmetic reconciles: `(4-2) + (4-3) = 3`, against exactly three `✗ C97` lines. Both false recall clauses read '
+        + 'the arrival server\'s recorded path — `/base/http://127.0.0.1:4507/absolute` and '
+        + '`/other/http://127.0.0.1:4507/absolute`, the concatenation written out verbatim — and the false precision clause '
+        + 'is the pair of them: the base moved and the wire moved with it, which is the one cell where it must not. '
+        + '**Widened after the fact and recorded as such** (`M164-03`): `C97.catches` did not name the absolute case until '
+        + 'this row, and the mutation has existed since `M125b1`. `PLAN_M164_03` §6 is the argument — §5.2 forbids choosing '
+        + 'a mutation to fit the suite, not correcting a claim toward a property the construct already had. '
+        + 'The surviving precision clause is a guard rather than a discriminator and was predicted to hold: it refuses a '
+        + 'runtime that fans one step out across every declared service, which no other clause here would notice.',
+    },
     C100: {
       covers: false,
       why:

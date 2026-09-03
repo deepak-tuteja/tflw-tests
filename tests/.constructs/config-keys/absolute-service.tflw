@@ -1,0 +1,19 @@
+# `C97` `config:key:api`, third column — the cell where the key must do NOTHING.
+#
+# `two-steps.tflw` beside this file proves the base URL's own path segment is *joined* onto a
+# step's path rather than replacing it. That is a claim about relative paths, and it says nothing
+# about the one step form where the base must not be consulted at all: an absolute target is the
+# address itself.
+#
+# Graded against `arrival-server.mjs`'s recorded path, never against the status — the server answers
+# `200` to every path it is asked for, which is the point. A build that prepended the base anyway
+# would send `http://127.0.0.1:4507/base/http://127.0.0.1:4507/absolute`, receive a `200`, and
+# report a green run; only the wire says where it went.
+#
+# `127.0.0.1` rather than `localhost` deliberately: `C100` owns the two-spellings-of-one-machine
+# argument and this must not entangle with it. `TF058` warns about an absolute target, as it does
+# for `absolute.tflw`, and is expected here.
+
+test "an absolute target is the address itself, so no base is joined onto it"
+  api GET http://127.0.0.1:4507/absolute
+  expect status equals 200
