@@ -1,0 +1,17 @@
+# `C108`'s third column, and the one cell where the `web` key must do NOTHING. An absolute `open`
+# target is the address itself (SPEC §5.1), so the active env's base is not consulted — which means
+# this one file passes under BOTH `web` bases while the two bare-path files each pass under exactly
+# one. That contrast is the known answer; either half alone is consistent with the key being ignored.
+#
+# Written against the console's port while the base names the storefront, because that is the
+# direction where a prepended base is *quiet*: it composes `http://localhost:8090/http://localhost:8091/`,
+# which `webV2/nginx.conf`'s `try_files $uri /index.html` SERVES with a 200 and the SPA shell. The
+# run then fails several steps later on content, attributed to the wrong step — the `FU-18` defect
+# verbatim rather than an approximation of it.
+#
+# `allow hosts` is what makes an absolute target legal at all, so it is in both configs here and in
+# neither of the bare-path ones; `TF057` warns about the absolute form, as it does in `absolute.tflw`.
+
+test "an absolute target opens the console whichever web base is active"
+  open "http://localhost:8091/"
+  expect text "testFlow-tests admin console" is visible
