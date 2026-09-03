@@ -761,6 +761,15 @@
     }
   },
   "absolute-api-target-still-gets-the-base-prepended": {
+    "C97": {
+      "kind": "assertion",
+      "tally": "2/4 / 3/4",
+      "failed": [
+        "recall: an absolute target arrived at exactly `/absolute` while the default base names `/base` — the address is the whole address, not a path to be appended to something (got: {\"/base/http://127.0.0.1:4507/absolute\":1})",
+        "recall: and at the same `/absolute` once that base line moves to `/other`: the base moved and the wire did not (got: {\"/other/http://127.0.0.1:4507/absolute\":1})",
+        "precision: and each leg recorded that one path and no other, under both bases (got: [\"/base/http://127.0.0.1:4507/absolute\"] and [\"/other/http://127.0.0.1:4507/absolute\"])"
+      ]
+    },
     "C100": {
       "kind": "assertion",
       "tally": "1/3 / 1/2",

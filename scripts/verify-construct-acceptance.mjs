@@ -2580,6 +2580,47 @@ if (KEY_IDS.some((id) => wanted(id))) {
       precision('C97', Object.keys(plainPaths.byPath).length === 3 && plainPaths.total === 3,
         `exactly three requests arrived and nowhere else (got: ${JSON.stringify(plainPaths.byPath)})`);
       precision('C97', /PASS 2\/2/.test(plainOut), 'the run itself is green, so the paths above are what a passing suite put on the wire');
+
+      // ---- the third column: the one cell where this key must do NOTHING (`M164-03`) ----------
+      //
+      // The two clauses above are claims about RELATIVE paths — that the base's own path segment is
+      // joined rather than replaced, and that a name on the step chooses a different base. Neither
+      // says anything about the one step form where the base must not be consulted at all. The
+      // census proved that gap rather than argued it: `absolute-api-target-still-gets-the-base-
+      // prepended` built, ran a full roster, and left this plant green while killing `C100`, whose
+      // input it had rewritten out from under it.
+      //
+      // Graded on the recorded path and never on the status. `arrival-server.mjs` answers `200` to
+      // every path, so a build that composed `…/base/http://127.0.0.1:4507/absolute` gets a `200`,
+      // reports a green run, and is caught only by where the request landed.
+      //
+      // Two legs differing in ONE config line, for `C108`'s reason: one cell proves the base was
+      // not joined *this time*, and the pair proves the base is not consulted at all.
+      const absDir = corpus('api-absolute', ['absolute-service.tflw'], 'services-allow.config');
+      await arrivals('__reset');
+      const absBaseOut = runRun([], { cwd: absDir });
+      const underBase = await arrivals('__arrivals');
+      useConfig(absDir, 'services-other-allow.config');
+      await arrivals('__reset');
+      const absOtherOut = runRun([], { cwd: absDir });
+      const underOther = await arrivals('__arrivals');
+      const ABS = '/absolute';
+      const pathsOf = (a) => JSON.stringify(Object.keys(a.byPath).sort());
+
+      recall('C97', (underBase.byPath[ABS] ?? 0) === 1,
+        `an absolute target arrived at exactly \`${ABS}\` while the default base names \`/base\` — the address is the whole address, not a path to be appended to something (got: ${JSON.stringify(underBase.byPath)})`);
+      recall('C97', (underOther.byPath[ABS] ?? 0) === 1,
+        `and at the same \`${ABS}\` once that base line moves to \`/other\`: the base moved and the wire did not (got: ${JSON.stringify(underOther.byPath)})`);
+      // A guard rather than a discriminator, and it is expected to hold under the mutation this row
+      // exists for: it refuses a runtime that fans one step out across every declared service, which
+      // is a different wrong implementation and one no clause above would notice.
+      precision('C97', underBase.total === 1 && underOther.total === 1 && /PASS 1\/1/.test(absBaseOut) && /PASS 1\/1/.test(absOtherOut),
+        `each leg is a green run that put exactly one request on the wire (got: ${underBase.total} and ${underOther.total})`);
+      // Stated as *both legs recorded `/absolute` and nothing else*, never as *the two legs agree* —
+      // `M168-02` §4.1's vacuity trap, where "the verdict does not move" is satisfied by both legs
+      // being equally wrong.
+      precision('C97', pathsOf(underBase) === JSON.stringify([ABS]) && pathsOf(underOther) === JSON.stringify([ABS]),
+        `and each leg recorded that one path and no other, under both bases (got: ${pathsOf(underBase)} and ${pathsOf(underOther)})`);
     }
 
     if (wanted('C98')) {
