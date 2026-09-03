@@ -129,6 +129,14 @@ const CLASSIFIED = [
   {
     wf: 'ci.yml',
     job: 'acceptance-check',
+    cmd: 'npm run verify:argv-contract',
+    class: 'gate',
+    local: 'npm run verify:argv-contract',
+    why: "`M164-04` — `discover-mutation-kills.mjs` validated its flags with a set of spellings and read them with index arithmetic over raw `argv`, two independently written things that nothing made agree, so four of nine flags were wrong in four different ways and none of them made a sound: an eighteen-word `--why` recorded one word, `--limit=5` was read by nothing, a forgotten `--limit` value swept zero candidates and exited 0, and a forgotten `--window` value disabled the baseline bracket. One table now; both the validator and the readers are projections of it. A contributor gate rather than ci-only because it is milliseconds and static, and because its own case set is the fragile part — each case declares whether it discriminates against the previous implementation, which the gate reimplements and compares against, so a case that quietly stops proving anything is refused rather than reported green",
+  },
+  {
+    wf: 'ci.yml',
+    job: 'acceptance-check',
     cmd: 'npm run verify:sweep-size',
     class: 'gate',
     local: 'npm run verify:sweep-size',

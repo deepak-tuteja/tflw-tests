@@ -41,6 +41,7 @@
     "perf:conformance": "node scripts/perf-conformance.mjs",
     "verify:contributing": "node scripts/verify-contributing.mjs",
     "verify:sweep-size": "node scripts/verify-sweep-size.mjs",
+    "verify:argv-contract": "node scripts/verify-argv-contract.mjs",
     "verify:tflw-resolution": "node scripts/verify-tflw-resolution.mjs",
     "verify:provenance": "node scripts/verify-provenance.mjs",
     "verify:construct-coverage": "node scripts/verify-construct-coverage.mjs",

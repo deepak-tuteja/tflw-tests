@@ -220,7 +220,8 @@ jobs:
       # What it does gate is the seam `D767` keeps finding: `lib/mutation-covers.mjs` is
       # hand-authored, one line of reasoning per relation, and `kill-detail.json` is measured. This
       # refuses in BOTH directions — an `assertion` kill with no label, and a label for a relation
-      # that no longer happens. It reads three committed files, runs no stack, and takes
+      # that no longer happens. It reads four committed files (`census-shape.json` since `M168-09`),
+      # runs no stack, and takes
       # milliseconds; it is here rather than in a regression phase for exactly that reason.
       - name: The hand-authored mutation covers table matches the measured kill matrix
         run: npm run read:mutation-matrix:gate
@@ -234,6 +235,23 @@ jobs:
       # actually had: every tracked file, not a list somebody wrote down. Quoting a stale count is
       # allowed and asserting one is not, which is why `CONTRIBUTING.md` can still show the sentence
       # that carried the defect. Static, milliseconds, and it runs its own guards on every invocation.
+      # `M164-04`. The argv block of `discover-mutation-kills.mjs` decided, silently and wrongly, four
+      # separate things: an eighteen-word `--why` was recorded as one word, `--limit=5` validated and
+      # was read by nothing, a forgotten `--limit` value became `NaN` and swept zero candidates while
+      # exiting 0, and a forgotten `--window` value became `NaN` — and `NaN > 0` is false, so the
+      # baseline bracket was disabled while the operator believed they had set one.
+      #
+      # The cause was one thing, not four: the validator was a set of spellings and the readers were
+      # index arithmetic over raw `argv`, two independently written things that nothing made agree.
+      # There is now one table, and both are projections of it.
+      #
+      # This gate drives that table's parser through the twelve inputs, and — because a case the old
+      # parser also passed proves nothing — reimplements the old parser and refuses if a case marked
+      # discriminating is not actually different. Static, milliseconds, no stack.
+      - name: The census script's flags are validated and read from one table
+        run: npm run verify:argv-contract
+        working-directory: testFlow-tests
+
       - name: No tracked file states how many phases the sweep has
         run: npm run verify:sweep-size
         working-directory: testFlow-tests
