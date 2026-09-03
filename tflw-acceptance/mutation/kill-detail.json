@@ -874,5 +874,394 @@
         "recall: and the help text quotes the clause back, so the refusal names its own cause"
       ]
     }
+  },
+  "insecure-arms-the-tls-switch-only-on-the-second-acquire": {
+    "C105": {
+      "kind": "assertion",
+      "tally": "1/2 / 2/2",
+      "failed": [
+        "recall: with `insecure true` the request completes against a certificate signed by a CA the container invented at start-up"
+      ]
+    },
+    "C106": {
+      "kind": "assertion",
+      "tally": "0/2 / 0/1",
+      "failed": [
+        "recall: the client certificate gets the request past `ssl_verify_client on`",
+        "recall: and deleting the two lines leaves nginx's own 400 — the pair that has always run under two envs in two files, here as one file and one config line",
+        "precision: the no-certificate leg fails on the status rather than on the transport, so the connection was made and refused by the listener"
+      ]
+    },
+    "C107": {
+      "kind": "assertion",
+      "tally": "2/2 / 0/1",
+      "failed": [
+        "precision: the matching pair over the identical fixture passes, so what failed above is the pairing and not the listener"
+      ]
+    }
+  },
+  "log-destination-console-reaches-the-html-report-too": {
+    "C103": {
+      "kind": "assertion",
+      "tally": "2/3 / 1/1",
+      "failed": [
+        "recall: `log destination console` keeps both calls out of `report.html` and `log destination html` puts them in (got 2 / 2)"
+      ]
+    }
+  },
+  "log-level-filters-the-record-instead-of-the-console": {
+    "C103": {
+      "kind": "assertion",
+      "tally": "3/3 / 0/1",
+      "failed": [
+        "precision: `results.json` carries both calls identically under all three configs (got 3 / 4 / 4), so what these keys filter is rendering"
+      ]
+    }
+  },
+  "require-env-guards-only-the-first-name-on-the-line": {
+    "C1": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C2": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C4": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C5": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C6": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C7": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C8": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C9": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C10": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C11": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C12": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C13": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C14": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C15": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C16": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C17": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C18": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C19": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C20": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C21": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C22": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C23": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C24": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C25": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C26": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C27": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C28": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C29": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C30": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C31": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C32": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C33": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C34": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C35": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C36": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C37": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C38": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C39": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C40": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C41": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C42": {
+      "kind": "refusal",
+      "note": "skipped: no report — the static half asserted (recall 2/2, precision 3/3) and every clause held"
+    },
+    "C43": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C60": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C61": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C62": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C63": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C64": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C65": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C66": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C67": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C68": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C69": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C70": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C71": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C72": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C73": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C74": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C75": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C76": {
+      "kind": "refusal",
+      "note": "skipped: no report — the static half asserted (recall n/a, precision 1/1) and every clause held"
+    },
+    "C77": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C78": {
+      "kind": "assertion",
+      "tally": "1/2 / 2/2",
+      "failed": [
+        "recall: with the world closed, the same bogus call is a `TF037` (got: error[TF077]: `ADMIN_PW` is read here but no `require env` line declares it)"
+      ],
+      "skipped": "no report"
+    },
+    "C79": {
+      "kind": "assertion",
+      "tally": "0/1 / n/a",
+      "failed": [
+        "recall: a test that reads a `before file` binding does not compile (got: error[TF077]: `ADMIN_PW` is read here but no `require env` line declares it)"
+      ],
+      "skipped": "no report"
+    },
+    "C80": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C81": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C82": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C83": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C84": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C85": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C86": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C87": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C88": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C89": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C90": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C91": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C95": {
+      "kind": "assertion",
+      "tally": "1/4 / 1/1",
+      "failed": [
+        "recall: neither variable set: the run is refused naming both (got: error: missing required environment variable: C95_TOKEN)",
+        "recall: `C95_UNUSED` is referenced nowhere in that config and is required just as hard — the refusal names it alone (got: 11:58:40.686 ✗ a discoverable file with nothing else to say)",
+        "recall: `tflw check` over the identical config now says so — an advisory note naming both variables, beside \"no problems found\" and an exit 0 (`D779`, reversing `M154g-11`) (got: 1 file checked, no problems found.)"
+      ]
+    },
+    "C112": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    },
+    "C113": {
+      "kind": "refusal",
+      "note": "skipped: no report"
+    }
+  },
+  "sequential-tests-batch-with-each-other": {
+    "C31": {
+      "kind": "assertion",
+      "tally": "2/3 / 2/2",
+      "failed": [
+        "recall: \"cart rows are drag-drop reorderable…\" is green (got ok=false)"
+      ]
+    },
+    "C79": {
+      "kind": "assertion",
+      "tally": "3/4 / 2/2",
+      "failed": [
+        "recall: all three tests passed (got 1/3): each read the binding its own `before` made, one ordinal apart"
+      ]
+    },
+    "C104": {
+      "kind": "assertion",
+      "tally": "1/2 / 2/2",
+      "failed": [
+        "recall: the same two marked `sequential` never did (got: {\"peakWaiting\":2,\"gatePaired\":2,\"gateAlone\":0,\"holdMs\":1500,\"gateN\":2})"
+      ]
+    }
   }
 }
