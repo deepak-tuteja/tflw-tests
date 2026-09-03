@@ -365,10 +365,30 @@ if (base.red.length > 0) {
 // never been tried*: 271 of 311 reads as complete without the denominator, which is the shape
 // `D767` keeps finding. `read-mutation-matrix.mjs` compares both against the live sibling and
 // reports the drift (`D854`).
-const priorMeta = existsSync(META) ? JSON.parse(readFileSync(META, 'utf8')) : null;
+/**
+ * `startedAt` is carried forward from the EARLIEST of two files, not from the state directory
+ * alone — because `M164e` repaired the wrong one.
+ *
+ * That milestone found `startedAt` being rewritten at every invocation, and fixed it twice: the
+ * carry-forward below, and a hand-edit of the committed `run-meta.json` putting `09:42` back. The
+ * carry-forward reads `OUT_DIR`, which by the siting argument above is outside every rsynced tree
+ * and so was **not** the file that got repaired. The box's copy still says `16:29`, so the next
+ * resume — `M168`'s, the first one there has ever been — would have written the wrong value
+ * straight back over the repair, with the harness fix present and working exactly as designed.
+ * A repair applied to an artefact while the mechanism that regenerates it keeps the bad input is
+ * `M168-04`.
+ *
+ * The committed artefact is therefore read as a *floor* rather than as the source: neither file is
+ * authoritative and the earliest surviving stamp wins. `M164e`'s own argument is that a census is
+ * dated by the measurement of its first row, and nothing recorded later can make that earlier.
+ */
+const readMeta = (p) => { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; } };
+const priorMeta = readMeta(META);
+const committedMeta = readMeta(path.join(ROOT, 'tflw-acceptance', 'mutation', 'run-meta.json'));
+const earliestStart = [priorMeta?.startedAt, committedMeta?.startedAt].filter(Boolean).sort()[0];
 writeFileSync(META, `${JSON.stringify({
   machine: process.env.TFLW_EXEC_MACHINE ?? (process.platform === 'darwin' ? 'mac' : 'box'),
-  startedAt: priorMeta?.startedAt ?? new Date().toISOString(),
+  startedAt: earliestStart ?? new Date().toISOString(),
   updatedAt: new Date().toISOString(),
   registry: path.relative(SIB, registryFile),
   candidates: allCandidates.length,

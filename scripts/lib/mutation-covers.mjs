@@ -20,9 +20,26 @@
 //     answer, and the answer was wrong. **Six of 207.**
 //
 // A plant that asserted nothing cannot have been *covered* by anything, under any reading of
-// `D842`. So the hand-labelling is exactly the six `assertion` relations below, and the other 201
-// are excluded by measurement rather than by judgement — which is the distinction `D842` was
-// written to keep and `M164b`'s glyph could not.
+// `D842`. So the hand-labelling is exactly the `assertion` relations below, and the rest are
+// excluded by measurement rather than by judgement — which is the distinction `D842` was written to
+// keep and `M164b`'s glyph could not.
+//
+// ## `M168`, 2026-09-03 — the second batch, and why the ratio moved so far
+//
+// `D851` named one reopening condition: *if tflw's registry gains mutations for the constructs
+// §12.5 lists as unmutated, the census is worth re-running over those*. tflw's `M168` authored five
+// and the census was resumed over exactly them, so the paragraph above now describes the first
+// batch rather than the table. Measured: **85 new relations, 11 of them `assertion`** — against six
+// in 207. The ratio is not an improvement in the roster and nothing here should be read as one. It
+// is what aiming a mutation at a plant's `catches` instead of at a construct's syntax does to the
+// numerator, which is `M168` §8.1's rule and is the only variable that changed.
+//
+// Five of the eleven cover. They are the first evidence that `C95`, `C103`, `C104` and `C105`
+// discriminate at all — four plants that had never been red in a census — and `C103` is covered
+// twice, by two mutations that fail two different halves of one known answer. The other six are
+// collateral, and two of them are the sharpest in either batch: see `C78` and `C79` below, where a
+// mutation meant to weaken a precondition quietly turned out to make a *checker* refuse 74 configs
+// out loud.
 //
 // ## What `covers` means here
 //
@@ -108,6 +125,143 @@ export const COVERS = {
         + "it lost all seven clauses at once, which is the signature of a fixture whose inputs were destroyed rather than of "
         + "a key that stopped being read. `C99` is the only plant in the census that both ran and went red under a lexer "
         + "break, and it is still collateral.",
+    },
+  },
+
+  // ── `M168`, 2026-09-03 ──────────────────────────────────────────────────────────────────────
+  'require-env-guards-only-the-first-name-on-the-line': {
+    // grader: `✗ C95 recall — neither variable set: the run is refused naming both (got: error: missing required environment variable: C95_TOKEN)`
+    //         `✗ C95 recall — C95_UNUSED is referenced nowhere in that config and is required just as hard — the refusal names it alone`
+    //         `✗ C95 recall — tflw check over the identical config now says so — an advisory note naming both variables`
+    C95: {
+      covers: true,
+      why:
+        "three of `C95`'s four recall clauses went false and all three are the plant's own subject. Its known answer is "
+        + "written in three legs — neither variable set, `C95_TOKEN` set, both set — and the middle leg exists precisely "
+        + "because `C95_UNUSED` is referenced nowhere in the config, which is what makes `require` a precondition on the "
+        + "environment rather than a check on use sites. Requiring only the first name on the line collapses that leg: the "
+        + "refusal names one variable where the plant asserts two, and `tflw check`'s advisory note (`D779`) reports one of "
+        + "one over a config declaring two. This is the second cell in the whole census where a mutation's `what` and a "
+        + "plant's `catches` describe the same defect, and the first that was authored to be one. Worth one "
+        + "more sentence: the property that makes the middle leg interesting is also what kept this fixture out of the "
+        + "`TF077` storm the same mutation caused everywhere else (see `C78`) — a variable that is declared and never read "
+        + "cannot trip a rule about variables that are read and never declared. `C95` could assert *because* its subject is "
+        + "the unreferenced name.",
+    },
+    // grader: `✗ C78 recall — with the world closed, the same bogus call is a TF037 (got: error[TF077]: ADMIN_PW is read here but no require env line declares it)`
+    C78: {
+      covers: false,
+      why:
+        "`C78` is `use`, and what went false in it is a diagnostic code rather than a behaviour. This mutation was written "
+        + "to be quiet — `M168` §8's house rule is that the rule stays visibly present and quietly wrong — and it is the "
+        + "loudest in the registry, because `requiredEnv` feeds two consumers and only one of them was thought about. The "
+        + "runtime gate is the quiet one; the checker's `TF077` rule (*read here but no `require env` line declares it*) is "
+        + "not, so dropping the tail of every declaration makes the checker refuse every config that reads a second "
+        + "variable. **74 of this mutation's 77 kills are that refusal**, and `C78`'s own `TF037` never got the chance to "
+        + "fire. `C100`'s shape one layer earlier: the plant's input was displaced rather than its construct broken.",
+    },
+    // grader: `✗ C79 recall — a test that reads a before file binding does not compile (got: error[TF077]: ADMIN_PW is read here but no require env line declares it)`
+    C79: {
+      covers: false,
+      why:
+        "the same displaced diagnostic as `C78`, in a plant whose subject is `before`. Its single recall clause asserts "
+        + "that a test reading a `before file` binding does not compile *for that reason*, and the compile failed for "
+        + "another one. A plant asserting the presence of a specific diagnostic is falsified by any earlier diagnostic, "
+        + "which makes this class of clause collateral-prone in a way a behavioural assertion is not — worth saying because "
+        + "the roster has many of them.",
+    },
+  },
+  'log-level-filters-the-record-instead-of-the-console': {
+    // grader: `✗ C103 precision — results.json carries both calls identically under all three configs (got 3 / 4 / 4), so what these keys filter is rendering`
+    C103: {
+      covers: true,
+      why:
+        "`recall 3/3, precision 0/1` is the entire finding in two numbers. Every clause about what reaches the *console* "
+        + "held — the mutation was built so the console output is byte-identical, because a below-threshold line was "
+        + "already being suppressed one layer further out — and the single clause about what reaches `results.json` went "
+        + "false, with the record carrying 3 / 4 / 4 entries where the plant asserts it carries them identically. That is "
+        + "SPEC §3.8's *never affects whether it is recorded*, it is `C103.catches` clause one word for word, and it is the "
+        + "half of the invariant the plant's own known answer calls *the one no ordinary run can observe*. tflw's suite "
+        + "could not see this mutation at all until `M168-03` was repaired; this plant saw it on the first run.",
+    },
+  },
+  'log-destination-console-reaches-the-html-report-too': {
+    // grader: `✗ C103 recall — log destination console keeps both calls out of report.html and log destination html puts them in (got 2 / 2)`
+    C103: {
+      covers: true,
+      why:
+        "the other half of the same plant, and the reason `C103` needed two mutations rather than a `level`/`destination` "
+        + "split (`M168-01`). Here the recall clause is the one that fails and the precision clause holds — the mirror of "
+        + "the row above — because the record is untouched and it is the *renderer* that stopped honouring the key. "
+        + "`C103.catches` clause two, *a `log destination` that reaches one renderer and not the other*, taken in the "
+        + "direction that adds rather than drops. One plant, two mutations, two different halves of one known answer, and "
+        + "neither mutation is visible in the other's clause.",
+    },
+  },
+  'sequential-tests-batch-with-each-other': {
+    // grader: `✗ C104 recall — the same two marked sequential never did (got: {"peakWaiting":2,"gatePaired":2,"gateAlone":0,...})`
+    C104: {
+      covers: true,
+      why:
+        "the plant is a server-side overlap watermark and it read **2** where its known answer is 1. `C104` exists because "
+        + "`D745` refused to measure tflw's scheduling against a real target, and this is the payoff: nothing in a report "
+        + "distinguishes a batch of two from two batches of one, so an assertion about a *report* could not have caught a "
+        + "partitioner generalised from *a run of `parallel` tests* to *a run of tests agreeing about concurrency*. "
+        + "`C104.catches` clause two, *a `sequential` marker that no longer serializes*. Both files run under `workers 1`, "
+        + "so the file-concurrency axis was pinned and the header modifier is the only thing that moved.",
+    },
+    // grader: `✗ C31 recall — "cart rows are drag-drop reorderable…" is green (got ok=false)`
+    C31: {
+      covers: false,
+      why:
+        "`C31` is `drag`, and dragging did not break — its isolation did. The plant's browser scenario reorders cart rows "
+        + "and now runs concurrently with the test next to it against one shared target, so it fails on interference. This "
+        + "is the collateral `D842` had in mind and the only kind in either batch that is genuinely about sharing a target "
+        + "rather than about sharing a corpus file.",
+    },
+    // grader: `✗ C79 recall — all three tests passed (got 1/3): each read the binding its own before made, one ordinal apart`
+    C79: {
+      covers: false,
+      why:
+        "the closest call in this table, and still collateral. `C79`'s clause is literally about `before` — *each test read "
+        + "the binding its own `before` made, one ordinal apart* — so it reads at first like the plant discriminating. It "
+        + "is not: `before` still made one binding per test, and what broke is that the tests stopped being one at a time, "
+        + "so an assertion written on ordinals could not hold. `D850` settles it — the clause that went false must be the "
+        + "plant's claim about *its own* construct, and this one is a claim about `before` that only holds while something "
+        + "else is true. `C99` under `number-rule-broadened` is the first batch's version of this.",
+    },
+  },
+  'insecure-arms-the-tls-switch-only-on-the-second-acquire': {
+    // grader: `✗ C105 recall — with insecure true the request completes against a certificate signed by a CA the container invented at start-up`
+    C105: {
+      covers: true,
+      why:
+        "`recall 1/2, precision 2/2`, and the precision half is what makes this the sharpest covering relation in either "
+        + "batch. The recall clause that failed is the plant's whole reason for existing — `env secureLocal` has carried "
+        + "this key since `M128a` and every run under it passed, so the suite could not tell a key that disabled "
+        + "verification from a target whose certificate verified. Both precision clauses **held**: SPEC §3.5's banner is "
+        + "still in the CLI summary and the report header. So the plant did not merely go red, it reported the exact "
+        + "shape of the defect — verification announced as disabled and not disabled — which is `C105.catches` clause one, "
+        + "*an `insecure` key that is parsed and never reaches the agent*.",
+    },
+    // grader: `✗ C106 recall — the client certificate gets the request past ssl_verify_client on` (and two more)
+    C106: {
+      covers: false,
+      why:
+        "`C106` is `cert` and this mutation is about `insecure`, which its fixture needs before the client certificate is "
+        + "ever examined. The mTLS listener presents the same invented CA, so a run that no longer disables verification "
+        + "dies in the handshake and never reaches `ssl_verify_client`. All three of its clauses went false and not one of "
+        + "them is evidence about `cert`.",
+    },
+    // grader: `✗ C107 precision — the matching pair over the identical fixture passes, so what failed above is the pairing and not the listener`
+    C107: {
+      covers: false,
+      why:
+        "`C107`'s recall held and its **precision** clause fired, which is the control working rather than the plant "
+        + "covering. That clause is a negative control: it proves a failure above was about the certificate/key *pairing* "
+        + "by showing the matching pair passes over the identical fixture. With verification never disabled the matching "
+        + "pair does not pass either, so the control correctly refused to attribute. Same reading as `C92` under "
+        + "`session-scope-drops-the-unscoped` in the first batch.",
     },
   },
 };
