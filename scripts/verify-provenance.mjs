@@ -251,6 +251,11 @@ export const EXCLUSIONS = [
     test: (path) => /(?:^|\/)(?:package-lock\.json|yarn\.lock|pnpm-lock\.yaml)$/.test(path),
   },
   {
+    label: 'the manifest',
+    why: 'a claim source, not a citation surface — `own-identifiers.json` LISTS the identifiers this repository defines, and reading a list of names as a list of citations is the same mistake one level up from `M169d1` §0.2, where a record that lists an unanchored identifier anchors it. Caught within the hour: `M169d2` shipped without this and the corpus grew by 19 identifiers that nothing cites, six of which then reported themselves as ambiguous',
+    test: (path) => path === MANIFEST || path === MANIFEST.replace(/\\/g, '/'),
+  },
+  {
     label: 'recorded data',
     why: 'a census row\'s `why` field is an *anchor source* rather than a citation surface — the same distinction `gen-decisions.mjs` draws for records, and 30 of this corpus\'s identifiers reach it through `kill-matrix.jsonl` alone',
     test: (path) => path.endsWith('.jsonl'),
