@@ -563,13 +563,24 @@ function main() {
       `  code corpus (M169d1, D-M164-06-2): ${codeCorpus.files.length} tracked non-prose files — not read: ${skipped}.`,
       `  ${codeCited.size} identifiers cited there; ${codeCited.size - codeUnresolved.length} resolve in tflw's index.`,
       `  ${mineNotTheirs.length} are this repository's own (${MANIFEST}, ${claimed.size} claimed) and are not demanded of tflw.`,
-      // The number this milestone exists for, and the reason it is reported rather than enforced.
-      // These RESOLVE — tflw publishes an entry under the same identifier — so no gate has ever
-      // had a reason to mention them, and the reader who follows one lands on a real entry about
-      // the wrong thing (`D711`). Repairing them is per-SITE, not per-identifier: the same `M22`
-      // can mean either sequence in two different files, so each has to be qualified by a person
-      // who knows which was meant. That is `D-M164-06-8`, and it is `M169d3`.
-      `  ⚠ ${ambiguous.length} resolve in tflw's index AND are claimed here — a real entry about the wrong thing (D711), repaired per-site at M169d3:`,
+      // These RESOLVE — tflw publishes an entry under the same identifier — so no gate had ever had
+      // a reason to mention them, and a reader who follows one can land on a real entry about the
+      // wrong thing (`D711`).
+      //
+      // `D-M164-06-8` SAID THIS IS REPAIRED PER SITE, and `M169d4` measured that: **3543 bare sites
+      // across 384 files**. It is not a hand edit, and reading the sites says why it should not be
+      // one — the manifest's per-identifier default is already what almost every one of them means,
+      // because almost every one of them IS this repository's own milestone. Qualifying 3543 sites
+      // to restate a default that is already correct is churn wearing a repair's clothes.
+      //
+      // What the default was wrong about was narrower and checkable, and `M169d4` fixed it there
+      // instead: `D16`, `D17` and `D19` were claimed and this repository has never written any of
+      // them — its records number decisions per plan, `D16.1`, `D17.2` — so a bare `D17` in code,
+      // unambiguously tflw's, was being withheld from the demand as ours. Three identifiers, one
+      // lookahead, no churn. The count below is what is left, and it is left ON PURPOSE: these are
+      // identifiers both repositories genuinely define, the census is the artefact that says so,
+      // and the residue is a list to read rather than a defect to close.
+      `  ⚠ ${ambiguous.length} resolve in tflw's index AND are claimed here — both record sets define them (D711):`,
       `    ${ambiguous.join(' ')}`,
       `  ${undeclared.length} unresolved and undeclared (ENFORCED since M169d4); ${DECLARED_UNRESOLVABLE.size} declared unresolvable:`,
     );
@@ -727,6 +738,13 @@ function selfTest() {
     // The vacuity control. A manifest that changes no outcome is decorative, and the number it
     // changes things by is the thing worth printing — it is the count of identifiers that would
     // otherwise be demanded of a repository that did not define them.
+    // `M169d4` — enforcement is not vacuous. The declarations are the only thing standing between
+    // the gate and a red, so the count of them that would fail it is the number worth printing:
+    // if this is ever zero, either the corpus stopped being read or the rule stopped being a rule.
+    const wouldFail = [...DECLARED_UNRESOLVABLE.keys()].filter((id) => citedInCode.has(id));
+    if (wouldFail.length > 0) ok(`enforcement is load-bearing: ${wouldFail.length} cited identifier(s) would fail the gate if their declarations were removed`);
+    else no('enforcement is load-bearing', 'no declared identifier is cited in code, so nothing demonstrates the gate can fail at all');
+
     const claimedAndCited = [...citedInCode].filter((id) => own.ids.has(id));
     if (claimedAndCited.length > 0) ok(`the manifest is load-bearing: ${claimedAndCited.length} identifier(s) it claims are cited in this repository's own code`);
     else no('the manifest is load-bearing', 'nothing it claims is cited in code, so removing it would change no outcome');
