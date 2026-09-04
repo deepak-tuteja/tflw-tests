@@ -39,7 +39,15 @@ import { readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { MANIFEST } from './refresh-own-identifiers.mjs';
+
+/**
+ * Where the manifest lives. Declared HERE and imported by the generator, not the other way round
+ * (`M169d3`). The generator needs this gate's `DECLARED_UNRESOLVABLE` to write the manifest's second
+ * half, and this gate needs the path — so one of the two directions has to go, and the path is the
+ * smaller thing to move. A dynamic `import()` was tried first and deadlocks: the cycle is real at
+ * runtime too, because the outer module is still evaluating when the inner one asks for it.
+ */
+export const MANIFEST = join('scripts', 'own-identifiers.json');
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const SIBLING = join(ROOT, '..', 'testFlow');
@@ -477,6 +485,10 @@ function main() {
    */
   const demanded = new Set(mine.keys());
   for (const id of codeCited.keys()) if (!claimed.has(id) || qualified.has(id)) demanded.add(id);
+  // A declared identifier is not asked of tflw — that is what the declaration says. It travels to
+  // the refresher in the manifest beside the claims (`M169d3`), so the pin will not carry it, and
+  // subtracting it here is what keeps the two sides of this comparison describing the same set.
+  for (const id of DECLARED_UNRESOLVABLE.keys()) demanded.delete(id);
 
   const pinned = new Set(Object.keys(pin.citations ?? {}));
   const missingFromPin = [...demanded].filter((id) => !pinned.has(id)).sort();
