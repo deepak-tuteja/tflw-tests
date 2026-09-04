@@ -454,16 +454,25 @@ function main() {
   if (own.error) problems.push(own.error);
   const claimed = own.ids ?? new Set();
   const codeCited = new Map();
-  const qualified = new Set();
+  // `D866` — qualification is a property of a SITE, so it is recorded against one. This was a single
+  // corpus-wide `Set` until `M169d5`, which made one `tflw M22` anywhere re-admit every bare `M22`
+  // everywhere: 7 identifiers, 47 pin sites that mean this repository's sequence, and `M22`'s two
+  // qualifying sites were both prose *about* the collision — one of them the docblock of
+  // `refresh-own-identifiers.mjs`, the file that generates `claimed`.
+  const qualifiedAt = new Map();
   if (!codeCorpus.error) {
     for (const { path, text } of codeCorpus.files) {
       for (const id of citationsOf(text, false)) {
         if (!codeCited.has(id)) codeCited.set(id, []);
         codeCited.get(id).push(path);
       }
-      for (const [, id] of text.matchAll(THEIRS)) qualified.add(id);
+      const here = new Set();
+      for (const [, id] of text.matchAll(THEIRS)) here.add(id);
+      if (here.size) qualifiedAt.set(path, here);
     }
   }
+  /** Does THIS file put `id` back into the demand? `D866`. */
+  const qualifiesAt = (path, id) => qualifiedAt.get(path)?.has(id) === true;
 
   /**
    * WHAT THE PIN IS FOR, WRITTEN AS A SET (`M169d3`, `D864`). tflw publishes what this repository
@@ -475,6 +484,10 @@ function main() {
    *
    * and the pin has to hold exactly that. The `tflw <id>` term is the per-site override
    * (`D-M164-06-8`): it is the one spelling that puts a claimed identifier back into the demand.
+   * **It is spent per site (`D866`), which is what this sentence always said and what neither
+   * implementation did until `M169d5`.** A claimed identifier re-enters the demand from the files
+   * that qualify it and from no others; a bare mention in a sibling file means this repository's
+   * sequence no matter what some other file spells.
    *
    * THIS WIDENED IN `M169d3` AND NOT IN `M169d4`, which is worth stating because the enforcement
    * half deliberately waits. `D511` accepts a red window on THIS repository's `main` between the
@@ -484,7 +497,10 @@ function main() {
    * with an actionable fix, and this file has been acted on that way before.
    */
   const demanded = new Set(mine.keys());
-  for (const id of codeCited.keys()) if (!claimed.has(id) || qualified.has(id)) demanded.add(id);
+  for (const [id, paths] of codeCited) {
+    // `D866`: unclaimed → every site asks tflw. Claimed → only the sites that spell `tflw <id>`.
+    if (!claimed.has(id) || paths.some((p) => qualifiesAt(p, id))) demanded.add(id);
+  }
   // A declared identifier is not asked of tflw — that is what the declaration says. It travels to
   // the refresher in the manifest beside the claims (`M169d3`), so the pin will not carry it, and
   // subtracting it here is what keeps the two sides of this comparison describing the same set.
@@ -754,6 +770,58 @@ function selfTest() {
     const clash = [...DECLARED_UNRESOLVABLE.keys()].filter((id) => own.ids.has(id));
     if (clash.length === 0) ok('no identifier is both declared unresolvable and claimed as this repository\'s own');
     else no('the declaration list and the manifest are disjoint', `${clash.join(' ')} appears in both — see M169d1 §0.2`);
+  }
+
+  // 7. `D866` — the override is spent PER SITE, and this property exists to record WHY this gate
+  //    could not have caught the defect. Read corpus-wide (what both implementations did until
+  //    `M169d5`) and read per-site, the two produce the IDENTICAL identifier set: a file that
+  //    spells `tflw M22` also cites `M22` by the bare grammar, so it is its own qualifying site and
+  //    no identifier ever enters or leaves the demand. They differ only in WHICH SITES ask, and
+  //    sites are what tflw's pin carries and this gate does not compare. So the blindness is
+  //    structural, not an oversight — `M164-12` asks for a parity artefact between the two
+  //    implementations, and this is the measurement that a parity check cannot be one: it is blind
+  //    to an error both sides make, and both sides made this one.
+  //
+  //    The number below is the control. If it ever reaches zero, either the corpus stopped
+  //    containing a claimed-and-qualified identifier or the override stopped being spent at all,
+  //    and in both cases nothing here is demonstrating anything.
+  {
+    const claimedIds = own.error ? new Set() : own.ids;
+    const qAt = new Map();
+    const citedAt = new Map();
+    for (const { path, text } of code.files) {
+      const here = new Set();
+      for (const [, id] of text.matchAll(THEIRS)) here.add(id);
+      if (here.size) qAt.set(path, here);
+      for (const id of citationsOf(text, false)) {
+        if (!citedAt.has(id)) citedAt.set(id, []);
+        citedAt.get(id).push(path);
+      }
+    }
+    const anywhere = new Set();
+    for (const s of qAt.values()) for (const id of s) anywhere.add(id);
+    const wide = new Set();
+    const perSite = new Set();
+    let bareSites = 0;
+    const affected = [];
+    for (const [id, paths] of citedAt) {
+      if (!claimedIds.has(id) || anywhere.has(id)) wide.add(id);
+      if (!claimedIds.has(id) || paths.some((p) => qAt.get(p)?.has(id))) perSite.add(id);
+      if (claimedIds.has(id) && anywhere.has(id)) {
+        const bare = paths.filter((p) => !qAt.get(p)?.has(id));
+        if (bare.length) { bareSites += bare.length; affected.push(`${id}×${bare.length}`); }
+      }
+    }
+    const sameIds = wide.size === perSite.size && [...wide].every((id) => perSite.has(id));
+    if (sameIds && bareSites > 0) {
+      ok(`the override is spent per site (D866): both readings demand the same ${wide.size} identifiers — which is why this gate is blind to it — and differ at ${bareSites} site(s): ${affected.sort().join(' ')}`);
+    } else if (!sameIds) {
+      no('the two readings of the override demand the same identifiers',
+         `they differ, which contradicts D866's account of why this gate could not see the defect — wide ${wide.size}, per-site ${perSite.size}`);
+    } else {
+      no('the per-site override is demonstrated by the corpus',
+         'no claimed identifier is cited bare at one site and qualified at another, so nothing here distinguishes per-site from corpus-wide');
+    }
   }
 
   console.log(bad === 0
