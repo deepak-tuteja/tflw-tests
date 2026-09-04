@@ -45,6 +45,8 @@
     "verify:tflw-resolution": "node scripts/verify-tflw-resolution.mjs",
     "verify:provenance": "node scripts/verify-provenance.mjs",
     "verify:provenance:self-test": "node scripts/verify-provenance.mjs --self-test",
+    "refresh:own-identifiers": "node scripts/refresh-own-identifiers.mjs",
+    "verify:own-identifiers": "node scripts/refresh-own-identifiers.mjs --check",
     "verify:construct-coverage": "node scripts/verify-construct-coverage.mjs",
     "verify:redaction:self-test": "node scripts/verify-redaction.mjs --self-test",
     "verify:construct-acceptance": "node scripts/verify-construct-acceptance.mjs",

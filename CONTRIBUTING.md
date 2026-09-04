@@ -78,6 +78,14 @@ npm run read:mutation-matrix:gate
 npm run verify:argv-contract
 ```
 
+**And when you add, rename or renumber a milestone or decision** in a `PLAN_*.md` or
+`PROGRESS.md` — this repository's records are `.gitignore`d, so this is the only machine that can
+tell whether the manifest still matches them. It says what to run when it fails:
+
+```sh
+npm run verify:own-identifiers
+```
+
 **And when a tflw milestone assigns or changes a `TF0xx` diagnostic code**, before opening either
 PR:
 
@@ -152,7 +160,7 @@ xvfb-run -a npm run regression -- --group security-ui
   `scripts/` proving nothing resolves a tflw any other way. **Its allow-list is the honest part** —
   the files that legitimately do are named there, each with a reason.
 - **`npm run verify:provenance:self-test`** — **the gate above reads two different corpora, and
-  this is what says the difference is deliberate.** `M169d1` split it: resolution widened to every
+  this is what says the difference is deliberate.** `testFlow-tests M169d1` split it: resolution widened to every
   tracked non-prose file, while the escaping-link and `**Notation.**` rules stayed on the 14
   markdown files, because a `.ts` file cannot carry a declaration paragraph and 394 of them cite
   something — widening rule 2 with the rest would redden 394 files with no repair that is not
@@ -164,6 +172,19 @@ xvfb-run -a npm run regression -- --group security-ui
   list honest from both ends: an entry that stops being cited is stale, and an entry that starts
   resolving in tflw's index is a declared non-existence that quietly became a lie. Milliseconds, no
   sibling checkout needed.
+
+- **`npm run verify:own-identifiers`** — **what this repository defines for itself, written down
+  so the other repository's index cannot answer for it.** tflw pins what this repository *cites*
+  and nothing recorded what it *defines*, and that asymmetry is where the two sequences collide in
+  silence: 69 identifiers are anchored in both record sets and **63 are already published by
+  tflw**, so a bare `testFlow-tests M22` in `docker-compose.yml` resolves to tflw's coverage audit
+  instead of this repository's nginx mTLS sidecar — a real entry about the wrong thing, delivered
+  green. `scripts/own-identifiers.json` is generated from this repository's records by
+  `npm run refresh:own-identifiers` and committed; this checks it is current. It is **absent from
+  CI on purpose**: the records are `.gitignore`d, so only your machine can tell whether the
+  manifest still matches them. Run it after adding or renaming a milestone or decision in a
+  `PLAN_*.md` or `PROGRESS.md`. Omitting an identifier is not a red — it is a wrong answer nobody
+  is told about, which is why this is a discipline rather than a convenience.
 
 - **`npm run verify:construct-coverage`** — **every construct tflw ships is either graded here with
   a known answer or explicitly listed as not yet graded, and a new one is neither.** The construct

@@ -216,6 +216,10 @@ const CLASSIFIED = [
  */
 const ABSENT_FROM_CI = [
   {
+    local: 'npm run verify:own-identifiers',
+    why: '`M169d2` (`D-M164-06-7`) — `scripts/own-identifiers.json` is tracked so a CI checkout can read it, but only a machine with this repository\'s `.gitignore`d `PLAN_*.md`/`PROGRESS.md` can check it is CURRENT, so this is a developer discipline for `D859`\'s exact reason rather than a step. It is the one thing standing between a bare `M22` in `docker-compose.yml` and tflw\'s coverage audit: 63 identifiers are defined in both repositories and already published by tflw, so an omission here is not a red — it is a green answer from the wrong sequence. `verify:provenance` fails if the manifest is missing or malformed, which is the half CI can hold',
+  },
+  {
     local: 'npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs',
     why: 'the cross-repo pair. It belongs to both repos and to neither\'s ci.yml — it answers in seconds, BEFORE either PR exists, which is the whole point. M132 found that nobody knew it existed, after it would have caught the same failure three times',
   },

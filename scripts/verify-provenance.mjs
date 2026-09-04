@@ -39,6 +39,8 @@ import { readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { MANIFEST } from './refresh-own-identifiers.mjs';
+
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const SIBLING = join(ROOT, '..', 'testFlow');
 
@@ -284,6 +286,29 @@ export function readCode(root) {
 }
 
 /**
+ * What this repository defines for itself (`M169d2`, `D-M164-06-7`). Tracked, so a CI checkout can
+ * read it; generated, so it cannot go stale by inattention; identifiers only, because the record
+ * filenames are part of what the `.gitignore` decision withholds.
+ *
+ * This is the artefact that makes `D711`'s worst case visible. 69 identifiers are anchored in both
+ * repositories' record sets and 63 are already published by tflw, so without this file a bare
+ * `M22` in `docker-compose.yml` is demanded of tflw's index and tflw *answers* — with its coverage
+ * audit, where this repository meant its nginx mTLS sidecar. A wrong entry, delivered green.
+ *
+ * It is read rather than skipped-if-absent, per this file's standing rule: a missing manifest is a
+ * failure, not a pass with fewer claims.
+ */
+function ownManifest() {
+  try {
+    const parsed = JSON.parse(readFileSync(join(ROOT, MANIFEST), 'utf8'));
+    if (!Array.isArray(parsed.identifiers)) return { error: `${MANIFEST} has no \`identifiers\` array` };
+    return { ids: new Set(parsed.identifiers) };
+  } catch (e) {
+    return { error: `${MANIFEST} is missing or unreadable (${String(e.message).split('\n')[0]}) — run \`npm run refresh:own-identifiers\`` };
+  }
+}
+
+/**
  * The identifiers this repository's code cites **because they resolve to nothing**, each with the
  * reason beside it. `D860`'s shape, re-declared on this side rather than shared — `D711`'s argument
  * that the two readings stay independent applies to the exclusion list as much as to the grammar,
@@ -303,6 +328,13 @@ export function readCode(root) {
  * one. A resolution mechanism built for a single member is a mechanism whose maintenance cost
  * exceeds its subject.
  *
+ * `D4` WAS HERE AND IS NOT ANY MORE, which is the list working rather than shrinking. It was
+ * declared unresolvable because `apiV2/src/orders/order-receipt.util.ts` cites `PLAN_FILEFORMATS.md
+ * D4` and tflw publishes a *different* `D4`. `M169d2`'s manifest gives the better account: this
+ * repository genuinely **defines** a `D4`, so the citation is correct and the demand was the
+ * mistake. The contradiction check below is what found it — an identifier cannot both be defined
+ * here and resolve nowhere — and it found it on the manifest's first run.
+ *
  * WHY THE SHA IS NOT CHECKED HERE. It would be the better declaration — a reason that goes stale
  * loudly beats one that goes stale silently — but `actions/checkout` sets no `fetch-depth` in this
  * repository's workflow, so CI holds a depth-1 clone and `37edd5c` is not an object it has. A gate
@@ -311,7 +343,6 @@ export function readCode(root) {
  * checked by hand.
  */
 export const DECLARED_UNRESOLVABLE = new Map([
-  ['D4', 'two independent causes on this side: `apiV2/src/orders/order-receipt.util.ts` cites `PLAN_FILEFORMATS.md D4`, this repository\'s own decision, against a DIFFERENT `D4` tflw publishes (`D687`); and this file\'s own docblock quotes it as the sibling-qualified example. tflw declares it too, for a third cause'],
   ['M164d', '`discover-mutation-kills.mjs` / `list-mutation-candidates.mjs` — `D851` records that `M164d` is not built. A citation of an unbuilt milestone is what a declared exclusion is for'],
   ['M141b', '`lib/regression-shared.mjs` / `regression.mjs` — names commit `37edd5c` (#27), this repository\'s half of `M141`. Not a dead pointer: the citation is accurate and no anchor set can hold it. See the docblock above'],
 ]);
@@ -431,12 +462,43 @@ function main() {
       codeCited.get(id).push(path);
     }
     const codeUnresolved = [...codeCited.keys()].filter((id) => !published.has(id)).sort();
-    const undeclared = codeUnresolved.filter((id) => !DECLARED_UNRESOLVABLE.has(id));
+    const own = ownManifest();
+    if (own.error) problems.push(own.error);
+    const claimed = own.ids ?? new Set();
+    const mineNotTheirs = codeUnresolved.filter((id) => claimed.has(id));
+    const undeclared = codeUnresolved.filter((id) => !DECLARED_UNRESOLVABLE.has(id) && !claimed.has(id));
     const staleDecl = [...DECLARED_UNRESOLVABLE.keys()].filter((id) => published.has(id)).sort();
+    // THE CONTRADICTION, and it is `M169d1` §0.2's rule turned into a gate. An identifier cannot
+    // both be one this repository defines and one that resolves nowhere: if the manifest claims it,
+    // the declaration is not merely redundant, it is a second answer to a question that has one.
+    // This is what stops a record from silently repairing a dead pointer by listing it — writing
+    // `- **\`M164d\`** — resolves to nothing` in a plan anchors `M164d`, the manifest then claims
+    // it, and the declaration explaining that it resolves to nowhere would sit beside a claim that
+    // this repository defines it. Measured on the day this landed: the rule fires on `D4`, and
+    // correctly — `PLAN_FILEFORMATS.md` really does define a `D4`, so the manifest is the right
+    // account of it and the declaration was the wrong one.
+    const ambiguous = [...codeCited.keys()].filter((id) => published.has(id) && claimed.has(id)).sort();
+    const contradicted = [...DECLARED_UNRESOLVABLE.keys()].filter((id) => claimed.has(id)).sort();
+    if (contradicted.length) {
+      problems.push(
+        `${contradicted.join(' ')} is BOTH declared unresolvable in verify-provenance.mjs AND claimed by ${MANIFEST} as an identifier this repository defines.\n` +
+        `    Those cannot both be true. If this repository's records define it, delete the declaration — the manifest already stops it being demanded of tflw.\n` +
+        `    If they do not, the records are anchoring it by accident: a plan that LISTS an identifier in a defining shape defines it (M169d1 §0.2).`,
+      );
+    }
     const skipped = [...codeCorpus.excluded].filter(([, n]) => n > 0).map(([k, n]) => `${n} ${k}`).join(' · ');
     codeLines.push(
       `  code corpus (M169d1, D-M164-06-2): ${codeCorpus.files.length} tracked non-prose files — not read: ${skipped}.`,
       `  ${codeCited.size} identifiers cited there; ${codeCited.size - codeUnresolved.length} resolve in tflw's index.`,
+      `  ${mineNotTheirs.length} are this repository's own (${MANIFEST}, ${claimed.size} claimed) and are not demanded of tflw.`,
+      // The number this milestone exists for, and the reason it is reported rather than enforced.
+      // These RESOLVE — tflw publishes an entry under the same identifier — so no gate has ever
+      // had a reason to mention them, and the reader who follows one lands on a real entry about
+      // the wrong thing (`D711`). Repairing them is per-SITE, not per-identifier: the same `M22`
+      // can mean either sequence in two different files, so each has to be qualified by a person
+      // who knows which was meant. That is `D-M164-06-8`, and it is `M169d3`.
+      `  ⚠ ${ambiguous.length} resolve in tflw's index AND are claimed here — a real entry about the wrong thing (D711), repaired per-site at M169d3:`,
+      `    ${ambiguous.join(' ')}`,
       `  ${undeclared.length} await publication (M169d3, approved as M164-06 §9); ${DECLARED_UNRESOLVABLE.size} declared unresolvable:`,
     );
     for (const [id, why] of DECLARED_UNRESOLVABLE) codeLines.push(`    ${id.padEnd(6)} ${why}`);
@@ -541,6 +603,28 @@ function selfTest() {
   const orphaned = [...DECLARED_UNRESOLVABLE.keys()].filter((id) => !citedInCode.has(id));
   if (orphaned.length === 0) ok(`all ${DECLARED_UNRESOLVABLE.size} declarations still have a citation site`);
   else no('every declaration still has a citation site', `${orphaned.join(' ')} is declared and no longer cited — delete the declaration`);
+
+  // 6. `M169d2` — the manifest. Well-formed, load-bearing, and not contradicting the declarations.
+  const own = ownManifest();
+  if (own.error) {
+    no('the own-identifiers manifest is readable', own.error);
+  } else {
+    if (own.ids.size > 0) ok(`the own-identifiers manifest is well-formed and non-empty (${own.ids.size} claimed)`);
+    else no('the own-identifiers manifest is non-empty', 'it claims nothing, so it cannot be doing anything');
+
+    // The vacuity control. A manifest that changes no outcome is decorative, and the number it
+    // changes things by is the thing worth printing — it is the count of identifiers that would
+    // otherwise be demanded of a repository that did not define them.
+    const claimedAndCited = [...citedInCode].filter((id) => own.ids.has(id));
+    if (claimedAndCited.length > 0) ok(`the manifest is load-bearing: ${claimedAndCited.length} identifier(s) it claims are cited in this repository's own code`);
+    else no('the manifest is load-bearing', 'nothing it claims is cited in code, so removing it would change no outcome');
+
+    // The contradiction, as a property rather than only as a gate finding. Stated here too because
+    // the gate's copy needs the sibling checkout and this one does not.
+    const clash = [...DECLARED_UNRESOLVABLE.keys()].filter((id) => own.ids.has(id));
+    if (clash.length === 0) ok('no identifier is both declared unresolvable and claimed as this repository\'s own');
+    else no('the declaration list and the manifest are disjoint', `${clash.join(' ')} appears in both — see M169d1 §0.2`);
+  }
 
   console.log(bad === 0
     ? `\n✓ self-test: the corpus split is deliberate, demonstrated, and every exclusion is exercised.`
