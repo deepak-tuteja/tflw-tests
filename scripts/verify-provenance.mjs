@@ -89,6 +89,23 @@ const DECLARES = (text) => /\*\*Notation\.\*\*/.test(text) && text.includes('/bl
  *
  * `D<n>` and `P#n` are not defaulted. This repository's own records number decisions per plan
  * (`D17.1`, `D19.1`), never bare, so a bare `D<n>` is unambiguously tflw's wherever it appears.
+ *
+ * **`M169d3` — THIS IS A PROSE DEVICE, and reading it in the code corpus made it match its own
+ * definition.** The line below contains the pattern it tests for, so `verify-provenance.mjs`
+ * declared *itself* a file that defaults to this repository's own milestones — and `citationsOf`
+ * then blanked **19 bare `M`-forms** in it, `M131 M141 M152e M154d M164 M167` among them, every one
+ * a real citation of tflw in a docblock. Measured over the whole corpus: exactly one file trips it,
+ * and it is this one. The gate whose subject is *which sequence an identifier means* was the only
+ * file in the repository exempt from having to answer that question.
+ *
+ * It is the same self-reference `M169d1` §0.2 records for a plan that anchors what it lists as
+ * unanchored, and `M169d2`'s fix for a manifest read as a citation surface — the fourth in this
+ * milestone, and the sharpest, because here the predicate matches the source of the predicate.
+ *
+ * The repair is the corpus split itself. A `.ts` file cannot carry a `**Notation.**` paragraph
+ * (`M169d1`'s rule 2) and it cannot carry this declaration either; what decides for code is
+ * `M169d2`'s manifest, per identifier, and `main` already partitions on it. So the parameter is not
+ * a special case — it says which of the two corpora is being read.
  */
 const defaultsToOwn = (text) => /here is this repository's own/.test(text);
 
@@ -136,8 +153,8 @@ const ROW = /(?<![\w#])(M\d{1,3}[a-z]?\d?|D\d{1,3}[a-z]?)-\d+\b/g;
  * STRICT, and this is the set the declaration's promise is measured against: each of these must
  * have an entry in tflw's index, because each is a bare identifier standing in front of a reader.
  */
-export function citationsOf(text) {
-  const own = defaultsToOwn(text);
+export function citationsOf(text, prose = true) {
+  const own = prose && defaultsToOwn(text);
   // In a file that defaults to this repository's own milestones, an unqualified `M<n>` is not a
   // citation of anything tflw publishes and must not be required to resolve there. Blanking them
   // rather than filtering afterwards keeps the range rule honest too: `M29-M33` in such a file is
@@ -163,8 +180,8 @@ export function citationsOf(text) {
  * nothing this does not — so a pin that has gone stale is still caught, and a disagreement about a
  * row id is not reported as one.
  */
-export function citationsLoose(text) {
-  const ids = citationsOf(text);
+export function citationsLoose(text, prose = true) {
+  const ids = citationsOf(text, prose);
   for (const [, id] of text.matchAll(ROW)) ids.add(id);
   return ids;
 }
@@ -350,6 +367,14 @@ function ownManifest() {
 export const DECLARED_UNRESOLVABLE = new Map([
   ['M164d', '`discover-mutation-kills.mjs` / `list-mutation-candidates.mjs` — `D851` records that `M164d` is not built. A citation of an unbuilt milestone is what a declared exclusion is for'],
   ['M141b', '`lib/regression-shared.mjs` / `regression.mjs` — names commit `37edd5c` (#27), this repository\'s half of `M141`. Not a dead pointer: the citation is accurate and no anchor set can hold it. See the docblock above'],
+  // THESE THREE ARE ALL IN THIS FILE, and that is the finding rather than a coincidence (`M169d3`).
+  // Until the prose default stopped reaching the code corpus, `verify-provenance.mjs` declared
+  // itself as defaulting to this repository's own milestones — because it contains the pattern that
+  // test looks for — and every bare `M`-form in it was blanked. The gate whose subject is which
+  // sequence an identifier means was the last file in the repository not answering for its own.
+  ['M7w', '`verify-provenance.mjs` — the base64 tail of the `sha512-` digest quoted in the lockfile exclusion\'s reason and used as its self-test fixture. tflw declares the same identifier for the same shape in its own docblocks, which is two independent readings agreeing (`D711`)'],
+  ['M404b', '`verify-provenance.mjs` — the invented half of the self-test\'s planted citation, `a comment mentioning D404 and M404b`. `D404` is a real tflw decision and resolves; only the `M` half is fictional, which is why the plant tests the grammar rather than the index'],
+  ['M154i', '`verify-provenance.mjs` — names the false red this gate produced against a tree `rsync` carried and git did not. Minted in that comment and referred back to once in tflw\'s `M164-12` row; a mention is not an anchor, and `M154a`-`M154h` are all anchored where this one never was'],
 ]);
 
 function main() {
@@ -415,10 +440,49 @@ function main() {
     );
   }
 
+  // --- the code corpus, read before the pin so the pin can be compared against BOTH halves -----
+  const codeCorpus = readCode(ROOT);
+  const own = ownManifest();
+  if (own.error) problems.push(own.error);
+  const claimed = own.ids ?? new Set();
+  const codeCited = new Map();
+  const qualified = new Set();
+  if (!codeCorpus.error) {
+    for (const { path, text } of codeCorpus.files) {
+      for (const id of citationsOf(text, false)) {
+        if (!codeCited.has(id)) codeCited.set(id, []);
+        codeCited.get(id).push(path);
+      }
+      for (const [, id] of text.matchAll(THEIRS)) qualified.add(id);
+    }
+  }
+
+  /**
+   * WHAT THE PIN IS FOR, WRITTEN AS A SET (`M169d3`, `D864`). tflw publishes what this repository
+   * ASKS OF IT, which is not the same as what this repository cites: the 64 identifiers below that
+   * both repositories define are cited here and must not be asked there, or the index answers a
+   * sentence about this repository's nginx sidecar with tflw's coverage audit. So the demand is
+   *
+   *     everything the prose cites  +  (what the code cites − what the manifest claims)  +  `tflw <id>`
+   *
+   * and the pin has to hold exactly that. The `tflw <id>` term is the per-site override
+   * (`D-M164-06-8`): it is the one spelling that puts a claimed identifier back into the demand.
+   *
+   * THIS WIDENED IN `M169d3` AND NOT IN `M169d4`, which is worth stating because the enforcement
+   * half deliberately waits. `D511` accepts a red window on THIS repository's `main` between the
+   * two merges — it does not accept a permanent one, and a pin that has grown a code half while
+   * this comparison still reads only markdown reports all 207 of them as stale on every run, with
+   * a remedy attached that would delete a correct pin. That is `M154i` exactly: a plausible finding
+   * with an actionable fix, and this file has been acted on that way before.
+   */
+  const demanded = new Set(mine.keys());
+  for (const id of codeCited.keys()) if (!claimed.has(id) || qualified.has(id)) demanded.add(id);
+
   const pinned = new Set(Object.keys(pin.citations ?? {}));
-  const missingFromPin = [...mine.keys()].filter((id) => !pinned.has(id)).sort();
+  const missingFromPin = [...demanded].filter((id) => !pinned.has(id)).sort();
   const loose = new Set();
   for (const { text } of citing) for (const id of citationsLoose(text)) loose.add(id);
+  for (const { text } of codeCorpus.files ?? []) for (const id of citationsLoose(text, false)) loose.add(id);
   const staleInPin = [...pinned].filter((id) => !loose.has(id)).sort();
   if (missingFromPin.length) {
     problems.push(`tflw's pin does not know this repository cites ${missingFromPin.join(' ')} — re-pin it (\`node scripts/refresh-sibling-citations.mjs --ref <this branch>\`), tflw side, and merge tflw first (D511).`);
@@ -457,19 +521,10 @@ function main() {
   // checkout. `M169d2`'s generated manifest is what makes it computable; until then this report is
   // measuring the smaller half and must not be read as clearance.
   const codeLines = [];
-  const codeCorpus = readCode(ROOT);
   if (codeCorpus.error) {
     codeLines.push(`  code corpus (M169d1): NOT READ — ${codeCorpus.error}.`);
   } else {
-    const codeCited = new Map();
-    for (const { path, text } of codeCorpus.files) for (const id of citationsOf(text)) {
-      if (!codeCited.has(id)) codeCited.set(id, []);
-      codeCited.get(id).push(path);
-    }
     const codeUnresolved = [...codeCited.keys()].filter((id) => !published.has(id)).sort();
-    const own = ownManifest();
-    if (own.error) problems.push(own.error);
-    const claimed = own.ids ?? new Set();
     const mineNotTheirs = codeUnresolved.filter((id) => claimed.has(id));
     const undeclared = codeUnresolved.filter((id) => !DECLARED_UNRESOLVABLE.has(id) && !claimed.has(id));
     const staleDecl = [...DECLARED_UNRESOLVABLE.keys()].filter((id) => published.has(id)).sort();
@@ -568,7 +623,7 @@ function selfTest() {
   // 2. THE VACUITY CONTROL. Rule 2 is markdown-only by decision; this measures what that decision
   //    costs if it is ever quietly widened, so the number is in the output rather than in a
   //    comment that can go stale.
-  const wouldRedden = code.files.filter(({ text }) => citationsOf(text).size > 0 && !DECLARES(text)).length;
+  const wouldRedden = code.files.filter(({ text }) => citationsOf(text, false).size > 0 && !DECLARES(text)).length;
   if (wouldRedden > 100) ok(`widening rule 2 to the code corpus would redden ${wouldRedden} files — the split is load-bearing, not decorative`);
   else no('the rule-2 split is load-bearing', `widening it would redden only ${wouldRedden} files; if this is genuinely small, rule 2 should widen and this test should go`);
 
@@ -582,8 +637,28 @@ function selfTest() {
   // 4. The planted citation, both directions (`M164-04`). A citation in code is SEEN; the two
   //    shapes the exclusions exist for are NOT.
   const planted = 'a comment mentioning D404 and M404b';
-  if (citationsOf(planted).has('D404') && citationsOf(planted).has('M404b')) ok('a planted citation in a code comment is seen by the widened rule');
-  else no('a planted citation in a code comment is seen', `got ${[...citationsOf(planted)].join(' ')}`);
+  if (citationsOf(planted, false).has('D404') && citationsOf(planted, false).has('M404b')) ok('a planted citation in a code comment is seen by the widened rule');
+  else no('a planted citation in a code comment is seen', `got ${[...citationsOf(planted, false)].join(' ')}`);
+
+  // 4b. `M169d3` — the prose declaration does not reach the code corpus, and the negative control
+  //     is the file that found it. A source carrying the phrase `defaultsToOwn` tests for is a
+  //     source that declared itself, so this asserts the two readings of the SAME text differ, and
+  //     names the count that was being lost. Reverting the parameter makes both sides equal and
+  //     reddens this line.
+  const selfDeclaring = code.files.find((f) => f.path === 'scripts/verify-provenance.mjs');
+  if (!selfDeclaring) {
+    no('the self-declaring file is in the code corpus', 'scripts/verify-provenance.mjs was not read — the corpus or the path changed');
+  } else {
+    const asProse = citationsOf(selfDeclaring.text, true);
+    const asCode = citationsOf(selfDeclaring.text, false);
+    const recovered = [...asCode].filter((id) => !asProse.has(id));
+    if (recovered.length > 10 && recovered.includes('M154d')) {
+      ok(`the prose default does not reach the code corpus — reading this file as prose loses ${recovered.length} identifiers, ${recovered.slice(0, 4).join(' ')} among them`);
+    } else {
+      no('the prose default does not reach the code corpus',
+         `reading this file as prose loses ${recovered.length} identifier(s) (${recovered.join(' ') || 'none'}) — if that is genuinely zero the parameter is doing nothing`);
+    }
+  }
 
   const digest = 'sha512-xQe0+cX8ncDDoNfMhoNXtQBg0lVMbAxSJH+M7w==';
   const lockRule = EXCLUSIONS.find((r) => r.label === 'lockfile');
@@ -604,7 +679,7 @@ function selfTest() {
   //    docblock: CI is a depth-1 clone), but a declared identifier that nothing cites any more is
   //    a declaration that has outlived its subject.
   const citedInCode = new Set();
-  for (const { text } of code.files) for (const id of citationsOf(text)) citedInCode.add(id);
+  for (const { text } of code.files) for (const id of citationsOf(text, false)) citedInCode.add(id);
   const orphaned = [...DECLARED_UNRESOLVABLE.keys()].filter((id) => !citedInCode.has(id));
   if (orphaned.length === 0) ok(`all ${DECLARED_UNRESOLVABLE.size} declarations still have a citation site`);
   else no('every declaration still has a citation site', `${orphaned.join(' ')} is declared and no longer cited — delete the declaration`);
