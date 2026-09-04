@@ -571,11 +571,31 @@ function main() {
       // who knows which was meant. That is `D-M164-06-8`, and it is `M169d3`.
       `  ⚠ ${ambiguous.length} resolve in tflw's index AND are claimed here — a real entry about the wrong thing (D711), repaired per-site at M169d3:`,
       `    ${ambiguous.join(' ')}`,
-      `  ${undeclared.length} await publication (M169d3, approved as M164-06 §9); ${DECLARED_UNRESOLVABLE.size} declared unresolvable:`,
+      `  ${undeclared.length} unresolved and undeclared (ENFORCED since M169d4); ${DECLARED_UNRESOLVABLE.size} declared unresolvable:`,
     );
     for (const [id, why] of DECLARED_UNRESOLVABLE) codeLines.push(`    ${id.padEnd(6)} ${why}`);
+    // `M169d4` — THE SWITCH. Everything above this line was computed and printed for three
+    // milestones while the index caught up; `M169d3` published the 93 it was waiting for and the
+    // count reached zero, so the report becomes a gate. What it now says is the same sentence rule
+    // 3 has always made about prose: an identifier a reader meets resolves, or it is declared, or
+    // this fails.
+    //
+    // The order was not caution for its own sake. Enforcing before the publication would have
+    // reddened `main` on 89 identifiers that were anchored in tflw's records and merely unpublished
+    // — work already scheduled and approved — and a gate that fails on scheduled work is a gate
+    // people learn to pass with `--no-verify`.
+    if (undeclared.length) {
+      problems.push(
+        `${undeclared.length} identifier(s) cited in this repository's code resolve to nothing: ${undeclared.join(' ')}\n` +
+        `    Each is one of three things. If tflw's records anchor it, re-pin (\`refresh-sibling-citations.mjs --ref <branch>\`)\n` +
+        `    and regenerate its index — that is the M169d3 path and it publishes on demand. If THIS repository\n` +
+        `    defines it, \`npm run refresh:own-identifiers\` — the manifest is what stops it being asked of tflw.\n` +
+        `    If nothing anywhere defines it, add it to DECLARED_UNRESOLVABLE with the reason, which is a\n` +
+        `    declaration a reader can check rather than a pointer they cannot follow (D860).`,
+      );
+    }
     codeLines.push(
-      `  NOT ENFORCED. Enforcement is M169d4, after the manifest (M169d2) and the re-pin (M169d3).`,
+      `  ENFORCED since M169d4 — an undeclared unresolved citation in code fails this gate.`,
     );
     // A declaration that starts resolving is a lie that nobody is told. This one IS enforced —
     // it costs nothing today and it is the property a by-identifier exclusion has that a
