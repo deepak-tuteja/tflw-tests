@@ -36,7 +36,7 @@
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -207,6 +207,115 @@ function tracked() {
   return { files: paths.map((path) => ({ path, text: readFileSync(join(ROOT, path), 'utf8') })) };
 }
 
+
+// ---------------------------------------------------------------------------------------------
+// `M169d1` — the second corpus (`D-M164-06-2`)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * The three rules split by corpus, because they are three promises and only one of them is about
+ * resolution.
+ *
+ * Rules 1 and 2 stay on `git ls-files '*.md'`. Rule 1 is a *markdown link* defect — `](../x)` does
+ * not exist in a `.ts` file — and rule 2 requires the `**Notation.**` paragraph, which a `.ts` file
+ * cannot carry: 397 of the files below cite something, so widening rule 2 with the others would
+ * turn this gate red on 397 files with no repair that is not absurd. That is `M167`'s shape read
+ * forwards for once — a guard deliberately narrower than its file set, with the reason written
+ * down rather than discovered eight days later.
+ *
+ * Rule 3 widens to here. An identifier standing in front of a reader in a code comment is standing
+ * in front of a reader.
+ *
+ * The exclusions are `D-M164-06-1`'s, by exclusion-with-a-reason rather than by extension
+ * allowlist, and every one of them is printed on every run so the corpus NOT read is visible on a
+ * green one. An allowlist is the defect: it fails silent and in the safe-looking direction.
+ */
+export const IMAGE_EXT = new Set(['.png', '.svg', '.jpg', '.jpeg', '.gif', '.ico', '.webp', '.avif']);
+
+export const EXCLUSIONS = [
+  {
+    label: 'markdown',
+    why: 'the other corpus — rules 1 and 2 read these under the full publish-and-resolve contract, and reading them here too would report every identifier twice',
+    test: (path) => path.endsWith('.md'),
+  },
+  {
+    label: 'image',
+    why: 'an SVG path is written in a language where `M<n>` means *moveto*; tflw measured its own three SVGs and every hit was a coordinate',
+    test: (path) => IMAGE_EXT.has(extname(path).toLowerCase()),
+  },
+  {
+    label: 'lockfile',
+    why: 'a `sha512-` digest tail parses as a citation and cannot be told from one by any grammar — `M7w` comes out of `apiV2/package-lock.json`, which is how tflw arrived at the same exclusion from the other side of the boundary',
+    test: (path) => /(?:^|\/)(?:package-lock\.json|yarn\.lock|pnpm-lock\.yaml)$/.test(path),
+  },
+  {
+    label: 'recorded data',
+    why: 'a census row\'s `why` field is an *anchor source* rather than a citation surface — the same distinction `gen-decisions.mjs` draws for records, and 30 of this corpus\'s identifiers reach it through `kill-matrix.jsonl` alone',
+    test: (path) => path.endsWith('.jsonl'),
+  },
+];
+
+/**
+ * The tracked non-prose corpus. Binary is detected on content rather than on extension, so a file
+ * with a misleading name is excluded for what it is; tflw's `receipt.png` is the worked example in
+ * the other direction, an ASCII fixture that stays *in* on the extension rule.
+ *
+ * @returns {{files: {path: string, text: string}[], excluded: Map<string, number>}}
+ */
+export function readCode(root) {
+  let out;
+  try {
+    out = execFileSync('git', ['ls-files'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  } catch (e) {
+    return { error: String(e.stderr || e.message).split('\n')[0].trim() };
+  }
+  const paths = out.split('\n').filter(Boolean);
+  if (paths.length === 0) return { error: 'git lists no tracked file at all in this tree' };
+  const files = [];
+  const excluded = new Map([...EXCLUSIONS.map((r) => [r.label, 0]), ['binary', 0]]);
+  for (const path of paths) {
+    const rule = EXCLUSIONS.find((r) => r.test(path));
+    if (rule) { excluded.set(rule.label, excluded.get(rule.label) + 1); continue; }
+    const buf = readFileSync(join(root, path));
+    if (buf.includes(0)) { excluded.set('binary', excluded.get('binary') + 1); continue; }
+    files.push({ path, text: buf.toString('utf8') });
+  }
+  return { files, excluded };
+}
+
+/**
+ * The identifiers this repository's code cites **because they resolve to nothing**, each with the
+ * reason beside it. `D860`'s shape, re-declared on this side rather than shared — `D711`'s argument
+ * that the two readings stay independent applies to the exclusion list as much as to the grammar,
+ * and the measurement is the evidence it works: this side re-derived `D4` and `M7w` without looking
+ * at tflw's list, and agrees with it on both.
+ *
+ * `M141b` is the one entry that is not a grammar artefact, and it is worth reading closely, because
+ * the citation is **correct** and the anchor set is what cannot hold it. It names `37edd5c` —
+ * *"M141b: one answer to \"which tflw am I running?\", and the second answers deleted (#27)"* — a
+ * real merged commit in this repository, which touched both of the two files that cite it. It is
+ * unanchored because tflw's records anchor whole milestones (`M141`, decisions `D531`-`D546`) and
+ * name its two PR halves only in a build-order table cell, and because this repository's own
+ * records are `.gitignore`d by decision and so cannot anchor anything for a public index.
+ *
+ * A general channel was considered and **rejected on a measurement**: a probe asking whether any
+ * other unresolved identifier names a real commit in either repository returns exactly one, this
+ * one. A resolution mechanism built for a single member is a mechanism whose maintenance cost
+ * exceeds its subject.
+ *
+ * WHY THE SHA IS NOT CHECKED HERE. It would be the better declaration — a reason that goes stale
+ * loudly beats one that goes stale silently — but `actions/checkout` sets no `fetch-depth` in this
+ * repository's workflow, so CI holds a depth-1 clone and `37edd5c` is not an object it has. A gate
+ * that verified it would be green on every developer machine and red on every CI run, which is the
+ * failure mode this file's own `M154i` comment is about, inverted. It is printed for a reader and
+ * checked by hand.
+ */
+export const DECLARED_UNRESOLVABLE = new Map([
+  ['D4', 'two independent causes on this side: `apiV2/src/orders/order-receipt.util.ts` cites `PLAN_FILEFORMATS.md D4`, this repository\'s own decision, against a DIFFERENT `D4` tflw publishes (`D687`); and this file\'s own docblock quotes it as the sibling-qualified example. tflw declares it too, for a third cause'],
+  ['M164d', '`discover-mutation-kills.mjs` / `list-mutation-candidates.mjs` — `D851` records that `M164d` is not built. A citation of an unbuilt milestone is what a declared exclusion is for'],
+  ['M141b', '`lib/regression-shared.mjs` / `regression.mjs` — names commit `37edd5c` (#27), this repository\'s half of `M141`. Not a dead pointer: the citation is accurate and no anchor set can hold it. See the docblock above'],
+]);
+
 function main() {
   const corpus = tracked();
   if (corpus.error) {
@@ -282,8 +391,69 @@ function main() {
     problems.push(`tflw's pin still claims this repository cites ${staleInPin.join(' ')}, and it does not. Its index will publish entries nothing asks for — re-pin it.`);
   }
 
+  // --- the widened rule 3, computed and NOT enforced (`M169d1`) ---------------------------------
+  //
+  // WHY IT PRINTS INSTEAD OF FAILING. Enforcing it today would redden `main` on 124 identifiers,
+  // and 120 of those are not defects: they are anchored in tflw's records and merely unpublished,
+  // because tflw's index is demand-driven and until now nothing in code was allowed to demand
+  // anything. Publishing them is `M169d3`, it takes a tflw pull request first (`D511`), and it was
+  // approved as `M164-06` §9 on 2026-09-03 after a human scan of the exact publish set.
+  //
+  // So this reports a number that is going to move, and says which way. A gate that fails on work
+  // that is already scheduled teaches people to ignore it; a gate that is silent until the day it
+  // is switched on teaches nobody anything. `M169d4` is the switch.
+  //
+  // THIS MILESTONE'S OWN NAME IS IN THAT NUMBER, and it is not a slip. `M169d1` is cited by the
+  // two comments that introduce this corpus — `ci.yml`'s step and `verify-contributing.mjs`'s
+  // entry — and it can never resolve in tflw's index, because it is anchored only in a
+  // `.gitignore`d plan in THIS repository. That completes the statement of the defect: an
+  // identifier this repository defines and cites in its own code either collides with a
+  // same-numbered tflw identifier and resolves to a real entry about the wrong thing (63 of them
+  // do today), or does not collide and resolves to nothing (`M141b`, `M164d`, and now this). There
+  // is no third outcome, and neither one is visible to a gate whose corpus is markdown. `M169d2`'s
+  // manifest is the fix, and the fact that the first commit of `M169d1` produced an instance of it
+  // is the argument for building `M169d2` next rather than later.
+  //
+  // AND IT CANNOT SEE THE WORSE DEFECT AT ALL, which is the honest part. 69 of the identifiers
+  // below are defined in BOTH repositories' record sets and 63 are already published, so resolving
+  // them here means answering with a real entry about the wrong thing — `D711`'s stated worst case.
+  // That census needs both record sets, and both are `.gitignore`d, so it is not computable from a
+  // checkout. `M169d2`'s generated manifest is what makes it computable; until then this report is
+  // measuring the smaller half and must not be read as clearance.
+  const codeLines = [];
+  const codeCorpus = readCode(ROOT);
+  if (codeCorpus.error) {
+    codeLines.push(`  code corpus (M169d1): NOT READ — ${codeCorpus.error}.`);
+  } else {
+    const codeCited = new Map();
+    for (const { path, text } of codeCorpus.files) for (const id of citationsOf(text)) {
+      if (!codeCited.has(id)) codeCited.set(id, []);
+      codeCited.get(id).push(path);
+    }
+    const codeUnresolved = [...codeCited.keys()].filter((id) => !published.has(id)).sort();
+    const undeclared = codeUnresolved.filter((id) => !DECLARED_UNRESOLVABLE.has(id));
+    const staleDecl = [...DECLARED_UNRESOLVABLE.keys()].filter((id) => published.has(id)).sort();
+    const skipped = [...codeCorpus.excluded].filter(([, n]) => n > 0).map(([k, n]) => `${n} ${k}`).join(' · ');
+    codeLines.push(
+      `  code corpus (M169d1, D-M164-06-2): ${codeCorpus.files.length} tracked non-prose files — not read: ${skipped}.`,
+      `  ${codeCited.size} identifiers cited there; ${codeCited.size - codeUnresolved.length} resolve in tflw's index.`,
+      `  ${undeclared.length} await publication (M169d3, approved as M164-06 §9); ${DECLARED_UNRESOLVABLE.size} declared unresolvable:`,
+    );
+    for (const [id, why] of DECLARED_UNRESOLVABLE) codeLines.push(`    ${id.padEnd(6)} ${why}`);
+    codeLines.push(
+      `  NOT ENFORCED. Enforcement is M169d4, after the manifest (M169d2) and the re-pin (M169d3).`,
+    );
+    // A declaration that starts resolving is a lie that nobody is told. This one IS enforced —
+    // it costs nothing today and it is the property a by-identifier exclusion has that a
+    // by-file one cannot (`D860`).
+    if (staleDecl.length) {
+      problems.push(`${staleDecl.join(' ')} is declared unresolvable in verify-provenance.mjs and now resolves in tflw's index. Remove the declaration — a declared non-existence that quietly became a lie is worse than no declaration.`);
+    }
+  }
+
   if (problems.length) {
     console.error(`✗ ${problems.length} provenance problem(s)\n\n${problems.map((p) => `  · ${p}`).join('\n')}\n`);
+    console.error(codeLines.join('\n'));
     return 1;
   }
   console.log(
@@ -292,7 +462,92 @@ function main() {
     `  ${mine.size} identifiers all resolve in tflw's DECISIONS.md (${published.size} entries), and its pin\n` +
     `  of this repository (${pin.repo}@${String(pin.sha).slice(0, 7)}) agrees in both directions.`,
   );
+  console.log(codeLines.join('\n'));
   return 0;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) process.exit(main());
+// ---------------------------------------------------------------------------------------------
+// `--self-test` — the split is load-bearing, and each exclusion excludes something
+// ---------------------------------------------------------------------------------------------
+//
+// `M164-04`'s rule, applied to a corpus change: a gate that reads more files is worth nothing if it
+// cannot be shown to fail on a file it newly reads, and an exclusion is worth nothing if nothing
+// demonstrates it excluding. Both directions, and the vacuity control matters more than the
+// positive case here — the whole claim of `M169d1` is that two corpora are different ON PURPOSE,
+// and "different on purpose" is indistinguishable from "different by accident" without a test that
+// says what breaks if they are merged.
+//
+// It runs on the pure cores and needs no sibling checkout, which is why it is a separate entry
+// point rather than a branch inside `main`.
+function selfTest() {
+  let bad = 0;
+  const ok = (label) => console.log(`  ✓ ${label}`);
+  const no = (label, detail) => { console.error(`  ✗ ${label} — ${detail}`); bad++; };
+
+  const md = tracked();
+  const code = readCode(ROOT);
+  if (md.error || code.error) { console.error(`✗ self-test needs a real checkout: ${md.error ?? code.error}`); return 1; }
+
+  // 1. The two corpora are disjoint, and neither is empty. If they ever overlap, an identifier is
+  //    reported twice and the "markdown is read by the publish half instead" line becomes false.
+  const mdPaths = new Set(md.files.map((f) => f.path));
+  const overlap = code.files.filter((f) => mdPaths.has(f.path));
+  if (overlap.length === 0 && md.files.length > 0 && code.files.length > 0) {
+    ok(`the two corpora are disjoint and non-empty (${md.files.length} markdown, ${code.files.length} non-prose)`);
+  } else {
+    no('the two corpora are disjoint', `${overlap.length} file(s) in both, or one is empty`);
+  }
+
+  // 2. THE VACUITY CONTROL. Rule 2 is markdown-only by decision; this measures what that decision
+  //    costs if it is ever quietly widened, so the number is in the output rather than in a
+  //    comment that can go stale.
+  const wouldRedden = code.files.filter(({ text }) => citationsOf(text).size > 0 && !DECLARES(text)).length;
+  if (wouldRedden > 100) ok(`widening rule 2 to the code corpus would redden ${wouldRedden} files — the split is load-bearing, not decorative`);
+  else no('the rule-2 split is load-bearing', `widening it would redden only ${wouldRedden} files; if this is genuinely small, rule 2 should widen and this test should go`);
+
+  // 3. Every exclusion excludes something. A rule that matches nothing is a rule nobody has
+  //    tested, and it will be wrong on the day it first matches.
+  for (const [label, n] of code.excluded) {
+    if (n > 0) ok(`the \`${label}\` exclusion is exercised (${n} file(s))`);
+    else no(`the \`${label}\` exclusion is exercised`, 'it excluded nothing in this tree, so nothing here demonstrates it works');
+  }
+
+  // 4. The planted citation, both directions (`M164-04`). A citation in code is SEEN; the two
+  //    shapes the exclusions exist for are NOT.
+  const planted = 'a comment mentioning D404 and M404b';
+  if (citationsOf(planted).has('D404') && citationsOf(planted).has('M404b')) ok('a planted citation in a code comment is seen by the widened rule');
+  else no('a planted citation in a code comment is seen', `got ${[...citationsOf(planted)].join(' ')}`);
+
+  const digest = 'sha512-xQe0+cX8ncDDoNfMhoNXtQBg0lVMbAxSJH+M7w==';
+  const lockRule = EXCLUSIONS.find((r) => r.label === 'lockfile');
+  const dataRule = EXCLUSIONS.find((r) => r.label === 'recorded data');
+  if (citationsOf(digest).size > 0 && lockRule.test('apiV2/package-lock.json')) {
+    ok('a `sha512-` tail IS read as a citation, and is excluded by path rather than by grammar');
+  } else {
+    no('the lockfile exclusion is the thing standing between the grammar and a digest',
+       `grammar found ${[...citationsOf(digest)].join(' ') || 'nothing'}; path rule ${lockRule.test('apiV2/package-lock.json')}`);
+  }
+  if (dataRule.test('tflw-acceptance/mutation/kill-matrix.jsonl') && !dataRule.test('scripts/regression.mjs')) {
+    ok('the recorded-data exclusion takes the census rows and leaves the scripts');
+  } else {
+    no('the recorded-data exclusion is scoped', 'it matches the wrong set');
+  }
+
+  // 5. A declaration must name sites that still exist. The sha is deliberately unchecked (see the
+  //    docblock: CI is a depth-1 clone), but a declared identifier that nothing cites any more is
+  //    a declaration that has outlived its subject.
+  const citedInCode = new Set();
+  for (const { text } of code.files) for (const id of citationsOf(text)) citedInCode.add(id);
+  const orphaned = [...DECLARED_UNRESOLVABLE.keys()].filter((id) => !citedInCode.has(id));
+  if (orphaned.length === 0) ok(`all ${DECLARED_UNRESOLVABLE.size} declarations still have a citation site`);
+  else no('every declaration still has a citation site', `${orphaned.join(' ')} is declared and no longer cited — delete the declaration`);
+
+  console.log(bad === 0
+    ? `\n✓ self-test: the corpus split is deliberate, demonstrated, and every exclusion is exercised.`
+    : `\n✗ self-test: ${bad} property/properties did not hold.`);
+  return bad === 0 ? 0 : 1;
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  process.exit(process.argv.includes('--self-test') ? selfTest() : main());
+}

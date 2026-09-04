@@ -71,6 +71,7 @@ npm run verify:contributing
 npm run verify:sweep-size
 npm run verify:tflw-resolution
 npm run verify:provenance
+npm run verify:provenance:self-test
 npm run verify:construct-coverage
 npm run verify:redaction:self-test
 npm run read:mutation-matrix:gate
@@ -150,6 +151,20 @@ xvfb-run -a npm run regression -- --group security-ui
   branch build and being handed the vendored one is an error, not a shrug), and a sweep of
   `scripts/` proving nothing resolves a tflw any other way. **Its allow-list is the honest part** —
   the files that legitimately do are named there, each with a reason.
+- **`npm run verify:provenance:self-test`** — **the gate above reads two different corpora, and
+  this is what says the difference is deliberate.** `M169d1` split it: resolution widened to every
+  tracked non-prose file, while the escaping-link and `**Notation.**` rules stayed on the 14
+  markdown files, because a `.ts` file cannot carry a declaration paragraph and 394 of them cite
+  something — widening rule 2 with the rest would redden 394 files with no repair that is not
+  absurd. A split like that is indistinguishable from an accident unless something states what
+  breaks if the two are merged, so this measures that 394 rather than asserting it in a comment
+  that can go stale, checks the two corpora are disjoint and non-empty, and checks that **every
+  exclusion excludes something in this tree** — a rule matching nothing is a rule nobody has
+  tested, and it will be wrong on the day it first matches. It also holds the declared-unresolvable
+  list honest from both ends: an entry that stops being cited is stale, and an entry that starts
+  resolving in tflw's index is a declared non-existence that quietly became a lie. Milliseconds, no
+  sibling checkout needed.
+
 - **`npm run verify:construct-coverage`** — **every construct tflw ships is either graded here with
   a known answer or explicitly listed as not yet graded, and a new one is neither.** The construct
   set is not a list in this repository: it comes from `tflw spec --json`, emitted by the vendored

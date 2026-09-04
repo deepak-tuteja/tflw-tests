@@ -105,6 +105,14 @@ const CLASSIFIED = [
   {
     wf: 'ci.yml',
     job: 'acceptance-check',
+    cmd: 'npm run verify:provenance:self-test',
+    class: 'gate',
+    local: 'npm run verify:provenance:self-test',
+    why: '`M169d1` — the gate above now reads TWO corpora (resolution over every tracked non-prose file, the escaping-link and `**Notation.**` rules over the 14 markdown ones), and this is the assertion that the split is deliberate rather than accidental: it measures that widening rule 2 would redden 394 files, that the corpora are disjoint, and that every exclusion in `D-M164-06-1`\'s list actually excludes something here. A contributor gate rather than ci-only for `verify:redaction:self-test`\'s reason — it is milliseconds, it needs no sibling checkout, and a corpus rule that has stopped discriminating is the one failure a green gate cannot report',
+  },
+  {
+    wf: 'ci.yml',
+    job: 'acceptance-check',
     cmd: 'npm run verify:construct-coverage',
     class: 'gate',
     local: 'npm run verify:construct-coverage',

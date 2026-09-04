@@ -44,6 +44,7 @@
     "verify:argv-contract": "node scripts/verify-argv-contract.mjs",
     "verify:tflw-resolution": "node scripts/verify-tflw-resolution.mjs",
     "verify:provenance": "node scripts/verify-provenance.mjs",
+    "verify:provenance:self-test": "node scripts/verify-provenance.mjs --self-test",
     "verify:construct-coverage": "node scripts/verify-construct-coverage.mjs",
     "verify:redaction:self-test": "node scripts/verify-redaction.mjs --self-test",
     "verify:construct-acceptance": "node scripts/verify-construct-acceptance.mjs",
