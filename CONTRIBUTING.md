@@ -71,10 +71,19 @@ npm run verify:contributing
 npm run verify:sweep-size
 npm run verify:tflw-resolution
 npm run verify:provenance
+npm run verify:provenance:self-test
 npm run verify:construct-coverage
 npm run verify:redaction:self-test
 npm run read:mutation-matrix:gate
 npm run verify:argv-contract
+```
+
+**And when you add, rename or renumber a milestone or decision** in a `PLAN_*.md` or
+`PROGRESS.md` — this repository's records are `.gitignore`d, so this is the only machine that can
+tell whether the manifest still matches them. It says what to run when it fails:
+
+```sh
+npm run verify:own-identifiers
 ```
 
 **And when a tflw milestone assigns or changes a `TF0xx` diagnostic code**, before opening either
@@ -150,6 +159,33 @@ xvfb-run -a npm run regression -- --group security-ui
   branch build and being handed the vendored one is an error, not a shrug), and a sweep of
   `scripts/` proving nothing resolves a tflw any other way. **Its allow-list is the honest part** —
   the files that legitimately do are named there, each with a reason.
+- **`npm run verify:provenance:self-test`** — **the gate above reads two different corpora, and
+  this is what says the difference is deliberate.** `testFlow-tests M169d1` split it: resolution widened to every
+  tracked non-prose file, while the escaping-link and `**Notation.**` rules stayed on the 14
+  markdown files, because a `.ts` file cannot carry a declaration paragraph and 394 of them cite
+  something — widening rule 2 with the rest would redden 394 files with no repair that is not
+  absurd. A split like that is indistinguishable from an accident unless something states what
+  breaks if the two are merged, so this measures that 394 rather than asserting it in a comment
+  that can go stale, checks the two corpora are disjoint and non-empty, and checks that **every
+  exclusion excludes something in this tree** — a rule matching nothing is a rule nobody has
+  tested, and it will be wrong on the day it first matches. It also holds the declared-unresolvable
+  list honest from both ends: an entry that stops being cited is stale, and an entry that starts
+  resolving in tflw's index is a declared non-existence that quietly became a lie. Milliseconds, no
+  sibling checkout needed.
+
+- **`npm run verify:own-identifiers`** — **what this repository defines for itself, written down
+  so the other repository's index cannot answer for it.** tflw pins what this repository *cites*
+  and nothing recorded what it *defines*, and that asymmetry is where the two sequences collide in
+  silence: 69 identifiers are anchored in both record sets and **63 are already published by
+  tflw**, so a bare `testFlow-tests M22` in `docker-compose.yml` resolves to tflw's coverage audit
+  instead of this repository's nginx mTLS sidecar — a real entry about the wrong thing, delivered
+  green. `scripts/own-identifiers.json` is generated from this repository's records by
+  `npm run refresh:own-identifiers` and committed; this checks it is current. It is **absent from
+  CI on purpose**: the records are `.gitignore`d, so only your machine can tell whether the
+  manifest still matches them. Run it after adding or renaming a milestone or decision in a
+  `PLAN_*.md` or `PROGRESS.md`. Omitting an identifier is not a red — it is a wrong answer nobody
+  is told about, which is why this is a discipline rather than a convenience.
+
 - **`npm run verify:construct-coverage`** — **every construct tflw ships is either graded here with
   a known answer or explicitly listed as not yet graded, and a new one is neither.** The construct
   set is not a list in this repository: it comes from `tflw spec --json`, emitted by the vendored
@@ -256,16 +292,27 @@ xvfb-run -a npm run regression -- --group security-ui
   repository root — every one of them 404s for anyone whose disk does not happen to hold both
   checkouts side by side, which is exactly why they survived a year. Four of the eight named a
   `PLAN_*.md` that tflw's `.gitignore` excludes, so even the right URL would have 404'd. Second,
-  every file that cites tflw's `P#n`/`D<n>`/`M<n>` notation **declares which sequence it means**:
-  both repositories number their milestones from 1, and 35 identifiers are defined in both record
-  sets — `testFlow-tests M22` is the nginx mTLS sidecar and `tflw M22` is a coverage audit — so an
-  unqualified one resolving to a real entry about the wrong thing is worse than one resolving to
-  nothing. Each file
-  declares a default and spells out the minority (`tflw M128a`, `testFlow-tests M22`). Third, every
-  unqualified citation has an entry in tflw's published `DECISIONS.md`, and tflw's tracked pin of
-  this repository's citations agrees with this repository's prose **in both directions** — a pin
-  that has gone stale makes tflw's index publish entries nothing asks for, and this is the only
-  place in either repository that can see both sides.
+  every *markdown* file that cites tflw's `P#n`/`D<n>`/`M<n>` notation **declares which sequence it
+  means**: both repositories number their milestones from 1, and **61 identifiers are defined in
+  both record sets** — `testFlow-tests M22` is the nginx mTLS sidecar and `tflw M22` is a coverage
+  audit — so an unqualified one resolving to a real entry about the wrong thing is worse than one
+  resolving to nothing. Each file declares a default and spells out the minority (`tflw M128a`,
+  `testFlow-tests M22`).
+
+  A `.ts` file cannot carry that paragraph, so **code answers the same question per identifier
+  instead of per file**: `scripts/own-identifiers.json` lists what this repository defines, and a
+  bare identifier it claims is not asked of tflw unless a site writes `tflw <id>`. Regenerate it
+  with `npm run refresh:own-identifiers` whenever you add, rename or renumber something.
+
+  Third, **every unqualified citation resolves in tflw's published `DECISIONS.md` — in prose and,
+  since `testFlow-tests M169d4`, in code, where it is now enforced rather than reported.** An
+  identifier that resolves nowhere is one of three things and the failure message says which: tflw
+  anchors it and has not published it (re-pin, tflw side, and it publishes on demand), this
+  repository defines it (refresh the manifest), or nothing anywhere defines it — in which case it
+  goes in `DECLARED_UNRESOLVABLE` with its reason, because a declaration a reader can check beats a
+  pointer they cannot follow. And tflw's tracked pin of this repository's citations agrees with both
+  corpora **in both directions**: a stale pin makes tflw's index publish entries nothing asks for,
+  and this is the only place in either repository that can see both sides.
 
   **This is one of the few gates that cannot run on fedora-box, and it now says so rather than
   guessing.** Its corpus is `git ls-files '*.md'`, and `scripts/exec.mjs` copies files, not history

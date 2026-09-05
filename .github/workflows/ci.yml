@@ -179,6 +179,16 @@ jobs:
         run: npm run verify:provenance
         working-directory: testFlow-tests
 
+      # `M169d1`. The step above reads two corpora now — resolution over every tracked non-prose
+      # file, the escaping-link and `**Notation.**` rules over the 14 markdown ones — and a split
+      # is indistinguishable from an accident unless something says what breaks when it is undone.
+      # This is that: it measures the 394 files widening rule 2 would redden, rather than asserting
+      # the number in a comment, and it fails if any exclusion in the corpus rule stops excluding
+      # anything. Needs no sibling checkout, so it is here only because its subject is.
+      - name: The two provenance corpora are different on purpose
+        run: npm run verify:provenance:self-test
+        working-directory: testFlow-tests
+
       # M154b (`D723`, `D727`, `D730`, `D741`). Static — it reads one JSON document out of the
       # binary and compares some sets — and in THIS job for the load-bearing reason the three steps
       # above share: it is the only job that checks out both repositories, and this gate's ground
