@@ -49,6 +49,7 @@
     "refresh:own-identifiers": "node scripts/refresh-own-identifiers.mjs",
     "verify:own-identifiers": "node scripts/refresh-own-identifiers.mjs --check",
     "verify:construct-coverage": "node scripts/verify-construct-coverage.mjs",
+    "refresh:check-coverage": "node scripts/verify-check-diagnostics.mjs --write",
     "verify:redaction:self-test": "node scripts/verify-redaction.mjs --self-test",
     "verify:construct-acceptance": "node scripts/verify-construct-acceptance.mjs",
     "verify:construct-acceptance:gate": "node scripts/verify-construct-acceptance.mjs --gate",

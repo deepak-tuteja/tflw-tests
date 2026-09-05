@@ -741,6 +741,67 @@ const dogfooded = new Set([
   ...AUTHZ_TARGET_FIXTURES.map((f) => f.expect).filter(Boolean),
   ...PUBLIC_TARGET_FIXTURES.map((f) => f.expect).filter(Boolean),
 ]);
+
+// --- what this repository covers, published so tflw can read it (`M172e`, tflw's `M155-02`) -----
+//
+// The header at the top of this file describes a breakage this repository absorbs and cannot
+// prevent: a tflw milestone assigns a code, merges green there, and `main` here goes red on the
+// next run because no fixture exists yet. tflw's ledger row for it says the finding is the
+// **asymmetry** — the rule is real, documented and enforced *one repository away from the change
+// that violates it*, so the author of the breaking commit is never the one who sees the red.
+//
+// This file is the half of the repair that lives here. `dogfooded` above is the answer to *which
+// check-phase codes does this repository have a fixture for*, and until now it existed only inside
+// a process that has already installed a tflw. Writing it down makes it something tflw can pin at
+// a ref (`scripts/sibling-citations.json`, `D709`/`D710`) and fail its own build against, which
+// moves the red to the side that caused it.
+//
+// **`dogfooded`, not `witnessed`.** The set recorded at the top of this file is the stronger claim
+// — codes a real `tflw check` was actually seen to emit — and it is the wrong one to publish,
+// because it depends on which tflw is installed. A tracked file holding it would change with the
+// developer's local build, which is the working-tree-decides-the-pin hazard tflw's `D710` refuses,
+// one level down. `dogfooded` is a function of the fixture tables above and nothing else, so this
+// file is reproducible from a checkout of this repository alone.
+//
+// **Generated, never hand-written.** A hand-maintained code list beside a fixture table is the
+// wordlist that drifts — it is `M86`'s defect in this very file, where a completeness sentence
+// counted the fixtures rather than the codes and stayed wrong for a year. This block writes the
+// file with `--write` and otherwise *compares*, so a fixture added without regenerating is a
+// failing assertion rather than a quiet divergence.
+const COVERAGE_FILE = 'scripts/check-fixture-coverage.json';
+const coverage =
+  JSON.stringify(
+    {
+      comment:
+        'Check-phase TF0xx codes this repository has a fixture for. Generated from the fixture ' +
+        'tables in scripts/verify-check-diagnostics.mjs — never hand-edit. Refresh with ' +
+        '`node scripts/verify-check-diagnostics.mjs --write`. tflw pins this file and fails its ' +
+        'own build when it assigns a check-phase code that is not in it (tflw M172e / M155-02).',
+      codes: [...dogfooded].sort(),
+    },
+    null,
+    2,
+  ) + '\n';
+
+if (process.argv.includes('--write')) {
+  writeFileSync(path.join(ROOT, COVERAGE_FILE), coverage);
+  console.log(`\u270e ${COVERAGE_FILE} rewritten — ${dogfooded.size} codes`);
+} else {
+  const onDisk = existsSync(path.join(ROOT, COVERAGE_FILE))
+    ? readFileSync(path.join(ROOT, COVERAGE_FILE), 'utf8')
+    : null;
+  ok(
+    `${COVERAGE_FILE} still states what the fixture tables cover`,
+    onDisk === coverage,
+    onDisk === null
+      ? `${COVERAGE_FILE} does not exist. tflw pins it, so an absent file is not a quiet no-op here —\n` +
+        `    it is a pin that cannot be refreshed. Write it: node scripts/verify-check-diagnostics.mjs --write`
+      : `${COVERAGE_FILE} disagrees with the fixture tables above. A fixture was added, removed or re-keyed and\n` +
+        `    the published set was not regenerated, so tflw is pinning a claim this repository no longer makes.\n` +
+        `    Regenerate and commit it: node scripts/verify-check-diagnostics.mjs --write`,
+  );
+}
+
 const assigned = assignedCodes();
 
 /**
