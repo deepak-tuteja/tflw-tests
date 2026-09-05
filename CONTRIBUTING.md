@@ -481,6 +481,37 @@ seconds before any PR exists.
 **The pre-push hook half stays refused.** A hook is an untracked file in one person's `.git/`; a
 guarantee that lives there is a guarantee for one machine.
 
+### And since `M172e`, tflw refuses the merge that would break this repository
+
+The paragraph above says *nothing here re-runs when tflw merges*, and that stays true — nothing
+does. What changed is on the other side. tflw now carries `verify-check-coverage.mjs`, which fails
+**its own build** when it assigns a check-phase `TF0xx` code this repository has no fixture for. So
+the third of the three sentences in this section — that the failure is only ever observed here,
+after the fact — is no longer the whole story, and this is where it is corrected rather than in a
+newer document that would quietly disagree with an older one.
+
+It reads this repository through a file this repository generates:
+
+```sh
+npm run refresh:check-coverage     # rewrites scripts/check-fixture-coverage.json
+```
+
+`scripts/check-fixture-coverage.json` is the check-phase codes the fixture tables in
+`verify-check-diagnostics.mjs` cover, written down. **It is generated and compared, never
+hand-edited** — running the gate without `--write` asserts the file still matches the tables, so a
+fixture added and not published is a red here rather than a wrong answer over there. tflw pins it at
+a ref in `scripts/sibling-citations.json` and compares it against its own built manifest.
+
+**What this does and does not change about the merge order.** Nothing: it is still tflw first, and
+the window below is still accepted. What moves is *who finds out*. Before, a code shipped, this
+repository's `main` went red, and the author of the tflw commit was somewhere else entirely — the
+asymmetry tflw's `M155-02` files as the finding, observed three times. Now the tflw PR is the thing
+that goes red, and the fixture lands here on a branch before either half merges.
+
+**It reads a pin, so it can only see an addition.** A fixture *removed* here after the pin was taken
+is invisible to it, by construction — that is this file's own `completeness` assertion, run here,
+against the real tree. The two halves are not redundant and neither replaces the other.
+
 ## Merge order, when a change spans both repos
 
 **tflw first, then here, chained.** Two independent reasons, and they point the same way:
