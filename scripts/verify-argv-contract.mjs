@@ -32,6 +32,33 @@
  * that did not exist. A control has to be faithful in what it is compared on, and the check that
  * exists to stop a case from silently agreeing found its own model wrong before it found anything
  * else.
+ *
+ * ## `M164-05` — two consumers, and why the gate had to become a table
+ *
+ * `M164-05` is the same defect in `perf-conformance.mjs`, filed separately because the blast radius
+ * differs: `discover-mutation-kills.mjs` wasted box time or corrupted a census, and a typo'd
+ * `--dry-run` here spends the box's **whole lease** on a run the operator asked not to happen.
+ * `PLAN_M170` §2.7 predicted what a second consumer would cost this file — *"a second consumer means
+ * turning that gate into a table over N scripts. The work is small; the shape is `M167` again, and
+ * taking it before it bites is the cheap version."* — and that is what happened.
+ *
+ * The milestone that did it is named in tflw's records rather than here, and the omission is
+ * deliberate: this file cites the ROW it repairs, which resolves in tflw's published index today.
+ * Citing the milestone identifier as well would have demanded a fresh cross-repo re-pin before this
+ * file could go green, because the pin names a sha rather than a branch — a whole merge cycle for a
+ * word. Worth knowing before adding one: the first draft of this very paragraph cited two decisions
+ * to explain that rule, and one of them was itself unpublished, so the sentence explaining the
+ * constraint broke it.
+ *
+ * The important part of the table is what it does **not** share. Each consumer keeps its own `old`
+ * model, because the two previous implementations were not the same wrong thing:
+ * `discover-mutation-kills.mjs` had a `KNOWN` set, so it *could* refuse an unknown flag and its
+ * defect was in the reading; `perf-conformance.mjs` had no validation of any kind, so its `parseOld`
+ * **never returns `ok: false`** — every input was accepted and every misspelling became a default.
+ * A single shared control would have had to pick one of those, and against the wrong one half the
+ * cases would have stopped discriminating while the gate stayed green. That is `D-M164-04-7`
+ * applied per script rather than per gate, and §2 below enforces it: a consumer with no
+ * discriminating case at all is a failure, not a quiet pass (`D880` — absent is not a skip).
  */
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
@@ -44,11 +71,13 @@ let violations = 0;
 const fail = (msg) => { console.error(`✗ ${msg}`); violations += 1; };
 const pass = (msg) => console.log(`✓ ${msg}`);
 
+// ── consumer 1: the census script ────────────────────────────────────────────────────────────
 // The spec under test, stated here rather than imported. `discover-mutation-kills.mjs` resolves the
 // vendored tflw bundle at module scope, above its argv block, so importing it would pay that cost
 // and fail on a machine whose vendored build has diverged (`D-M164-04-5`). §3 below closes the gap
-// that restating opens: every key here must appear in that file's own `SPEC`.
-const SPEC = {
+// that restating opens: every key here must appear in that file's own `SPEC`. The same argument
+// holds for consumer 2, which spawns a lease helper and resolves a tflw binary at module scope.
+const CENSUS_SPEC = {
   '--limit': VALUE,
   '--only': VALUE,
   '--baseline-only': BOOLEAN,
@@ -61,17 +90,17 @@ const SPEC = {
 };
 
 /** The old contract, in full: a set of spellings, and `argv[i + 1]`. */
-const OLD_KNOWN = new Set(Object.keys(SPEC));
-function parseOld(argv) {
+const CENSUS_KNOWN = new Set(Object.keys(CENSUS_SPEC));
+function parseOldCensus(argv) {
   for (const a of argv) {
-    if (a.startsWith('--') && !OLD_KNOWN.has(a.split('=')[0])) {
-      return { ok: false, error: `unknown flag: ${a}\nknown: ${[...OLD_KNOWN].join(' ')}` };
+    if (a.startsWith('--') && !CENSUS_KNOWN.has(a.split('=')[0])) {
+      return { ok: false, error: `unknown flag: ${a}\nknown: ${[...CENSUS_KNOWN].join(' ')}` };
     }
   }
   const flag = (n) => { const i = argv.indexOf(n); return i === -1 ? null : argv[i + 1]; };
   const values = Object.create(null);
-  for (const k of Object.keys(SPEC)) {
-    if (SPEC[k] === BOOLEAN) { if (argv.includes(k)) values[k] = true; }
+  for (const k of Object.keys(CENSUS_SPEC)) {
+    if (CENSUS_SPEC[k] === BOOLEAN) { if (argv.includes(k)) values[k] = true; }
     else if (flag(k) !== null) values[k] = flag(k);
   }
   return { ok: true, values };
@@ -84,7 +113,7 @@ const WHY18 = 'C97 gained an absolute-target third column at M164-03 — recall 
  * where `values` is checked exactly — an unlisted flag must be absent, so a parser that invents a
  * value cannot pass by being a superset.
  */
-const CASES = [
+const CENSUS_CASES = [
   {
     n: 1, why: 'a multi-word --why is recorded in full — the filed defect',
     argv: ['--remeasure', 'C97', '--why', ...WHY18.split(' ')],
@@ -149,6 +178,127 @@ const CASES = [
   { n: 12, why: 'empty argv parses to no values', argv: [], expect: { values: {} }, discriminating: false },
 ];
 
+// ── consumer 2: the scheduled perf run (`M164-05`) ───────────────────────────────────────────
+const PERF_SPEC = {
+  '--profile': VALUE,
+  '--no-lease': BOOLEAN,
+  '--dry-run': BOOLEAN,
+  '--in-sweep': BOOLEAN,
+};
+
+/**
+ * The old contract, in full — and the whole of it is that there wasn't one.
+ *
+ *     const arg = (name, dflt) => { const i = argv.indexOf(`--${name}`); return i === -1 ? dflt : argv[i + 1]; };
+ *     const NO_LEASE = argv.includes('--no-lease');
+ *
+ * No set of spellings, no loop over `argv`, and therefore **no input this function can refuse** —
+ * it has no `ok: false` branch at all, which is not an omission in the model but the finding
+ * itself. Every unknown token was accepted and every flag it did not recognise took its default.
+ *
+ * One faithfulness detail worth stating, because it is exactly the trap the header describes: a
+ * trailing `--profile` made the old reader return `argv[i + 1]`, i.e. `undefined`, **not** the
+ * `'full'` default — `dflt` is only reached when the flag is absent entirely. The script then threw
+ * `no profile named undefined` from its `PROFILES` lookup. That is a loud failure and the model
+ * must say so rather than collapsing it into the same shape as "flag absent", so it is recorded as
+ * a sentinel instead of being dropped by `JSON.stringify`.
+ */
+const OLD_UNDEFINED = '<undefined — the old reader returned argv[i+1] and PROFILES[undefined] threw>';
+function parseOldPerf(argv) {
+  const values = Object.create(null);
+  const i = argv.indexOf('--profile');
+  if (i !== -1) values['--profile'] = argv[i + 1] === undefined ? OLD_UNDEFINED : argv[i + 1];
+  for (const b of ['--no-lease', '--dry-run', '--in-sweep']) if (argv.includes(b)) values[b] = true;
+  return { ok: true, values };
+}
+
+const PERF_CASES = [
+  {
+    n: 1, why: 'a typo\'d --dry-run is refused, not silently a REAL run under the box lease — the filed defect',
+    argv: ['--dry-runn'],
+    expect: { error: 'unknown flag: --dry-runn' },
+    discriminating: true,
+  },
+  {
+    n: 2, why: 'a typo\'d --no-lease is refused, not silently a run that takes the lease it was told to skip',
+    argv: ['--no-leaseX'],
+    expect: { error: 'unknown flag: --no-leaseX' },
+    discriminating: true,
+  },
+  {
+    n: 3, why: 'a typo\'d --in-sweep is refused, not silently a run that overwrites latest.json',
+    argv: ['--in-sweepp'],
+    expect: { error: 'unknown flag: --in-sweepp' },
+    discriminating: true,
+  },
+  {
+    n: 4, why: 'a typo\'d --profile is refused, not silently the full ladder when the short one was asked for',
+    argv: ['--profil', 'quick'],
+    expect: { error: 'unknown flag: --profil' },
+    discriminating: true,
+  },
+  {
+    n: 5, why: '--profile=quick is refused rather than read by nothing, which meant the full ladder',
+    argv: ['--profile=quick'],
+    expect: { error: '`--profile=…` is not supported' },
+    discriminating: true,
+  },
+  {
+    n: 6, why: 'a trailing --profile is a usage error, not `no profile named undefined` from deep in the run',
+    argv: ['--dry-run', '--profile'],
+    expect: { error: '--profile needs a value' },
+    discriminating: true,
+  },
+  {
+    n: 7, why: 'a forgotten --profile value does not eat the next flag',
+    argv: ['--profile', '--dry-run'],
+    expect: { error: '--profile needs a value' },
+    discriminating: true,
+  },
+  {
+    n: 8, why: 'a bare positional is named rather than ignored — `perf-conformance.mjs quick` asked for something',
+    argv: ['quick'],
+    expect: { error: 'unexpected argument: quick' },
+    discriminating: true,
+  },
+  {
+    n: 9, why: 'the deliberate dry run still parses — the invocation the repair must not break',
+    argv: ['--profile', 'quick', '--dry-run'],
+    expect: { values: { '--profile': 'quick', '--dry-run': true } },
+    discriminating: false,
+  },
+  {
+    n: 10, why: 'the sweep phase still parses (`D758`)',
+    argv: ['--in-sweep'],
+    expect: { values: { '--in-sweep': true } },
+    discriminating: false,
+  },
+  {
+    n: 11, why: 'empty argv parses to no values — the scheduled unit passes none, and PROFILE falls back to full',
+    argv: [],
+    expect: { values: {} },
+    discriminating: false,
+  },
+];
+
+// ── the table ────────────────────────────────────────────────────────────────────────────────
+const CONSUMERS = [
+  {
+    script: path.join('scripts', 'discover-mutation-kills.mjs'),
+    row: 'M164-04',
+    spec: CENSUS_SPEC,
+    parseOld: parseOldCensus,
+    cases: CENSUS_CASES,
+  },
+  {
+    script: path.join('scripts', 'perf-conformance.mjs'),
+    row: 'M164-05',
+    spec: PERF_SPEC,
+    parseOld: parseOldPerf,
+    cases: PERF_CASES,
+  },
+];
+
 const shape = (r) => (r.ok ? `ok ${JSON.stringify(r.values)}` : `error ${JSON.stringify(r.error)}`);
 
 const matches = (result, expect) => {
@@ -160,60 +310,79 @@ const matches = (result, expect) => {
   return want.every((k) => result.values[k] === expect.values[k]);
 };
 
-// =============================================================================
-// 1. every case behaves as specified
-// =============================================================================
-console.log('argv contract — 12 cases\n');
-for (const c of CASES) {
-  const got = parseArgv(c.argv, SPEC);
-  if (matches(got, c.expect)) pass(`case ${c.n}: ${c.why}`);
-  else fail(`case ${c.n}: ${c.why}\n    argv: ${JSON.stringify(c.argv)}\n    want: ${JSON.stringify(c.expect)}\n    got:  ${shape(got)}`);
-}
+let totalCases = 0;
+let totalDiscriminating = 0;
+let totalFlags = 0;
 
-// =============================================================================
-// 2. the discriminating cases really do discriminate
-// =============================================================================
-console.log('\ndiscrimination against the previous implementation\n');
-for (const c of CASES) {
-  const now = shape(parseArgv(c.argv, SPEC));
-  const before = shape(parseOld(c.argv));
-  const differs = now !== before;
-  if (c.discriminating && !differs) {
-    fail(`case ${c.n} is marked discriminating but the old parser agrees — it proves nothing about the repair\n    both: ${now}`);
-  } else if (!c.discriminating && differs) {
-    fail(`case ${c.n} is marked a regression guard but the two parsers disagree — reclassify it\n    old: ${before}\n    new: ${now}`);
-  } else {
-    pass(`case ${c.n}: ${c.discriminating ? 'differs from the old parser' : 'unchanged, as a regression guard should be'}`);
+for (const c of CONSUMERS) {
+  console.log(`\n${'='.repeat(78)}\n${c.script}  (${c.row}) — ${c.cases.length} cases\n${'='.repeat(78)}`);
+
+  // ===========================================================================
+  // 1. every case behaves as specified
+  // ===========================================================================
+  console.log('\nbehaviour\n');
+  for (const k of c.cases) {
+    const got = parseArgv(k.argv, c.spec);
+    if (matches(got, k.expect)) pass(`case ${k.n}: ${k.why}`);
+    else fail(`${c.script} case ${k.n}: ${k.why}\n    argv: ${JSON.stringify(k.argv)}\n    want: ${JSON.stringify(k.expect)}\n    got:  ${shape(got)}`);
   }
-}
 
-// =============================================================================
-// 3. no flag is declared without a reader
-// =============================================================================
-//
-// The rule the old block's own comment stated and could not enforce: "anything added there needs a
-// reader". `--help` and `--out` each broke it once — both were spelled in `KNOWN`, both parsed,
-// both read by nothing, and one of them started a multi-hour sweep under the box lock when the
-// operator asked for usage. Now it is a check rather than a sentence.
-console.log('\nspec/reader agreement\n');
-const SRC = path.join('scripts', 'discover-mutation-kills.mjs');
-const src = readFileSync(path.join(ROOT, SRC), 'utf8');
+  // ===========================================================================
+  // 2. the discriminating cases really do discriminate
+  // ===========================================================================
+  console.log('\ndiscrimination against this script\'s own previous implementation\n');
+  const discriminating = c.cases.filter((k) => k.discriminating);
+  // `D880`, and the reason this check is here rather than assumed: a consumer added to the table
+  // with only regression guards would run every assertion above and prove nothing about any repair,
+  // while printing a full page of ticks. A table makes that mistake cheap to make, so it is refused
+  // at the point the table is read.
+  if (discriminating.length === 0) {
+    fail(`${c.script}: no case is marked discriminating, so nothing here demonstrates its repair — ${c.row} would be certified by a gate that only shows the new parser agreeing with itself`);
+  }
+  for (const k of c.cases) {
+    const now = shape(parseArgv(k.argv, c.spec));
+    const before = shape(c.parseOld(k.argv));
+    const differs = now !== before;
+    if (k.discriminating && !differs) {
+      fail(`${c.script} case ${k.n} is marked discriminating but the old parser agrees — it proves nothing about the repair\n    both: ${now}`);
+    } else if (!k.discriminating && differs) {
+      fail(`${c.script} case ${k.n} is marked a regression guard but the two parsers disagree — reclassify it\n    old: ${before}\n    new: ${now}`);
+    } else {
+      pass(`case ${k.n}: ${k.discriminating ? 'differs from the old parser' : 'unchanged, as a regression guard should be'}`);
+    }
+  }
 
-const declared = [...src.matchAll(/^\s*'(--[a-z-]+)':\s*(BOOLEAN|VALUE|REST),$/gm)].map((m) => m[1]);
-if (declared.length === 0) {
-  fail(`${SRC}: found no SPEC entries — this gate's parse of that file has broken, which would make every check below vacuous`);
-} else if (declared.sort().join(' ') !== Object.keys(SPEC).sort().join(' ')) {
-  fail(`${SRC}: its SPEC and this gate's disagree\n    there: ${declared.sort().join(' ')}\n    here:  ${Object.keys(SPEC).sort().join(' ')}`);
-} else {
-  pass(`${SRC}: its SPEC has the same ${declared.length} flags this gate drives`);
-}
+  // ===========================================================================
+  // 3. no flag is declared without a reader
+  // ===========================================================================
+  //
+  // The rule the old block's own comment stated and could not enforce: "anything added there needs a
+  // reader". `--help` and `--out` each broke it once — both were spelled in `KNOWN`, both parsed,
+  // both read by nothing, and one of them started a multi-hour sweep under the box lock when the
+  // operator asked for usage. Now it is a check rather than a sentence.
+  console.log('\nspec/reader agreement\n');
+  const src = readFileSync(path.join(ROOT, c.script), 'utf8');
 
-for (const key of Object.keys(SPEC)) {
-  // A reader is a `flag('--x')` or `has('--x')` call somewhere below the spec — the declaration
-  // itself is excluded by requiring the quote to follow an opening paren.
-  const read = new RegExp(`(?:flag|has)\\('${key}'\\)`).test(src);
-  if (read) pass(`${key} has a reader`);
-  else fail(`${key} is declared in SPEC and no \`flag()\`/\`has()\` call reads it — that is exactly how \`--help\` and \`--out\` shipped as decoration`);
+  const declared = [...src.matchAll(/^\s*'(--[a-z-]+)':\s*(BOOLEAN|VALUE|REST),$/gm)].map((m) => m[1]);
+  if (declared.length === 0) {
+    fail(`${c.script}: found no SPEC entries — this gate's parse of that file has broken, which would make every check below vacuous`);
+  } else if (declared.sort().join(' ') !== Object.keys(c.spec).sort().join(' ')) {
+    fail(`${c.script}: its SPEC and this gate's disagree\n    there: ${declared.sort().join(' ')}\n    here:  ${Object.keys(c.spec).sort().join(' ')}`);
+  } else {
+    pass(`${c.script}: its SPEC has the same ${declared.length} flags this gate drives`);
+  }
+
+  for (const key of Object.keys(c.spec)) {
+    // A reader is a `flag('--x')` or `has('--x')` call somewhere below the spec — the declaration
+    // itself is excluded by requiring the quote to follow an opening paren.
+    const read = new RegExp(`(?:flag|has)\\('${key}'\\)`).test(src);
+    if (read) pass(`${key} has a reader`);
+    else fail(`${c.script}: ${key} is declared in SPEC and no \`flag()\`/\`has()\` call reads it — that is exactly how \`--help\` and \`--out\` shipped as decoration`);
+  }
+
+  totalCases += c.cases.length;
+  totalDiscriminating += discriminating.length;
+  totalFlags += Object.keys(c.spec).length;
 }
 
 console.log('');
@@ -221,4 +390,4 @@ if (violations > 0) {
   console.error(`✗ argv contract: ${violations} violation(s)`);
   process.exit(1);
 }
-console.log(`✓ argv contract: ${CASES.length} cases, ${CASES.filter((c) => c.discriminating).length} of them discriminating, ${Object.keys(SPEC).length} flags each with a reader`);
+console.log(`✓ argv contract: ${CONSUMERS.length} consumers, ${totalCases} cases, ${totalDiscriminating} of them discriminating, ${totalFlags} flags each with a reader`);

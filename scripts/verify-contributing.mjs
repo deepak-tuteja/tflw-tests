@@ -140,7 +140,7 @@ const CLASSIFIED = [
     cmd: 'npm run verify:argv-contract',
     class: 'gate',
     local: 'npm run verify:argv-contract',
-    why: "`M164-04` — `discover-mutation-kills.mjs` validated its flags with a set of spellings and read them with index arithmetic over raw `argv`, two independently written things that nothing made agree, so four of nine flags were wrong in four different ways and none of them made a sound: an eighteen-word `--why` recorded one word, `--limit=5` was read by nothing, a forgotten `--limit` value swept zero candidates and exited 0, and a forgotten `--window` value disabled the baseline bracket. One table now; both the validator and the readers are projections of it. A contributor gate rather than ci-only because it is milliseconds and static, and because its own case set is the fragile part — each case declares whether it discriminates against the previous implementation, which the gate reimplements and compares against, so a case that quietly stops proving anything is refused rather than reported green",
+    why: "`M164-04` — `discover-mutation-kills.mjs` validated its flags with a set of spellings and read them with index arithmetic over raw `argv`, two independently written things that nothing made agree, so four of nine flags were wrong in four different ways and none of them made a sound: an eighteen-word `--why` recorded one word, `--limit=5` was read by nothing, a forgotten `--limit` value swept zero candidates and exited 0, and a forgotten `--window` value disabled the baseline bracket. One table now; both the validator and the readers are projections of it. A contributor gate rather than ci-only because it is milliseconds and static, and because its own case set is the fragile part — each case declares whether it discriminates against the previous implementation, which the gate reimplements and compares against, so a case that quietly stops proving anything is refused rather than reported green. It is table-driven over a second consumer, `perf-conformance.mjs` (`M164-05`), where the same defect cost more: with no validation of any kind, a typo'd `--dry-run` there ran a real measured ladder under the box lease. Each consumer keeps its own model of the implementation it replaced — the census script could refuse an unknown flag and the perf script could refuse nothing at all — because one shared control would have silently stopped discriminating for whichever consumer it did not describe",
   },
   {
     wf: 'ci.yml',
@@ -157,6 +157,22 @@ const CLASSIFIED = [
     class: 'gate',
     local: 'npm run verify:scrub',
     why: 'what this **public** repository publishes: an address that reaches a person, or a filesystem path naming a real account, over every tracked text file. In this job because the rules are tflw\'s and are imported rather than copied (`D882`), so it needs both trees — and it does NOT skip when the sibling is absent, for the reason the step below states. It arrived with 37 real hits, 25 of them the box account\'s home path in five committed perf artifacts, published since `M160d`. The build host\'s name is deliberately outside its corpus (`D876`) and is named 45 times here without being a finding',
+  },
+  {
+    wf: 'ci.yml',
+    job: 'acceptance-check',
+    cmd: 'npm run verify:notation-parity',
+    class: 'gate',
+    local: 'npm run verify:notation-parity',
+    why: "`M171d` (`M164-12`) — `D711` keeps two implementations of the citation notation on purpose, and nothing was paying the other half of that cost: nothing held the two grammars to one shape, so the only thing that had ever detected a divergence between them was a red neither repository could clear. They disagreed on 10 of 16 fixtures when this was written, and had since tflw tightened its side nine milestones earlier. A `gate` rather than ci-only on the same footing as `verify:scrub` and `verify:provenance` — it needs both trees, it is milliseconds, and the person who will next edit one of the four patterns is the one who needs the answer before pushing rather than after. It does NOT skip when the sibling is absent",
+  },
+  {
+    wf: 'ci.yml',
+    job: 'acceptance-check',
+    cmd: 'npm run verify:notation-parity:self-test',
+    class: 'gate',
+    local: 'npm run verify:notation-parity:self-test',
+    why: "the gate above is green over this repository's real prose BY CONSTRUCTION — measured, the two grammars extract the same 288 identifiers over the 14 tracked markdown files, and did so throughout the nine milestones they were diverging — so a corpus of real prose would have been green on the day the divergence was found. That makes its hand-written fixtures the only thing between it and `M141`'s vacuous shape, and this runs the controls that show each one fires. It earned its place immediately: it found that an exemption waiving a *case* rather than an *observation* silently swallowed a `RANGE` regression on the same fixture",
   },
   {
     wf: 'ci.yml',

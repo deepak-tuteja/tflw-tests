@@ -62,6 +62,7 @@ import { fileURLToPath } from 'node:url';
 import { RUNGS, FIXTURES, FIXTURE_SOURCE, TARGETS } from './lib/perf-ladder.mjs';
 import { resolveTflw, resolveArtifactContract } from './lib/tflw-bin.mjs';
 import { compare } from './verify-perf-baseline.mjs';
+import { parseArgv, BOOLEAN, VALUE } from './lib/argv.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const HOME = os.homedir();
@@ -105,14 +106,48 @@ function measuringBuildDurations() {
   }
 }
 
-const argv = process.argv.slice(2);
-const arg = (name, dflt) => {
-  const i = argv.indexOf(`--${name}`);
-  return i === -1 ? dflt : argv[i + 1];
+// ── argv (`M164-05`, repaired) ───────────────────────────────────────────────────────────────
+//
+// This block validated **nothing**. `arg(name, dflt)` was `argv.indexOf` plus `argv[i + 1]`, and the
+// three booleans were bare `argv.includes()` calls — no set of known spellings, no loop over `argv`,
+// so no misspelling could ever be reported. Every one of them was a silent default, and this script
+// is the one where that costs the most:
+//
+//   --dry-runn    DRY is false, so the run **measures for real** — the operator asked for the one
+//                 thing this flag exists to prevent, and got a full ladder under the box lease
+//   --no-leaseX   NO_LEASE is false, so the run takes the lease it was told to skip
+//   --in-sweepp   IN_SWEEP is false, so the artifact lands on `latest.json` instead of the sweep's
+//                 own series, overwriting the scheduled run's record with a working-tree number
+//   --profil quick  PROFILE falls back to `full`, so the short ladder request runs the long one
+//
+// `M164-04` found the same family in `discover-mutation-kills.mjs` and built `scripts/lib/argv.mjs`
+// as the repair. This is its second consumer. The difference `M164-05` records is blast radius, not
+// kind: that script wasted box time or corrupted a census, and this one spends the box's whole lease
+// on a run the operator explicitly asked not to happen.
+//
+// `--profile`'s *value* was already safe — `PROFILES[PROFILE]` throws by name below — so the gap was
+// never the unknown profile, it was the unknown flag that silently became no flag at all.
+const SPEC = {
+  '--profile': VALUE,
+  '--no-lease': BOOLEAN,
+  '--dry-run': BOOLEAN,
+  '--in-sweep': BOOLEAN,
 };
-const PROFILE = arg('profile', 'full');
-const NO_LEASE = argv.includes('--no-lease');
-const DRY = argv.includes('--dry-run');
+const argv = process.argv.slice(2);
+const parsed = parseArgv(argv, SPEC);
+if (!parsed.ok) {
+  // 64 is EX_USAGE, the same code `discover-mutation-kills.mjs` uses. It matters here beyond
+  // convention: `regression.mjs` invokes this script as a phase, and a usage mistake must be
+  // distinguishable from a perf failure by exit code alone.
+  console.error(parsed.error);
+  process.exit(64);
+}
+const flag = (name) => parsed.values[name] ?? null;
+const has = (name) => parsed.values[name] === true;
+
+const PROFILE = flag('--profile') ?? 'full';
+const NO_LEASE = has('--no-lease');
+const DRY = has('--dry-run');
 
 // `D758` — `--in-sweep`: this run is a **phase of the regression sweep**, not a run of its own.
 //
@@ -128,7 +163,7 @@ const DRY = argv.includes('--dry-run');
 // lease is inherited rather than re-taken (`D759`), the artifact lands in its own series rather
 // than over `latest.json` (`RESULTS_DIR` below), and a machine that is not the box **skips loudly
 // with exit 3** rather than failing or, worse, measuring.
-const IN_SWEEP = argv.includes('--in-sweep');
+const IN_SWEEP = has('--in-sweep');
 
 /** Where the artifact lands.
  *
