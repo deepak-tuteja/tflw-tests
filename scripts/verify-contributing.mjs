@@ -153,6 +153,14 @@ const CLASSIFIED = [
   {
     wf: 'ci.yml',
     job: 'acceptance-check',
+    cmd: 'npm run verify:scrub',
+    class: 'gate',
+    local: 'npm run verify:scrub',
+    why: 'what this **public** repository publishes: an address that reaches a person, or a filesystem path naming a real account, over every tracked text file. In this job because the rules are tflw\'s and are imported rather than copied (`D882`), so it needs both trees — and it does NOT skip when the sibling is absent, for the reason the step below states. It arrived with 37 real hits, 25 of them the box account\'s home path in five committed perf artifacts, published since `M160d`. The build host\'s name is deliberately outside its corpus (`D876`) and is named 45 times here without being a finding',
+  },
+  {
+    wf: 'ci.yml',
+    job: 'acceptance-check',
     cmd: 'npm run verify:contributing',
     class: 'gate',
     local: 'npm run verify:contributing',

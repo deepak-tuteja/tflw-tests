@@ -11,7 +11,7 @@
     "dirty": true
   },
   "tflw": {
-    "entry": "/home/deepaktuteja/tflw-perf/checkout/node_modules/tflw/dist/cli.cjs",
+    "entry": "/home/<user>/tflw-perf/checkout/node_modules/tflw/dist/cli.cjs",
     "resolved": "released",
     "durations": {
       "rule": "D809",
