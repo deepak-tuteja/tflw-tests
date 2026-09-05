@@ -73,6 +73,8 @@ npm run verify:sweep-size
 npm run verify:tflw-resolution
 npm run verify:provenance
 npm run verify:provenance:self-test
+npm run verify:notation-parity
+npm run verify:notation-parity:self-test
 npm run verify:construct-coverage
 npm run verify:redaction:self-test
 npm run read:mutation-matrix:gate
@@ -171,6 +173,30 @@ xvfb-run -a npm run regression -- --group security-ui
   branch build and being handed the vendored one is an error, not a shrug), and a sweep of
   `scripts/` proving nothing resolves a tflw any other way. **Its allow-list is the honest part** —
   the files that legitimately do are named there, each with a reason.
+- **`npm run verify:notation-parity`** — **the citation notation is implemented twice on purpose,
+  and this is what holds the two to one grammar.** `tflw D711` keeps the two readings independent —
+  two that agree is evidence, one that agrees with itself is not — and the cost of that is a second
+  implementation nobody was checking. `tflw M164-12` files the result: the only thing that had ever
+  detected a divergence between them was a red neither repository could clear. Measured when this
+  landed, the two grammars disagreed on **10 of 16** citation-shaped fixtures and had done since
+  tflw tightened its side nine milestones earlier — an unqualified right endpoint made `D93-122`
+  expand to **30 identifiers** here and one over there. `OWN` and `THEIRS` are held to source-text
+  parity because they are byte-identical and have no reason to drift; `CITATION` and `RANGE` are
+  held to behavioural parity, because this repository keeps one clause tflw does not and should.
+  Needs both trees checked out side by side, like `verify:provenance` and `verify:scrub`, and it
+  reads tflw's patterns as TEXT rather than importing them — importing tflw's refresher would shell
+  out to `gh` at module scope. A pattern that is not where the table says turns this **red**, not
+  quiet: comparing nothing is the state it exists to refuse.
+- **`npm run verify:notation-parity:self-test`** — **the gate above is green over this repository's
+  real prose by construction, so its fixtures are the only thing keeping it honest.** Over the 14
+  tracked markdown files the two grammars extract the same 288 identifiers, and would have done on
+  every day of the divergence — a gate whose corpus was this repository's prose would have been
+  green the day the defect was found, which is `tflw M141`'s shape exactly. So the corpus is a hand
+  list chosen to *separate* the two grammars, and this runs the controls that show each one fires:
+  an absent pattern throws, a one-character drift in `OWN` is caught, reverting `RANGE` reddens the
+  gate, and an exemption that no longer diverges fails rather than passing. It paid for itself on
+  the first run — it found that an exemption waiving a whole *case* rather than one *observation*
+  silently swallowed a `RANGE` regression on a fixture already excused for a different reason.
 - **`npm run verify:provenance:self-test`** — **the gate above reads two different corpora, and
   this is what says the difference is deliberate.** `testFlow-tests M169d1` split it: resolution widened to every
   tracked non-prose file, while the escaping-link and `**Notation.**` rules stayed on the 14

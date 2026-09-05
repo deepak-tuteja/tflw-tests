@@ -72,8 +72,22 @@ const SIBLING = join(ROOT, '..', 'testFlow');
  * Widened after measuring rather than before (`D716`'s lesson: that widening was reversed by
  * measuring it). Across all 13 tracked markdown files the change adds **exactly two** identifiers,
  * `D6` and `D7`, both in `CONSTRUCTS.md`, both published in tflw's index. No false positives.
+ *
+ * CONVERGED ONTO tflw's FORM BY `M171d` (`M164-12`), 2026-09-05. This was `(?<!\w)(P#…|D…|M…)(?!-\d)\b`
+ * and is now tflw's `CITATION` plus this repository's one extra clause. Three rules arrived with it,
+ * every one of which this side was missing and `D861` had already paid for over there:
+ *   - `#` and `+` and `=` are left boundaries, and `+`/`=` are right boundaries too, so a base64
+ *     tail like `…Xg+M7w==` and an anchor like `#D318` stop being read as citations;
+ *   - `[a-rt-z]` rather than `[a-z]` excludes a trailing `s`, so `both D318s were wrong` yields
+ *     `D318` rather than the unresolvable `D318s`;
+ *   - `s?` then consumes that plural explicitly rather than leaving it to a boundary.
+ * `(?!-\d)` is KEPT and is the single permitted difference between the two grammars — see
+ * `scripts/verify-notation-parity.mjs`, which is what now holds them together. Measured before the
+ * change: over the 14 tracked markdown files here the converged pair extracts **the same 288
+ * identifiers**, 0 lost and 0 gained, which is why this could land in the same commit as the guard
+ * instead of leaving a red behind.
  */
-const CITATION = /(?<!\w)(P#\d{1,3}[a-z]?|D\d{1,3}[a-z]?|M\d{1,3}[a-z]?\d?)(?!-\d)\b/g;
+const CITATION = /(?<![\w#+=])(D\d{1,3}[a-rt-z]?|M\d{1,3}[a-rt-z]?\d?|P#\d{1,3}[a-rt-z]?)s?\b(?![+=])(?!-\d)/g;
 
 /**
  * A citation marked as belonging to the other repository than the file's default. `D711`'s whole
@@ -137,8 +151,17 @@ export function escapingLinks(path, text) {
  * A range cites its interior. `D40–D44` is one citation phrase and five identifiers, and a reader
  * following it wants the three in the middle — tflw's index publishes them for that reason, so this
  * gate has to agree that they are cited.
+ *
+ * CONVERGED ONTO tflw's FORM BY `M171d` (`M164-12`), 2026-09-05, and this is the half that was
+ * costing something. The old form allowed spaces around the dash and made the right endpoint's kind
+ * OPTIONAL — `(?:[DM])?` — so an unqualified right side was read as a span. `D861` is tflw's record
+ * of what that costs: **290 invented identifiers out of two citations and a piece of sentence
+ * punctuation, the single largest source of false demand in either repository.** That finding was
+ * nine milestones old and still live on this side, because nothing held the two grammars together.
+ * The `\1` backreference is the repair: a range must name one sequence, so `D93-122` is one citation
+ * and `D12-M15` is two, not a span of four.
  */
-const RANGE = /(?<![\w#])([DM])(\d{1,3})[a-z]?\s*[-–—]\s*(?:[DM])?(\d{1,3})[a-z]?\b/g;
+const RANGE = /(?<![\w#])([DM])(\d{1,3})[a-z]?[-–—]\1(\d{1,3})[a-z]?\b/g;
 
 /**
  * A ledger row: `M138b-01`. Names a row, not the milestone — see `citationsLoose`.
@@ -719,14 +742,36 @@ function selfTest() {
     }
   }
 
+  // `M171d` CHANGED WHAT THIS PROPERTY CAN SAY, AND THE PROPERTY IS REWRITTEN RATHER THAN DELETED.
+  //
+  // It used to assert the opposite of what it asserts now: *a `sha512-` tail IS read as a citation,
+  // and is excluded by path rather than by grammar*. That was true of the loose grammar this
+  // repository carried until the notation convergence — `M7w` really was extracted out of
+  // `…SJH+M7w==`, and the lockfile path rule really was the only thing between it and the corpus.
+  //
+  // Converging onto tflw's `CITATION` brought `+` and `=` boundaries with it, and they refuse the
+  // whole shape. Measured at the convergence: the grammar now finds **zero** identifiers in all
+  // three tracked lockfiles, where it previously found `M7w` in one. So the path rule has stopped
+  // being load-bearing for the reason it was written, and an exclusion that excludes nothing is the
+  // vacuity `M141` names — filed as a row rather than quietly kept or quietly deleted, because
+  // "keep it as defence in depth and an I/O saving" and "delete it, the grammar covers this now"
+  // are a real decision and not this gate's to take.
+  //
+  // What this property asserts is therefore the thing that is still true and still worth guarding:
+  // the grammar refuses the digest ON ITS OWN. If that ever regresses, the message says the path
+  // rule has silently become load-bearing again.
   const digest = 'sha512-xQe0+cX8ncDDoNfMhoNXtQBg0lVMbAxSJH+M7w==';
   const lockRule = EXCLUSIONS.find((r) => r.label === 'lockfile');
   const dataRule = EXCLUSIONS.find((r) => r.label === 'recorded data');
-  if (citationsOf(digest).size > 0 && lockRule.test('apiV2/package-lock.json')) {
-    ok('a `sha512-` tail IS read as a citation, and is excluded by path rather than by grammar');
+  const inDigest = [...citationsOf(digest)];
+  if (inDigest.length === 0) {
+    ok('the grammar refuses a `sha512-` tail on its own (`+`/`=` boundaries, arrived with `M171d`’s convergence) — the lockfile path rule is no longer what stands between it and the corpus');
+  } else if (lockRule.test('apiV2/package-lock.json')) {
+    no('the grammar refuses a `sha512-` tail on its own',
+       `it read ${inDigest.join(' ')} out of a digest, so the lockfile path rule is load-bearing again — that is a REGRESSION of the convergence, not a new exclusion to write`);
   } else {
-    no('the lockfile exclusion is the thing standing between the grammar and a digest',
-       `grammar found ${[...citationsOf(digest)].join(' ') || 'nothing'}; path rule ${lockRule.test('apiV2/package-lock.json')}`);
+    no('a digest is refused by grammar or by path',
+       `the grammar read ${inDigest.join(' ')} and no path rule excludes the lockfile`);
   }
   if (dataRule.test('tflw-acceptance/mutation/kill-matrix.jsonl') && !dataRule.test('scripts/regression.mjs')) {
     ok('the recorded-data exclusion takes the census rows and leaves the scripts');

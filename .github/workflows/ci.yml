@@ -205,6 +205,22 @@ jobs:
         run: npm run verify:provenance:self-test
         working-directory: testFlow-tests
 
+      # `M171d` (`M164-12`). In THIS job for the load-bearing reason the steps above share: it reads
+      # tflw's notation patterns out of `../testFlow/scripts/` AS TEXT, and only a job with both
+      # trees can. No pin and no published artifact — importing tflw's `refresh-sibling-citations.mjs`
+      # would shell out to `gh` at module scope, so the comparison is textual by necessity, and
+      # `patternSource` FAILS rather than going quiet when a pattern is not where the table says.
+      - name: The two notation implementations share one grammar
+        run: npm run verify:notation-parity
+        working-directory: testFlow-tests
+
+      # The gate above is green over this repository's real prose BY CONSTRUCTION — the two grammars
+      # extracted the same 288 identifiers throughout the nine milestones they were diverging — so
+      # its fixtures are the only thing between it and `M141`'s vacuous shape. This runs its controls.
+      - name: The notation gate's own controls fire on the input they exist for
+        run: npm run verify:notation-parity:self-test
+        working-directory: testFlow-tests
+
       # M154b (`D723`, `D727`, `D730`, `D741`). Static — it reads one JSON document out of the
       # binary and compares some sets — and in THIS job for the load-bearing reason the three steps
       # above share: it is the only job that checks out both repositories, and this gate's ground
