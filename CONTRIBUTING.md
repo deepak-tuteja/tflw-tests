@@ -281,8 +281,8 @@ xvfb-run -a npm run regression -- --group security-ui
   drift. That line informs and does not fail, because a mutation added in tflw is the right change
   and reddening this repository's CI for it would leave the person who tripped it with a
   seven-hour box run as their only remedy.
-- **`npm run verify:argv-contract`** — **the census script's flags are validated and read from one
-  table, and the cases proving it are held against the implementation they replaced.**
+- **`npm run verify:argv-contract`** — **two scripts' flags are validated and read from one table,
+  and the cases proving it are held against the implementation each of them replaced.**
   `discover-mutation-kills.mjs` decides whether a retraction's stated cause is recorded, whether a
   capped sweep is capped, and whether the baseline bracket runs at all. Until `M164-04` it validated
   with a set of spellings and read with index arithmetic over raw `argv` — two independently written
@@ -301,6 +301,20 @@ xvfb-run -a npm run regression -- --group security-ui
   as a repair demonstration that the old parser also passed. It also enforces the rule the old
   block's comment could only state — a flag declared in the spec and read by no `flag()`/`has()`
   call is refused, which is exactly how `--help` and `--out` each shipped as decoration.
+  It drives **two** consumers, `discover-mutation-kills.mjs` and
+  `perf-conformance.mjs` (`M164-05`), and the part worth knowing before adding a third is what the
+  table deliberately does not share. Each consumer keeps its **own** model of the implementation it
+  replaced, because the two were not the same wrong thing: the census script had a set of known
+  spellings and could at least refuse an unknown flag, while `perf-conformance.mjs` validated
+  nothing whatsoever and so had no way to refuse anything at all. Its old model therefore never
+  returns a failure, which is the finding rather than a simplification. A single shared control
+  would have had to pick one of those, and against the wrong one half the cases would have stopped
+  discriminating while this gate stayed green. A consumer whose cases are *all* regression guards
+  is refused for the same reason — it would print a page of ticks and demonstrate no repair.
+  The second consumer is the one with the larger blast radius: a typo'd `--dry-run` there used to
+  spend the box's whole lease on a full measured run the operator had explicitly asked not to
+  happen, and a typo'd `--in-sweep` wrote over the scheduled run's `latest.json` with a
+  working-tree number.
   A contributor gate rather than ci-only because it is milliseconds, needs no stack, and the person
   who will next add a flag is the one who should learn immediately that spelling it is not wiring
   it.
