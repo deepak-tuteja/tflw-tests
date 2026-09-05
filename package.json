@@ -9,7 +9,7 @@
     "url": "git+https://github.com/deepak-tuteja/tflw-tests.git"
   },
   "license": "MIT",
-  "author": "Deepak Tuteja <tuteja123@gmail.com>",
+  "author": "Deepak Tuteja <33311251+deepak-tuteja@users.noreply.github.com>",
   "engines": {
     "node": ">=22"
   },
@@ -40,6 +40,7 @@
     "verify:perf-baseline": "node scripts/verify-perf-baseline.mjs",
     "perf:conformance": "node scripts/perf-conformance.mjs",
     "verify:contributing": "node scripts/verify-contributing.mjs",
+  "verify:scrub": "node scripts/verify-scrub.mjs",
     "verify:sweep-size": "node scripts/verify-sweep-size.mjs",
     "verify:argv-contract": "node scripts/verify-argv-contract.mjs",
     "verify:tflw-resolution": "node scripts/verify-tflw-resolution.mjs",

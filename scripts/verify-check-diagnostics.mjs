@@ -301,7 +301,7 @@ const CONFIG_FIXTURES = {
   TF024: 'env local default\n  api "http://localhost:4001"\n\nenv other default\n  api "http://localhost:4002"\n',
   TF025: 'defaults\n  web "http://localhost:8090"\n\nenv local default\n  api "http://localhost:4001"\n',
   TF029:
-    'env local default\n  api "http://localhost:4001"\n\nsession admin\n  api POST /auth/login body { email: "a@a.com", password: "x" }\n\nsession admin\n  api POST /auth/login body { email: "a@a.com", password: "x" }\n',
+    'env local default\n  api "http://localhost:4001"\n\nsession admin\n  api POST /auth/login body { email: "a@a.test", password: "x" }\n\nsession admin\n  api POST /auth/login body { email: "a@a.test", password: "x" }\n',
   // tflw M85 (review cluster C1 / `A4-10`): the active env's own base URL against its own
   // `allow hosts`. It has to be the *default* env here — the check is env-scoped, and this script
   // runs `tflw check` with no `--env`.
@@ -356,7 +356,7 @@ const CONFIG_FIXTURES = {
   // Coupled with its tflw half and red until that half merges (D350/D382). The local pre-flight is
   // `npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs` (D351).
   TF074:
-    'env local default\n  api "http://localhost:4001"\n\nsession admin for env locl\n  api POST /auth/login body { email: "a@a.com", password: "x" }\n',
+    'env local default\n  api "http://localhost:4001"\n\nsession admin for env locl\n  api POST /auth/login body { email: "a@a.test", password: "x" }\n',
   // tflw `M147f` (review `M147-07`, D647): `header "X" is "Y" for <service>` naming a service no
   // `env` declares. **`TF074`'s twin, one row later and in a clause that had already shipped** —
   // which is the part worth recording here rather than only in the tflw ledger. Order 6 spent a code

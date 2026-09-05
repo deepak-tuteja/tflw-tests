@@ -11,7 +11,7 @@
     "dirty": true
   },
   "tflw": {
-    "entry": "/home/deepaktuteja/tflw-exec/testFlow-tests/node_modules/tflw/dist/cli.cjs",
+    "entry": "/home/<user>/tflw-exec/testFlow-tests/node_modules/tflw/dist/cli.cjs",
     "resolved": "released"
   },
   "legs": {

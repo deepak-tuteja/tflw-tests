@@ -143,6 +143,22 @@ jobs:
         run: npm run verify:perf-baseline
         working-directory: testFlow-tests
 
+      # `M171b2` (`M164-09`, `D882`-`D884`). Static, seconds, and in THIS job because its rules are
+      # not here: they are declared once in tflw's `gen-decisions.mjs`, where each carries the
+      # corpus it covers as data (`D875`), and this gate imports them through the same
+      # `siblingRoot()` this repo already uses for tflw's mutation registry. A copy would be two
+      # implementations of one grammar with nothing holding them together — `M164-12` verbatim.
+      #
+      # It does NOT skip when the sibling is missing, for the reason the step below states about
+      # itself. A publication gate that goes quiet when it cannot find its rules reports a clean
+      # repository it never read, which is the whole of `M164-09`.
+      #
+      # It arrived with 37 real hits in a **public** repository, 25 of them the build account's
+      # absolute home path across five committed perf artifacts, published since `M160d`/PR #62.
+      - name: What this public repository publishes
+        run: npm run verify:scrub
+        working-directory: testFlow-tests
+
       # M138b (`M136a-02`). Static, seconds, and here for two reasons rather than one. The cheap
       # reason is that it is the same shape as the step above — no Docker, no .env, no Playwright.
       # The load-bearing one is that this is **the only job that checks out both repositories**, so

@@ -11,7 +11,7 @@
     "dirty": true
   },
   "tflw": {
-    "entry": "/home/deepaktuteja/tflw-exec/testFlow-tests/node_modules/tflw/dist/cli.cjs",
+    "entry": "/home/<user>/tflw-exec/testFlow-tests/node_modules/tflw/dist/cli.cjs",
     "resolved": "released"
   },
   "legs": {
@@ -60,10 +60,10 @@
           "target": "apiV2",
           "runners": {
             "tflw": {
-              "error": "no workload test in /home/deepaktuteja/tflw-exec/testFlow-tests/tflw-acceptance/perf/tflw/report/results.json — did the rung run at all?"
+              "error": "no workload test in /home/<user>/tflw-exec/testFlow-tests/tflw-acceptance/perf/tflw/report/results.json — did the rung run at all?"
             },
             "k6": {
-              "error": "k6 wrote no summary for perf/k6/checkout-burst.js (exit null). k6 said: time=\"2026-08-26T12:23:39+02:00\" level=error msg=\"Error: login failed: 0 null\\n\\tat login (file:///home/deepaktuteja/tflw-exec/testFlow-tests/tflw-acceptance/perf/k6/checkout-burst.js:76:33(41))\\n\\tat authedRequest (file:///home/deepaktuteja/tflw-exec/testFlow-tests/tflw-acceptance/perf/k6/checkout-burst.js:85:28(6))\\n\\tat default (file:///home/deepaktuteja/tflw-exec/testFlow-tests/tflw-acceptance/perf/k6/checkout-burst.js:99:31(16))\\n\" executor=ramping-vus hint=\"script exception\" scenario=checkout_burst source=stacktrace / time=\"2026-08-26T12:23:39+02:00\" level=warning msg=\"Request Failed\" error=\"Post \\\"http://localhost:4001/v1/auth/login\\\": dial tcp 127.0.0.1:4001: connect: connection refused\" / time=\"2026-08-26T12:23:39+02:00\" level=warning msg=\"Request Failed\" error=\"Post \\\"http://localhost:4001/v1/auth/login\\\": dial tcp 127.0.0.1:4001: connect: connection refused\""
+              "error": "k6 wrote no summary for perf/k6/checkout-burst.js (exit null). k6 said: time=\"2026-08-26T12:23:39+02:00\" level=error msg=\"Error: login failed: 0 null\\n\\tat login (file:///home/<user>/tflw-exec/testFlow-tests/tflw-acceptance/perf/k6/checkout-burst.js:76:33(41))\\n\\tat authedRequest (file:///home/<user>/tflw-exec/testFlow-tests/tflw-acceptance/perf/k6/checkout-burst.js:85:28(6))\\n\\tat default (file:///home/<user>/tflw-exec/testFlow-tests/tflw-acceptance/perf/k6/checkout-burst.js:99:31(16))\\n\" executor=ramping-vus hint=\"script exception\" scenario=checkout_burst source=stacktrace / time=\"2026-08-26T12:23:39+02:00\" level=warning msg=\"Request Failed\" error=\"Post \\\"http://localhost:4001/v1/auth/login\\\": dial tcp 127.0.0.1:4001: connect: connection refused\" / time=\"2026-08-26T12:23:39+02:00\" level=warning msg=\"Request Failed\" error=\"Post \\\"http://localhost:4001/v1/auth/login\\\": dial tcp 127.0.0.1:4001: connect: connection refused\""
             }
           },
           "skipped": {
@@ -97,10 +97,10 @@
           "target": "apiV2",
           "runners": {
             "tflw": {
-              "error": "no workload test in /home/deepaktuteja/tflw-exec/testFlow-tests/tflw-acceptance/perf/tflw/report/results.json — did the rung run at all?"
+              "error": "no workload test in /home/<user>/tflw-exec/testFlow-tests/tflw-acceptance/perf/tflw/report/results.json — did the rung run at all?"
             },
             "k6": {
-              "error": "k6 wrote no summary for perf/k6/dogfood-get-only.js (exit null). k6 said: time=\"2026-08-26T12:23:42+02:00\" level=warning msg=\"Request Failed\" error=\"Post \\\"http://localhost:4001/v1/auth/login\\\": dial tcp 127.0.0.1:4001: connect: connection refused\" / time=\"2026-08-26T12:23:42+02:00\" level=error msg=\"Error: login failed: 0 null\\n\\tat login (file:///home/deepaktuteja/tflw-exec/testFlow-tests/tflw-acceptance/perf/k6/dogfood-get-only.js:39:33(41))\\n\\tat authedRequest (file:///home/deepaktuteja/tflw-exec/testFlow-tests/tflw-acceptance/perf/k6/dogfood-get-only.js:46:28(6))\\n\\tat default (file:///home/deepaktuteja/tflw-exec/testFlow-tests/tflw-acceptance/perf/k6/dogfood-get-only.js:60:28(12))\\n\" executor=ramping-vus hint=\"script exception\" scenario=dogfood_get_only source=stacktrace / time=\"2026-08-26T12:23:42+02:00\" level=warning msg=\"Request Failed\" error=\"Post \\\"http://localhost:4001/v1/auth/login\\\": dial tcp 127.0.0.1:4001: connect: connection refused\""
+              "error": "k6 wrote no summary for perf/k6/dogfood-get-only.js (exit null). k6 said: time=\"2026-08-26T12:23:42+02:00\" level=warning msg=\"Request Failed\" error=\"Post \\\"http://localhost:4001/v1/auth/login\\\": dial tcp 127.0.0.1:4001: connect: connection refused\" / time=\"2026-08-26T12:23:42+02:00\" level=error msg=\"Error: login failed: 0 null\\n\\tat login (file:///home/<user>/tflw-exec/testFlow-tests/tflw-acceptance/perf/k6/dogfood-get-only.js:39:33(41))\\n\\tat authedRequest (file:///home/<user>/tflw-exec/testFlow-tests/tflw-acceptance/perf/k6/dogfood-get-only.js:46:28(6))\\n\\tat default (file:///home/<user>/tflw-exec/testFlow-tests/tflw-acceptance/perf/k6/dogfood-get-only.js:60:28(12))\\n\" executor=ramping-vus hint=\"script exception\" scenario=dogfood_get_only source=stacktrace / time=\"2026-08-26T12:23:42+02:00\" level=warning msg=\"Request Failed\" error=\"Post \\\"http://localhost:4001/v1/auth/login\\\": dial tcp 127.0.0.1:4001: connect: connection refused\""
             }
           },
           "skipped": {
@@ -134,7 +134,7 @@
           "target": "apiV2",
           "runners": {
             "tflw": {
-              "error": "no workload test in /home/deepaktuteja/tflw-exec/testFlow-tests/tflw-acceptance/perf/tflw/report/results.json — did the rung run at all?"
+              "error": "no workload test in /home/<user>/tflw-exec/testFlow-tests/tflw-acceptance/perf/tflw/report/results.json — did the rung run at all?"
             },
             "k6": {
               "error": "k6 wrote no summary for perf/k6/dogfood-post-uncontended.js (exit null). k6 said: time=\"2026-08-26T12:23:44+02:00\" level=warning msg=\"Request Failed\" error=\"Post \\\"http://localhost:4001/v1/auth/login\\\": dial tcp 127.0.0.1:4001: connect: connection refused\" / time=\"2026-08-26T12:23:44+02:00\" level=warning msg=\"Request Failed\" error=\"Post \\\"http://localhost:4001/v1/auth/login\\\": dial tcp 127.0.0.1:4001: connect: connection refused\" / time=\"2026-08-26T12:23:44+02:00\" level=warning msg=\"Request Failed\" error=\"Post \\\"http://localhost:4001/v1/auth/login\\\": dial tcp 127.0.0.1:4001: connect: connection refused\""
@@ -210,10 +210,10 @@
           "target": "apiV2",
           "runners": {
             "tflw": {
-              "error": "no workload test in /home/deepaktuteja/tflw-exec/testFlow-tests/tflw-acceptance/perf/tflw/report/results.json — did the rung run at all?"
+              "error": "no workload test in /home/<user>/tflw-exec/testFlow-tests/tflw-acceptance/perf/tflw/report/results.json — did the rung run at all?"
             },
             "k6": {
-              "error": "k6 wrote no summary for perf/k6/ticket-write.js (exit null). k6 said: time=\"2026-08-26T12:24:11+02:00\" level=warning msg=\"Request Failed\" error=\"Post \\\"http://localhost:4001/v1/auth/login\\\": dial tcp 127.0.0.1:4001: connect: connection refused\" / time=\"2026-08-26T12:24:11+02:00\" level=error msg=\"Error: login failed: 0 null\\n\\tat login (file:///home/deepaktuteja/tflw-exec/testFlow-tests/tflw-acceptance/perf/k6/ticket-write.js:45:33(41))\\n\\tat authedRequest (file:///home/deepaktuteja/tflw-exec/testFlow-tests/tflw-acceptance/perf/k6/ticket-write.js:52:28(6))\\n\\tat default (file:///home/deepaktuteja/tflw-exec/testFlow-tests/tflw-acceptance/perf/k6/ticket-write.js:66:28(12))\\n\" executor=ramping-vus hint=\"script exception\" scenario=ticket_write source=stacktrace / time=\"2026-08-26T12:24:11+02:00\" level=error msg=\"Error: login failed: 0 null\\n\\tat login (file:///home/deepaktuteja/tflw-exec/testFlow-tests/tflw-acceptance/perf/k6/ticket-write.js:45:33(41))\\n\\tat authedRequest (file:///home/deepaktuteja/tflw-exec/testFlow-tests/tflw-acceptance/perf/k6/ticket-write.js:52:28(6))\\n\\tat default (file:///home/deepaktuteja/tflw-exec/testFlow-tests/tflw-acceptance/perf/k6/ticket-write.js:66:28(12))\\n\" executor=ramping-vus hint=\"script exception\" scenario=ticket_write source=stacktrace"
+              "error": "k6 wrote no summary for perf/k6/ticket-write.js (exit null). k6 said: time=\"2026-08-26T12:24:11+02:00\" level=warning msg=\"Request Failed\" error=\"Post \\\"http://localhost:4001/v1/auth/login\\\": dial tcp 127.0.0.1:4001: connect: connection refused\" / time=\"2026-08-26T12:24:11+02:00\" level=error msg=\"Error: login failed: 0 null\\n\\tat login (file:///home/<user>/tflw-exec/testFlow-tests/tflw-acceptance/perf/k6/ticket-write.js:45:33(41))\\n\\tat authedRequest (file:///home/<user>/tflw-exec/testFlow-tests/tflw-acceptance/perf/k6/ticket-write.js:52:28(6))\\n\\tat default (file:///home/<user>/tflw-exec/testFlow-tests/tflw-acceptance/perf/k6/ticket-write.js:66:28(12))\\n\" executor=ramping-vus hint=\"script exception\" scenario=ticket_write source=stacktrace / time=\"2026-08-26T12:24:11+02:00\" level=error msg=\"Error: login failed: 0 null\\n\\tat login (file:///home/<user>/tflw-exec/testFlow-tests/tflw-acceptance/perf/k6/ticket-write.js:45:33(41))\\n\\tat authedRequest (file:///home/<user>/tflw-exec/testFlow-tests/tflw-acceptance/perf/k6/ticket-write.js:52:28(6))\\n\\tat default (file:///home/<user>/tflw-exec/testFlow-tests/tflw-acceptance/perf/k6/ticket-write.js:66:28(12))\\n\" executor=ramping-vus hint=\"script exception\" scenario=ticket_write source=stacktrace"
             }
           },
           "skipped": {},
@@ -384,17 +384,17 @@
     {
       "kind": "rung-failed",
       "rung": "checkout-burst",
-      "detail": "no workload test in /home/deepaktuteja/tflw-exec/testFlow-tests/tflw-acceptance/perf/tflw/report/results.json — did the rung run at all?"
+      "detail": "no workload test in /home/<user>/tflw-exec/testFlow-tests/tflw-acceptance/perf/tflw/report/results.json — did the rung run at all?"
     },
     {
       "kind": "rung-failed",
       "rung": "dogfood-get-only",
-      "detail": "no workload test in /home/deepaktuteja/tflw-exec/testFlow-tests/tflw-acceptance/perf/tflw/report/results.json — did the rung run at all?"
+      "detail": "no workload test in /home/<user>/tflw-exec/testFlow-tests/tflw-acceptance/perf/tflw/report/results.json — did the rung run at all?"
     },
     {
       "kind": "rung-failed",
       "rung": "dogfood-post-uncontended",
-      "detail": "no workload test in /home/deepaktuteja/tflw-exec/testFlow-tests/tflw-acceptance/perf/tflw/report/results.json — did the rung run at all?"
+      "detail": "no workload test in /home/<user>/tflw-exec/testFlow-tests/tflw-acceptance/perf/tflw/report/results.json — did the rung run at all?"
     },
     {
       "kind": "error-rate",
@@ -414,7 +414,7 @@
     {
       "kind": "rung-failed",
       "rung": "ticket-write",
-      "detail": "no workload test in /home/deepaktuteja/tflw-exec/testFlow-tests/tflw-acceptance/perf/tflw/report/results.json — did the rung run at all?"
+      "detail": "no workload test in /home/<user>/tflw-exec/testFlow-tests/tflw-acceptance/perf/tflw/report/results.json — did the rung run at all?"
     },
     {
       "kind": "target-health",

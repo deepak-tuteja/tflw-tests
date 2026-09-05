@@ -68,6 +68,7 @@ npm run verify:external-targets
 npm run verify:perf-parity
 npm run verify:perf-baseline
 npm run verify:contributing
+npm run verify:scrub
 npm run verify:sweep-size
 npm run verify:tflw-resolution
 npm run verify:provenance
@@ -149,6 +150,17 @@ xvfb-run -a npm run regression -- --group security-ui
   bound whose absence let a rung report PASS at a 100% error rate on 2026-08-05.
 - **`npm run verify:contributing`** — this document against `.github/workflows/`. It is in the set
   it guards, which is the point rather than an oversight.
+- **`npm run verify:scrub`** — **what this public repository publishes.** Every tracked text file,
+  swept for an address that reaches a person and for a filesystem path naming a real account. The
+  rules are not here: they are declared once in tflw's `gen-decisions.mjs`, each carrying the corpus
+  it covers as data (`D875`), and this gate imports them through the same `siblingRoot()` used for
+  tflw's mutation registry — a second copy would be two implementations of one grammar with nothing
+  holding them together (`D882`). So it needs the sibling checkout and **does not skip without it**,
+  exactly like the two gates around it. Two exemptions, both lockfiles holding npm's own published
+  maintainer metadata, and each is checked for still exempting something (`D883`). The build host's
+  name is outside its corpus by decision (`D876`): it is named 45 times here on purpose and none of
+  them is a finding. It arrived with 37 real hits, 25 being the build account's absolute home path
+  in five committed perf artifacts, published since `M160d`.
 - **`npm run verify:tflw-resolution`** — **which tflw a script is grading is declared, printed, and
   asked in exactly one place.** Before `M141` this repo held seven answers to that one question: three
   environment variable names, three defaults, and nowhere that printed which had won, so the same
