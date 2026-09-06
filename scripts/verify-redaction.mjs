@@ -72,14 +72,101 @@ const pass = (msg) => console.log(`✓ ${msg}`);
 const CONSTRUCTS_GRADED_HERE = ['config:key:redact'];
 
 /** Which five values are ground truth, and how each is read out of the profile export. Named
- *  explicitly so a field the endpoint renames goes red here rather than quietly leaving the set. */
+ *  explicitly so a field the endpoint renames goes red here rather than quietly leaving the set.
+ *
+ *  `covers` is the `redact` path each one stands for, added by `M176e` for `M171-01`. It is not
+ *  decoration: `redactedPaths()` below expands `tflw.config`'s own `redact` line against the live
+ *  profile and holds this list to it in both directions. */
 const PII_FIELDS = [
-  { name: 'ADMIN_EMAIL', from: (env) => env.ADMIN_EMAIL },
-  { name: 'phone', from: (_env, p) => p?.phone },
-  { name: 'address.street', from: (_env, p) => p?.address?.street },
-  { name: 'address.city', from: (_env, p) => p?.address?.city },
-  { name: 'address.postalCode', from: (_env, p) => p?.address?.postalCode },
+  { name: 'ADMIN_EMAIL', covers: 'body.email', from: (env) => env.ADMIN_EMAIL },
+  { name: 'phone', covers: 'body.phone', from: (_env, p) => p?.phone },
+  { name: 'address.street', covers: 'body.address.street', from: (_env, p) => p?.address?.street },
+  { name: 'address.city', covers: 'body.address.city', from: (_env, p) => p?.address?.city },
+  { name: 'address.postalCode', covers: 'body.address.postalCode', from: (_env, p) => p?.address?.postalCode },
 ];
+
+/**
+ * `M171-01`, repaired by `M176e`. THE WILDCARD IS EXPANDED AGAINST THE LIVE PROFILE, NOT TRUSTED.
+ *
+ * This file's opening claim is that it *"proves tflw's `redact` config actually keeps real PII out
+ * of the emitted artifacts"*. What it actually walked was the five hand-written entries above,
+ * against a config line that reads:
+ *
+ *     redact body.email, body.phone, body.address.*
+ *
+ * — **a wildcard**. `PII_FIELDS` enumerates three of `address`'s members, which is every member
+ * only because `apiV2/src/profile-export/profile-export.service.ts` currently declares exactly
+ * `{ street, city, postalCode }`. Nothing was missed the day this was filed, and that is the
+ * finding rather than a reason to discount it: the corpus was narrower than the subject, nothing
+ * was lost, and the guard could not tell you which of those two was true. A fourth address member
+ * would have been redacted by the config, unwalked by this scan, and the closing line would still
+ * have said the trace is clean.
+ *
+ * So the population is now read off the two artifacts that define it — the config's own `redact`
+ * line, and the profile the endpoint actually returned — and this list is asserted equal to it in
+ * both directions (`D895`: a hand list that fails loudly on a member it does not know beats a
+ * declaration that it might be incomplete). A `body.address.*` that grows a fourth member reddens
+ * this gate naming the member; a `covers` entry for a path the config stopped redacting reddens it
+ * naming the path.
+ *
+ * Deliberately not a widening of the *scan*. Walking whatever the wildcard expands to would make
+ * the closing count vary with the fixture, which is `M141`'s shape. The list stays hand-written and
+ * reviewed; what changed is that it can no longer be silently incomplete.
+ */
+/** The `redact` line as `tflw.config` actually writes it. Exported so the self-test reads the real
+ *  file through the same expression the run does — a regex verified against a literal in a test and
+ *  then pointed at a file is two different claims. */
+export function redactLineOf(configText) {
+  return /^\s*redact\s+(.+?)\s*$/m.exec(configText);
+}
+
+export function redactedPaths(redactLine, profile) {
+  const paths = [];
+  const problems = [];
+  for (const raw of redactLine.split(',')) {
+    const path = raw.trim();
+    if (path === '') continue;
+    if (!path.endsWith('.*')) { paths.push(path); continue; }
+    const stem = path.slice(0, -2);
+    // `body.address.*` — the members are whatever the endpoint returned under `address`, which is
+    // the only reading of the wildcard that is true at run time.
+    const container = stem.split('.').slice(1).reduce((o, k) => (o == null ? o : o[k]), profile);
+    if (container == null || typeof container !== 'object') {
+      problems.push(
+        `\`${path}\` is a wildcard over \`${stem}\`, and the profile export carries no object there ` +
+          `(got ${JSON.stringify(container)}). Its member set cannot be determined, so this gate cannot say ` +
+          'whether the fields it walks are all of them.',
+      );
+      continue;
+    }
+    for (const k of Object.keys(container)) paths.push(`${stem}.${k}`);
+  }
+  return { paths, problems };
+}
+
+/** Hold `PII_FIELDS` to that expansion, both ways. */
+export function coverageProblems(expanded, fields = PII_FIELDS) {
+  const problems = [];
+  const walked = new Set(fields.map((f) => f.covers));
+  const promised = new Set(expanded);
+  for (const p of promised) {
+    if (walked.has(p)) continue;
+    problems.push(
+      `\`redact\` promises \`${p}\` and \`PII_FIELDS\` walks no value for it. The config would mask it ` +
+        'and this scan would never look for it, so a leak of that field reads as a clean trace. Add an entry ' +
+        'with a `covers` of that path, or narrow the `redact` line.',
+    );
+  }
+  for (const p of walked) {
+    if (promised.has(p)) continue;
+    problems.push(
+      `\`PII_FIELDS\` carries \`${p}\` and \`tflw.config\`'s \`redact\` line does not promise it. ` +
+        'A needle for a field nothing redacts either fails forever or proves nothing; delete the entry, or say ' +
+        'why the two lists differ.',
+    );
+  }
+  return problems;
+}
 
 /** A needle shorter than this is not evidence: a two-character "city" would match somewhere in
  *  every artifact and turn the leak check red for a reason that has nothing to do with redaction.
@@ -271,6 +358,22 @@ if (SELF_TEST) {
   if (leaked.leaks.some((l) => l.name === 'phone' && l.field === 'detail')) pass('self-test: a real value in a step `detail` is found');
   else { console.error(`✗ self-test: the detail leak was not found; got ${JSON.stringify(leaked.leaks)}`); failedCases += 1; }
 
+  // `M171-01` — the wildcard's expansion, both directions and the unanswerable case.
+  const LIVE_LINE = redactLineOf(readFileSync(path.join(ROOT, 'tflw.config'), 'utf8'));
+  if (LIVE_LINE) pass(`self-test: \`tflw.config\`'s redact line is read as \`${LIVE_LINE[1]}\``);
+  else { console.error('✗ self-test: no `redact` line was found in `tflw.config`'); failedCases += 1; }
+  expectClean('the live redact line expands to exactly the fields PII_FIELDS walks',
+    coverageProblems(redactedPaths(LIVE_LINE?.[1] ?? '', CLEAN_PROFILE).paths));
+  expectCase('a fourth address member the config redacts and this scan does not walk is a violation',
+    coverageProblems(redactedPaths('body.email, body.phone, body.address.*',
+      { ...CLEAN_PROFILE, address: { ...CLEAN_PROFILE.address, country: 'DE' } }).paths),
+    'body.address.country');
+  expectCase('a needle for a path the config stopped redacting is a violation',
+    coverageProblems(redactedPaths('body.email, body.phone', CLEAN_PROFILE).paths), 'does not promise it');
+  expectCase('a wildcard over something that is not an object is unanswerable, not clean',
+    redactedPaths('body.address.*', { ...CLEAN_PROFILE, address: undefined }).problems,
+    'member set cannot be determined');
+
   expectCase('a roster row this script does not claim is a violation',
     rosterProblems([{ id: 'C99', construct: 'config:key:invented' }], CONSTRUCTS_GRADED_HERE, GRADERS.redaction, SELF_PATH), 'C99');
   expectCase('a claim no roster row names is a violation',
@@ -339,6 +442,22 @@ const profile = await profileRes.json();
 
 const { values: piiValues, problems: groundTruthProblems } = groundTruth(env, profile);
 for (const problem of groundTruthProblems) fail(problem);
+
+// `M171-01`. The config's own `redact` line, expanded against the profile that just came back, is
+// what says how many fields this scan owes a needle to. Read from the file rather than restated
+// here — a second copy of the line would be `D767` in the guard written to close `D767`'s shape.
+const REDACT_LINE = redactLineOf(readFileSync(path.join(ROOT, 'tflw.config'), 'utf8'));
+if (!REDACT_LINE) {
+  fail('`tflw.config` carries no `redact` line, so this gate cannot establish what it is meant to cover.');
+} else {
+  const { paths, problems } = redactedPaths(REDACT_LINE[1], profile);
+  for (const problem of problems) fail(problem);
+  const gaps = coverageProblems(paths);
+  for (const problem of gaps) fail(problem);
+  if (problems.length === 0 && gaps.length === 0)
+    console.log(`✓ \`redact ${REDACT_LINE[1]}\` expands to ${paths.length} field(s) against the live profile,`
+      + ` and \`PII_FIELDS\` walks exactly those ${paths.length}`);
+}
 
 const reportDir = path.join(ROOT, 'report');
 const report = JSON.parse(readFileSync(path.join(reportDir, 'results.json'), 'utf8'));

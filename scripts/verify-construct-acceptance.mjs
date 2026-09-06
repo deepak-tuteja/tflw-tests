@@ -1149,8 +1149,14 @@ if (REAL_FLOW_IDS.some(wanted)) {
       scores.get(id).skipped = 'no report';
     }
   } else {
+    // `M162-02`, DECIDED BY `M176f`. Every `flow()` fragment is recorded as it is used, so the
+    // check below can ask which tests in this file no plant names — at run time, off the calls
+    // themselves, never by grepping this file for `flow('…')`. A hand-rolled parser of a source
+    // file's own literals is `M166`'s trap wearing a census's clothes.
+    const claimedFragments = [];
     /** One test's steps, with the three questions every plant below asks of them. */
     const flow = (fragment) => {
+      claimedFragments.push(fragment);
       const test = named(report, fragment);
       const steps = stepsOf(test);
       const find = (re) => steps.filter((s) => re.test(s.source));
@@ -1344,16 +1350,63 @@ if (REAL_FLOW_IDS.some(wanted)) {
     // someone else's documented flake into this gate and go red on a build with nothing wrong with
     // it. Each row's own test is asserted green by `flowIsGreen`; what is left to check is that no
     // row is silently grading a test that has been renamed out from under it.
-    const flows = ['receipt link genuinely opens a second browser tab', 'double click and right click are real',
-      'Quick View modal traps focus', 'Category <select> really filters', "a11y-demo's accessible checkbox tick/untick",
-      'cart rows are drag-drop reorderable', "support page's drop-zone accepts a real file",
-      "payment gateway's real fetch is stubbed", 'render fixture: a masked snapshot',
-      'happy-path product and catalog pages have no accessibility violations', "a11y-demo's inaccessible section"];
+    // `M176f`: this was a hand-written list of the same eleven fragments the `flow()` calls above
+    // already pass — one fact written down twice, in the file whose milestone merged two copies of
+    // `GRADERS` for exactly that (`M163-02`). It is the recorded calls now, so a renamed fragment
+    // cannot be checked against a stale copy of itself.
+    const flows = [...new Set(claimedFragments)];
     const missing = flows.filter((f) => !named(report, f));
     for (const id of REAL_FLOW_IDS) {
       if (!wanted(id)) continue;
-      precision(id, missing.length === 0, `all 11 flows this batch names are still in the evidence file (missing: ${missing.join('; ') || 'none'})`);
+      precision(id, missing.length === 0, `all ${flows.length} flows this batch names are still in the evidence file (missing: ${missing.join('; ') || 'none'})`);
     }
+
+    // `M162-02`, DECIDED BY `M176f`. THE NAMING IS ASSERTED; THE FILE-WIDE PASS IS NOT.
+    //
+    // The row asks whether the file-wide assertion should come back. `M162b` removed the flake that
+    // was the stated reason for leaving it out, so the contingent objection is gone — but the
+    // structural one is not, and it is the one the grader's own comment above makes: asserting
+    // *every test in this file passed* imports the whole file's stability into a roster gate, and
+    // conflates two different failures under one red — a plant that stopped discriminating, and an
+    // unrelated test that broke.
+    //
+    // What the row actually reports is a **reporting** harm, and it is worth quoting: at
+    // `M154g-06`'s threshold four tests in this file failed and only two of them were graded by a
+    // plant, so *"a reader of the gate's output sees two rows go red and has no way to learn that
+    // four tests did"*. That is a gate whose reach is narrower than its output's claim — this
+    // milestone's subject — and the cure is not to widen the assertion but to make the gap
+    // impossible to miss. Measured 2026-09-06: **16 tests, 11 named, 5 named by nothing.**
+    //
+    // So every test in the evidence file is either claimed by a `flow()` fragment or listed below
+    // with what it would take to claim it, and a test in neither turns this red. `D895`: a hand
+    // list that fails loudly on a member it does not know beats a declaration that it might be
+    // incomplete. The list is held in both directions, so an entry for a test that no longer exists
+    // is also a failure — a declaration about nothing is `D767`'s shape.
+    const UNCLAIMED = [
+      ['row-scoped add-to-cart on a page of a dozen identical buttons',
+       'named by `M154g-06` as one of the two failures the gate could not report. It is `within`-scoped resolution over identical siblings plus an async toast; the constructs are graded singly by `C13`-`C18` and `C36`, and no row states what this *combination* answers'],
+      ['a full checkout — product page, cart, the iframe payment widget',
+       "the other of `M154g-06`'s two. Four surfaces and a real network request in one test; claiming it needs a known answer about the composition, not about any one construct in it"],
+      ['reviews: a first submission succeeds, a duplicate 409s',
+       'the test whose documented flake was the stated reason this batch asserts no file-wide pass. `M162b` removed the flake; the row was never written'],
+      ['the virtualized catalog filters through a placeholder-only field',
+       'virtualisation is a property of the fixture page rather than of a tflw construct, so there is no manifest id for it to be the known answer of'],
+      ["the cart's Remove confirm() dialog",
+       '`C43` grades `dialog type` and `C2` the message; what is unclaimed here is the *effect* — dismiss keeps the item, accept issues a real DELETE — which is a claim about the storefront, not about the dialog construct'],
+    ];
+    const testNames = (report?.tests ?? []).map((t) => t.name).filter(Boolean);
+    const claims = (name) => flows.some((f) => name.includes(f)) || UNCLAIMED.some(([f]) => name.includes(f));
+    const orphanTests = testNames.filter((n) => !claims(n));
+    const deadEntries = UNCLAIMED.filter(([f]) => !testNames.some((n) => n.includes(f))).map(([f]) => f);
+    for (const id of REAL_FLOW_IDS) {
+      if (!wanted(id)) continue;
+      precision(id, orphanTests.length === 0 && deadEntries.length === 0,
+        `every one of the ${testNames.length} test(s) in the evidence file is either graded by a plant here (${flows.length}) or declared unclaimed (${UNCLAIMED.length})`
+        + `${orphanTests.length > 0 ? ` — named by nothing: ${orphanTests.join('; ')}` : ''}`
+        + `${deadEntries.length > 0 ? ` — declared unclaimed but not in the file: ${deadEntries.join('; ')}` : ''}`);
+      break; // one statement about the file, not fifteen copies of it
+    }
+    console.log(`  · ${testNames.length} test(s) in the evidence file — ${flows.length} graded by a plant, ${UNCLAIMED.length} declared unclaimed (\`M162-02\`)`);
   }
 }
 
@@ -3026,6 +3079,70 @@ if (wanted('C112')) {
 // =============================================================================
 // the table
 // =============================================================================
+
+// ---------------------------------------------------------------------------------------------
+// C114 — a locator in SUBJECT position is judged; the same locator in ACTION position is not
+// ---------------------------------------------------------------------------------------------
+//
+// `M176c`, `D906`. Check-only, so it opens no browser and no stack — the whole claim is made by
+// `tflw check` reading one file. Three legs, and each is asserted separately because they fail in
+// three different directions:
+//
+//   1. recall    — the incompatible pairing IS refused, and the refusal names the subject's KIND.
+//   2. precision — the compatible pairing is NOT refused. Without this the row would be green
+//                  under the opposite defect (a checker that rejects every locator subject), which
+//                  is `M168`'s "a guard must leave the guarded thing reachable" on a diagnostic.
+//   3. precision — the identical locator text in ACTION position is not judged at all. This is the
+//                  one that makes the row about *position* rather than about `TF042`, which `C59`
+//                  already rosters by reference and grades on a value subject.
+if (wanted('C114')) {
+  const REL = 'tests/.checkonly/subject-position-locator.tflw';
+  console.log(`\nC114 — a locator as a subject\n  target: ${REL} — \`tflw check\`, three legs, no stack`);
+  const out = runCheck([REL]);
+  const codes = out.match(/TF\d{3}/g) ?? [];
+  // A needle that is not in the file must REFUSE, never resolve to a number. `findIndex` returns
+  // -1 and `+ 1` makes that `0`, which reads as a line and is not one — so a control that deletes a
+  // leg would have produced `line 0` in a message that otherwise looks like a measurement, which is
+  // `M166`'s "fails plausibly" inside the assertion written to prevent it. Caught by running the
+  // controls rather than by reading the code.
+  const lineOf = (needle) => {
+    const src = readFileSync(path.join(ROOT, REL), 'utf8').split('\n');
+    const i = src.findIndex((l) => l.includes(needle));
+    if (i === -1) {
+      fail(`C114 — \`${REL}\` no longer contains the leg \`${needle}\`. The fixture and this grader are `
+        + 'one statement; a missing leg is a broken plant, not a passing one.');
+      return null;
+    }
+    return i + 1;
+  };
+  const subjectLine = lineOf('expect button "Save" was made');
+  const compatibleLine = lineOf('expect button "Save" has count 2');
+  const actionLine = lineOf('click button "Save"');
+  const at = (n) => (n === null ? '(absent)' : String(n));
+
+  recall(
+    'C114',
+    /error\[TF042\]/.test(out) && /can't be used on a UI locator/.test(out),
+    `C114 the locator in subject position is judged by the kind rule, and the refusal names the kind (got: ${
+      (out.match(/error\[TF\d{3}\]: [^\n]*/) ?? ['no diagnostic at all'])[0]
+    })`,
+  );
+  recall(
+    'C114',
+    subjectLine !== null && new RegExp(`subject-position-locator\\.tflw:${subjectLine}:`).test(out),
+    `C114 the diagnostic points at line ${at(subjectLine)}, the subject-position leg`,
+  );
+  precision(
+    'C114',
+    codes.length === 1,
+    `C114 exactly one diagnostic from the whole file — the compatible pairing on line ${at(compatibleLine)} and the action-position use on line ${at(actionLine)} are both silent (got ${codes.length}: ${codes.join(', ') || 'none'})`,
+  );
+  precision(
+    'C114',
+    actionLine !== null && !new RegExp(`subject-position-locator\\.tflw:${actionLine}:`).test(out),
+    `C114 nothing is said about line ${at(actionLine)}, where the same locator text stands in action position and the kind rule is never consulted`,
+  );
+}
 
 console.log('\nper-plant precision and recall:\n');
 // `M154f-03`. Iterate the plants THIS gate grades, not every plant on the roster. Seven rows are

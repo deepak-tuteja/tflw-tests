@@ -103,12 +103,19 @@ if (!GRADEABLE.has(provenance.state)) {
 
 // --- the manifest, and what this repository claims about it -------------------
 
-if (spec.manifest !== 1) {
-  fail(
-    `\`tflw spec --json\` reports manifest version ${spec.manifest}; this gate was written against 1.\n` +
-      '    The version is pinnable precisely so a shape change is a red here rather than a silent misread.',
-  );
-}
+// `M176c`/`M176d`. **The manifest version is pinned in `lib/tflw-provenance.mjs`'s `readSpec`, not
+// here.** This gate carried the only pin in the repository — `spec.manifest !== 1` since `d7cf8cf`
+// (2026-08-25, `M154b`, `#36`) — and `M174`'s bump to 2 broke it on the first vendored build after
+// `#179`, which is `D538` working exactly as designed. What `M176d` measured is that "every
+// consumer breaks loudly" had, here, one consumer: one spawn site, four call sites, one comparison.
+// So the pin moved to the spawn site and this copy is deleted rather than updated — two places
+// holding one version is `M163-02`'s shape, closed in this same milestone.
+//
+// One correction rides along, because `M176` is the milestone about a claim outrunning its
+// mechanism. `PLAN_M174` §9 records that this repository *"pins no manifest version at all"* and
+// hands that absence to `M176` to file. It was false when written: the pin was twelve days old and
+// sat in the very file §9 cites. `M176-01` is what survives, and it is about reach, not absence.
+
 
 const manifestIds = spec.constructs.map((c) => c.id);
 const manifestById = new Map(spec.constructs.map((c) => [c.id, c]));

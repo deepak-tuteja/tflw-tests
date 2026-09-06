@@ -1,0 +1,18 @@
+# `C114` — `subject:locator`. A locator in SUBJECT position is read as a UI locator by the
+# matcher-compatibility rule; the identical locator text in ACTION position never reaches that rule
+# at all (`D906`). Check-only: every claim here is made by `tflw check`, so it opens no browser.
+#
+# Three legs, and the middle one is why this is not a diagnostic plant wearing a subject's clothes.
+# `C59` rosters `TF042` by reference and grades it on its own probe — `expect status is visible`,
+# a *value* subject. Nothing there says a locator is a subject at all. What this file states is
+# that the same six-spelling construct is admitted in subject position, judged there, and unjudged
+# one word to the left.
+test "a locator in subject position is judged, and in action position is not"
+  open "/"
+  # (1) subject position, incompatible matcher — refused, and the refusal names the KIND.
+  expect button "Save" was made
+  # (2) subject position, compatible matcher — clean. Without this leg the file would be green if
+  #     the checker refused every locator subject, which is the opposite of what the row claims.
+  expect button "Save" has count 2
+  # (3) action position, the same locator text — the kind rule is never consulted, so no diagnostic.
+  click button "Save"

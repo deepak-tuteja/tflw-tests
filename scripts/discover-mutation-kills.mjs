@@ -84,12 +84,6 @@ import { parseArgv, BOOLEAN, VALUE, REST } from './lib/argv.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const SIB = siblingRoot();
-// `released` — the vendored tarball, which is the build the plants actually run and therefore the
-// only one whose identity answers "is this mutation installed?". Asked through the resolver rather
-// than by hand so the question is declared, which is what `verify-tflw-resolution.mjs` exists to
-// require; it caught the hand-built path in this file's first draft.
-const { entry: CLI } = resolveTflw('released', { label: 'mutation-discovery' });
-
 // ── argv ─────────────────────────────────────────────────────────────────────────────────────
 // `M164-04`. The spec is the single source: `scripts/lib/argv.mjs` derives both the validation and
 // the readers from it, so a flag cannot be spelled here without being read. It replaces a `KNOWN`
@@ -116,6 +110,20 @@ if (!parsed.ok) {
 }
 const flag = (name) => parsed.values[name] ?? null;
 const has = (name) => parsed.values[name] === true;
+
+// `released` — the vendored tarball, which is the build the plants actually run and therefore the
+// only one whose identity answers "is this mutation installed?". Asked through the resolver rather
+// than by hand so the question is declared, which is what `verify-tflw-resolution.mjs` exists to
+// require; it caught the hand-built path in this file's first draft.
+//
+// **Below the argv block, not above it (`M170-01`).** It used to resolve 21 lines before
+// `parseArgv`, so a misspelled flag on a machine whose vendored build had diverged was reported as
+// an environment failure rather than as a usage mistake. `verify-argv-contract.mjs`'s own comment
+// had already written the fact down — *"resolves the vendored tflw bundle at module scope, above
+// its argv block"* — as a reason not to import this file, and never read it as a statement about
+// this file's own behaviour. A constraint noticed while designing an instrument is not thereby
+// noticed about the thing being measured.
+const { entry: CLI } = resolveTflw('released', { label: 'mutation-discovery' });
 
 // `--help` was in the old `KNOWN` set from the first draft with nothing reading it, so asking for
 // usage passed validation and started a multi-hour sweep under the box lock. That set looked like a

@@ -49,7 +49,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveTflw } from './lib/tflw-bin.mjs';
 import { GRADERS, PLANTS, PLANT_IDS, isPlantFinding, plantsFor } from './lib/plants.mjs';
-import { plantsFor as constructPlantsFor } from './lib/constructs.mjs';
+import { ALL_GRADERS, unclaimedGraders } from './lib/graders.mjs';
+import { plantsFor as constructPlantsFor, GRADERS as CONSTRUCT_GRADERS } from './lib/constructs.mjs';
 
 /**
  * **`D752` — the construct index, checked in both directions.**
@@ -1610,6 +1611,21 @@ function ledgerIds() {
   } else {
     const gatedPhases = [...new Set(Object.values(GRADERS).filter((g) => g.gated).map((g) => g.phase))];
     console.log(`✓ all ${PLANTS.length} plants name a grader, and every one of them names at least one gated grader (${gatedPhases.join(', ')})`);
+  }
+
+  // `M163-02`, the other direction. `gradersFor` already refuses a ledger naming a grader that does
+  // not exist; this refuses a grader that exists and no ledger names. Two tables could not ask this
+  // question at all — each one's unclaimed set was the other one's key set — which is the argument
+  // for merging them rather than merely correcting the copy that went stale.
+  const orphans = unclaimedGraders(GRADERS, CONSTRUCT_GRADERS);
+  if (orphans.length > 0) {
+    fail(
+      `\`lib/graders.mjs\` defines grader(s) no ledger claims: ${orphans.map((n) => `\`${n}\``).join(', ')}. ` +
+        'A grading script in the table and in neither ledger grades nothing, and its `gated: true` says otherwise.',
+    );
+  } else {
+    console.log(`✓ all ${Object.keys(ALL_GRADERS).length} graders in \`lib/graders.mjs\` are claimed by a ledger`
+      + ` — ${Object.keys(GRADERS).length} by the vulnerability ledger, ${Object.keys(CONSTRUCT_GRADERS).length} by the construct roster`);
   }
 }
 

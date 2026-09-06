@@ -58,33 +58,15 @@
  *  `apiV2/src/vuln/` is mounted, not eighteen facts. */
 const VULN_ROUTES = { pathPrefix: '/v1/vuln/' };
 
-/** The scripts that grade this ledger, and whether an automated pass runs them.
+import { gradersFor } from './graders.mjs';
+
+/** The four scripts that grade this ledger, selected from the one table in `lib/graders.mjs`.
  *
- *  `gated` is the field with teeth. `verify-security-acceptance.mjs` ran by hand and by nothing else
- *  until `M139-5` split it, which is the entire content of `M137e-01`. A row whose only graders are
- *  ungated is graded by nobody on any day nobody was looking.
- *
- *  **`input` was stale here for the whole of `M154g`, and `M163e`'s audit (`D828`) is what found it.**
- *  `M154g` step 5 (`D765`) gated Tier 3's grader — `input-acceptance` has been a `regression.mjs`
- *  phase since — and `lib/constructs.mjs`'s `GRADERS` was updated to say so while this copy was not.
- *  Two tables carrying one fact, and the one that went stale is the one
- *  `verify-security-acceptance.mjs` reads for its "graded only by ungated script(s)" check.
- *
- *  **The damage was available rather than done, and the distinction is measured, not assumed.** That
- *  check fires only when *every* grader on a plant is ungated; five plants name `input` (`V10`-`V14`)
- *  and none names it alone, so the false verdict had no subject. The next plant graded solely by
- *  Tier 3 would have been reported as graded by nobody — a gate telling the truth's opposite, in the
- *  exact words `M137e-01` exists to prevent.
- *
- *  Corrected rather than deduplicated. One table fed from the other is the right shape and is not
- *  this milestone's to build: they hold different key sets for different ledgers, and merging them
- *  is a change to both callers. Filed instead (`M163-02`). */
-export const GRADERS = {
-  security: { script: 'scripts/verify-security-acceptance.mjs --gate', phase: 'security-acceptance-gate', gated: true },
-  sarif: { script: 'scripts/verify-sarif-acceptance.mjs', phase: 'sarif-acceptance', gated: true },
-  hidden: { script: 'scripts/verify-vuln-slice-hidden.mjs', phase: 'vuln-slice-hidden-check', gated: true },
-  input: { script: 'scripts/verify-input-acceptance.mjs', phase: 'input-acceptance', gated: true },
-};
+ *  It was defined here in full until `M176e` closed `M163-02`, and the stale `input` entry that
+ *  finding is named for lived in this copy. The rationale, the measurement and the reason `security`
+ *  lost its unread `--gate` suffix are all recorded there; what is left here is the claim — these
+ *  four and no others — which `gradersFor` refuses to satisfy with a name that does not exist. */
+export const GRADERS = gradersFor(['security', 'sarif', 'hidden', 'input']);
 
 export const PLANTS = [
   // --- Tier 1: claims a response makes about itself ------------------------------------------------

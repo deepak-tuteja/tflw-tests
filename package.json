@@ -46,6 +46,7 @@
     "verify:tflw-resolution": "node scripts/verify-tflw-resolution.mjs",
     "verify:provenance": "node scripts/verify-provenance.mjs",
     "verify:provenance:self-test": "node scripts/verify-provenance.mjs --self-test",
+    "verify:build-provenance:self-test": "node scripts/lib/tflw-provenance.mjs --self-test",
     "verify:notation-parity": "node scripts/verify-notation-parity.mjs",
     "verify:notation-parity:self-test": "node scripts/verify-notation-parity.mjs --self-test",
     "refresh:own-identifiers": "node scripts/refresh-own-identifiers.mjs",

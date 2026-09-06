@@ -73,6 +73,7 @@ npm run verify:sweep-size
 npm run verify:tflw-resolution
 npm run verify:provenance
 npm run verify:provenance:self-test
+npm run verify:build-provenance:self-test
 npm run verify:notation-parity
 npm run verify:notation-parity:self-test
 npm run verify:construct-coverage
@@ -224,6 +225,17 @@ xvfb-run -a npm run regression -- --group security-ui
   `PLAN_*.md` or `PROGRESS.md`. Omitting an identifier is not a red — it is a wrong answer nobody
   is told about, which is why this is a discipline rather than a convenience.
 
+- **`npm run verify:build-provenance:self-test`** — **`verify:construct-coverage` below refuses to
+  grade unless the vendored build's provenance is `current`, and CI cannot check which state a
+  build lands in.** `refresh-tflw` makes the vendored build and the sibling the same commit in CI
+  by construction, so provenance there is always `current`; every other branch of that state
+  machine exists only on a machine where somebody works. That is how `diverged`, whose advice is
+  *"look first"*, went on being the answer to an ordinary squash merge — this repository squashes
+  every pull request, so the commit `npm pack` recorded stops being reachable the moment the branch
+  lands (`testFlow M170-02`). The fourth state is `orphaned` and its fix is one command. This drives
+  all six git-answerable states against a **real throwaway repository** rather than a stubbed
+  `spawnSync`, because a stub would assert what this code already believes `git branch --contains`
+  prints. Milliseconds, no sibling checkout, no network.
 - **`npm run verify:construct-coverage`** — **every construct tflw ships is either graded here with
   a known answer or explicitly listed as not yet graded, and a new one is neither.** The construct
   set is not a list in this repository: it comes from `tflw spec --json`, emitted by the vendored

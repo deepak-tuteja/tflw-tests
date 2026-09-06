@@ -42,34 +42,16 @@
 // file whose entire purpose is that it goes down. Lowering it is the ordinary business of every
 // milestone after this one and needs no ceremony.
 
-/** The scripts that grade this ledger. Same shape and same purpose as `plants.mjs`'s `GRADERS`:
- *  `gated` is the field with teeth, because a row whose only grader runs by hand is a row nobody
- *  grades on any day nobody was looking — which is `M137e-01` exactly, filed against the previous
- *  ledger for the same reason. */
-export const GRADERS = {
-  coverage: { script: 'scripts/verify-construct-coverage.mjs', phase: '(acceptance-check job)', gated: true },
-  acceptance: { script: 'scripts/verify-construct-acceptance.mjs', phase: 'construct-acceptance', gated: true },
-  // `M154f` (`D752`). The security tier is not graded by `verify-construct-acceptance.mjs` and should
-  // not be: three gates already grade it, they have graded it for six milestones, and each states its
-  // known answers as *data* — `LEDGER`, `DECLINES`, `APPLICABILITY_PROBES` — rather than as prose in a
-  // plant row. `D724` folds `VULNS.md` in by reference rather than by duplication; this is the same
-  // move on the construct axis, and `D752` is what makes the reference an assertion instead of a
-  // claim.
-  security: { script: 'scripts/verify-security-acceptance.mjs', phase: 'security-acceptance-gate', gated: true },
-  // `M154g` step 5 (`D765`). Tier 3's grader, and the newest `gated: true` in this table — it was
-  // `gated: false` in everything but the field, because the field did not exist and the script ran
-  // nowhere. `D764` is what found it: three ratchet entries held themselves back on the sentence
-  // *"a Tier 3 assertion costs an order of magnitude more requests than a Tier 2 one (`D380`)"*, and
-  // `D380` does not say that — it decides that the ~45 real test files are Tier 3's negative corpus
-  // and its **volume measurement**, which is `sweep-input-volume.mjs`'s 240 observed requests and a
-  // different script entirely. Measured instead of argued: this grader costs 7 assertions and 80
-  // extra requests and finishes in **0.91-1.05 s** on `fedora-box`, against **1.70-1.99 s** for
-  // `security-acceptance-gate`, the Tier 1/2 phase the sweep has run since `M139-5` — six runs each,
-  // two days, two commits. The premise was not merely misattributed, it was inverted.
-  input: { script: 'scripts/verify-input-acceptance.mjs', phase: 'input-acceptance', gated: true },
-  redaction: { script: 'scripts/verify-redaction.mjs', phase: 'safety-redaction-check', gated: true },
-  diagnostics: { script: 'scripts/verify-check-diagnostics.mjs', phase: 'check-diagnostics', gated: true },
-};
+import { gradersFor } from './graders.mjs';
+
+/** The six scripts that grade this ledger, selected from the one table in `lib/graders.mjs`.
+ *
+ *  This copy and `lib/plants.mjs`'s overlapped on `security` and `input` and disagreed about both
+ *  at different times; `M176e` merged them for `M163-02`. `gradersFor` refuses a name the table does
+ *  not define, and `unclaimedGraders` refuses a grader neither ledger names. */
+export const GRADERS = gradersFor([
+  'coverage', 'acceptance', 'security', 'input', 'redaction', 'diagnostics',
+]);
 
 /**
  * One row per construct with a known answer.
@@ -2525,6 +2507,25 @@ export const PLANTS = [
     catches: 'a `unique like` whose distinctness went back to being probabilistic (it would move under a second seed, since the only way to draw is to consult the RNG), one that replays a value across a retried test\'s attempts, and one that silently wrapped its pattern instead of refusing to overflow it.',
     blockedOn: null,
   },
+  {
+    id: 'C114',
+    construct: 'subject:locator',
+    family: 'subject',
+    tier: 'check',
+    title: 'a locator in **subject** position is judged by the matcher-compatibility rule; the same locator in **action** position is not',
+    target: 'tests/.checkonly/subject-position-locator.tflw — three legs in one file, graded from `tflw check` alone; no browser, no stack',
+    evidence: {
+      file: 'tests/.checkonly/subject-position-locator.tflw',
+      pattern: '^\\s*expect button "Save" was made$',
+      min: 1,
+    },
+    graders: ['acceptance'],
+    knownAnswer:
+      'The file yields **exactly one** diagnostic: `TF042` on the `expect button "Save" was made` line, whose text names the subject KIND — *"`was made` can\'t be used on a UI locator"*. The other two legs are silent: `expect button "Save" has count 2` is a compatible pairing, and `click button "Save"` is the identical locator text one word to the left, where the kind rule is never consulted. `M176c` measured all three. The middle leg is load-bearing — without it this row would be green if the checker refused every locator subject, which is the opposite of the claim.',
+    catches:
+      "a locator ceasing to be a *subject*: either dropped from the kind rule (leg 1 goes silent and an incompatible pairing checks clean, then fails mid-run from the runtime's own matcher switch — `TF042`'s own founding scenario), or widened so that action position is judged too (leg 3 starts refusing `click`). `D906` is why this is not `locator:*` twice over: `C13`-`C18` each anchor their evidence on an ACTION-position use — `click text`, `fill field`, `within list`, `click css`, `click xpath` — measured, all five, so not one of them reaches `pollable()` or the compatibility check. And it is not `C59`'s `TF042` again either: that roster grades the code on a *value* subject and says nothing about whether a locator is a subject at all.",
+    blockedOn: null,
+  },
 ];
 
 /**
@@ -2609,6 +2610,64 @@ export const expandReferenceRosters = (manifestConstructs) =>
  * exercised*. `step:api` sits here with 1139 occurrences behind it.
  */
 export const RATCHET = [
+  // --- subject (15) ---
+  //
+  // **`M176c`. The ratchet was empty and this puts fifteen back on it, and the number going up is
+  // the point rather than the embarrassment.** `M174` (`#177`, `44e2d79`) gave tflw a `subject`
+  // family: sixteen ids for the positions an `expect`/`check`/`capture` can read. They arrived in
+  // `tflw spec --json` on the first `refresh-tflw` after that merge, on neither list, and this gate
+  // went red the same minute — which is the anti-regression property `D730` was written for, doing
+  // exactly its job across a repository boundary.
+  //
+  // The arithmetic is `M154c`'s precedent said again: **`0 + 16 − 1`**. Sixteen constructs arrived
+  // at once because the denominator was corrected upwards, and one was rostered in the same
+  // milestone (`C114`, `subject:locator`, `D906`). A remainder can only be honest about a
+  // denominator that has itself just moved.
+  //
+  // **Read `D739` before reading the fifteen, and read it harder here than anywhere else on this
+  // list.** `M176c` censused all sixteen across every plant fixture in this repository. Thirteen of
+  // them are exercised, several enormously: `subject:status` appears in **79** plant fixtures,
+  // `subject:body` in 62, `subject:locator` in 33, `subject:value` in 24. Not one of those uses is
+  // evidence for a row here, because in every one of them the *known answer is about something
+  // else* — the matcher, the step, the config key — and the subject is how the assertion reaches
+  // its data. A `RATCHET` entry says **no row states this construct's known answer**; on this
+  // family it says nothing whatever about how much traffic runs through it.
+  //
+  // So the exits are grouped by what each would actually cost, and the groups are three.
+  //
+  // **(a) The claim is missing and the surface is already here** — `status`, `body`, `body-csv`,
+  // `body-bytes`, `body-pdf-text`, `page`, `response`, `network-request`, `dialog-message`,
+  // `dialog-type`, `value`. Each has at least one plant fixture reading it today, so the exit is a
+  // row whose known answer moves when *the subject's own read* breaks and not when its matcher
+  // does. That discrimination is the whole cost, and `C114` is the worked example of paying it:
+  // the leg that mattered was the compatible pairing, without which the row would have been green
+  // under the opposite defect.
+  //
+  // **(b) No plant fixture reads it at all** — `duration`, `header`, `body-text`. Measured at zero
+  // across all 113 plants. These need a fixture before they can need a claim, which is the more
+  // expensive half and the honest reason they are not being cleared in the same milestone that
+  // filed them.
+  //
+  // **(c) Spun out by name** — `request`. Two plant fixtures (`C6`, `C7`) read it, and
+  // `PLAN_M96_VALUE_SUBJECT.md` is scoped and unstarted; `D904`'s exhaustiveness map is what will
+  // make that plan's roster obligation checkable rather than remembered.
+  //
+  // None of the fifteen is blocked on tflw. Every one of them is this repository's to write.
+  'subject:status',
+  'subject:duration',
+  'subject:header',
+  'subject:body',
+  'subject:body-text',
+  'subject:body-bytes',
+  'subject:body-csv',
+  'subject:body-pdf-text',
+  'subject:request',
+  'subject:network-request',
+  'subject:page',
+  'subject:response',
+  'subject:dialog-message',
+  'subject:dialog-type',
+  'subject:value',
   // --- declaration (0) ---
   // The family `M154a` missed and `M154c`/`D742` added: twelve constructs, of which `after` and
   // `retry` were rostered above, `crawl` left at `M154f` (`C56`), the four that decide **which
@@ -2858,8 +2917,24 @@ export const RATCHET = [
  * rostered in the same milestone; the arithmetic was `163 + 12 - 9`. What the ratchet measures is
  * the unrostered remainder, and a remainder can only be honest about a denominator that has itself
  * just been corrected upwards.
+ *
+ * **And it has now gone up a second time, `0` → `15` (`M176c`), for the same reason and from
+ * zero.** `M174` added tflw's `subject` family: sixteen ids arrived in one `refresh-tflw`, one was
+ * rostered in the same milestone (`C114`, `D906`), and the arithmetic is `0 + 16 - 1`. Two things
+ * are worth saying about it rather than letting the integer speak.
+ *
+ * First, this is the pin working, not failing. The list had reached empty and the gate could have
+ * been read as finished; instead a shape change one repository over put fifteen unrostered
+ * constructs into the census and turned this red on the first vendored build after the merge. A
+ * ceiling that can only ever have been satisfied is `D722`'s "a gate whose presence is not
+ * evidence"; this one has now been contradicted twice by reality and both times said so.
+ *
+ * Second, a rise costs two edits in two files **and a reason in prose**, and the reason is the
+ * expensive part on purpose. The fifteen entries above carry their exits grouped by what each would
+ * cost — the claim is missing (11), no fixture exists at all (3), spun out by name (1) — so the next
+ * milestone to lower this number can start from a measurement instead of from a re-reading.
  */
-export const RATCHET_CEILING = 0;
+export const RATCHET_CEILING = 15;
 
 /**
  * `CONSTRUCTS.md` carries one row per plant and prose a human reads; this asserts their id sets

@@ -229,6 +229,18 @@ jobs:
         run: npm run verify:provenance:self-test
         working-directory: testFlow-tests
 
+      # `M170-02`, `M176b`. The gate two steps below REFUSES on a build whose provenance is not
+      # `current`, so which state a build lands in decides whether anyone can grade anything — and
+      # CI is structurally unable to exercise that: `refresh-tflw` above makes the vendored build
+      # and the sibling the same commit by construction, so provenance here is always `current`.
+      # Every other branch of that state machine exists only where a human works, which is how
+      # `diverged` — the branch that says "look first" — went on being the answer to the ordinary
+      # squash merge for four days. This drives all six git-answerable states against a real
+      # throwaway repository, including the orphan a squash actually produces.
+      - name: The build-provenance state machine answers each state on a real repository
+        run: npm run verify:build-provenance:self-test
+        working-directory: testFlow-tests
+
       # M154b (`D723`, `D727`, `D730`, `D741`). Static — it reads one JSON document out of the
       # binary and compares some sets — and in THIS job for the load-bearing reason the three steps
       # above share: it is the only job that checks out both repositories, and this gate's ground
@@ -295,10 +307,14 @@ jobs:
       # index arithmetic over raw `argv`, two independently written things that nothing made agree.
       # There is now one table, and both are projections of it.
       #
-      # This gate drives that table's parser through the twelve inputs, and — because a case the old
-      # parser also passed proves nothing — reimplements the old parser and refuses if a case marked
-      # discriminating is not actually different. Static, milliseconds, no stack.
-      - name: The census script's flags are validated and read from one table
+      # This gate drives that table's parser through every case the table declares, and — because a
+      # case the old parser also passed proves nothing — reimplements the old parser and refuses if a
+      # case marked discriminating is not actually different. Static, milliseconds, no stack.
+      #
+      # The count that used to sit in the line above ("the twelve inputs", against a gate printing 23)
+      # is gone rather than corrected — `M170-03`, `D767`: a number in prose that nothing reads is a
+      # copy with no guard, and the second copy of a number is the defect whatever its value.
+      - name: Two scripts' flags are validated and read from one table
         run: npm run verify:argv-contract
         working-directory: testFlow-tests
 
