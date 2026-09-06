@@ -29,7 +29,7 @@ function ok(label, condition, detail = '') {
 }
 
 execSync(
-  `${TFLW} run --only "row-scoped add-to-cart on a page of a dozen identical buttons, with its async toast" --no-color tests/mixed/storefront.tflw`,
+  `${TFLW} run --only "row-scoped add-to-cart on a search-filtered catalog row, with its async toast" --no-color tests/mixed/storefront.tflw`,
   { cwd: ROOT, stdio: 'inherit' },
 );
 
