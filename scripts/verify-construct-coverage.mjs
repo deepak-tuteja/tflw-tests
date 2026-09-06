@@ -103,9 +103,20 @@ if (!GRADEABLE.has(provenance.state)) {
 
 // --- the manifest, and what this repository claims about it -------------------
 
-if (spec.manifest !== 1) {
+// `M176c`. **2 since `M174` (`#177`, `44e2d79`), which added the `subject` family.** The bump is
+// `D538` working as designed: tflw changed the manifest's shape, this pin went red on the first
+// `refresh-tflw` after the merge, and that red was `D511`'s accepted window rather than a surprise.
+//
+// One correction rides along, because `M176` is the milestone about a claim outrunning its
+// mechanism. `PLAN_M174` §9 recorded that the sibling *"pins no manifest version at all"* and handed
+// that absence to `M176` to file. It is false, and was false when written: this line has pinned the
+// version since `d7cf8cf` (2026-08-25, `M154b`, `#36`) — twelve days earlier, in the very file §9
+// cites. What survives is narrower and is `M176-01`: **8 scripts here invoke `tflw spec --json`, 1
+// pins the version** (this one) and 1 more checks only that it is a number
+// (`lib/tflw-provenance.mjs:85`). So `D538`'s loud break for every consumer is, here, one consumer.
+if (spec.manifest !== 2) {
   fail(
-    `\`tflw spec --json\` reports manifest version ${spec.manifest}; this gate was written against 1.\n` +
+    `\`tflw spec --json\` reports manifest version ${spec.manifest}; this gate was written against 2.\n` +
       '    The version is pinnable precisely so a shape change is a red here rather than a silent misread.',
   );
 }

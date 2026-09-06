@@ -3027,6 +3027,70 @@ if (wanted('C112')) {
 // the table
 // =============================================================================
 
+// ---------------------------------------------------------------------------------------------
+// C114 — a locator in SUBJECT position is judged; the same locator in ACTION position is not
+// ---------------------------------------------------------------------------------------------
+//
+// `M176c`, `D906`. Check-only, so it opens no browser and no stack — the whole claim is made by
+// `tflw check` reading one file. Three legs, and each is asserted separately because they fail in
+// three different directions:
+//
+//   1. recall    — the incompatible pairing IS refused, and the refusal names the subject's KIND.
+//   2. precision — the compatible pairing is NOT refused. Without this the row would be green
+//                  under the opposite defect (a checker that rejects every locator subject), which
+//                  is `M168`'s "a guard must leave the guarded thing reachable" on a diagnostic.
+//   3. precision — the identical locator text in ACTION position is not judged at all. This is the
+//                  one that makes the row about *position* rather than about `TF042`, which `C59`
+//                  already rosters by reference and grades on a value subject.
+if (wanted('C114')) {
+  const REL = 'tests/.checkonly/subject-position-locator.tflw';
+  console.log(`\nC114 — a locator as a subject\n  target: ${REL} — \`tflw check\`, three legs, no stack`);
+  const out = runCheck([REL]);
+  const codes = out.match(/TF\d{3}/g) ?? [];
+  // A needle that is not in the file must REFUSE, never resolve to a number. `findIndex` returns
+  // -1 and `+ 1` makes that `0`, which reads as a line and is not one — so a control that deletes a
+  // leg would have produced `line 0` in a message that otherwise looks like a measurement, which is
+  // `M166`'s "fails plausibly" inside the assertion written to prevent it. Caught by running the
+  // controls rather than by reading the code.
+  const lineOf = (needle) => {
+    const src = readFileSync(path.join(ROOT, REL), 'utf8').split('\n');
+    const i = src.findIndex((l) => l.includes(needle));
+    if (i === -1) {
+      fail(`C114 — \`${REL}\` no longer contains the leg \`${needle}\`. The fixture and this grader are `
+        + 'one statement; a missing leg is a broken plant, not a passing one.');
+      return null;
+    }
+    return i + 1;
+  };
+  const subjectLine = lineOf('expect button "Save" was made');
+  const compatibleLine = lineOf('expect button "Save" has count 2');
+  const actionLine = lineOf('click button "Save"');
+  const at = (n) => (n === null ? '(absent)' : String(n));
+
+  recall(
+    'C114',
+    /error\[TF042\]/.test(out) && /can't be used on a UI locator/.test(out),
+    `C114 the locator in subject position is judged by the kind rule, and the refusal names the kind (got: ${
+      (out.match(/error\[TF\d{3}\]: [^\n]*/) ?? ['no diagnostic at all'])[0]
+    })`,
+  );
+  recall(
+    'C114',
+    subjectLine !== null && new RegExp(`subject-position-locator\\.tflw:${subjectLine}:`).test(out),
+    `C114 the diagnostic points at line ${at(subjectLine)}, the subject-position leg`,
+  );
+  precision(
+    'C114',
+    codes.length === 1,
+    `C114 exactly one diagnostic from the whole file — the compatible pairing on line ${at(compatibleLine)} and the action-position use on line ${at(actionLine)} are both silent (got ${codes.length}: ${codes.join(', ') || 'none'})`,
+  );
+  precision(
+    'C114',
+    actionLine !== null && !new RegExp(`subject-position-locator\\.tflw:${actionLine}:`).test(out),
+    `C114 nothing is said about line ${at(actionLine)}, where the same locator text stands in action position and the kind rule is never consulted`,
+  );
+}
+
 console.log('\nper-plant precision and recall:\n');
 // `M154f-03`. Iterate the plants THIS gate grades, not every plant on the roster. Seven rows are
 // graded by reference under `D751` — `security`, `diagnostics`, `redaction` — and this driver never
