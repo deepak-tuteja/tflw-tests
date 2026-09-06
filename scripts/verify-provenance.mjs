@@ -293,11 +293,34 @@ export const EXCLUSIONS = [
     why: 'an SVG path is written in a language where `M<n>` means *moveto*; tflw measured its own three SVGs and every hit was a coordinate',
     test: (path) => IMAGE_EXT.has(extname(path).toLowerCase()),
   },
-  {
-    label: 'lockfile',
-    why: 'a `sha512-` digest tail parses as a citation and cannot be told from one by any grammar — `M7w` comes out of `apiV2/package-lock.json`, which is how tflw arrived at the same exclusion from the other side of the boundary',
-    test: (path) => /(?:^|\/)(?:package-lock\.json|yarn\.lock|pnpm-lock\.yaml)$/.test(path),
-  },
+  // `M171-02`, DECIDED AND DELETED BY `M176f`. There was a `lockfile` rule here, excluding
+  // `package-lock.json`/`yarn.lock`/`pnpm-lock.yaml` by path. Its stated reason was that *"a
+  // `sha512-` digest tail parses as a citation and cannot be told from one by any grammar"* —
+  // `M7w` really did come out of `…SJH+M7w==` in `apiV2/package-lock.json`, and the path rule
+  // really was the only thing between it and the corpus.
+  //
+  // `M171d` converged this file's `CITATION` onto tflw's, which brought `+` and `=` boundaries with
+  // it, and the grammar refuses the whole shape. The exclusion outlived its reason on the day of a
+  // change whose whole point was that it changed nothing (0 lost, 0 gained across 784 files). Its
+  // self-test is what made this a finding rather than a guess: it asserted *the exclusion is
+  // load-bearing*, so it went red naming the property — the mechanism working. `M171-02` recorded
+  // the open question rather than answering it, because *"keep it as defence in depth and an I/O
+  // saving"* and *"delete it, the grammar covers this now"* are a decision and not a repair.
+  //
+  // **Measured before deciding, which is what the row asked for.** Over the real corpus on the Mac:
+  // **5** tracked lockfiles (not the 3 the row was filed on — `inventory-service/` and
+  // `webV2/admin/` have since arrived, so the number in the finding had itself gone stale),
+  // **855,936 bytes, 15.4% of the tracked corpus by size** — and **0.6 ms** of the scan's 15.7 ms,
+  // yielding **0** identifiers. The I/O argument is worth six tenths of a millisecond.
+  //
+  // So it goes. Not because the saving is small, but because of what keeping it costs: this file's
+  // corpus would stay permanently 15.4% narrower than the claim it makes, on a reason that has
+  // expired — which is `M171-01` with the polarity reversed, in the milestone that spent `M176e`
+  // repairing two instances of exactly that. And an exclusion by path cannot tell you whether it is
+  // still needed; only the grammar can, and it is asked directly below.
+  //
+  // The property worth guarding survives and is now the only thing standing here: the self-test
+  // asserts the grammar refuses the digest ON ITS OWN, and says loudly if that regresses.
   {
     label: 'the manifest',
     why: 'a claim source, not a citation surface — `own-identifiers.json` LISTS the identifiers this repository defines, and reading a list of names as a list of citations is the same mistake one level up from `M169d1` §0.2, where a record that lists an unanchored identifier anchors it. Caught within the hour: `M169d2` shipped without this and the corpus grew by 19 identifiers that nothing cites, six of which then reported themselves as ambiguous',
@@ -403,7 +426,7 @@ export const DECLARED_UNRESOLVABLE = new Map([
   // itself as defaulting to this repository's own milestones — because it contains the pattern that
   // test looks for — and every bare `M`-form in it was blanked. The gate whose subject is which
   // sequence an identifier means was the last file in the repository not answering for its own.
-  ['M7w', '`verify-provenance.mjs` — the base64 tail of the `sha512-` digest quoted in the lockfile exclusion\'s reason and used as its self-test fixture. tflw declares the same identifier for the same shape in its own docblocks, which is two independent readings agreeing (`D711`)'],
+  ['M7w', '`verify-provenance.mjs` — the base64 tail of the `sha512-` digest this file keeps as a self-test fixture. It was also quoted in the `lockfile` exclusion\'s stated reason until `M176f` deleted that rule (`M171-02`); the fixture is what remains, and it is now the *only* thing asserting that the grammar refuses a digest, which is why it earns its place here rather than being tidied away with the rule it used to justify. tflw declares the same identifier for the same shape in its own docblocks, which is two independent readings agreeing (`D711`)'],
   ['M404b', '`verify-provenance.mjs` — the invented half of the self-test\'s planted citation, `a comment mentioning D404 and M404b`. `D404` is a real tflw decision and resolves; only the `M` half is fictional, which is why the plant tests the grammar rather than the index'],
   ['M154i', '`verify-provenance.mjs` — names the false red this gate produced against a tree `rsync` carried and git did not. Minted in that comment and referred back to once in tflw\'s `M164-12` row; a mention is not an anchor, and `M154a`-`M154h` are all anchored where this one never was'],
 ]);
@@ -764,14 +787,16 @@ function selfTest() {
   const lockRule = EXCLUSIONS.find((r) => r.label === 'lockfile');
   const dataRule = EXCLUSIONS.find((r) => r.label === 'recorded data');
   const inDigest = [...citationsOf(digest)];
-  if (inDigest.length === 0) {
-    ok('the grammar refuses a `sha512-` tail on its own (`+`/`=` boundaries, arrived with `M171d`’s convergence) — the lockfile path rule is no longer what stands between it and the corpus');
-  } else if (lockRule.test('apiV2/package-lock.json')) {
-    no('the grammar refuses a `sha512-` tail on its own',
-       `it read ${inDigest.join(' ')} out of a digest, so the lockfile path rule is load-bearing again — that is a REGRESSION of the convergence, not a new exclusion to write`);
+  if (inDigest.length === 0 && lockRule === undefined) {
+    ok('the grammar refuses a `sha512-` tail on its own (`+`/`=` boundaries, `M171d`’s convergence), and no path rule stands behind it — `M176f` deleted the one that did');
+  } else if (inDigest.length === 0) {
+    // Not a pass. `M176f` deleted the path rule precisely because the grammar makes it redundant;
+    // a rule reappearing here means somebody re-added the exclusion without re-opening the decision.
+    no('the lockfile exclusion is gone and stays gone (`M171-02`)',
+       'the grammar refuses the digest on its own, and a `lockfile` path rule is back in `EXCLUSIONS`. Re-read `M171-02` before restoring it: measured, it saved 0.6 ms of a 15.7 ms scan and cost 15.4% of the corpus');
   } else {
-    no('a digest is refused by grammar or by path',
-       `the grammar read ${inDigest.join(' ')} and no path rule excludes the lockfile`);
+    no('the grammar refuses a `sha512-` tail on its own',
+       `it read ${inDigest.join(' ')} out of a digest. That is a REGRESSION of \`M171d\`'s convergence, and since \`M176f\` there is no path rule behind it — the digest would now reach the corpus. Fix the grammar; do not re-add the exclusion`);
   }
   if (dataRule.test('tflw-acceptance/mutation/kill-matrix.jsonl') && !dataRule.test('scripts/regression.mjs')) {
     ok('the recorded-data exclusion takes the census rows and leaves the scripts');
