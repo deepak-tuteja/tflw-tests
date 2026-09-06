@@ -83,7 +83,23 @@ const PROVENANCE = (() => {
   } catch (e) {
     // A build too old to have `tflw spec` is itself the strongest possible staleness signal, so
     // this reports it as one rather than exiting — the corpora below still check fine against it.
-    return { state: 'stale', summary: `could not read a build stamp: ${e.message.split('\n')[0]}`, detail: '  This build predates `tflw spec` (M154a), which is itself evidence it is out of date.' };
+    //
+    // `M176d`: the *reason* is now read off the error rather than asserted. This branch stated one
+    // cause for every cause — a manifest whose version this repository is not written against was
+    // announced as a build that predates the command, which is a report giving a reason it never
+    // measured (`M176-02`, one repository over). The version case is genuinely different and is
+    // genuinely harmless here: this script reads the build stamp and nothing else out of the
+    // manifest, so its answers below stand, while the gates whose ground truth IS the manifest
+    // refuse. Saying so is the whole repair.
+    return {
+      state: 'stale',
+      summary: `could not read a build stamp: ${e.message.split('\n')[0]}`,
+      detail: e.code === 'TFLW_MANIFEST_VERSION'
+        ? '  The build emits a manifest shape this repository is not written against. This script reads only the\n' +
+          '  build stamp out of it, so the corpus answers below still hold; `verify-construct-coverage.mjs` and\n' +
+          '  `verify-check-diagnostics.mjs`, whose ground truth is the manifest itself, refuse instead.'
+        : '  This build predates `tflw spec` (M154a), which is itself evidence it is out of date.',
+    };
   }
 })();
 announceProvenance('check-acceptance', PROVENANCE);

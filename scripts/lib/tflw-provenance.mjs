@@ -59,6 +59,14 @@ export const SIBLING_ROOT = path.join(ROOT, '..', 'testFlow');
  * @param {string} entry absolute path to a tflw `cli.cjs`
  * @returns {{ manifest: number, build: object, constructs: Array<object> }}
  */
+/**
+ * The manifest shape every gate in this repository is written against (`M176d`, `D538`).
+ *
+ * Bumped by tflw, never by this repository — `M174` took it 1 → 2 when the `subject` family landed
+ * (`#177`, `44e2d79`), and the first `refresh-tflw` after that merge is what turned this red.
+ */
+export const SPEC_MANIFEST_VERSION = 2;
+
 export function readSpec(entry) {
   const r = spawnSync(process.execPath, [entry, 'spec', '--json'], {
     encoding: 'utf8',
@@ -84,6 +92,38 @@ export function readSpec(entry) {
   }
   if (!Array.isArray(parsed.constructs) || typeof parsed.manifest !== 'number') {
     throw new Error('`tflw spec --json` emitted a document with no `manifest` version or no `constructs` array.');
+  }
+  // `M176d`, `M176-01`. **The version is pinned here, once, where the manifest is read.**
+  //
+  // `D538` requires a shape change to break loudly for *every* consumer, and `M174` bumped
+  // `SPEC_MANIFEST_VERSION` to 2 on exactly that argument. Measured on this repository afterwards,
+  // the argument had one consumer: `tflw spec --json` is spawned from **one** place — this function
+  // — with four call sites, and only `verify-construct-coverage.mjs` compared the number to
+  // anything. The other three took the document and read on. This line asserted `typeof … ===
+  // 'number'`, which is a shape check that any reshaped manifest passes.
+  //
+  // The repair is not eight pins. Eight copies of an integer is `D767` eight times over, and this
+  // repository has just spent `M163-02` merging two copies of one table for that reason. It is one
+  // pin at the single point every reader already funnels through, so a consumer inherits the loud
+  // break by reading the manifest at all rather than by remembering to check.
+  //
+  // A throw rather than a `fail()`: the two checks above it throw for the same class of reason, and
+  // a gate whose ground truth is a document it cannot interpret has nothing to grade. That is
+  // `D741`'s rule about a build this repository is not current with, one field along.
+  if (parsed.manifest !== SPEC_MANIFEST_VERSION) {
+    // The error is TYPED, not just worded. `check-acceptance.mjs` catches every failure here and
+    // reports it rather than refusing — deliberately, `D737` — but its message named one cause
+    // ("this build predates `tflw spec`") for every cause, so a version mismatch would have been
+    // announced as an absent command. That is `M176-02`'s defect exactly: a report stating a reason
+    // it never measured. A caller that wants to distinguish reads `err.code`; nobody parses prose.
+    const err = new Error(
+      `\`tflw spec --json\` reports manifest version ${parsed.manifest}; every gate here is written ` +
+        `against ${SPEC_MANIFEST_VERSION}.\n` +
+        '  The version is pinnable precisely so a shape change is a red here rather than a silent\n' +
+        '  misread. Read the sibling\'s change, then move this constant and whatever it broke.',
+    );
+    err.code = 'TFLW_MANIFEST_VERSION';
+    throw err;
   }
   return parsed;
 }
