@@ -219,6 +219,20 @@ jobs:
         run: npm run verify:provenance
         working-directory: testFlow-tests
 
+      # `M163-01`, `M178a`. `D828`'s grader audit was a hand pass, and a hand pass is a date. This is
+      # the standing version: every script in `scripts/` is reachable from a regression phase, a
+      # `package.json` entry or a `run:` line here, or it names itself in the gate's `EXEMPT` list
+      # with the reason it grades nothing. It reads the phase table through
+      # `regression.mjs --list-phases` rather than by grepping, so it costs one node start and no
+      # stack. Its first real run caught itself, which is the shortest possible demonstration.
+      - name: Every grader in scripts/ is reachable from something that runs
+        run: npm run verify:grader-reachability
+        working-directory: testFlow-tests
+
+      - name: The reachability gate's own controls fire on the input they exist for
+        run: npm run verify:grader-reachability:self-test
+        working-directory: testFlow-tests
+
       # `M169d1`. The step above reads two corpora now — resolution over every tracked non-prose
       # file, the escaping-link and `**Notation.**` rules over the 14 markdown ones — and a split
       # is indistinguishable from an accident unless something says what breaks when it is undone.

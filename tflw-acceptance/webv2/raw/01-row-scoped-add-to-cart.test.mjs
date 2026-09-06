@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { withPage, loginAsUserA, WEB_BASE, pollUntilVisible } from './_helpers.mjs';
 
-test('row-scoped add-to-cart on a page of a dozen identical buttons, with its async toast', async () => {
+test('row-scoped add-to-cart on a search-filtered catalog row, with its async toast', async () => {
   await withPage(async (page) => {
     await loginAsUserA(page);
     await page.goto(WEB_BASE + '/');

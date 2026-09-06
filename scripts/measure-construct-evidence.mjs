@@ -33,19 +33,25 @@
 // `M154g`'s own subject committed by `M154g`'s own instrument, one milestone after `M154f` caught
 // three graders doing it (`M154g-02`).
 //
-// **It was deleted rather than finished because its consumer no longer exists, not because it is
-// expensive.** `--probe` existed to sequence the rostering of the unrostered remainder — measure
-// which constructs are cheap to roster, do those first. That remainder is empty: the roster is
-// complete, `RATCHET` holds no entries and `RATCHET_CEILING` is 0. A cheap/expensive split computed
-// now would sequence nothing. The work got done by hand and came out right, which is evidence about
-// that plan and not a general licence — recorded here so the next reader of `M154g` step 1 learns
-// it from this paragraph rather than from an empty verb.
+// **It was deleted rather than finished because its consumer no longer existed at the time, not
+// because it is expensive.** `--probe` existed to sequence the rostering of the unrostered
+// remainder — measure which constructs are cheap to roster, do those first. When `D826` deleted it
+// that remainder was empty, so a cheap/expensive split would have sequenced nothing. The work got
+// done by hand and came out right, which is evidence about that plan and not a general licence —
+// recorded here so the next reader of `M154g` step 1 learns it from this paragraph rather than from
+// an empty verb.
+//
+// `M178a`: that paragraph stated the remainder's size as a literal and `M176c` refilled it, so the
+// sentence was false within hours (`M176-07`). The size is not restated here any more — it is in
+// `lib/constructs.mjs` and printed by `verify:construct-coverage` — and the deletion argument is
+// written against the state at the time, which is what it was actually about. Whether a refilled
+// ratchet is reason to rebuild `--probe` is a live question this file does not answer.
 //
 // **What this script still does, and what that is worth today.** It reports corpus *shape* — site
-// counts per construct — and it refuses to call that behaviour. Since `RATCHET` is empty it
-// currently iterates nothing and reports zeros; that is the correct answer to the question it asks,
-// not a malfunction. The `find` patterns are kept deliberately: `D827` names the roster-vacuity gate
-// (`M164`) as the instrument this repository actually lacks, and it wants them.
+// counts per construct — and it refuses to call that behaviour. It iterates whatever is on the
+// `RATCHET`, which is a number this paragraph deliberately does not restate. The `find` patterns are
+// kept deliberately: `D827` names the roster-vacuity gate (`M164`) as the instrument this repository
+// actually lacks, and it wants them.
 //
 // Discovery alone was never the measurement, and this script still refuses to print a
 // cheap/expensive verdict from it. That refusal is the point: reporting shape as if it were
@@ -82,7 +88,7 @@ const only = argv.includes('--only') ? argv[argv.indexOf('--only') + 1] : null;
       if (a === '--probe') {
         console.error('  It was specified and never implemented: it perturbed nothing, ran nothing, and its');
         console.error('  output was byte-identical to a bare run. Deleted rather than built because the');
-        console.error('  remainder it existed to sequence is empty (RATCHET_CEILING is 0). This script reports');
+        console.error('  remainder it existed to sequence was empty at the time. This script reports');
         console.error('  corpus shape only, and no instrument here turns that into behaviour.');
       }
       console.error('  usage: node scripts/measure-construct-evidence.mjs [--only <id>] [--json]');
@@ -149,6 +155,39 @@ const PROBES = {
   'generator:random-like':     { find: /\brandom\s+like\b/ },
   'generator:random-uuid':     { find: /\brandom\s+uuid\b/ },
   'generator:random-password': { find: /\brandom\s+password\b/ },
+
+  // --- subject (13 of 15) ---
+  //
+  // `M178a` (`M178-01`). `M176c` put fifteen `subject:*` ids on the `RATCHET` and this table had
+  // none of them, so `discover()` fell through its `if (probe?.find)` and scored every one
+  // `expensive:no-sites` — the script printed **"15 have NO corpus site at all"** about fifteen
+  // constructs it had never searched for. `subject:status` has **1357** sites in 204 files.
+  //
+  // Each pattern below was measured against the corpus before it was written, not derived from the
+  // grammar: `expect status equals 200`, `capture body.accessToken as adminToken`. The subject is
+  // the first word after the assertion or capture keyword, which is why these anchor on that keyword
+  // rather than on a line start alone — a bare `\bstatus\b` matches prose in a comment and the
+  // docblock above is explicit that an over-broad pattern is the failure this script must not have.
+  //
+  // **`subject:network-request` and `subject:value` are deliberately absent.** The analogous pattern
+  // finds no site for either, and this repository's vendored build is `manifest 2`'s predecessor —
+  // 183 constructs, not 199 — so their written forms cannot be read back from `tflw spec --json`
+  // here to tell a true zero from a wrong spelling. An unverified pattern that returns zero is the
+  // exact defect this block repairs, one spelling further along, so they stay unprobed and the
+  // report says `NO PROBE` rather than `NO SITES`.
+  'subject:status':          { find: /^\s*(expect|check|capture)\s+status\b/ },
+  'subject:duration':        { find: /^\s*(expect|check|capture)\s+duration\b/ },
+  'subject:header':          { find: /^\s*(expect|check|capture)\s+header\b/ },
+  'subject:body':            { find: /^\s*(expect|check|capture)\s+body(?:[\s.[]|$)/ },
+  'subject:body-text':       { find: /^\s*(expect|check|capture)\s+body\s+text\b/ },
+  'subject:body-bytes':      { find: /^\s*(expect|check|capture)\s+body\s+bytes\b/ },
+  'subject:body-csv':        { find: /^\s*(expect|check|capture)\s+body\s+csv\b/ },
+  'subject:body-pdf-text':   { find: /^\s*(expect|check|capture)\s+body\s+pdf\s+text\b/ },
+  'subject:request':         { find: /^\s*(expect|check|capture)\s+request\b/ },
+  'subject:page':            { find: /^\s*(expect|check|capture)\s+page\b/ },
+  'subject:response':        { find: /^\s*(expect|check|capture)\s+response\b/ },
+  'subject:dialog-message':  { find: /^\s*(expect|check|capture)\s+dialog\s+message\b/ },
+  'subject:dialog-type':     { find: /^\s*(expect|check|capture)\s+dialog\s+type\b/ },
 };
 
 /** Config constructs live in `tflw.config` files, not in `.tflw` bodies, so they scan separately. */
@@ -173,9 +212,23 @@ const CONFIG_PROBES = {
   'config:probe:traversal': /\btraversal\b/,
 };
 
+// `M178a` (`M178-02`). The walk used to skip three names and take everything else, which meant the
+// corpus was *the working tree* rather than the repository — so any `.tflw` anybody had left lying
+// around counted. Measured when the subject probes landed: `tests/.scratch/m162/arm-b.tflw` alone
+// contributed **240** `subject:status` sites and 120 `subject:body` sites, and the four untracked
+// files together supplied 300 of the 1657 this script reported — **18%** of the published number,
+// from files no reviewer would call corpus. One of them was a probe fixture this very session had
+// written an hour earlier, which is the cleanest possible demonstration: the instrument was reading
+// its own operator's scratch and reporting it as a property of the repository.
+//
+// Scratch is excluded by name rather than by asking git, because `exec.mjs` rsyncs this tree to the
+// box **without** `.git` and a corpus rule that silently changes shape depending on which machine
+// runs it is worse than one that is slightly coarse on both. `tests/.checkonly/` is tracked corpus
+// and stays in; `M171-01` is why the corpus is now stated in the output instead of assumed.
+const SKIP_DIRS = new Set(['node_modules', '.git', 'vendor', '.scratch']);
 function walk(dir, out = []) {
   for (const entry of readdirSync(dir)) {
-    if (entry === 'node_modules' || entry === '.git' || entry === 'vendor') continue;
+    if (SKIP_DIRS.has(entry) || entry.endsWith('-scratch')) continue;
     const full = path.join(dir, entry);
     const st = statSync(full);
     if (st.isDirectory()) walk(full, out);
@@ -214,9 +267,17 @@ function discover() {
       sites: sites.length,
       files: [...new Set(sites.map((s) => s.file))].length,
       examples: sites.slice(0, 3),
-      // The ONLY verdict this script is allowed to reach. There is no second one: `--probe` was
-      // specified, never implemented, and deleted by `D826` rather than built.
-      verdict: sites.length === 0 ? 'expensive:no-sites' : 'unmeasured',
+      // The ONLY verdict this script is allowed to reach about *behaviour*. There is no second one:
+      // `--probe` was specified, never implemented, and deleted by `D826` rather than built.
+      //
+      // `M178a` (`M178-01`) adds a third value that is not a verdict at all but a refusal. Until it,
+      // a construct with no entry in `PROBES` skipped the scan entirely and fell into
+      // `expensive:no-sites` — indistinguishable in the output from one that was searched for and
+      // genuinely absent. Those two states are opposites: one says *the corpus does not use this*,
+      // the other says *this script cannot see it*, and the second was printed as the first for all
+      // fifteen `subject:*` ids from `M176c` until here. A zero from a scan that never ran is
+      // `M141`'s shape, and the reason it survived is that nothing gates this script's output.
+      verdict: !probe?.find ? 'unmeasured:no-probe' : sites.length === 0 ? 'expensive:no-sites' : 'unmeasured',
     });
   }
   return rows;
@@ -233,21 +294,35 @@ if (JSON_OUT) {
     console.log(`\n── ${family} (${list.length}) ─────────────────────────────`);
     for (const r of list) {
       const flag = r.approximate ? ' ~' : '  ';
-      const v = r.verdict === 'expensive:no-sites' ? '  NO SITES' : '';
+      const v = r.verdict === 'expensive:no-sites' ? '  NO SITES'
+        : r.verdict === 'unmeasured:no-probe' ? '  NO PROBE — not searched for, which is not the same as absent'
+        : '';
       console.log(`${flag}${r.id.padEnd(44)} ${String(r.sites).padStart(5)} sites  ${String(r.files).padStart(3)} files${v}`);
     }
   }
   const none = rows.filter((r) => r.verdict === 'expensive:no-sites');
-  // `M163d`. Zero is the honest answer and not an empty report: `discover()` iterates `RATCHET`,
-  // the roster is complete, and `RATCHET` holds no entries. Said out loud so a future reader does
-  // not read zeros as a broken scan.
+  const blind = rows.filter((r) => r.verdict === 'unmeasured:no-probe');
+  // `M163d`, corrected by `M178a`. This branch used to state the ratchet's size and ceiling as
+  // literals — `RATCHET` is empty, `RATCHET_CEILING` is 0 — and `M176c` made both false four hours
+  // after raising the ceiling to 15 (`M176-07`). The numbers live in `lib/constructs.mjs` and are
+  // printed by `verify:construct-coverage`; restating them here bought nothing and went stale.
+  // What the branch is *for* survives: zero rows is a state, not an empty report, so say so.
   if (rows.length === 0) {
-    console.log('\nNo targets: `RATCHET` is empty (the roster is complete, `RATCHET_CEILING` is 0),');
-    console.log('so this script has nothing to measure the shape of. That is the state, not a failure.');
+    console.log('\nNo targets: `RATCHET` is empty, so this script has nothing to measure the shape');
+    console.log('of. That is the state, not a failure. `verify:construct-coverage` prints its size.');
   }
-  console.log(`\n${rows.length} unrostered non-diagnostic constructs measured for sites.`);
-  console.log(`${none.length} have NO corpus site at all — those cannot be cheap, whatever their usage count elsewhere.`);
-  console.log(`${rows.length - none.length} remain UNMEASURED: a site count is corpus shape, not evidence.`);
+  // `M171-01`. State the corpus, do not imply it: a count is only as good as what was counted, and
+  // the previous version of this line did not exist at all.
+  console.log(`\ncorpus: ${tflwFiles.length} .tflw file(s) and ${configFiles.length} tflw.config file(s), all of them read`
+    + ' — scratch directories excluded, so this is the repository and not the working tree.');
+  console.log(`${rows.length} unrostered non-diagnostic constructs on the ratchet.`);
+  console.log(`${rows.length - blind.length} were searched for; ${blind.length} have no probe in this file and were NOT searched for.`);
+  console.log(`${none.length} were searched for and have NO corpus site at all — those cannot be cheap, whatever their usage count elsewhere.`);
+  console.log(`${rows.length - none.length - blind.length} remain UNMEASURED: a site count is corpus shape, not evidence.`);
+  if (blind.length) {
+    console.log(`\nNot searched for (${blind.map((r) => r.id).join(', ')}): this script has no pattern for them.`);
+    console.log('That is a gap in this file, not a fact about the corpus — do not read it as absence.');
+  }
   // `D826`/`M163d`. This line used to read "Run --probe on a quiet box with the stack up to turn
   // shape into behaviour" — a verb this script never implemented, instructing the reader to run it.
   console.log(`Shape only. Nothing in this repository turns these site counts into behaviour (D826).`);

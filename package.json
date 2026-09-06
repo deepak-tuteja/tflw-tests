@@ -35,6 +35,8 @@
     "check:acceptance": "node scripts/check-acceptance.mjs",
     "regression": "node scripts/regression.mjs",
     "regression:smoke": "node scripts/regression-smoke.mjs",
+    "verify:grader-reachability": "node scripts/verify-grader-reachability.mjs",
+    "verify:grader-reachability:self-test": "node scripts/verify-grader-reachability.mjs --self-test",
     "verify:external-targets": "node scripts/verify-external-targets.mjs",
     "verify:perf-parity": "node scripts/verify-perf-parity.mjs",
     "verify:perf-baseline": "node scripts/verify-perf-baseline.mjs",

@@ -1383,8 +1383,21 @@ if (REAL_FLOW_IDS.some(wanted)) {
     // incomplete. The list is held in both directions, so an entry for a test that no longer exists
     // is also a failure — a declaration about nothing is `D767`'s shape.
     const UNCLAIMED = [
-      ['row-scoped add-to-cart on a page of a dozen identical buttons',
-       'named by `M154g-06` as one of the two failures the gate could not report. It is `within`-scoped resolution over identical siblings plus an async toast; the constructs are graded singly by `C13`-`C18` and `C36`, and no row states what this *combination* answers'],
+      // `M178a` (`M162-03`). The fragment was renamed here and in all three files that carry the
+      // title. The rename was refused when the row was filed, on the argument that renaming a test
+      // is how a grader silently stops finding it — `M176f`'s `deadEntries` check removed that
+      // argument, because an entry naming a test that no longer exists is now a failure in its own
+      // right, so a partial rename reddens instead of passing.
+      //
+      // The claim moved with the name, and that is the part worth reading. This entry used to say
+      // the test is *"`within`-scoped resolution over identical siblings"*. It is not, and has not
+      // been since before `M162`: the catalog's Search is not debounced, so the page under the
+      // click holds **one** row. Scoping over a single match is satisfied by construction, so what
+      // this test still demonstrates is `within` + an async toast, and the sibling-disambiguation
+      // half is exercised nowhere. That is a coverage gap the title was hiding, and it is why
+      // `M162-03` closes as a *renaming plus a recorded gap* rather than as a wording fix.
+      ['row-scoped add-to-cart on a search-filtered catalog row',
+       'named by `M154g-06` as one of the two failures the gate could not report. It is `within`-scoped resolution on a single filtered row plus an async toast; the constructs are graded singly by `C13`-`C18` and `C36`, and no row states what this *combination* answers. Resolution over identical siblings is NOT exercised here and is exercised nowhere else either'],
       ['a full checkout — product page, cart, the iframe payment widget',
        "the other of `M154g-06`'s two. Four surfaces and a real network request in one test; claiming it needs a known answer about the composition, not about any one construct in it"],
       ['reviews: a first submission succeeds, a duplicate 409s',
