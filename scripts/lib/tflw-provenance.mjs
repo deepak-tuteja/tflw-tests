@@ -39,7 +39,8 @@
 // asks git which it is via `merge-base --is-ancestor` rather than reporting an unhelpful "≠".
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -118,11 +119,11 @@ export function siblingState() {
 }
 
 /** Is `commit` an ancestor of `HEAD` in the sibling? `null` when git cannot answer. */
-function ancestorOfHead(commit) {
-  if (!existsSync(path.join(SIBLING_ROOT, '.git'))) return null;
-  const known = spawnSync('git', ['cat-file', '-e', `${commit}^{commit}`], { cwd: SIBLING_ROOT, stdio: 'ignore' });
+function ancestorOfHead(commit, root = SIBLING_ROOT) {
+  if (!existsSync(path.join(root, '.git'))) return null;
+  const known = spawnSync('git', ['cat-file', '-e', `${commit}^{commit}`], { cwd: root, stdio: 'ignore' });
   if (known.status !== 0) return 'unknown-commit';
-  const r = spawnSync('git', ['merge-base', '--is-ancestor', commit, 'HEAD'], { cwd: SIBLING_ROOT, stdio: 'ignore' });
+  const r = spawnSync('git', ['merge-base', '--is-ancestor', commit, 'HEAD'], { cwd: root, stdio: 'ignore' });
   return r.status === 0;
 }
 
@@ -139,16 +140,31 @@ function ancestorOfHead(commit) {
  *                is the one state where a red is not evidence about the code under review.
  *   `ahead`      HEAD is an ancestor of the stamp's commit. Legitimate, and worth naming rather
  *                than lumping with `stale`: the fix is `git -C ../testFlow pull`, not a refresh.
- *   `diverged`   neither is an ancestor of the other.
+ *   `orphaned`   the commit resolves as an object but is reachable from no ref. **The normal
+ *                post-merge state, not a rare one** (`M170-02`): tflw squash-merges every pull
+ *                request, so a build packed while working on a branch names a commit that ceases
+ *                to be reachable the moment that branch lands. Its fix is `refresh-tflw`, the same
+ *                as `stale`, and it must be asked BEFORE `diverged` — with neither ancestor test
+ *                able to succeed, an orphan satisfies `diverged`'s definition while needing none
+ *                of its advice.
+ *   `diverged`   neither is an ancestor of the other, and both are reachable from some ref.
  *   `unknown`    the sibling has never heard of that commit — a build packed elsewhere.
  *   `unknowable` the stamp carries no commit (`D737`), or there is no sibling git to ask. The
  *                ordinary state on the box, and deliberately not a synonym for `current`.
  *   `dev`        `source: 'dev'` — an unbundled `tsx` run, which has no provenance at all.
  *
+ * `root` defaults to the real sibling checkout and exists so this state machine is reachable from
+ * a test at all. That is not a test-only seam: `M164-12` files the fact that this repository's
+ * `scripts/` are unreachable from any harness, and every git question here is already *about* a
+ * named directory — hard-coding the one directory was the accident. `--self-test` below drives all
+ * six git-answerable states against a real throwaway repository rather than a stubbed `spawnSync`,
+ * because a stub would agree with whatever this file believes `git branch --contains` prints.
+ *
  * @param {object} build the `build` object out of `tflw spec --json`
  * @param {ReturnType<typeof siblingState>} sibling
+ * @param {string} [root] the checkout to ask; defaults to the real sibling
  */
-export function gradeProvenance(build, sibling) {
+export function gradeProvenance(build, sibling, root = SIBLING_ROOT) {
   const stamp = `tflw ${build?.version ?? '?'}`;
   if (build?.source === 'dev') {
     return { state: 'dev', summary: `${stamp} built by \`npm run dev\` — no build stamp to check (D737).` };
@@ -177,7 +193,7 @@ export function gradeProvenance(build, sibling) {
         }
       : { state: 'current', summary: `${stamp} built from ${build.commit} (${sibling.branch}), matching the sibling checkout.` };
   }
-  const anc = ancestorOfHead(build.commit);
+  const anc = ancestorOfHead(build.commit, root);
   if (anc === 'unknown-commit') {
     return {
       state: 'unknown',
@@ -196,7 +212,7 @@ export function gradeProvenance(build, sibling) {
     };
   }
   const headIsAncestor = spawnSync('git', ['merge-base', '--is-ancestor', 'HEAD', build.commit], {
-    cwd: SIBLING_ROOT,
+    cwd: root,
     stdio: 'ignore',
   }).status === 0;
   if (headIsAncestor) {
@@ -206,11 +222,55 @@ export function gradeProvenance(build, sibling) {
       detail: '  The vendored build is newer than the source beside it. `git -C ../testFlow pull`, not a refresh.',
     };
   }
+  // `M170-02`. Both ancestor tests have now failed, which is `diverged`'s definition — and for the
+  // commonest state this repository can be in, that definition is met for a reason `diverged`'s
+  // advice does not address. tflw squash-merges every pull request, so the commit `npm pack`
+  // recorded while working on a branch is replaced by a new one when that branch lands and is left
+  // reachable from no ref at all. Measured 2026-09-06: the local vendored build named `42efb20`,
+  // `git branch -a --contains` returned nothing, and its squash replacement was `50af50a` (#160).
+  //
+  // So the question is asked rather than assumed, and it is one command. An orphan is exactly
+  // `refresh-tflw`'s case, which is why this branch carries `stale`'s advice and not `diverged`'s
+  // *"look first"* — the guard whose exceptional branch is the common path is `M141`'s shape
+  // inverted, and a reader who follows advice written for the rare case investigates a situation
+  // with a one-command fix.
+  if (!reachableFromAnyRef(build.commit, root)) {
+    return {
+      state: 'orphaned',
+      summary: `${stamp} built from ${build.commit}, which is reachable from no ref in the sibling checkout at ${sibling.head} (${sibling.branch}).`,
+      detail:
+        '  Almost certainly a squash merge: the branch this build was packed from has landed, and the\n' +
+        '  commit it recorded was replaced rather than kept. Run `npm run refresh-tflw` (`M170-02`).',
+    };
+  }
   return {
     state: 'diverged',
     summary: `${stamp} built from ${build.commit}, which has DIVERGED from the sibling checkout at ${sibling.head} (${sibling.branch}).`,
     detail: '  Neither commit contains the other. Neither a refresh nor a pull is obviously right; look first.',
   };
+}
+
+/**
+ * Is `commit` reachable from any ref in the sibling checkout (`M170-02`)?
+ *
+ * `git branch -a --contains` rather than `rev-list --all`: the question is *does any branch, local
+ * or remote-tracking, contain it*, which is what "the history somebody else can check out" means
+ * here. A commit that only a tag or a reflog holds is still orphaned for this purpose — a refresh
+ * is still the right advice — so widening the ref set would move the answer without improving it.
+ *
+ * Empty stdout is the orphan answer. A non-zero exit means git could not tell us, and the caller
+ * must NOT read that as an orphan: an unanswerable question routed into the state whose advice is
+ * "run a refresh" would be `M166`'s failing-plausibly one level down. It falls through to
+ * `diverged`, which is the answer the caller already had.
+ */
+export function reachableFromAnyRef(commit, root = SIBLING_ROOT) {
+  const r = spawnSync('git', ['branch', '-a', '--contains', commit], {
+    cwd: root,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+  if (r.status !== 0) return true;
+  return r.stdout.trim().length > 0;
 }
 
 /** The states in which a red says something about the code under review rather than about the build. */
@@ -247,3 +307,114 @@ export function stalenessBanner(verdict) {
     `${bar}\n`
   );
 }
+
+// --- `--self-test`: the state machine, against a real repository (`M170-02`) ---------------------
+//
+// `node scripts/lib/tflw-provenance.mjs --self-test`.
+//
+// This module is a library and it is also the only place the six git-answerable states are decided,
+// so the control lives with the decision rather than in whichever gate happens to import it — all
+// four importers resolve a tflw binary at module scope, so a flag on any of them would pay a full
+// build resolution to answer a question about `git branch --contains` (`M170-01`'s shape, third
+// site).
+//
+// **A real repository, not a stubbed `spawnSync`.** The thing under test is what git prints for a
+// commit no ref contains; a stub asserts what this file already believes about that, which is
+// `D711`'s "a shared implementation would agree with itself" arriving as a fake. The fixture makes
+// a genuine orphan the way the real one was made — commit on a branch, delete the branch — and the
+// squash merge this row is about produces exactly that state.
+
+function fixtureRepo() {
+  const dir = mkdtempSync(path.join(tmpdir(), 'tflw-provenance-'));
+  const git = (...args) => {
+    const r = spawnSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    if (r.status !== 0) throw new Error(`git ${args.join(' ')} failed in the fixture: ${r.stderr}`);
+    return r.stdout.trim();
+  };
+  git('init', '-q', '-b', 'main');
+  git('config', 'user.email', 'fixture@example.invalid');
+  git('config', 'user.name', 'fixture');
+  writeFileSync(path.join(dir, 'a'), 'a\n');
+  git('add', '-A');
+  git('commit', '-qm', 'base');
+  const base = git('rev-parse', 'HEAD');
+
+  git('checkout', '-q', '-b', 'feature');
+  writeFileSync(path.join(dir, 'b'), 'b\n');
+  git('add', '-A');
+  git('commit', '-qm', 'on a branch, as a vendored build would be packed');
+  const onBranch = git('rev-parse', 'HEAD');
+
+  // The squash: main gains the branch's content as a NEW commit, and the branch goes away. This is
+  // `M170-02` reproduced in miniature — `onBranch` is now reachable from no ref.
+  git('checkout', '-q', 'main');
+  writeFileSync(path.join(dir, 'b'), 'b\n');
+  git('add', '-A');
+  git('commit', '-qm', 'the squash that replaced it (#1)');
+  const squashed = git('rev-parse', 'HEAD');
+  git('branch', '-qD', 'feature');
+
+  // An ancestor of HEAD that is still reachable, for the `stale` control.
+  return { dir, base, onBranch, squashed, head: squashed };
+}
+
+function selfTest() {
+  const ok = [];
+  const bad = [];
+  const t = (name, cond) => (cond ? ok : bad).push(name);
+
+  const fx = fixtureRepo();
+  const sib = { head: fx.head, branch: 'main' };
+  const build = (commit, extra = {}) => ({ version: '0.1.0', source: 'released', commit, ...extra });
+
+  // The discriminator itself, both ways round — an orphan and a reachable commit in one repository,
+  // so a `reachableFromAnyRef` that answered a constant would fail one of these whichever it chose.
+  t('a commit reachable from a branch is reachable', reachableFromAnyRef(fx.base, fx.dir) === true);
+  t('a commit whose only branch was deleted is NOT reachable', reachableFromAnyRef(fx.onBranch, fx.dir) === false);
+
+  // The routing this row is about: an orphan satisfies `diverged`'s definition, and must not get
+  // `diverged`'s advice.
+  const orphan = gradeProvenance(build(fx.onBranch), sib, fx.dir);
+  t('a squashed-away build commit grades `orphaned`, not `diverged`', orphan.state === 'orphaned');
+  t('and it is told to refresh, which is the one-command fix', /refresh-tflw/.test(orphan.detail ?? ''));
+  t('`orphaned` is not gradeable — a manifest from the wrong build is wrong, not old',
+    !GRADEABLE.has('orphaned'));
+
+  // The neighbours still answer as they did, so the new branch narrowed nothing.
+  t('an ancestor of HEAD is still `stale`', gradeProvenance(build(fx.base), sib, fx.dir).state === 'stale');
+  t('HEAD itself is still `current`', gradeProvenance(build(fx.head), sib, fx.dir).state === 'current');
+  t('HEAD with a dirty tree is still `dirty`',
+    gradeProvenance(build(fx.head, { dirty: true }), sib, fx.dir).state === 'dirty');
+  t('a commit this repository has never seen is still `unknown`',
+    gradeProvenance(build('0'.repeat(40)), sib, fx.dir).state === 'unknown');
+  t('a build with no commit is still `unknowable`', gradeProvenance(build(undefined), sib, fx.dir).state === 'unknowable');
+  t('a dev build is still `dev`', gradeProvenance({ version: '0.1.0', source: 'dev' }, sib, fx.dir).state === 'dev');
+
+  // The control that makes the orphan case non-vacuous: with the reachability question removed, the
+  // orphan falls through to `diverged` exactly as it did before this repair.
+  const withoutTheQuestion = (commit) => {
+    const anc = ancestorOfHead(commit, fx.dir);
+    return anc === true ? 'stale' : 'diverged';
+  };
+  t('without the reachability question the same commit reads `diverged` — the defect, reproduced',
+    withoutTheQuestion(fx.onBranch) === 'diverged');
+
+  rmSync(fx.dir, { recursive: true, force: true });
+
+  if (bad.length) {
+    console.error(`✗ build-provenance self-test: ${bad.length} of ${ok.length + bad.length} control(s) did not fire`);
+    for (const b of bad) console.error(`    · ${b}`);
+    return 1;
+  }
+  console.log(`✓ build-provenance self-test: ${ok.length} control(s) against a real repository, each shown to fire on the input it exists for`);
+  return 0;
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  if (!process.argv.includes('--self-test')) {
+    console.error('✗ this module is a library; its only command-line mode is `--self-test`.');
+    process.exit(64);
+  }
+  process.exit(selfTest());
+}
+

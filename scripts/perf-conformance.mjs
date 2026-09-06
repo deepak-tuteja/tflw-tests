@@ -76,14 +76,6 @@ const BOXLOCK = process.env.TFLW_PERF_BOXLOCK ?? path.join(HOME, 'tflw-exec/bin/
 const RESULTS = process.env.TFLW_PERF_RESULTS ?? path.join(HOME, 'tflw-perf/results');
 const ARRIVAL_PORT = 4507;
 
-// `M141`/`D533`: which tflw a script grades is an argument, not an inference, and there is exactly
-// one place allowed to answer it. The first draft of this file read a `TFLW_BIN` override directly
-// and `verify:tflw-resolution` caught it — an eighth answer to the one question that milestone spent
-// itself reducing to one. `released` because the ladder measures the shipped generator, not a
-// branch build; the resolver announces the entry path and a sha prefix, and the artifact records
-// them so a number can be attributed to a build.
-const { entry: TFLW_BIN, label: TFLW_LABEL } = resolveTflw('released', { label: 'perf-conformance' });
-
 /** `M160d` / `D835` — the reporting bound of the build this run is about to measure, copied into the
  *  artifact so a derivation months later reads the right one.
  *
@@ -144,6 +136,22 @@ if (!parsed.ok) {
 }
 const flag = (name) => parsed.values[name] ?? null;
 const has = (name) => parsed.values[name] === true;
+
+// `M141`/`D533`: which tflw a script grades is an argument, not an inference, and there is exactly
+// one place allowed to answer it. The first draft of this file read a `TFLW_BIN` override directly
+// and `verify:tflw-resolution` caught it — an eighth answer to the one question that milestone spent
+// itself reducing to one. `released` because the ladder measures the shipped generator, not a
+// branch build; the resolver announces the entry path and a sha prefix, and the artifact records
+// them so a number can be attributed to a build.
+//
+// **Below the argv block, not above it (`M170-01`).** `resolveTflw` throws from two sites, one of
+// them on a missing entry, and it used to run 52 lines before `parseArgv`. The refusal still
+// preceded the lease and the measurement either way, so a typo could never start a real run — what
+// degraded was the diagnostic: on a machine whose vendored build has diverged, `--dry-runn` was
+// reported as an environment failure, which is the class of message that sends someone to fix the
+// wrong thing. Measured on the box 2026-09-05: two tflw resolution lines printed *before*
+// `unknown flag: --dry-runn`.
+const { entry: TFLW_BIN, label: TFLW_LABEL } = resolveTflw('released', { label: 'perf-conformance' });
 
 const PROFILE = flag('--profile') ?? 'full';
 const NO_LEASE = has('--no-lease');
