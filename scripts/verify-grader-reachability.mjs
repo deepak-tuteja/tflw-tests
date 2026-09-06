@@ -27,13 +27,15 @@
  * exists, or one that has since become reachable, also fails — a declaration about nothing is
  * `D767`'s shape, and this gate is not allowed to carry one while reporting on others.
  *
- * **It is green the day it lands, and that is stated rather than discovered.** The three unreachable
- * scripts today are exactly the three on `EXEMPT`. `M172e` shipped a gate in the same condition and
+ * **It is green the day it lands, and that is stated rather than discovered.** The unreachable
+ * scripts are exactly the ones on `EXEMPT` — the count is printed by the gate rather than restated
+ * here, because a number in prose that nothing reads is `D767`. `M172e` shipped a gate in the same
+ * condition and
  * the rule it set is the one followed here: say so in the guard, say so in the close, and give it a
  * self-test that proves it can go red, so nobody later reads a permanent green as an argument for
  * deleting it. Run `--self-test` for that proof.
  */
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -49,7 +51,6 @@ const SCRIPTS = path.join(ROOT, 'scripts');
  * catches on the first run.
  */
 const EXEMPT = {
-  'exec.mjs': 'the box runner — it ships work to fedora-box and reports what came back. It states no known answer of its own, and its exit status is famously not one either (its own header says to treat it as carrying no information).',
   'derive-perf-bands.mjs': 'named by `M163-01` as an opt-out. It derives baseline bands from recorded runs and writes them; the assertions live in `verify-perf-baseline.mjs`, which reads what this produces.',
   'measure-construct-evidence.mjs': 'reports corpus *shape* — site counts per construct — and `D826` is the decision that it must never turn that into a verdict. A script forbidden to reach a verdict cannot be unreachable from one.',
 };
@@ -57,9 +58,35 @@ const EXEMPT = {
 const problems = [];
 const fail = (m) => problems.push(m);
 
-/** Every `.mjs` directly under `scripts/`. `lib/` is imported, never invoked, so it is not a caller. */
+/**
+ * Every `.mjs` the repository holds directly under `scripts/`. `lib/` is imported, never invoked, so
+ * it is not a caller.
+ *
+ * **This asks git, not the filesystem, and that is the whole of `M178-04`.** `readdirSync` answers
+ * about the working tree, and the two are not the same set: `scripts/exec.mjs` is listed in
+ * `.git/info/exclude` in both repositories — a *local* exclusion, so it is not even shared with
+ * another clone — because it names the build host and `D669` forbids that in a tracked file. So it
+ * is present on the machine this gate was written on and absent from every checkout CI makes, and a
+ * gate reading the directory grades a different corpus in the two places. It shipped green on the
+ * Mac and red on CI in the same commit, which is `M171-01`'s signature and the same repair
+ * `M178-02` made to `measure-construct-evidence.mjs` one row earlier: say the repository, mean the
+ * repository.
+ *
+ * It refuses rather than falling back (`M166`): a tree with no `.git` cannot answer this question,
+ * and answering it from `readdirSync` anyway is how the divergence got shipped.
+ */
 function corpus() {
-  return readdirSync(SCRIPTS).filter((f) => f.endsWith('.mjs')).sort();
+  let out;
+  try {
+    out = execFileSync('git', ['ls-files', '--', 'scripts/'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 1 << 24 });
+  } catch (err) {
+    throw new Error(
+      'grader reachability needs a git checkout: its corpus is the scripts the repository holds, not '
+        + 'the ones this machine happens to have. `git ls-files` failed here — run it where `.git` is.\n'
+        + `    (${err.message.split('\n')[0]})`,
+    );
+  }
+  return out.split('\n').filter((l) => /^scripts\/[^/]+\.mjs$/.test(l)).map((l) => l.slice('scripts/'.length)).sort();
 }
 
 /** The real phase table, from the runner itself. */
@@ -128,7 +155,8 @@ function main() {
       `from a regression phase, a package.json script or a CI run: line; ${dark.length} declared to grade ` +
       `nothing, by name, in EXEMPT (${Object.keys(EXEMPT).join(', ')}).\n` +
       `  Green on the day it landed and stated so (M178a): the unreachable set and the declared set are ` +
-      `the same three files. It fires on the fourth, which is the whole point — run --self-test for the proof.`,
+      `the same ${dark.length} file(s). It fires on the next one, which is the whole point — ` +
+      `run --self-test for the proof.`,
   );
   return 0;
 }
@@ -150,6 +178,20 @@ function selfTest() {
       () => packageCommands().length > 20],
     ['every EXEMPT entry names a file that exists',
       () => Object.keys(EXEMPT).every((f) => corpus().includes(f))],
+    // `M178-04`. This is the control the gate shipped without: it was green on the machine that wrote
+    // it and red on CI in the same commit, because `readdirSync` answers about the working tree and
+    // the repository is what CI checks out. A file present here and untracked must not be graded.
+    ['the corpus is the repository, so an untracked script in scripts/ is not graded',
+      () => {
+        const probe = path.join(SCRIPTS, 'zz-untracked-probe.mjs');
+        try {
+          writeFileSync(probe, '// M178-04 self-test probe; removed in the same call.\n');
+          return readdirSync(SCRIPTS).includes('zz-untracked-probe.mjs')
+            && !corpus().includes('zz-untracked-probe.mjs');
+        } finally {
+          try { unlinkSync(probe); } catch { /* already gone */ }
+        }
+      }],
   ];
   let bad = 0;
   for (const [name, fn] of cases) {
