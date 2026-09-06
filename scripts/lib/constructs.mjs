@@ -42,34 +42,16 @@
 // file whose entire purpose is that it goes down. Lowering it is the ordinary business of every
 // milestone after this one and needs no ceremony.
 
-/** The scripts that grade this ledger. Same shape and same purpose as `plants.mjs`'s `GRADERS`:
- *  `gated` is the field with teeth, because a row whose only grader runs by hand is a row nobody
- *  grades on any day nobody was looking — which is `M137e-01` exactly, filed against the previous
- *  ledger for the same reason. */
-export const GRADERS = {
-  coverage: { script: 'scripts/verify-construct-coverage.mjs', phase: '(acceptance-check job)', gated: true },
-  acceptance: { script: 'scripts/verify-construct-acceptance.mjs', phase: 'construct-acceptance', gated: true },
-  // `M154f` (`D752`). The security tier is not graded by `verify-construct-acceptance.mjs` and should
-  // not be: three gates already grade it, they have graded it for six milestones, and each states its
-  // known answers as *data* — `LEDGER`, `DECLINES`, `APPLICABILITY_PROBES` — rather than as prose in a
-  // plant row. `D724` folds `VULNS.md` in by reference rather than by duplication; this is the same
-  // move on the construct axis, and `D752` is what makes the reference an assertion instead of a
-  // claim.
-  security: { script: 'scripts/verify-security-acceptance.mjs', phase: 'security-acceptance-gate', gated: true },
-  // `M154g` step 5 (`D765`). Tier 3's grader, and the newest `gated: true` in this table — it was
-  // `gated: false` in everything but the field, because the field did not exist and the script ran
-  // nowhere. `D764` is what found it: three ratchet entries held themselves back on the sentence
-  // *"a Tier 3 assertion costs an order of magnitude more requests than a Tier 2 one (`D380`)"*, and
-  // `D380` does not say that — it decides that the ~45 real test files are Tier 3's negative corpus
-  // and its **volume measurement**, which is `sweep-input-volume.mjs`'s 240 observed requests and a
-  // different script entirely. Measured instead of argued: this grader costs 7 assertions and 80
-  // extra requests and finishes in **0.91-1.05 s** on `fedora-box`, against **1.70-1.99 s** for
-  // `security-acceptance-gate`, the Tier 1/2 phase the sweep has run since `M139-5` — six runs each,
-  // two days, two commits. The premise was not merely misattributed, it was inverted.
-  input: { script: 'scripts/verify-input-acceptance.mjs', phase: 'input-acceptance', gated: true },
-  redaction: { script: 'scripts/verify-redaction.mjs', phase: 'safety-redaction-check', gated: true },
-  diagnostics: { script: 'scripts/verify-check-diagnostics.mjs', phase: 'check-diagnostics', gated: true },
-};
+import { gradersFor } from './graders.mjs';
+
+/** The six scripts that grade this ledger, selected from the one table in `lib/graders.mjs`.
+ *
+ *  This copy and `lib/plants.mjs`'s overlapped on `security` and `input` and disagreed about both
+ *  at different times; `M176e` merged them for `M163-02`. `gradersFor` refuses a name the table does
+ *  not define, and `unclaimedGraders` refuses a grader neither ledger names. */
+export const GRADERS = gradersFor([
+  'coverage', 'acceptance', 'security', 'input', 'redaction', 'diagnostics',
+]);
 
 /**
  * One row per construct with a known answer.

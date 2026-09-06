@@ -51,22 +51,24 @@ const WORKFLOW_DIR = join(repoRoot, '.github', 'workflows');
  */
 const CLASSIFIED = [
   // --- job `apiv2` — one multi-line block, three commands, two classes ---------------------------
-  { wf: 'ci.yml', job: 'apiv2', cmd: 'npm ci', class: 'setup', why: 'apiV2 has its own dependency tree; this block runs with `working-directory: apiV2`' },
+  { wf: 'ci.yml', job: 'apiv2', cmd: 'npm ci', name: 'apiV2 lint', class: 'setup', why: 'apiV2 has its own dependency tree; this block runs with `working-directory: apiV2`' },
   {
     wf: 'ci.yml',
     job: 'apiv2',
     cmd: 'npm run lint',
+    name: 'apiV2 lint',
     class: 'gate',
     local: 'npm --prefix apiV2 run lint',
     why: 'eslint over the NestJS target app. The local form names the directory explicitly because this repo\'s root has no `lint` at all. **No `--fix`** as of `M141`/`D538` — an autofixing linter only fails on the unfixable subset, so the job was reporting on a tree it had just rewritten (`M141-01`). This job had a third command, `npm test`, until the same change: it was `jest --passWithNoTests` over a tree with no test files (`M138b-01`), and it was DELETED rather than filled in, because apiV2 is a dogfood target meant to keep changing shape',
   },
 
   // --- job `acceptance-check` — static, both trees checked out ------------------------------------
-  { wf: 'ci.yml', job: 'acceptance-check', cmd: 'npm ci', class: 'setup', why: 'installs the tflw monorepo\'s dev deps so `npm pack` can rebuild what refresh-tflw packs' },
+  { wf: 'ci.yml', job: 'acceptance-check', cmd: 'npm ci', name: 'Install tflw workspace deps', class: 'setup', why: 'installs the tflw monorepo\'s dev deps so `npm pack` can rebuild what refresh-tflw packs' },
   {
     wf: 'ci.yml',
     job: 'acceptance-check',
     cmd: 'npm run refresh-tflw',
+    name: 'Refresh tflw from the checked-out build',
     class: 'setup',
     why: 'packs ../testFlow/packages/cli and installs the tarball — this repo dogfoods tflw\'s live main, unpinned on purpose. Also this repo\'s own dependency install; there is nothing else in package.json',
   },
@@ -74,6 +76,7 @@ const CLASSIFIED = [
     wf: 'ci.yml',
     job: 'acceptance-check',
     cmd: 'npm run check:acceptance',
+    name: 'Check every acceptance corpus parses against current tflw',
     class: 'gate',
     local: 'npm run check:acceptance',
     why: 'every tflw-acceptance/ corpus still parses. That tree is excluded from bare discovery, so before this existed nothing checked it and two checker tightenings silently un-parsed 10 of 12 files across four milestones',
@@ -82,6 +85,7 @@ const CLASSIFIED = [
     wf: 'ci.yml',
     job: 'acceptance-check',
     cmd: 'npm run verify:external-targets',
+    name: 'Every external target is declared and fenced',
     class: 'gate',
     local: 'npm run verify:external-targets',
     why: 'the one host this repo does not own stays fenced, and a NEW external target fails until somebody writes down what it is for. **This is the gate that arrived while the plan enumerating the gate set was being written**, and not knowing about it is why this table exists',
@@ -90,6 +94,7 @@ const CLASSIFIED = [
     wf: 'ci.yml',
     job: 'acceptance-check',
     cmd: 'npm run verify:perf-parity',
+    name: 'The perf ladder\'s runners agree, and every host is ours',
     class: 'gate',
     local: 'npm run verify:perf-parity',
     why: 'the perf ladder\'s three runners agree on the fixture values, every rung is rostered, and every host a load generator points at is ours — the last of which nothing asserted before, because the gate above walks `tflw.config` roots and k6/Artillery files can never hold one',
@@ -98,6 +103,7 @@ const CLASSIFIED = [
     wf: 'ci.yml',
     job: 'acceptance-check',
     cmd: 'npm run verify:perf-baseline',
+    name: 'The perf baseline covers every comparable rung',
     class: 'gate',
     local: 'npm run verify:perf-baseline',
     why: 'the perf regression baseline still covers every rung that has a co-runner, and declares no band so wide it cannot fail. The comparison itself runs on the box inside the scheduled run — but a rung quietly dropping out of the baseline is a document defect, and from the outside it reads exactly like a rung with no regressions',
@@ -106,6 +112,7 @@ const CLASSIFIED = [
     wf: 'ci.yml',
     job: 'acceptance-check',
     cmd: 'npm run verify:provenance:self-test',
+    name: 'The two provenance corpora are different on purpose',
     class: 'gate',
     local: 'npm run verify:provenance:self-test',
     why: '`M169d1` — the gate above now reads TWO corpora (resolution over every tracked non-prose file, the escaping-link and `**Notation.**` rules over the 14 markdown ones), and this is the assertion that the split is deliberate rather than accidental: it measures that widening rule 2 would redden 394 files, that the corpora are disjoint, and that every exclusion in `D-M164-06-1`\'s list actually excludes something here. A contributor gate rather than ci-only for `verify:redaction:self-test`\'s reason — it is milliseconds, it needs no sibling checkout, and a corpus rule that has stopped discriminating is the one failure a green gate cannot report',
@@ -113,7 +120,17 @@ const CLASSIFIED = [
   {
     wf: 'ci.yml',
     job: 'acceptance-check',
+    cmd: 'npm run verify:build-provenance:self-test',
+    name: 'The build-provenance state machine answers each state on a real repository',
+    class: 'gate',
+    local: 'npm run verify:build-provenance:self-test',
+    why: '`M170-02` — `verify:construct-coverage` below REFUSES to grade on a build whose provenance is not `current`, so which state a build lands in decides whether anything can be graded at all, and CI is structurally unable to check that: `refresh-tflw` makes the vendored build and the sibling the same commit here by construction, so provenance in CI is always `current`. Every other branch of that state machine exists only where a human works, which is exactly how `diverged` — whose advice is "look first" — went on being the answer to an ordinary squash merge. A contributor gate rather than ci-only precisely because the contributor is the only person who can be in the states it covers; it costs milliseconds and builds its own throwaway repository, so it needs neither a sibling checkout nor a network',
+  },
+  {
+    wf: 'ci.yml',
+    job: 'acceptance-check',
     cmd: 'npm run verify:construct-coverage',
+    name: 'Every construct tflw ships is rostered or explicitly unrostered',
     class: 'gate',
     local: 'npm run verify:construct-coverage',
     why: 'every construct tflw ships is rostered in `CONSTRUCTS.md` or explicitly on the ratchet, measured against `tflw spec --json` from the build under test (`M154b`, `D723`/`D730`). A contributor gate rather than ci-only because the thing it catches is a construct arriving with nowhere to be graded, and the person who can cheapest write that row is the one who just added it. It **refuses to run** against a vendored tflw that is not current with the sibling checkout (`D741`), so running it locally without `npm run refresh-tflw` first tells you so by name instead of guessing',
@@ -122,6 +139,7 @@ const CLASSIFIED = [
     wf: 'ci.yml',
     job: 'acceptance-check',
     cmd: 'npm run verify:redaction:self-test',
+    name: 'The redaction gate\'s own guards fire on the input they exist for',
     class: 'gate',
     local: 'npm run verify:redaction:self-test',
     why: '`scripts/verify-redaction.mjs`\'s own guards, driven against synthetic fixtures (`M154g`, carrying `M154f-03`). The gate itself needs apiV2, a real `--env safetyRedaction` run and a direct ground-truth fetch, and runs as the `safety-redaction-check` regression phase — its guards need none of that. A contributor gate rather than ci-only because it is milliseconds and it is the thing that tells you a guard stopped discriminating, which is the one failure a green gate cannot report',
@@ -130,6 +148,7 @@ const CLASSIFIED = [
     wf: 'ci.yml',
     job: 'acceptance-check',
     cmd: 'npm run read:mutation-matrix:gate',
+    name: 'The hand-authored mutation covers table matches the measured kill matrix',
     class: 'gate',
     local: 'npm run read:mutation-matrix:gate',
     why: "the hand-authored half of `M164b`'s kill matrix — `scripts/lib/mutation-covers.mjs`, one line of reasoning per relation (`D842`) — is held to the measured half in `tflw-acceptance/mutation/kill-detail.json`, in both directions. A contributor gate rather than ci-only because it reads four committed files (`census-shape.json` since `M168-09`), runs no stack and takes milliseconds, and because a hand-maintained table nothing reads is `D767` by definition. It deliberately asserts **nothing** about how much of the roster is covered: `D851` measured that at one plant of 102 and refused to pin it",
@@ -138,6 +157,7 @@ const CLASSIFIED = [
     wf: 'ci.yml',
     job: 'acceptance-check',
     cmd: 'npm run verify:argv-contract',
+    name: 'Two scripts\' flags are validated and read from one table',
     class: 'gate',
     local: 'npm run verify:argv-contract',
     why: "`M164-04` — `discover-mutation-kills.mjs` validated its flags with a set of spellings and read them with index arithmetic over raw `argv`, two independently written things that nothing made agree, so four of nine flags were wrong in four different ways and none of them made a sound: an eighteen-word `--why` recorded one word, `--limit=5` was read by nothing, a forgotten `--limit` value swept zero candidates and exited 0, and a forgotten `--window` value disabled the baseline bracket. One table now; both the validator and the readers are projections of it. A contributor gate rather than ci-only because it is milliseconds and static, and because its own case set is the fragile part — each case declares whether it discriminates against the previous implementation, which the gate reimplements and compares against, so a case that quietly stops proving anything is refused rather than reported green. It is table-driven over a second consumer, `perf-conformance.mjs` (`M164-05`), where the same defect cost more: with no validation of any kind, a typo'd `--dry-run` there ran a real measured ladder under the box lease. Each consumer keeps its own model of the implementation it replaced — the census script could refuse an unknown flag and the perf script could refuse nothing at all — because one shared control would have silently stopped discriminating for whichever consumer it did not describe",
@@ -146,6 +166,7 @@ const CLASSIFIED = [
     wf: 'ci.yml',
     job: 'acceptance-check',
     cmd: 'npm run verify:sweep-size',
+    name: 'No tracked file states how many phases the sweep has',
     class: 'gate',
     local: 'npm run verify:sweep-size',
     why: "`M167` (`D767`, `D857`) — no tracked file states how many phases the regression sweep has. `D504` keeps the phase list out of prose because a copy has no guard; a count is that copy compressed and drifted three times regardless. `M154g` deleted seven occurrences across four files and this file's guard was pointed at one of them; `M166-02` found the count still in six files, in three disagreeing numbers, one of them a file that repair's close-claim names as finished. A contributor gate rather than ci-only because it is milliseconds and because the person who will next write the number is the one editing the prose. Quoting a stale count is allowed — `CONTRIBUTING.md` shows the sentence that carried the defect — and asserting one is not",
@@ -154,6 +175,7 @@ const CLASSIFIED = [
     wf: 'ci.yml',
     job: 'acceptance-check',
     cmd: 'npm run verify:scrub',
+    name: 'What this public repository publishes',
     class: 'gate',
     local: 'npm run verify:scrub',
     why: 'what this **public** repository publishes: an address that reaches a person, or a filesystem path naming a real account, over every tracked text file. In this job because the rules are tflw\'s and are imported rather than copied (`D882`), so it needs both trees — and it does NOT skip when the sibling is absent, for the reason the step below states. It arrived with 37 real hits, 25 of them the box account\'s home path in five committed perf artifacts, published since `M160d`. The build host\'s name is deliberately outside its corpus (`D876`) and is named 45 times here without being a finding',
@@ -162,6 +184,7 @@ const CLASSIFIED = [
     wf: 'ci.yml',
     job: 'acceptance-check',
     cmd: 'npm run verify:notation-parity',
+    name: 'The two notation implementations share one grammar',
     class: 'gate',
     local: 'npm run verify:notation-parity',
     why: "`M171d` (`M164-12`) — `D711` keeps two implementations of the citation notation on purpose, and nothing was paying the other half of that cost: nothing held the two grammars to one shape, so the only thing that had ever detected a divergence between them was a red neither repository could clear. They disagreed on 10 of 16 fixtures when this was written, and had since tflw tightened its side nine milestones earlier. A `gate` rather than ci-only on the same footing as `verify:scrub` and `verify:provenance` — it needs both trees, it is milliseconds, and the person who will next edit one of the four patterns is the one who needs the answer before pushing rather than after. It does NOT skip when the sibling is absent",
@@ -170,6 +193,7 @@ const CLASSIFIED = [
     wf: 'ci.yml',
     job: 'acceptance-check',
     cmd: 'npm run verify:notation-parity:self-test',
+    name: 'The notation gate\'s own controls fire on the input they exist for',
     class: 'gate',
     local: 'npm run verify:notation-parity:self-test',
     why: "the gate above is green over this repository's real prose BY CONSTRUCTION — measured, the two grammars extract the same 288 identifiers over the 14 tracked markdown files, and did so throughout the nine milestones they were diverging — so a corpus of real prose would have been green on the day the divergence was found. That makes its hand-written fixtures the only thing between it and `M141`'s vacuous shape, and this runs the controls that show each one fires. It earned its place immediately: it found that an exemption waiving a *case* rather than an *observation* silently swallowed a `RANGE` regression on the same fixture",
@@ -178,6 +202,7 @@ const CLASSIFIED = [
     wf: 'ci.yml',
     job: 'acceptance-check',
     cmd: 'npm run verify:contributing',
+    name: 'The gate set and CONTRIBUTING.md agree',
     class: 'gate',
     local: 'npm run verify:contributing',
     why: 'this file. It is in the set it guards — adding it meant classifying it and naming it in CONTRIBUTING.md, which is the mechanism working on its first day rather than an oversight',
@@ -186,6 +211,7 @@ const CLASSIFIED = [
     wf: 'ci.yml',
     job: 'acceptance-check',
     cmd: 'npm run verify:tflw-resolution',
+    name: 'One answer to "which tflw am I running?"',
     class: 'gate',
     local: 'npm run verify:tflw-resolution',
     why: 'M141 (`M115-03`, `M128-04`) — every script that grades a tflw declares WHICH tflw and prints the entry it resolved, and nothing resolves one outside `scripts/lib/tflw-bin.mjs`. In `acceptance-check` rather than `apiv2` for a load-bearing reason and not just cheapness: half of it asserts that `released` and `branch` resolve to two different programs, which is only checkable where both trees exist, and this is the only job that checks out both',
@@ -195,25 +221,28 @@ const CLASSIFIED = [
     wf: 'ci.yml',
     job: 'acceptance-check',
     cmd: 'npm run verify:provenance',
+    name: 'Prose links inside the repo, and citations that resolve',
     class: 'gate',
     local: 'npm run verify:provenance',
     why: 'M152e (`D673`/`D709`/`D711`) — no tracked prose file links out of the repository, every file citing tflw\'s notation declares WHICH sequence it means (both repos number milestones from 1, and 35 identifiers are defined in both record sets), and every unqualified citation resolves in tflw\'s published `DECISIONS.md`. Also checks tflw\'s tracked pin of this repository\'s citations in both directions — like the two gates above it needs both trees, and this is the only job that has them',
   },
 
   // --- job `regression` — the sweep, 4 matrix legs ------------------------------------------------
-  { wf: 'ci.yml', job: 'regression', cmd: 'npm ci', class: 'setup', why: 'the tflw monorepo again — each matrix leg is a fresh runner' },
+  { wf: 'ci.yml', job: 'regression', cmd: 'npm ci', name: 'Install tflw workspace deps', class: 'setup', why: 'the tflw monorepo again — each matrix leg is a fresh runner' },
   {
     wf: 'ci.yml',
     job: 'regression',
     cmd: 'cp .env.example .env',
+    name: 'Configure env (dev-safe defaults, matches docker-compose.yml\'s own fallbacks)',
     class: 'setup',
     why: 'dev-safe defaults matching docker-compose.yml\'s own fallbacks; no GitHub Secret is involved. Locally this is the same line README\'s Setup section documents',
   },
-  { wf: 'ci.yml', job: 'regression', cmd: 'npm run refresh-tflw', class: 'setup', why: 'as above, plus this repo\'s dependency install' },
+  { wf: 'ci.yml', job: 'regression', cmd: 'npm run refresh-tflw', name: 'Refresh tflw from the checked-out build', class: 'setup', why: 'as above, plus this repo\'s dependency install' },
   {
     wf: 'ci.yml',
     job: 'regression',
     cmd: 'npx playwright install chromium',
+    name: 'Install Playwright browsers',
     class: 'setup',
     why: 'playwright has no postinstall download hook and the webV2 phases drive a real browser. Chromium only — this suite never runs firefox or webkit. NO `--with-deps` since `M143c`, where two legs of one run sat in this step for three hours; `CONTRIBUTING.md` keeps the flag for local setup on purpose and says why',
   },
@@ -221,6 +250,7 @@ const CLASSIFIED = [
     wf: 'ci.yml',
     job: 'regression',
     cmd: 'xvfb-run -a npm run regression -- --group ${{ matrix.group }}',
+    name: 'Regression sweep — group ${{ matrix.group }} (each phase its own fresh Docker restart)',
     class: 'gate',
     local: 'xvfb-run -a npm run regression',
     alsoInDoc: [
@@ -261,11 +291,24 @@ function runSteps(text) {
   let job = null;
   let inJobs = false;
 
+  let name = null;
+
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
     if (/^jobs:\s*$/.test(line)) { inJobs = true; continue; }
     const jobMatch = inJobs && /^ {2}([A-Za-z0-9_-]+):\s*$/.exec(line);
-    if (jobMatch) { job = jobMatch[1]; continue; }
+    if (jobMatch) { job = jobMatch[1]; name = null; continue; }
+
+    // `M170-03`. The step's human-readable label, carried alongside the command it labels. This
+    // parser read `run:` and nothing else, which is why `ci.yml` could describe a one-script gate for
+    // a day after the gate grew a second consumer with every check green: the command was checked,
+    // the local form was checked, and the two things a reader actually reads — the name and the
+    // comment above it — were the only unchecked text in the block.
+    //
+    // A `run: |` block's commands share one name, deliberately: the label names the step, not each
+    // line in it, so several CLASSIFIED entries may carry the same one.
+    const nameMatch = /^\s*-\s+name:\s*(.+?)\s*$/.exec(line);
+    if (nameMatch) { name = nameMatch[1]; continue; }
 
     const runMatch = /^(\s*)(?:- )?run:(.*)$/.exec(line);
     if (!runMatch) continue;
@@ -273,7 +316,7 @@ function runSteps(text) {
     const value = runMatch[2].trim();
 
     if (value !== '|' && value !== '|-' && value !== '>' && value !== '>-') {
-      out.push({ job, cmd: value });
+      out.push({ job, cmd: value, name });
       continue;
     }
     for (let j = i + 1; j < lines.length; j += 1) {
@@ -282,7 +325,7 @@ function runSteps(text) {
       const indent = body.length - body.trimStart().length;
       if (indent <= col) break;
       if (body.trim().startsWith('#')) continue;
-      out.push({ job, cmd: body.trim() });
+      out.push({ job, cmd: body.trim(), name });
     }
   }
   return out;
@@ -367,6 +410,40 @@ for (const s of unclassified) {
   );
 }
 if (unclassified.length === 0) console.log(`✓ ${steps.length} run: command(s) across ${workflowFiles.length} workflow(s), every one classified`);
+
+// --- 1b. the step's NAME is a checked field too (`M170-03`) ---------------------------------------
+//
+// The classification keys on `wf · job · cmd`, so for a day `ci.yml` announced *"The census script's
+// flags are validated and read from one table"* over a gate that had grown a second consumer the day
+// before, with every check here green. `CONTRIBUTING.md` said "two scripts' flags"; those had been
+// one sentence before `M170a` moved one copy and not the other — `M163-02`'s two-copies-one-fact
+// shape, arriving in a block where every other line is enforced.
+//
+// The name is the thing a reader of a CI run actually sees: a check conclusion is `success` or
+// `failure`, and the label beside it is the whole of what it claims to have done. Checking the
+// command and not the label is a gate whose reach is wider than its output's claim — the inverse of
+// what `PLAN_M175` collects, and the cheaper direction to create, because widening a gate does not
+// prompt anybody to re-read the label.
+//
+// Verbatim, like the `local` form and for the same reason: a keyword match would accept "The census
+// script's flags…" against an entry saying "Two scripts'…", which is precisely the drift.
+const named = new Map(CLASSIFIED.map((c) => [key(c), c]));
+let nameProblems = 0;
+for (const s of steps) {
+  const c = named.get(key(s));
+  if (!c) continue; // already reported as unclassified above
+  if (c.name === s.name) continue;
+  nameProblems += 1;
+  fail(
+    `the step name in ${s.wf} · ${s.job} does not match its classification.\n` +
+      `    workflow says:  ${s.name === null ? '(no name: on the step)' : s.name}\n` +
+      `    CLASSIFIED says: ${c.name}\n` +
+      `    for \`${s.cmd}\`. The label is what a reader of a green run sees, so it is a checked field —\n` +
+      `    M170-03, filed when this file described a one-script gate for a day after the gate grew a second.`,
+  );
+}
+if (unclassified.length === 0 && nameProblems === 0)
+  console.log(`✓ ${steps.length} step name(s) match their classification verbatim`);
 
 // --- 2. no fossils: every entry still matches a live step ------------------------------------------
 

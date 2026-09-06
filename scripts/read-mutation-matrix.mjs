@@ -51,18 +51,70 @@ console.log(`kill matrix — ${matrix.size} of ${meta.candidates} candidates, ${
 console.log(`  ${Object.entries(tally).map(([k, v]) => `${k} ${v}`).join('  ')}   ${relations} kill relation(s)\n`);
 
 // ── how each kill happened, measured ──────────────────────────────────────────────────────────
+//
+// `M168-05`. THE VOCABULARY IS DERIVED FROM THE ROW, NOT READ OFF IT.
+//
+// `D849`'s three kinds were drawn from one census in which the split was clean: 195 rows carried
+// `recall n/a precision n/a (skipped: no report)` and six carried a real tally with no skip. The
+// resume produced rows carrying **both**, because a plant can be graded statically and then have
+// its fixture refused at run time — and the schema had no cell for it. Two of them went to
+// `refusal` with a `note` that contradicts the kind in its own row (*"skipped: no report — the
+// static half asserted (recall 2/2, precision 3/3) and every clause held"*), which is a label
+// saying the plant asserted nothing above prose saying what it asserted.
+//
+// The repair is not a fourth label bolted on. `kind` was carrying two independent facts at once —
+// WHAT THE PLANT ASSERTED and WHETHER ITS FIXTURE WAS REFUSED — and packing them into one word is
+// why two of them had nowhere to go. They are now two fields, and the kind is a function of three
+// booleans the grader's own page already reports:
+//
+//         asserted?   refused?    kind
+//         no          yes         refusal          it asserted nothing; nothing can have covered it
+//         no          no          no-assertions    an empty tally the acceptance gate fails on (`M154f-03`)
+//         yes         either      assertion        it produced its known answer and the answer was FALSE
+//         yes         either      held             it produced its known answer and every clause HELD
+//
+// `assertion` and `held` are separated by `failed`, not by the skip — which is what keeps `C78`
+// and `C79` where `D842` needs them (they asserted, they went false, they are labelled in
+// `lib/mutation-covers.mjs`) while `C42` and `C76` stop claiming to have asserted nothing.
+//
+// And it is DERIVED and then checked against the stored label, because `kill-detail.json` has no
+// producer in this tree: it is transcribed from the grader's per-plant page by hand, once per
+// census, which is the step that mislabelled these two in the first place. A hand step nothing
+// checks is `D767` with a person in the loop. This makes the label falsifiable from the row's own
+// fields; it does not make the transcription unnecessary (see `M176-05`).
+//
+// So the schema is now load-bearing and a transcriber has to honour it: a skip is the `skipped`
+// field and a tally is the `tally` field, never prose in `note`. A row written the old way is
+// refused rather than mis-derived — the pre-`M176e` `{kind: 'refusal', note: 'skipped: no report'}`
+// derives as `no-assertions` and says so, naming both readings. That is deliberate. `M166`'s rule
+// is that a gate which fails plausibly is worse than one that refuses, and a silent re-derivation
+// of 267 rows from prose would be exactly the plausible failure.
+function deriveKind(r) {
+  const asserted = typeof r.tally === 'string' && r.tally.length > 0;
+  if (!asserted) return typeof r.skipped === 'string' ? 'refusal' : 'no-assertions';
+  return (r.failed ?? []).length > 0 ? 'assertion' : 'held';
+}
+
 const kinds = {};
 const assertions = [];
 for (const [mid, plants] of Object.entries(detail)) {
   for (const [pid, d] of Object.entries(plants)) {
-    kinds[d.kind] = (kinds[d.kind] ?? 0) + 1;
-    if (d.kind === 'assertion') assertions.push({ mid, pid, d });
+    const derived = deriveKind(d);
+    if (derived !== d.kind)
+      fail(`${mid} × ${pid} is stored as \`${d.kind}\` in \`kill-detail.json\` and its own fields say \`${derived}\``
+        + ` (tally ${d.tally ? `\`${d.tally}\`` : 'absent'}, ${(d.failed ?? []).length} failed clause(s),`
+        + ` ${typeof d.skipped === 'string' ? `skipped: ${d.skipped}` : 'not skipped'}). \`M168-05\`.`);
+    kinds[derived] = (kinds[derived] ?? 0) + 1;
+    if (derived === 'assertion') assertions.push({ mid, pid, d });
   }
 }
+const skips = Object.values(detail).flatMap((p) => Object.values(p)).filter((d) => typeof d.skipped === 'string');
 console.log('how the plants died (from the acceptance grader\'s own per-plant page):');
 console.log(`  refusal        ${String(kinds.refusal ?? 0).padStart(3)}  the fixture was refused at check time — no report, so the plant asserted nothing`);
 console.log(`  no-assertions  ${String(kinds['no-assertions'] ?? 0).padStart(3)}  an empty tally the acceptance gate itself fails on (\`M154f-03\`)`);
-console.log(`  assertion      ${String(kinds.assertion ?? 0).padStart(3)}  the plant ran, produced its known answer, and the answer was false\n`);
+console.log(`  assertion      ${String(kinds.assertion ?? 0).padStart(3)}  the plant ran, produced its known answer, and the answer was false`);
+console.log(`  held           ${String(kinds.held ?? 0).padStart(3)}  the plant produced its known answer, every clause held, and it is red only because the rest of its fixture was refused (\`M168-05\`)`);
+console.log(`  ${String(skips.length).padStart(3)} of those ${Object.values(detail).reduce((n, p) => n + Object.keys(p).length, 0)} were skipped at run time — an orthogonal fact, and the ${skips.filter((d) => d.tally).length} that also carry a tally are why it is one\n`);
 
 // ── the hand table must match the measurement exactly, both ways (`D767`) ─────────────────────
 const measured = new Set(assertions.map((a) => `${a.mid}|${a.pid}`));
@@ -134,11 +186,42 @@ for (const [name, ids] of Object.entries(buckets)) if (name !== 'refusal-only' &
 // is visible in the artefact's own output rather than in a plan nobody checks out.
 const stamps = [...matrix.values()].map((r) => r.at).filter(Boolean).sort();
 console.log(`\ncensus taken ${meta.startedAt?.slice(0, 10) ?? '?'} on the ${meta.machine}`);
+
+// `M168-06`. THE COST AND THE SPAN ARE TWO NUMBERS, AND ONLY ONE OF THEM IS A COST.
+//
+// This block printed exactly one figure — the first-to-last stamp span — and called it
+// `wall clock ... resumes included`. Both halves of that phrase were doing damage. It was derived
+// from the rows' own stamps rather than from `run-meta`, for `D849`'s reason (the meta block is
+// written once per invocation and a resumed sweep is several of them), and that reasoning is
+// right about *when the census was taken* and wrong about *what it cost*: the very property that
+// makes a span robust to a resume is what makes it meaningless across one. `resumes included`
+// reads as `this figure accounts for them`; what it meant was `this figure contains the nights`.
+//
+// Measured on the box over this committed matrix: span **50.6 h**, sum of `rosterSeconds`
+// **6.2 h** — 8.1x, up from the 7x the finding was filed on, because a span grows with the
+// calendar and a cost does not. This was the only cost number in the artefact, so it is the one a
+// reader sizing the next census would have used.
+//
+// The repair needed no re-run: `rosterSeconds` is a committed field, written per row by
+// `discover-mutation-kills.mjs:659` from that mutation's own roster invocation. State what it is
+// and what it leaves out rather than rounding it into the span:
+//   - it is ROSTER time only. The per-candidate re-vendor is not in it (`run-meta` records one
+//     baseline `revendorSeconds`, not one per row), and neither are the stack recycles.
+//   - the `unbuildable` rows carry none at all, and that is correct rather than missing data —
+//     those candidates failed to re-vendor and never reached the roster.
+// So it is a floor and the span is a ceiling, and the two are printed as what they are.
+const seconds = [...matrix.values()].map((r) => r.rosterSeconds).filter((n) => typeof n === 'number');
+if (seconds.length > 0) {
+  const cost = seconds.reduce((a, b) => a + b, 0) / 3600;
+  const without = matrix.size - seconds.length;
+  console.log(`  ${cost.toFixed(1)} h of roster time, summed from the ${seconds.length} row(s) of ${matrix.size} that record it`
+    + `${without > 0 ? ` (the other ${without} never reached the roster)` : ''} — a floor: the per-candidate`
+    + ` re-vendor and the stack recycles are measured nowhere per row`);
+}
 if (stamps.length > 1) {
   const hours = (Date.parse(stamps[stamps.length - 1]) - Date.parse(stamps[0])) / 3.6e6;
-  // Derived from the rows' own stamps rather than read off `run-meta`, for `D849`'s reason: the
-  // meta block is written once per invocation and a resumed sweep is several of them.
-  console.log(`  ${hours.toFixed(1)} h wall clock across ${stamps.length} recorded row(s), resumes included`);
+  console.log(`  ${hours.toFixed(1)} h calendar span from the first recorded row to the last`
+    + ` — a ceiling, and across a resume it is mostly the gap between sittings, not work`);
 }
 // `M168-09`. The denominators are compared by CONTENT, not by cardinality.
 //

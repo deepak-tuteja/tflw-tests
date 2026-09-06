@@ -39,8 +39,28 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 
-/** Roots we walk looking for `tflw.config`. */
-const SEARCH_ROOTS = ['tflw-acceptance', 'tests', 'examples'];
+/**
+ * `M171-01`, repaired by `M176e`. THE CORPUS IS THE REPOSITORY, AND THE REMAINING NARROWING IS
+ * ASSERTED RATHER THAN ASSUMED.
+ *
+ * This file's first line claims **every host this repo can send a request to**, and it used to read
+ * `SEARCH_ROOTS = ['tflw-acceptance', 'tests', 'examples']` — a three-entry hand list standing in
+ * for an open population, with no recorded reason and no cost to being complete, since `walk()`
+ * already collects every file in the tree and the roots were only a filter applied afterwards.
+ *
+ * Measured before removing it: **11 `tflw.config` files, 10 inside those roots and one outside —
+ * `tflw.config`, the repository's own root config, carrying 11 `api` base declarations.** The
+ * primary config file of the repo was the one file this gate had never read. Nothing was missed:
+ * all 11 bases are `localhost`. That is the finding rather than a reason to discount it — the
+ * corpus was narrower than the subject, nothing was lost today, and the gate could not tell you
+ * which of those two was true.
+ *
+ * One narrowing genuinely remains and is now a checked claim instead of a silence: only
+ * `tflw.config` files are read for `api` bases, never `.tflw` files. Measured, the 262 `.tflw`
+ * files declare **zero** — so check 0 below asserts that, and the day one does, this gate refuses
+ * instead of quietly not looking (`D895`: a hand list that fails loudly on a member it does not
+ * know beats a declaration that it might be incomplete).
+ */
 
 /** Hosts that are ours. `host.docker.internal` is the stack reaching back at a listener we started. */
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0', 'host.docker.internal']);
@@ -117,7 +137,29 @@ function classify(url) {
 const API_BASE = /^\s*api(?:\s+[A-Za-z_][A-Za-z0-9_]*)?\s+"([^"]+)"/gm;
 
 const files = await walk(repoRoot);
-const configs = files.filter((f) => f.endsWith('tflw.config') && SEARCH_ROOTS.some((r) => relative(repoRoot, f).startsWith(r + '/')));
+const configs = files.filter((f) => f.endsWith('tflw.config'));
+
+// --- 0. the corpus this gate reads, stated and bounded (`M171-01`) ------------------------------
+
+const tflwFilesEverywhere = files.filter((f) => f.endsWith('.tflw'));
+const declaringTflw = [];
+for (const f of tflwFilesEverywhere) {
+  const text = await readFile(f, 'utf8');
+  if ([...text.matchAll(API_BASE)].length > 0) declaringTflw.push(relative(repoRoot, f));
+}
+if (declaringTflw.length > 0) {
+  fail(
+    `${declaringTflw.length} \`.tflw\` file(s) declare an \`api\` base, and this gate reads only \`tflw.config\`:\n` +
+      `    ${declaringTflw.join('\n    ')}\n` +
+      `    The header of this file claims every host this repo can send a request to. Either read\n` +
+      `    \`.tflw\` files here too, or narrow the claim — but do not leave the two disagreeing.`,
+  );
+} else {
+  console.log(
+    `✓ corpus: ${configs.length} \`tflw.config\` file(s), all of them read` +
+      ` — and ${tflwFilesEverywhere.length} \`.tflw\` file(s) declare no \`api\` base, so none is a host this gate cannot see`,
+  );
+}
 
 const externals = new Map(); // host -> Set of config paths
 for (const cfg of configs) {

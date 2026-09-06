@@ -18,6 +18,17 @@
 //     known answer was produced.
 //   - **`assertion`** — a real tally with a false clause in it. The plant ran, produced its known
 //     answer, and the answer was wrong. **Six of 207.**
+//   - **`held`** — added by `M176e` for `M168-05`. A real tally with **no** false clause: the plant
+//     produced its known answer, every clause it reached held, and it is red only because the rest
+//     of its fixture was refused. It cannot be `covers` — nothing went false — but it did not
+//     assert nothing either, which is what filing it `refusal` had been claiming. Two rows, both
+//     under `require-env-guards-only-the-first-name-on-the-line`.
+//
+// `read-mutation-matrix.mjs` DERIVES all four from the row's fields and refuses if the stored label
+// disagrees, so this vocabulary is a function of the measurement rather than a judgement taken once
+// per census. `assertion` and `held` are told apart by `failed`, and whether the fixture was refused
+// is a separate `skipped` field — because packing "what did it assert" and "was it refused" into one
+// word is precisely how two of this census's relations ended up with nowhere honest to go.
 //
 // A plant that asserted nothing cannot have been *covered* by anything, under any reading of
 // `D842`. So the hand-labelling is exactly the `assertion` relations below, and the rest are
