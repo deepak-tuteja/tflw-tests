@@ -163,9 +163,13 @@ reproduce false collisions."* True until tflw's `M181`, which gave every `unique
 namespace, so the family is collision-safe *across* runs as well as within one and the
 `second-run-check` phase runs a file twice on one stack to hold it there. What still needs the
 restart is what a namespace cannot reach: seeded stock a checkout decrements and only `down -v`
-replenishes, rows that accumulate until a count assertion reads the previous run's, and any run that
-pins `--now`, which pins the namespace with it. Measured over three whole-suite runs on one stack:
-**323/323, 323/323, 322/323**, so two are clean and the third is not; `node cli.mjs stop`/`start` tears down
+replenishes and any run that pins `--now`, which pins the namespace with it. **The third member of
+that list is gone as of `M182`**, and it read *"rows that accumulate until a count assertion reads
+the previous run's"* — one case, `tickets.tflw`'s collection `wait until`, whose assignee was a
+seeded agent, so every earlier run's breached tickets were still assigned to them. It now mints its
+own agent per run (`M182c`), which makes the count this run's by construction. Measured over three
+whole-suite runs on one stack, 2026-09-08: **325/325, 325/325, 325/325**, where the same measurement
+before `M182` went **323/323, 323/323, 322/323**; `node cli.mjs stop`/`start` tears down
 and rebuilds **both** Postgres containers — apiV2's and inventory-service's own — every phase, same
 isolation guarantee for the second database E4 introduced). Exits non-zero if any phase fails. See
 `scripts/regression.mjs`'s own `PHASES` array for the authoritative, always-current list — this
@@ -367,7 +371,7 @@ A plain `npm test` (or any `npx tflw run` below) already exercises a lot of what
 | `@orderWebhooks` | `order-webhooks.tflw` (M33 — a real order-completion webhook, delivered to a JS-escape-hatch throwaway HTTP receiver) |
 | `@lifecycle` | token-refresh-lifecycle.tflw, user-lifecycle.tflw (`PLAN_LIFECYCLE.md` L3 — attribute enrich→conflict→retry→redact, then soft async self-deletion, as one realistic chain) |
 | `@orderReturns` | return-requests.tflw (`PLAN_RETURNS.md` R3 — order return/refund requests: owner submits, admin approves/rejects, an approved decision fires a real async refund job) |
-| `@ticketing` | tickets.tflw (`PLAN_TICKETING.md` T3 — a third role (`AGENT`) scoped to specific resource instances, role-filtered comment visibility, a cross-endpoint cancel/resolve race, and the suite's first collection-level `wait until` combined with `has count`) |
+| `@ticketing` | tickets.tflw (`PLAN_TICKETING.md` T3 — a third role (`AGENT`) scoped to specific resource instances, role-filtered comment visibility, a cross-endpoint cancel/resolve race, and the suite's first collection-level `wait until` combined with `has count`; since `M182c` that wait registers and promotes **its own agent per run** through `PATCH /admin/users/:id/role`, whose authz cases live in the same file because nothing else calls it) |
 | `@fileFormats` | file-formats.tflw (`PLAN_FILEFORMATS.md` F2 — upload→download round-trips for CSV/TXT/PDF in both response-envelope modes, `body csv`/`body pdf text` against real generated content (the orders CSV export, a naturally multi-page order receipt), `tests/.demo-fail/malformed-{csv,pdf}-upload.tflw` for the loud-error negative cases; closes TFLW-GAPS.md gap #19, `tflw M25`) |
 | `@logging` | logging.tflw (`PLAN_LOG_CONSUME.md` M51 — `log` statement consumption: config-default `log destination`/`log level` resolution, override-not-accumulate semantics, and "an explicit `to …` clause always wins" over both config and `--log-output`/`--log-level`; every other file also gets one narration `log` line in its own clearest test, untagged) |
 

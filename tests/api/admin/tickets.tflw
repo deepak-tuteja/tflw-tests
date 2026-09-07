@@ -12,11 +12,31 @@
 # return-requests.tflw and jobs.tflw already settled on: this file sorts late enough in the suite
 # that a cached admin session's 5s-TTL bearer token can be stale by the time these tests run.
 #
-# Agent-identity discipline: AGENT_B (dave) is reserved exclusively for the collection-level test
-# below — every other test here only ever uses AGENT_A (carol) as the agent who successfully
-# claims/acts. That keeps `?assignedTo={daveId}` an exact, order-independent count no matter what
-# order these tests execute in, without needing a query filter this DTO doesn't expose (there's no
-# subject/description search).
+# Agent-identity discipline, amended in place by `M182c` (`D940`). What this paragraph used to say,
+# quoted rather than deleted because every word of it is still true and it is still the reason two
+# tests below use dave at all:
+#
+#     "AGENT_B (dave) is reserved exclusively for the collection-level test below — every other test
+#     here only ever uses AGENT_A (carol) as the agent who successfully claims/acts. That keeps
+#     `?assignedTo={daveId}` an exact, order-independent count no matter what order these tests
+#     execute in, without needing a query filter this DTO doesn't expose."
+#
+# True **within a run**, and that was the whole boundary it could see. `?assignedTo=` counts rows in
+# a database and a *seeded* agent outlives the run, so the tickets one run breaches are still
+# assigned to dave on the next one. Measured (`M181-01`, three runs of this one file on one stack):
+# run 1 waited 7 attempts / 1827 ms and passed; run 2 was satisfied by its **first** poll in **2 ms**
+# on run 1's two tickets, while its own two were still unbreached when the run ended. A step whose
+# whole subject is waiting had not waited, and it was green.
+#
+# So the collection-level test now **registers and promotes its own agent** (`D939`), through
+# `PATCH /admin/users/:id/role` (`M182b`, `D938`) — the verb the API was missing, and the reason it
+# could not simply be scoped harder: `POST /auth/register` hardcodes `role: user` and
+# `PATCH /tickets/:id/assign` refuses a non-AGENT assignee with 422, so no test could mint an agent.
+# A `unique email` per run means the count is this run's by construction rather than by discipline.
+#
+# **Dave stays seeded and stays in this file.** He is still the agent whose claim collides (409) and
+# whose view 404s in the two tests below, he is still never a successful assignee anywhere here, and
+# removing a fixture to prove a different point is how a grader stops finding things.
 
 @ticketing @adminOps @api
 test "the full ticket lifecycle: owner submits, an agent claims/starts/resolves, the owner closes"
@@ -252,40 +272,117 @@ test "the ticket collection composes wait until with a count assertion across mu
   expect status equals 200
   capture body.accessToken as aliceToken
 
-  api POST /auth/login body { email: env(AGENT_B_EMAIL), password: env(AGENT_B_PW) }
-  expect status equals 200
-  capture body.accessToken as daveToken
+  # `M182c` (`D939`) — this run's own agent, not a seeded one. `unique` is run-scoped since `M181`,
+  # so this address has never existed before and the id below has no history for the count to find.
+  let agentPw = random password
+  api POST /auth/register body { name: unique("SLA agent"), email: unique email, password: {agentPw} }
+  expect status equals 201
+  capture body.accessToken as agentToken
 
   api GET /auth/profile
-    header "Authorization" is "Bearer {daveToken}"
+    header "Authorization" is "Bearer {agentToken}"
   expect status equals 200
-  capture body.id as daveId
+  expect body.role equals "user"
+  capture body.id as agentId
 
-  api POST /tickets body { subject: unique("Dave's ticket A"), description: "first of two" }
+  # `M182b` (`D938`) — the promotion. Registration always yields `user`, and `assign` refuses a
+  # non-AGENT assignee with 422, so without this route a per-run agent is unreachable and the count
+  # below has to be scoped by convention instead of by construction.
+  api PATCH /admin/users/{agentId}/role body { role: "agent" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 200
+  expect body.role equals "agent"
+
+  api POST /tickets body { subject: unique("SLA ticket A"), description: "first of two" }
     header "Authorization" is "Bearer {aliceToken}"
   expect status equals 201
   capture body.id as ticketAId
 
-  api POST /tickets body { subject: unique("Dave's ticket B"), description: "second of two" }
+  api POST /tickets body { subject: unique("SLA ticket B"), description: "second of two" }
     header "Authorization" is "Bearer {aliceToken}"
   expect status equals 201
   capture body.id as ticketBId
 
-  api PATCH /tickets/{ticketAId}/assign body { assigneeId: "{daveId}" }
+  api PATCH /tickets/{ticketAId}/assign body { assigneeId: "{agentId}" }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 200
 
-  api PATCH /tickets/{ticketBId}/assign body { assigneeId: "{daveId}" }
+  api PATCH /tickets/{ticketBId}/assign body { assigneeId: "{agentId}" }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 200
 
   # decision 8/11's novel combination — a collection endpoint (not a single resource) as the target
   # of `wait until`, with a `has count` assertion as the eventual condition rather than an
-  # equals/contains on one field. Scoped to dave alone (see the file header) so the count is exact
-  # regardless of what any other test in this file has done.
-  wait until api GET /tickets?assignedTo={daveId}&slaBreached=true
+  # equals/contains on one field. Scoped to an agent minted by this run, so the count starts at 0
+  # and reaches 2 only through work this run did — which is what makes the wait a wait.
+  wait until api GET /tickets?assignedTo={agentId}&slaBreached=true
     header "Authorization" is "Bearer {adminToken}"
     expect body has count 2
+
+# ---- `M182b` (`D938`): the role route's own authz coverage -------------------------------------
+#
+# These three live in this file rather than in one of their own because the route exists for the
+# test above and nothing else calls it. Tagged `@ticketing` for the same reason — the tag names this
+# file, and a reader who follows `@ticketing` from README.md should find the verb the collection
+# test depends on, not have to know it lives somewhere else.
+
+@ticketing @adminOps @authz @api
+test "only an admin may promote a user to the agent role"
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as aliceToken
+
+  api GET /auth/profile
+    header "Authorization" is "Bearer {aliceToken}"
+  expect status equals 200
+  capture body.id as aliceId
+
+  # An ordinary user cannot promote anyone — not even themselves, which is the shape that would
+  # matter: `assign` trusts the AGENT role completely, so self-promotion here would hand any
+  # registered account the agent's role-filtered view of every ticket assigned to it.
+  api PATCH /admin/users/{aliceId}/role body { role: "agent" }
+    header "Authorization" is "Bearer {aliceToken}"
+  expect status equals 403
+
+  # And the refusal really refused — RolesGuard runs before the handler, so nothing was written.
+  api GET /auth/profile
+    header "Authorization" is "Bearer {aliceToken}"
+  expect status equals 200
+  expect body.role equals "user"
+
+@ticketing @adminOps @authz @api
+test "promoting a user that does not exist is a 404, and an unknown role is a 422"
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+  # Well-formed uuid, no such row — the id survives `ParseUUIDPipe` and dies in the repository
+  # lookup, which is the 404 this asserts. A malformed id is a different answer (400) from a
+  # different layer and is not what this test is about.
+  api PATCH /admin/users/00000000-0000-4000-8000-000000000000/role body { role: "agent" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 404
+
+  # Its own subject, on a throwaway account rather than a seeded one: a refusal that half-applied
+  # would be invisible if asserted against a user whose role nothing else reads.
+  let throwawayPw = random password
+  api POST /auth/register body { name: unique("Role victim"), email: unique email, password: {throwawayPw} }
+  expect status equals 201
+  capture body.accessToken as throwawayToken
+
+  api GET /auth/profile
+    header "Authorization" is "Bearer {throwawayToken}"
+  expect status equals 200
+  capture body.id as throwawayId
+
+  api PATCH /admin/users/{throwawayId}/role body { role: "superuser" }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 422
+
+  api GET /auth/profile
+    header "Authorization" is "Bearer {throwawayToken}"
+  expect status equals 200
+  expect body.role equals "user"
 
 @ticketing @adminOps @authz @api
 test "only an admin may assign a ticket to an agent"
