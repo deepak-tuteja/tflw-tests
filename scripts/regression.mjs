@@ -18,11 +18,22 @@
 // tracked files were counting it, in three disagreeing numbers. A guard pointed at one file is what
 // let that stand.
 //
-// Every phase gets its own fresh Docker restart first. Necessary, not just cautious: `unique(...)`
-// resets its counter each `tflw run` invocation, but Postgres data persists across invocations —
-// chaining phases on the same DB reproduces the exact "unique(...)-email/data collision" false
-// failures this project has already hit and documented twice (PROGRESS.md M20, M21). A phase's
-// result is only trustworthy in isolation.
+// Every phase gets its own fresh Docker restart first, and **the reason this comment gave for that
+// from M21 until `M181c` was a defect rather than a property.** It read: *"Necessary, not just
+// cautious: `unique(...)` resets its counter each `tflw run` invocation, but Postgres data persists
+// across invocations — chaining phases on the same DB reproduces the exact
+// 'unique(...)-email/data collision' false failures this project has already hit and documented
+// twice (PROGRESS.md M20, M21)."* Every word of that was true and it described something
+// unrepaired: `M162-01` measured three whole-suite runs on one stack going 323 pass -> 5 failed ->
+// 8 failed, twelve of the thirteen failing steps being one column. tflw's `M181a` repaired it —
+// every `unique` value now carries a run namespace taken from the run clock — so that particular
+// collision is gone, and `second-run-check` below is the phase that grades its absence instead of
+// this comment asserting it.
+//
+// The restart stays, and the reason it stays is the rest of the class: a seeded product's stock is
+// finite and only `down -v` restores it (six runs, `D822`/`CONTRIBUTING.md`), and a review cannot
+// be deleted at any route. A phase's result is only trustworthy in isolation, for reasons this
+// milestone did not remove.
 import { rmSync } from 'node:fs';
 import { tflwCommand } from './lib/tflw-bin.mjs';
 
@@ -305,6 +316,32 @@ const PHASES = [
     name: 'screenshot-step-check',
     cmd: 'node scripts/verify-screenshot-step.mjs',
   },
+  // `M181c` (testFlow `PLAN_M181_RUN_SCOPED_UNIQUE.md`, `D934`). **The guard `D822` refused, at the
+  // price the condition actually costs** — and the only phase in this file whose subject is what
+  // happens on the *second* run against one stack rather than on the first.
+  //
+  // Every other phase here opens with a fresh restart, which is exactly why none of them can see
+  // this: `restart()` is `down -v` and then `up`, so every phase measures a first run forever. The
+  // header of this file has said since M21 that the restart exists to keep the
+  // "`unique(...)`-email/data collision" out of the results — a workaround documented as hygiene,
+  // load-bearing in `README.md` and `CONTRIBUTING.md`, and never once graded. `M162-01` is what it
+  // was hiding: three whole-suite runs against one live stack went 323 pass -> 5 failed -> 8 failed.
+  //
+  // `D822` priced this guard at *"eight consecutive full-gate rounds"* and declined, and it was
+  // right about the condition it priced — stock depletion, `CONTRIBUTING.md`'s measured six runs of
+  // one file. The `unique` condition underneath it costs **two** runs of **one file**, so `D934`
+  // amends that decision on its own terms rather than overruling it, and the script states its
+  // reach (`D896`) instead of letting a green imply the wider class.
+  //
+  // **It needs no extra restart, because not restarting is the condition.** It takes the ordinary
+  // fresh restart every phase takes and then runs `--tag smoke` twice inside itself. Measured on the
+  // build box: 12 tests, ~1.3 s a run, so what this phase costs a leg is ~3 s against a stack
+  // restart every phase pays regardless — the same arithmetic `security-acceptance-gate`,
+  // `input-acceptance` and `screenshot-step-check` were each placed on.
+  {
+    name: 'second-run-check',
+    cmd: 'node scripts/verify-second-run.mjs',
+  },
   // `M154h` (`D758`, `D761`). The perf ladder, measured — and the **only** phase in this file that
   // deliberately does not run in CI.
   //
@@ -396,11 +433,19 @@ const PHASES = [
 // measured on the box, against a stack restart every phase pays regardless, so what it moves is
 // `core` from 9 to 10 — tied with `tooling` rather than exceeding it. The re-pack six placements have
 // now deferred still needs CI timings this milestone had no reason to pull.
+// `M181c` adds `second-run-check` to `security-ui`, the seventh hand placement, and it is placed on
+// **count alone** — which is worth saying plainly, because theme points elsewhere and loses. The bins
+// were 10/10/10/9 and `security-ui` was the unique smallest, exactly the argument `M139-5` used for
+// `core` at 8. Theme would have said `core`, whose `full suite` phase is the corpus this one runs a
+// slice of twice; that reading is available and was not taken, because the phase's graded work is ~3 s
+// against a stack restart every phase pays regardless, so count is the only proxy that moves anything.
+// The re-pack seven placements have now deferred still needs the CI timings nobody has pulled — and
+// this is the eighth placement to say so.
 const PHASE_GROUPS = {
   core: ['full suite', '--tag orderOps', '--tag smoke,catalogOps', 'demo-fail-check', '--tag orgOps', '--tag inventoryOps', 'migrate-check', 'secure-local-check', 'security-acceptance-gate', 'input-acceptance'],
   tooling: ['--tag api', 'watch-check', 'pick-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check', 'security-target-check', 'sarif-acceptance', 'construct-acceptance'],
   safety: ['--tag identityOps', '--tag mixed', '--tag smoke,orderOps', '--tag adminOps', '--tag catalogOps', 'safety-flags-check', 'check-diagnostics', 'artifact-contract', 'safety-redaction-check', 'screenshot-step-check'],
-  'security-ui': ['--tag smoke,identityOps', 'cli-flags-check', '--tag smoke,adminOps', '--tag ui', 'webv2-admin-check', '--tag smoke,inventoryOps', 'logging-check', 'mtls-rejection', 'vuln-slice-hidden-check'],
+  'security-ui': ['--tag smoke,identityOps', 'cli-flags-check', '--tag smoke,adminOps', '--tag ui', 'webv2-admin-check', '--tag smoke,inventoryOps', 'logging-check', 'mtls-rejection', 'vuln-slice-hidden-check', 'second-run-check'],
 };
 
 // The groups are a hand-maintained partition of PHASES, and CI runs *only* the groups (a 4-leg

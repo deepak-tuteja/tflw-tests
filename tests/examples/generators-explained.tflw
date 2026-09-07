@@ -1,6 +1,9 @@
-# generators-explained.tflw — SPEC §7.2-§7.3: `unique(...)` (collision-safe, run-wide counter,
-# never seed-reproducible) for anything with a uniqueness constraint; `random ...` (per-test
-# seeded, replays identically under the same `--seed`, collisions allowed) for value-shaped data.
+# generators-explained.tflw — SPEC §7.2-§7.3: `unique(...)` (collision-safe within a run off a
+# run-wide counter, and — since tflw's `M181` — across runs too, off a run namespace taken from the
+# run clock; never seed-reproducible either way) for anything with a uniqueness constraint;
+# `random ...` (per-test seeded, replays identically under the same `--seed`, collisions allowed)
+# for value-shaped data. The two move on different axes: `random` follows `--seed` and ignores the
+# clock, `unique` follows `--now` and ignores the seed.
 
 before
   api GET /categories

@@ -157,8 +157,15 @@ the perf gate, which needs `fedora-box`, k6 and exclusive use of the machine, an
 `⊘ skipped` anywhere else rather than a pass. Six of its eight rungs drive apiV2 and two drive a
 managed echo target it starts itself, so it takes the same fresh restart as everything else. Each
 phase runs on its own fresh Docker restart (`scripts/regression.mjs`; restarting every phase isn't
-optional — `unique(...)`'s counter resets per `tflw run` invocation but Postgres data doesn't, so
-chained phases on the same DB reproduce false collisions; `node cli.mjs stop`/`start` tears down
+optional, though **the cause this sentence used to name is repaired**. It read: *"`unique(...)`'s
+counter resets per `tflw run` invocation but Postgres data doesn't, so chained phases on the same DB
+reproduce false collisions."* True until tflw's `M181`, which gave every `unique` value a run
+namespace, so the family is collision-safe *across* runs as well as within one and the
+`second-run-check` phase runs a file twice on one stack to hold it there. What still needs the
+restart is what a namespace cannot reach: seeded stock a checkout decrements and only `down -v`
+replenishes, rows that accumulate until a count assertion reads the previous run's, and any run that
+pins `--now`, which pins the namespace with it. Measured over three whole-suite runs on one stack:
+**323/323, 323/323, 322/323**, so two are clean and the third is not; `node cli.mjs stop`/`start` tears down
 and rebuilds **both** Postgres containers — apiV2's and inventory-service's own — every phase, same
 isolation guarantee for the second database E4 introduced). Exits non-zero if any phase fails. See
 `scripts/regression.mjs`'s own `PHASES` array for the authoritative, always-current list — this

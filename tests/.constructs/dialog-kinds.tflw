@@ -40,8 +40,12 @@ test "a `prompt` separates cancelled from answered-empty from answered, and the 
   expect status equals 200
   capture body[0].id as categoryId
 
-  # `unique uuid`, not `unique("…")`, for the reason `C2`'s plant records in full: the prefix form
-  # is a run-scoped counter and this database survives between runs.
+  # `unique uuid`, not `unique("…")`, for the reason `C2`'s plant records in full — **and that
+  # reason was wrong when it was written**. The prefix form was a run-scoped counter against a
+  # database that survives between runs, which was true; what it missed is that `unique uuid`'s
+  # trailing eight hex digits were that *same* counter, so the hatch it reached for was never one.
+  # Since tflw's `M181` both forms carry a run namespace and either would do. This one stays
+  # because changing a plant's fixture identity is how a grader silently stops finding it.
   let prefix = unique uuid
   api POST /products body { name: "{prefix} zeta", price: 8.00, stock: 3, categoryId: {categoryId} }
     header "Authorization" is "Bearer {adminToken}"

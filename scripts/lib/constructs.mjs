@@ -1714,22 +1714,28 @@ export const PLANTS = [
     construct: 'generator:unique-prefix',
     family: 'generator',
     tier: 'api',
-    title: '`unique("prefix")` appends a run-wide counter — its distinctness is ordering, not entropy',
+    title: '`unique("prefix")` appends a run namespace and a run-wide counter — its distinctness is ordering, not entropy',
     target: 'tests/.constructs/generator-known-answers.tflw, against `POST /v1/lifecycle/mark` and `/attempt`',
     evidence: { file: 'tests/.constructs/generator-known-answers.tflw', pattern: '^  let a = unique\\("W3-Widget"\\)$', min: 1 },
     graders: ['acceptance'],
     knownAnswer:
-      'Three draws yield `W3-Widget-0`, `-1`, `-2`: the prefix verbatim, then three **consecutive** ' +
-      'integers. The grader states that as arithmetic, which is what separates this row from the ' +
-      '~60 `unique("…")` sites in this suite — every one of them spends the value on a request and ' +
-      'asserts on the response, so a generator returning a constant passes the lot. It also runs ' +
-      'the plant under two seeds and two run clocks and requires the value to be **identical** in ' +
-      'all four, because a counter is not seeded, which is the whole difference from the `random` ' +
-      'group. The last claim is `SPEC` §7.2\'s bolded retry clause: inside a `retry 2` test that ' +
-      'settles on attempt 3, the counter keeps advancing, so the server sees three distinct values ' +
-      'marked once each. Nothing in this repository had observed that — `retry-and-flake.tflw` ' +
-      'retries against a `random string 8` key, which is the opposite promise and passes either way.',
-    catches: 'a `unique("…")` that drops or mangles its prefix, that repeats within a run, that became seed-derived, or that replays a value across a retried test\'s attempts.',
+      'Three draws yield `W3-Widget-<ns>-0`, `-1`, `-2`: the prefix verbatim, then the run ' +
+      'namespace, then three **consecutive** integers. The grader states that as arithmetic, ' +
+      'which is what separates this row from the ~60 `unique("…")` sites in this suite — every ' +
+      'one of them spends the value on a request and asserts on the response, so a generator ' +
+      'returning a constant passes the lot. It runs the plant under two seeds and two run ' +
+      'clocks and requires **two axes** rather than one: the value is identical under a second ' +
+      'seed, because a counter is not seeded, and it **moves under a moved clock**, because the ' +
+      'namespace is the run clock. The seed half is the whole difference from the `random` ' +
+      'group; the clock half is `M181`. Until then this row required the value to be identical ' +
+      'in all four runs, which asserted the defect `M162-01` was filed on as a property — it is ' +
+      're-derived rather than deleted (`D933`), and what is identical in all four is now the ' +
+      'counter *inside* the value. The last claim is `SPEC` §7.2\'s bolded retry clause: inside ' +
+      'a `retry 2` test that settles on attempt 3, the counter keeps advancing, so the server ' +
+      'sees three distinct values marked once each. Nothing in this repository had observed ' +
+      'that — `retry-and-flake.tflw` retries against a `random string 8` key, which is the ' +
+      'opposite promise and passes either way.',
+    catches: 'a `unique("…")` that drops or mangles its prefix, that repeats within a run, that became seed-derived, that replays a value across a retried test\'s attempts, or that went back to re-issuing the previous run\'s values against a column that outlives the run (`M162-01`).',
     blockedOn: null,
   },
   {
@@ -1737,19 +1743,23 @@ export const PLANTS = [
     construct: 'generator:unique-email',
     family: 'generator',
     tier: 'api',
-    title: '`unique email` is `user<n>@example.test` off the **same** counter every other `unique` reads',
+    title: '`unique email` is `user-<ns>-<n>@example.test` off the **same** counter and the **same** namespace every other `unique` reads',
     target: 'tests/.constructs/generator-known-answers.tflw, against `POST /v1/lifecycle/mark`',
     evidence: { file: 'tests/.constructs/generator-known-answers.tflw', pattern: '^  let a = unique email$', min: 1 },
     graders: ['acceptance'],
     knownAnswer:
-      'The 32 sites this construct has in the suite all use it as an address and none of them says ' +
-      'what the address is. It is `user<n>@example.test`, and `<n>` is not this construct\'s own ' +
-      'sequence — the grader requires the first address to be `user{k+1}` where `k` is the last ' +
-      'index `C81`\'s test drew, so the plant reads `user3@example.test` **because the test above ' +
-      'it drew three prefixes**. That is the family\'s real known answer and it is stated nowhere ' +
-      'else: two `unique` values are distinct because of ordering across the whole run, not ' +
-      'because each construct has a private counter.',
-    catches: 'a `unique email` that repeats, that stops being a routable-looking address, or that acquires a per-construct counter and so stops being collision-safe against its siblings.',
+      'The 32 sites this construct has in the suite all use it as an address and none of them ' +
+      'says what the address is. It is `user-<ns>-<n>@example.test`, and neither field is this ' +
+      'construct\'s own. `<n>` continues the shared counter — the grader requires the first ' +
+      'address to carry `{k+1}` where `k` is the last index `C81`\'s test drew, so the plant ' +
+      'reads `#3` **because the test above it drew three prefixes** — and `<ns>` is `C81`\'s ' +
+      'namespace unchanged. That is the family\'s real known answer and it is stated nowhere ' +
+      'else: two `unique` values are distinct within a run because of ordering across the whole ' +
+      'run, and distinct across runs because of one namespace shared by the whole group, not ' +
+      'because either construct has a private sequence of either. **This is the construct ' +
+      '`M162-01` was measured on**: twelve of the thirteen steps that failed on a second run ' +
+      'against one stack were `email already registered`.',
+    catches: 'a `unique email` that repeats, that stops being a routable-looking address, that acquires a per-construct counter or namespace and so stops being collision-safe against its siblings, or that stops being collision-safe against the previous run.',
     blockedOn: null,
   },
   {
@@ -1757,17 +1767,23 @@ export const PLANTS = [
     construct: 'generator:unique-number',
     family: 'generator',
     tier: 'api',
-    title: '`unique number` is the shared counter itself, unwrapped',
+    title: '`unique number` is the shared counter and the shared namespace packed into one safe integer',
     target: 'tests/.constructs/generator-known-answers.tflw, against `POST /v1/lifecycle/mark`',
     evidence: { file: 'tests/.constructs/generator-known-answers.tflw', pattern: '^  let a = unique number$', min: 1 },
     graders: ['acceptance'],
     knownAnswer:
-      'This construct has **no site anywhere in the repository** — `M154g` step 1\'s discovery leg ' +
-      'found four like it, and the first move on those is to write a use, not a grader. So this ' +
-      'row and its plant are its entire evidence. Three draws are three consecutive integers, and ' +
-      'they continue directly from `C82`\'s last address index, which is the third of the four ' +
-      'observations that pin the counter as shared.',
-    catches: 'a `unique number` that repeats, that returns something other than digits, or that runs off a sequence of its own.',
+      'This construct has **no site anywhere in the repository** — `M154g` step 1\'s discovery ' +
+      'leg found four like it, and the first move on those is to write a use, not a grader. So ' +
+      'this row and its plant are its entire evidence. The value decomposes: the run namespace ' +
+      'in the high 30 bits of a JavaScript safe integer and the counter in the low 23, so ' +
+      '`7420329097953286` is `884572160 * 2^23 + 6`. The grader does that arithmetic and checks ' +
+      'each field against this row\'s siblings — three consecutive counters continuing directly ' +
+      'from `C82`\'s last address index, which is the third of the four observations that pin ' +
+      'the counter as shared, and one namespace agreeing with all three. The 23-bit field is a ' +
+      'stated ceiling rather than a wrap: `SPEC` §7.2 documents the refusal, because the ' +
+      'alternative is two counters rounding onto one value once the product leaves safe-integer ' +
+      'range.',
+    catches: 'a `unique number` that repeats, that returns something other than digits, that runs off a sequence of its own, that drops either field, or that exceeds a safe integer and starts rounding two counters onto one value.',
     blockedOn: null,
   },
   {
@@ -1775,25 +1791,31 @@ export const PLANTS = [
     construct: 'generator:unique-uuid',
     family: 'generator',
     tier: 'api',
-    title: '`unique uuid` carries the counter in its last eight hex digits — the guarantee `random uuid` does not have',
+    title: '`unique uuid` carries the counter in its last eight hex digits and the run namespace in the four bytes before them — the guarantee `random uuid` does not have',
     target: 'tests/.constructs/generator-known-answers.tflw, against `POST /v1/lifecycle/mark`',
     evidence: { file: 'tests/.constructs/generator-known-answers.tflw', pattern: '^  let a = unique uuid$', min: 1 },
     graders: ['acceptance'],
     knownAnswer:
-      'v4-shaped, and its trailing eight hex digits are the same run-wide counter — `…0000000c`, ' +
-      '`…0000000d`, `…0000000e` is 12, 13, 14. The grader parses them and requires consecutive ' +
-      'integers, which is what turns "distinct" from a probability into a guarantee. It also ' +
-      'requires that under a **different seed** the uuid changes while those eight digits do not: ' +
-      'the two halves of this construct have different sources and only one of them carries the ' +
-      'promise. That comparison against `C90` is the documented difference between the two uuid ' +
-      'constructs, and it existed nowhere. The counter also jumps by four rather than one between ' +
-      '`C83`\'s last draw and this one, because the three `unique like` draws in between spend three ' +
-      'ticks of the same shared sequence (`SPEC` §7.5). That gap used to be `M154g-07`\'s evidence — ' +
-      'the ticks were spent and the values did not carry them — and it is now just the counter being ' +
-      'one counter. It is still asserted, because it is the only place the *sharing* is visible: ' +
-      'four constructs reading one sequence is what makes `C82`\'s and `C83`\'s continuations mean ' +
-      'anything, and an implementation that gave each construct its own would pass every other claim here.',
-    catches: 'a `unique uuid` whose tail stopped being the counter (silently downgrading a guarantee to 122 bits of luck), and one that is no longer v4-shaped.',
+      'v4-shaped, and **both** of its guaranteeing halves are read back. Its trailing eight hex ' +
+      'digits are the same run-wide counter — `…0000000c`, `…0000000d`, `…0000000e` is 12, 13, ' +
+      '14 — and bytes 8-11 immediately before them are the run namespace, masked past the ' +
+      'variant nibble (`b4b9-8000`). The grader parses both, requires consecutive integers on ' +
+      'one and agreement with `C81`-`C83` on the other, and requires the two to move ' +
+      'independently: under a **different seed** the uuid changes and neither half does, and ' +
+      'under a **moved clock** the namespace moves and the counter does not. That is what turns ' +
+      '"distinct" from a probability into a guarantee on each axis. `M181` put the namespace in ' +
+      'the half that carries the promise deliberately, and the layout keeps the trailing digits ' +
+      'the counter, which is why this row did not invert. The comparison against `C90` is the ' +
+      'documented difference between the two uuid constructs, and it existed nowhere. The ' +
+      'counter also jumps by four rather than one between `C83`\'s last draw and this one, ' +
+      'because the three `unique like` draws in between spend three ticks of the same shared ' +
+      'sequence (`SPEC` §7.5). That gap used to be `M154g-07`\'s evidence — the ticks were spent ' +
+      'and the values did not carry them — and it is now just the counter being one counter. It ' +
+      'is still asserted, because it is the only place the *sharing* is visible: four ' +
+      'constructs reading one sequence and one namespace is what makes `C82`\'s and `C83`\'s ' +
+      'continuations mean anything, and an implementation that gave each construct its own ' +
+      'would pass every other claim here.',
+    catches: 'a `unique uuid` whose tail stopped being the counter or whose bytes 8-11 stopped being the run namespace (silently downgrading a guarantee to 122 bits of luck on either axis), and one that is no longer v4-shaped.',
     blockedOn: null,
   },
   {
@@ -2486,25 +2508,32 @@ export const PLANTS = [
     evidence: { file: 'tests/.constructs/generator-known-answers.tflw', pattern: '^  let a = unique like "ORD-######"$', min: 1 },
     graders: ['acceptance'],
     knownAnswer:
-      'Three claims, and the shape one is the weakest of them. `#` fills with digits and the three ' +
-      'draws are distinct — but a sample of three cannot tell a guarantee from a high probability, ' +
-      'and for a year this construct passed exactly that assertion while having no guarantee at ' +
-      'all. So the row is graded on the two things a sample cannot fake. First, the value is ' +
-      '**identical under both seeds and both run clocks**, which places it with `C81`-`C84` and ' +
-      'against `C89`: `random like` shares this construct\'s entire pattern language and moves with ' +
-      'the seed, so *seed-independence is the only thing that tells the two constructs apart*, and ' +
-      'nothing here or in tflw asserted it. It is also the claim that discriminates, measured: this ' +
-      'row scored **3/4 against the pre-fix build and 4/4 after**, and seed-independence is the one ' +
-      'that moved. Second, `SPEC` §7.2\'s **bolded** retry clause — a retried attempt cannot ' +
-      'reproduce a value an earlier attempt used — is read off the same `retry 2` test that grades ' +
-      '`C81` and `C88`: three distinct values, marked once each, where `random string` beside them ' +
-      'is one value marked three times. **That mark was written at step 3 and read for the first ' +
-      'time here, and reading it corrected the record.** `M154g-07` twice asserted the clause was ' +
-      '*false* for this construct and it never was: the old build keyed its RNG on the shared ' +
-      'counter, which advances across a retried test\'s attempts, so the three values already ' +
-      'differed. The claim was inferred from a mechanism theory that was itself wrong, while the ' +
+      'Three claims, and the shape one is the weakest of them. `#` fills with digits and the ' +
+      'three draws are distinct — but a sample of three cannot tell a guarantee from a high ' +
+      'probability, and for a year this construct passed exactly that assertion while having no ' +
+      'guarantee at all. So the row is graded on the two things a sample cannot fake. First, ' +
+      'since `M181` the discriminator is **two-axis and graded as a pair in one expression**: ' +
+      'this construct is identical under a second seed and moves under a moved clock, while ' +
+      '`random like` — same pattern language, same regex — does exactly the opposite. Read ' +
+      'apart, either half is satisfied by a constant, which is why it is one expression and not ' +
+      'two clauses. Until `M181` this row required the value to be *identical under both seeds ' +
+      'and both run clocks*, and that clause asserted the defect as a property; it is ' +
+      're-derived rather than deleted (`D933`) and its seed half survives verbatim. It is also ' +
+      'the claim that discriminates, measured: this row scored **3/4 against the pre-fix build ' +
+      'and 4/4 after**, and seed-independence is the one that moved. This member is the ' +
+      'family\'s one **probabilistic** cross-run case (`SPEC` §7.2) — it moves between runs ' +
+      'without widening, still six digits and carrying no namespace, because the namespace ' +
+      're-keys a permutation of a finite space instead of being appended to it. Second, `SPEC` ' +
+      '§7.2\'s **bolded** retry clause — a retried attempt cannot reproduce a value an earlier ' +
+      'attempt used — is read off the same `retry 2` test that grades `C81` and `C88`: three ' +
+      'distinct values, marked once each, where `random string` beside them is one value marked ' +
+      'three times. **That mark was written at step 3 and read for the first time here, and ' +
+      'reading it corrected the record.** `M154g-07` twice asserted the clause was *false* for ' +
+      'this construct and it never was: the old build keyed its RNG on the shared counter, ' +
+      'which advances across a retried test\'s attempts, so the three values already differed. ' +
+      'The claim was inferred from a mechanism theory that was itself wrong, while the ' +
       'instrument that would have settled it sat unread in this file.',
-    catches: 'a `unique like` whose distinctness went back to being probabilistic (it would move under a second seed, since the only way to draw is to consult the RNG), one that replays a value across a retried test\'s attempts, and one that silently wrapped its pattern instead of refusing to overflow it.',
+    catches: 'a `unique like` whose distinctness went back to being probabilistic *within* a run (it would move under a second seed, since the only way to draw is to consult the RNG), one that replays a value across a retried test\'s attempts, one that silently wrapped its pattern instead of refusing to overflow it, and one that stopped moving between runs — which would make it and `random like` tell apart on one axis again.',
     blockedOn: null,
   },
   {

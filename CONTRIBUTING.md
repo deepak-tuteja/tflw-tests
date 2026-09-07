@@ -464,8 +464,21 @@ If apiV2 ever stops being a target and starts being something whose internals ot
 this decision expires. That is the condition; it is deliberately not tied to a milestone number.
 - **`xvfb-run -a npm run regression`** — the whole sweep, each phase on its own fresh Docker
   restart — **plus one phase that runs only off CI**, see `perf-ladder` below. Restarting is
-  not optional: `unique(...)`'s counter resets per `tflw run` while Postgres
-  data does not, so chained phases on one database reproduce false collisions. `xvfb-run -a` is not
+  not optional, and **the cause this line used to give is repaired.** It read: *"`unique(...)`'s
+  counter resets per `tflw run` while Postgres data does not, so chained phases on one database
+  reproduce false collisions."* That was true, and it was the seventh place this repository wrote
+  the same defect down without repairing it (`M181` §4). tflw's `M181` gave every `unique` value a
+  run namespace, so the family is collision-safe **across** runs as well as within one, and
+  `second-run-check` runs a file twice on one stack and requires the second run green — so this
+  half is measured now rather than assumed. What still needs the restart is what a namespace cannot
+  reach: seeded stock a checkout decrements and only `down -v` replenishes (`M162b`/`D819`), rows
+  that accumulate until a count assertion reads the previous run's (`M181`/`D935`), and any run
+  that pins `--now`, which pins the namespace with it. **That residue is measured now, and it is not
+  small enough** (`M181e`, 2026-09-07, on the build box): three consecutive whole-suite runs on one
+  stack with no `cli.mjs stop` go **323/323, 323/323, 322/323** — two runs clean where the second
+  used to fail on five tests, and the third not. The one failure is a `wait until` reading rows the
+  earlier runs left behind (`M181-01`), which no namespace can reach. The restart stays; what
+  changed is that its reason is now one this repository has measured rather than one it inherited. `xvfb-run -a` is not
   optional either — the `watch-check` phase spawns a real `tflw watch`, which always forces a headed
   browser.
   **The phases are deliberately not listed here, and since `M154g`/`D767` they are not *counted*
@@ -520,6 +533,22 @@ written here instead, with the reason, measured on 2026-08-31:
 
 If you are about to assert a stateful outcome on something you did not create, that is the moment to
 create it instead. `tests/ui/storefront/review-submission.tflw` is the pattern.
+
+**Part of this is a gate now, and knowing which part is the point (`M181c`, `D934`).** The three
+bullets above are one class with three thresholds, and `D822` priced the class at its widest — six
+runs, the stock one. The `unique(...)` threshold is **two** runs of **one file**, which is cheap
+enough to gate, and `M162-01` is what it costs unguarded: three whole-suite runs against one live
+stack went 323 pass → 5 failed → 8 failed, twelve of the thirteen failing steps answering *email
+already registered*. tflw's `M181a` repaired that generator, and `regression.mjs`'s
+**`second-run-check`** phase now grades its absence — `--tag smoke` twice on one stack, inside the
+fresh restart every phase takes anyway, ~3 seconds of graded work. Run it yourself with
+`npm run verify:second-run` against a stack that is already up.
+
+What that phase reaches is **two runs**, so it sees a re-issued `unique` value and a test asserting a
+once-per-stack outcome; it does not see stock depletion, and running it twice does not make it a
+six-run guard. So the convention above stands unchanged — `D819` is still a convention, because the
+class is wider than what two runs can see. What changed is that its cheapest member stopped being
+one.
 
 ## The cross-repo pair — the gate that belongs to two repositories
 
