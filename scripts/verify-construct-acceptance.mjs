@@ -502,6 +502,11 @@ const PLANT_CONSTRUCT = {
  *  500 ms bins and a `spike`'s burst needs them. */
 const curve = async (binMs) => JSON.parse(await (await fetch(`http://127.0.0.1:4507/__curve?bin=${binMs}`)).text());
 
+/** `C45`'s flatness tolerance, in arrivals per 500 ms bin against a target of 25 (`M180`, `D924`).
+ *  Derived from a measured floor of `0` over 25 runs rather than chosen — the long comment at the
+ *  clause carries the measurement and why this statistic has no noise floor to speak of. */
+const FLAT_TOLERANCE = 3;
+
 /** The bins of one path with the leading empty ones dropped, so each test's curve is its own
  *  timeline rather than an offset into the server's. The corpus runs its tests sequentially onto
  *  distinct paths, which is what makes this sound. */
@@ -510,6 +515,14 @@ function ownBins(c, p) {
   const first = bins.findIndex((n) => n > 0);
   return first === -1 ? [] : bins.slice(first);
 }
+
+/** `C45`'s flatness statistic: the spread across the *steady* bins, dropping the clipped first and
+ *  last. Written once and pointed at two curves (`M180`, `D925`) — the whole value of the control
+ *  is that it runs this predicate and not a second copy of it. */
+const flatness = (bins) => {
+  const body = bins.slice(1, -1);
+  return body.length ? Math.max(...body) - Math.min(...body) : 999;
+};
 
 if (wanted('C44') || wanted('C45') || wanted('C46') || wanted('C47')) {
   for (const id of ['C44', 'C45', 'C46', 'C47']) {
@@ -541,9 +554,56 @@ if (wanted('C44') || wanted('C45') || wanted('C46') || wanted('C47')) {
         // Bin 1 rather than bin 0: bin 0 is clipped by wherever in the bin the run started.
         const second = b[1] ?? 0;
         recall('C45', second >= 20 && second <= 30, `it is at full rate by its second 500ms bin (${second}, 25 expected) — a flat target has no ramp-in`);
-        const body = b.slice(1, -1);
-        const spread = body.length ? Math.max(...body) - Math.min(...body) : 999;
-        precision('C45', spread <= 6, `and it stays flat: the spread across its steady bins is ${spread} (bins ${JSON.stringify(b)})`);
+        //
+        // **`M180` — this clause's tolerance was never derived, and the measurement that derives it
+        // says the number it was compared against is not a measurement at all.** `M155-03` asks of
+        // every null-result clause here: *is the movement it denies larger than the jitter it is
+        // measured under?* `M178a` sorted the file's seven such clauses and put this one in the same
+        // class as `C48` — a timing number under jitter. **It is not in that class** (`D923`), and
+        // it belongs with the five `M178a` excluded, where the question is not askable. Measured over
+        // **25 runs of this corpus — 18 on the build box, 7 read out of GitHub-hosted CI logs** — the
+        // spread is `0` in every one, and the seven body bins read exactly `25` every one. Not
+        // *approximately* flat: identical.
+        //
+        // That is arithmetic rather than luck, and the reason is the plant's own design. The target
+        // is a zero-latency counter (`arrival-server.mjs`, `D745`) and the generator paces an open
+        // model deterministically at 20 ms — measured gaps min 14, **median 20**, max 22 — so 25
+        // arrivals per 500 ms bin is a division, not a sample. The only thing that can move a body
+        // bin is cumulative drift carrying one arrival across a bin boundary, which moves the spread
+        // by at most 2. (At 250 ms the spread is `1` in all 18 box runs and that is not jitter
+        // either: 12.5 arrivals per bin cannot be an integer, so the bins alternate 12/13. A floor
+        // measured at the wrong resolution reads as noise when it is rounding.)
+        //
+        // So the repair is not `C48`'s. `C48` was too tight for its noise **and** too loose for its
+        // effect; this clause has no noise, and was only ever the second of those. The tolerance now
+        // sits between two numbers off the same run rather than beside none: a measured floor of `0`,
+        // and the `15` this very predicate reads off `/ramp` two clauses down. `3` is one full
+        // boundary-slip above a floor never once observed to be non-zero, and it refuses a 500 ms
+        // window off its neighbours by more than 3 of 25 — 12%, where the old `6` waved through 24%.
+        const spread = flatness(b);
+        precision('C45', spread <= FLAT_TOLERANCE, `and it stays flat: the spread across its steady bins is ${spread} against a tolerance of ${FLAT_TOLERANCE} — no 500ms window off its neighbours by more than ${FLAT_TOLERANCE} of 25 (bins ${JSON.stringify(b)})`);
+        // The control, and the reason the clause above is evidence rather than a number that has
+        // never been asked to fail. `/ramp` is the closest wrong answer this generator can give: the
+        // same target rate over the same duration through the same server on this very run, and the
+        // only construct in the file whose curve differs from `hold`'s in **shape alone**. Pointing
+        // `hold`'s own predicate at it must refuse — if it does not, the flatness clause is one that
+        // cannot fail and every `spread 0` printed above means nothing (`M141`, `D683`).
+        //
+        // **It also bounds the tolerance from above, which is the half nobody asked for (`D926`).**
+        // Mutated on the box at `FLAT_TOLERANCE = 999`, the flatness clause goes on printing a
+        // confident `✓ … the spread across its steady bins is 0 against a tolerance of 999` and this
+        // control is the only thing in the file that refuses. So the number above cannot be loosened
+        // past the nearest wrong shape without the grader saying so by name.
+        //
+        // **What none of this covers, stated here rather than left to be found (`D927`).** 500 ms
+        // bins cannot see sub-bin burstiness: a generator firing all 25 requests at once at the top
+        // of every bin scores `spread 0` and satisfies every clause in `C45`. Spacing is `gapsMs`'s
+        // subject and `C50`'s claim, and nothing anywhere grades `hold`'s — `M180-01`. The class
+        // `M155-03` is about is two clauses wide, this one and `C48`, both now answered in place;
+        // **no gate watches for a third** (`D928`), which is a declared reach and not an oversight.
+        const rampSpread = flatness(ownBins(c500, '/ramp'));
+        precision('C45', rampSpread > FLAT_TOLERANCE,
+          `and the identical predicate refuses \`/ramp\`'s curve from this same run (spread ${rampSpread}, tolerance ${FLAT_TOLERANCE}) — the flatness test can fail`);
       }
 
       // --- C44 `ramp` ------------------------------------------------------------------------

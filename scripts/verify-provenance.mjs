@@ -559,7 +559,7 @@ function main() {
   for (const { text } of codeCorpus.files ?? []) for (const id of citationsLoose(text, false)) loose.add(id);
   const staleInPin = [...pinned].filter((id) => !loose.has(id)).sort();
   if (missingFromPin.length) {
-    problems.push(`tflw's pin does not know this repository cites ${missingFromPin.join(' ')} — re-pin it (\`node scripts/refresh-sibling-citations.mjs --ref <this branch>\`), tflw side, and merge tflw first (D511).`);
+    problems.push(`tflw's pin does not know this repository cites ${missingFromPin.join(' ')} — re-pin it (\`node scripts/refresh-sibling-citations.mjs --pr <this branch's PR number>\`), tflw side, and merge tflw first (D511).`);
   }
   if (staleInPin.length) {
     problems.push(`tflw's pin still claims this repository cites ${staleInPin.join(' ')}, and it does not. Its index will publish entries nothing asks for — re-pin it.`);
@@ -660,7 +660,7 @@ function main() {
     if (undeclared.length) {
       problems.push(
         `${undeclared.length} identifier(s) cited in this repository's code resolve to nothing: ${undeclared.join(' ')}\n` +
-        `    Each is one of three things. If tflw's records anchor it, re-pin (\`refresh-sibling-citations.mjs --ref <branch>\`)\n` +
+        `    Each is one of three things. If tflw's records anchor it, re-pin (\`refresh-sibling-citations.mjs --pr <N>\`)\n` +
         `    and regenerate its index — that is the M169d3 path and it publishes on demand. If THIS repository\n` +
         `    defines it, \`npm run refresh:own-identifiers\` — the manifest is what stops it being asked of tflw.\n` +
         `    If nothing anywhere defines it, add it to DECLARED_UNRESOLVABLE with the reason, which is a\n` +
