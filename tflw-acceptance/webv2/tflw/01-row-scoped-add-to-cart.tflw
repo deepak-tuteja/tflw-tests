@@ -1,4 +1,4 @@
-test "row-scoped add-to-cart on a page of a dozen identical buttons, with its async toast"
+test "row-scoped add-to-cart on a search-filtered catalog row, with its async toast"
   open "/login"
   fill field "Email" with env(USER_A_EMAIL)
   fill field "Password" with env(USER_A_PW)

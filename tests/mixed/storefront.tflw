@@ -58,7 +58,7 @@ after file
     header "Authorization" is "Bearer {cleanupToken}"
 
 @mixed
-test "row-scoped add-to-cart on a page of a dozen identical buttons, with its async toast"
+test "row-scoped add-to-cart on a search-filtered catalog row, with its async toast"
   # `M162b` (`D819`) — **this test creates the row it puts in a cart.** It drove the seeded
   # `Bulk Item 100` until 2026-08-31, and that is a finite resource: the seed gives it `stock` 20
   # (`apiV2/src/seed/seed.ts:293`), the seed never replenishes it (`seed.ts:281` skips a name that
@@ -94,8 +94,17 @@ test "row-scoped add-to-cart on a page of a dozen identical buttons, with its as
   # The catalog's Search is not debounced (`CatalogPage.tsx:75` sets `query` on every keystroke and
   # the effect at :30 refetches), so the click below lands on a page filtered to this one row.
   # **That was already true of `Bulk Item 100`** — the name matched exactly one product — so the
-  # title's "a page of a dozen identical buttons" describes a page this test stopped visiting long
-  # before `M162`. Recorded, not renamed: the scoping this asserts is real, the phrase is stale.
+  # title used to say "a page of a dozen identical buttons" and described a page this test stopped
+  # visiting long before `M162` (`M162-03`). Renamed in `M178a`, here and in the two acceptance
+  # twins and the grader's own claim list, all four together: the rename was refused when the row
+  # was filed because renaming a test is how a grader silently stops finding it, and `M176f`'s
+  # both-directions check retired that argument.
+  #
+  # What the rename exposed is worth more than the wording. `within` over **one** match is
+  # satisfied by construction, so resolution over identical siblings — the thing the old title
+  # advertised — is exercised by this test not at all, and by nothing else in the suite either.
+  # The title was the only place that gap was visible, and it was visible as a claim rather than
+  # as a gap.
   root("{ownName}")
   within css "[aria-label='{ownName}']"
     click button "Add to cart"

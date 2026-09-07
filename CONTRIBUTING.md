@@ -73,6 +73,8 @@ npm run verify:sweep-size
 npm run verify:tflw-resolution
 npm run verify:provenance
 npm run verify:provenance:self-test
+npm run verify:grader-reachability
+npm run verify:grader-reachability:self-test
 npm run verify:build-provenance:self-test
 npm run verify:notation-parity
 npm run verify:notation-parity:self-test
@@ -211,6 +213,25 @@ xvfb-run -a npm run regression -- --group security-ui
   list honest from both ends: an entry that stops being cited is stale, and an entry that starts
   resolving in tflw's index is a declared non-existence that quietly became a lie. Milliseconds, no
   sibling checkout needed.
+
+- **`npm run verify:grader-reachability`** — **every script in `scripts/` that states and asserts a
+  known answer is reachable from a regression phase, a `package.json` entry or a CI `run:` line, or
+  it names itself in the gate's `EXEMPT` list with the reason it grades nothing.** `D828` made this
+  an audit; an audit is a date. It became a gate because the same defect had been found four times
+  by accident — `M137e`, `D764`/`M154g-13`, `M154g-02`, and `M163e`, which turned up
+  `verify-screenshot-step.mjs` asserting four known answers with **zero callers of any kind** and
+  exiting non-zero since `M50`. It reads the phase table through `regression.mjs --list-phases`
+  rather than by grepping the runner, because that array mixes a one-line and a multi-line form and
+  an anchored pattern finds 8 of the 19 scripts named in it (`M166`). Run it after adding a script
+  to `scripts/`; that is the edit that creates the failure, and this is milliseconds.
+
+- **`npm run verify:grader-reachability:self-test`** — **the gate above is green the day it lands
+  and this is why that is safe.** The unreachable set and the declared set are the same three files
+  (`exec.mjs`, `derive-perf-bands.mjs`, `measure-construct-evidence.mjs`), so the real run cannot go
+  red today — and `M172e` set the rule for that case: say so in the guard, say so in the close, and
+  ship controls that prove it can refuse. Seven of them, including both directions of the hand list
+  (`D895`): an `EXEMPT` entry naming a file that does not exist, and one that has quietly become
+  reachable, are each a failure in their own right.
 
 - **`npm run verify:own-identifiers`** — **what this repository defines for itself, written down
   so the other repository's index cannot answer for it.** tflw pins what this repository *cites*

@@ -2824,8 +2824,12 @@ export const RATCHET = [
  * else can satisfy is a debt with an address, and the four that left at step 5 for a bad citation
  * are the counter-example that made `D764` necessary.
  *
- * An empty ratchet is not a finished one. `RATCHET_CEILING` at `0` means the next construct that
- * cannot be rostered has to *raise* it, which is exactly the edit this pin exists to make loud.
+ * An empty ratchet is not a finished one. The ceiling means the next construct that cannot be
+ * rostered has to *raise* it, which is exactly the edit this pin exists to make loud — and `M176c`
+ * made that edit, for `M174`'s subject family. The value is stated once, below, and printed by
+ * `verify:construct-coverage` on every run; this paragraph used to restate it as `0` and was wrong
+ * within four hours of the raise, in four other places at the same time (`M176-07`). The pin was
+ * loud in the gate and silent in every sentence about the gate, which is `D767` exactly.
  *
  * **`41` -> `37` at `M154g` step 2c: the four declarations that decide which tests exist.** `test`,
  * `import`, `with each` and `@tag` answer, before a step runs, *which tests are there and which of

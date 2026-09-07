@@ -438,6 +438,28 @@ const PHASE_GROUPS = {
   }
 }
 
+// `M178a` (`M163-01`). **The phase table is a fact other instruments need, and until here the only
+// way to read it was to run the suite.** `verify-grader-reachability.mjs` asks whether every script
+// in `scripts/` that grades something is reachable from a phase, a `package.json` entry or a CI job,
+// and the honest way to answer is to read this array rather than to grep this file for paths. Text
+// scanning was tried and rejected on a measurement: `PHASES` mixes a one-line `{ name, cmd }` form
+// with a multi-line one, so an anchored `cmd:` pattern finds **8** of the 19 scripts named here and
+// a loose one also matches the paths quoted in these comments. That is `M166`'s rule — never
+// hand-roll a parser for a structure you can be handed — and this is the handing.
+//
+// It prints and exits before any stack work, so it costs nothing and cannot restart anything. The
+// grouping guard above runs first on purpose: a caller asking for the table gets one that has
+// already been checked against `PHASE_GROUPS`, so no consumer can read a partition this file would
+// itself refuse.
+if (process.argv.includes('--list-phases')) {
+  console.log(JSON.stringify({
+    v: 1,
+    phases: PHASES.map((p) => ({ name: p.name, cmd: p.cmd ?? null, args: p.args ?? null, localOnly: Boolean(p.localOnly) })),
+    groups: PHASE_GROUPS,
+  }, null, 2));
+  process.exit(0);
+}
+
 const groupFlagIndex = process.argv.indexOf('--group');
 const groupArg = groupFlagIndex === -1 ? null : process.argv[groupFlagIndex + 1];
 if (groupArg !== null && !PHASE_GROUPS[groupArg]) {

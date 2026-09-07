@@ -60,11 +60,19 @@ Everything not rostered is on the **ratchet** in
 ## What "uncovered" means here, and what it does not (`D739`)
 
 A ratchet entry says exactly one thing: **no row in this file states its known answer.** It does
-*not* say the construct is never exercised. `step:api` is on the ratchet with 1139 occurrences
-behind it; `step:expect` with 1692; `step:capture` with 523. For those, the row will usually be
-cheap — the evidence already exists and only the claim is missing. For the seven at zero it is a
-plant that does not exist yet. Both are unrostered, they cost very different amounts, and the gate
+*not* say the construct is never exercised. An entry can sit on the ratchet with thousands of
+occurrences behind it — when that is true the row is usually cheap, because the evidence already
+exists and only the claim is missing — and another can sit there with none, where the row is a plant
+that does not exist yet. Both are unrostered, they cost very different amounts, and the gate
 deliberately does not pretend to know which is which.
+
+This paragraph used to name three constructs as examples of the first case and a count for the
+second. All four went stale: `M154g` and `M176c` moved the ratchet underneath them and nothing
+noticed for months, because a gate reads the list and nothing reads a sentence about the list
+(`M161f-01`, `M176-07`, `D767`). **The live membership is printed by `npm run
+verify:construct-coverage` on every run** — it ends with a `ratchet N/CEILING` line — and it is not
+restated here. `M176c`'s `RATCHET` block in `scripts/lib/constructs.mjs` is where the current
+entries are argued, one exit condition each.
 
 This distinction is written down because a list that reads as "constructs this suite never
 exercises" would be false of a third of it, and a list nobody believes is a list nobody defends.
@@ -73,19 +81,30 @@ exercises" would be false of a third of it, and a list nobody believes is a list
 
 The construct set is **not a list in this repository**. It comes from `tflw spec --json`, emitted by
 the vendored build — the same artifact every other grader here runs — so the checklist and the
-program under test cannot disagree. Since tflw's `M159` that is **180 constructs**: 12
-declarations, 36 step keywords, 18 matchers, 15 generators, 6 locators, 25 config words, 68
-diagnostic codes.
+program under test cannot disagree. **The number is deliberately not written here.** It was — as
+*"Since tflw's `M159` that is 180 constructs"* with a seven-way breakdown summing to it — and
+tflw's `M174` added a sixteen-member `subject` family, so the sentence and every term of its
+breakdown were wrong from the first `refresh-tflw` after that merge. Nothing went red, because the
+gate reads the manifest and no instrument read the paragraph. `npm run verify:construct-coverage`
+prints the live total, the rostered split and the ratchet on every run; that output is the answer to
+"how many", and this file answers "which ones, and on what evidence".
 
-The two most recent moves are worth a line each, because neither is what the arithmetic looks like.
+Three moves are worth a line each, because none is what the arithmetic looks like.
 `M157` **removed** a step keyword — `cleanup` — and put a config key in its place, `teardown`, which
 is why 37/24 became 36/25 with the total unchanged. `M159` added **two diagnostics** —
 `TF079` and `TF080` — and nothing else, although it added a good deal of language: `accept dialog
-with` is the same `step:accept` construct with more syntax, and `dialog message`/`dialog type` are
-value *subjects*, which live inside matcher rows rather than as constructs of their own. A milestone
-can grow the surface a reader has to learn without moving this number at all.
+with` is the same `step:accept` construct with more syntax. A milestone can grow the surface a
+reader has to learn without moving this number at all.
 
-It was **166** four milestones ago, and the twelve that arrived are worth a sentence because they are
+`M174` is the move in the other direction, and it is the one that dated this section. It promoted
+the value *subjects* to constructs in their own right — a sixteen-member `subject` family — where
+this paragraph had said of `dialog message` and `dialog type` that they *"live inside matcher rows
+rather than as constructs of their own"*. That was true when written and false the moment `M174`
+merged, and both `subject:dialog-message` and `subject:dialog-type` are on the ratchet as this is
+written. The sentence is kept, quoted, rather than deleted: it is the clearest example in this file
+of a claim about the manifest that only the manifest could have refuted, and nothing here reads it.
+
+It was **166** at `M154a`, and the twelve that arrived are worth a sentence because they are
 not new language. `M154a` built the manifest out of six tables and shipped without a seventh: the
 declaration dialect — `test`, `crawl`, `action`, `import`, `use`, `before`, `after`, and the five
 `test`-header clauses — was simply absent. Under `D723` and `D724` together that made a whole
@@ -894,8 +913,10 @@ already holds the standing record of where quantifying stops working. The pair i
 browser-network assertion — `expect request to "…" with method "POST" was made` — and its two live
 uses are in `tests/mixed/storefront.tflw`. A pair for it needs a page that issues a request and a
 path that is never requested, which is UI-tier work in a UI fixture; putting it in an API plant
-would be filing it where nobody looking for it would look. It stays on the ratchet with a reason
-rather than a turn.
+would be filing it where nobody looking for it would look. It stayed on the ratchet with a reason
+rather than a turn — and then came off it: `M154g` step 5 rostered it as **`C112`**, on the
+argument recorded there that its condition had been an address rather than a requirement. This
+sentence went on saying *"stays"* for as long as nobody read it against the list (`M161f-01`).
 
 ### `C67`–`C72` — the six workhorses, and the two things 3354 uses could not say
 
@@ -1392,7 +1413,10 @@ for.
 `generator:unique-like` was the twelfth member of a family whose other eleven rostered together in
 step 3, and it stayed behind on a condition: *rosters when tflw's `unique like` embeds the counter,
 or when the manifest stops promising it does*. On 2026-08-28 tflw did the first. The row follows,
-and the ratchet is **empty** — `RATCHET_CEILING` is `0`.
+and it emptied the ratchet — which it no longer is. `M176c` refilled it on 2026-09-06 with `M174`'s
+subject family. The live size and ceiling are stated once, in `scripts/lib/constructs.mjs`, and
+`npm run verify:construct-coverage` prints them on every run; this paragraph used to restate them
+here and was wrong for four hours without any gate noticing (`M176-07`).
 
 **That is the case for writing conditions instead of dates.** Four of the five entries alive at step
 5 died of a bad citation, which is why `D764` exists; this one is the other outcome. Its condition
@@ -1406,9 +1430,18 @@ off the constructs either side of `unique like` and asserts the gap — 8 to 12,
 draws. Those ticks were real and the values did not carry them: the construct advanced the shared
 counter and then spent it as a *sub-seed*, filling its pattern from the resulting stream. So its
 distinctness was 10⁶-probabilistic on a construct whose entire purpose is keys under a uniqueness
-constraint, and `SPEC` §7.2's bolded retry clause was false for it. Filed as `M154g-07`, fixed in
-tflw, and the ledger row's own account of the mechanism was corrected in the same pass — it said the
-counter was *discarded*, and it was spent.
+constraint. Filed as `M154g-07`, fixed in tflw, and the ledger row's own account of the mechanism
+was corrected in the same pass — it said the counter was *discarded*, and it was spent.
+
+This sentence used to end *"and `SPEC` §7.2's bolded retry clause was false for it"*, and that half
+is **withdrawn** (`M161f-02`). It followed from the same wrong mechanism theory: if the pattern came
+from the test's replayed `random` stream, a retried attempt would reproduce the earlier value. It
+did not — the old build keyed on the *shared* counter, which advances across a retried test's
+attempts, so the three values already differed, and `C113` grades **3/4** against the pre-fix build
+with seed-independence as the claim that actually moved. The plant header at
+`tests/.constructs/generator-known-answers.tflw` has carried that retraction since `M154g`; this
+file did not, for the same reason this file is full of the shape — the correction pass ran **through
+this exact sentence**, repaired the clause beside it, and left this one standing.
 
 **The row is not graded on the thing the plant asserts in-band.** `expect {a} not equals {b}` across
 three draws is the assertion that passed for a year against an implementation with no guarantee
