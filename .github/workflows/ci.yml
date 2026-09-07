@@ -233,6 +233,35 @@ jobs:
         run: npm run verify:grader-reachability:self-test
         working-directory: testFlow-tests
 
+      # `M179c` (`D915`/`D917`/`D918`). tflw pins this repository at `refs/pull/N/head` since
+      # `M179a`, because a branch ref dies on the squash-merge and `main` cannot be pinned at all
+      # under `D511` — tflw merges first, so the commit is not there yet. That removes the follow-up
+      # re-pin, and with it the guarantee that rode on it: re-pinning at `main` was what
+      # retroactively confirmed this repository's prose had actually LANDED. This clause is that
+      # guarantee, made explicit.
+      #
+      # It runs HERE and only on a push to `main`. In tflw's CI it could never fire: `D511` makes the
+      # pinned pull request necessarily open on every tflw run, so the clause would tolerate `OPEN`
+      # every time and never once be asked its question — `M141`, an instrument never pointed at its
+      # corpus, planted inside the milestone that closes `M176-06` (`D916`). The event that makes the
+      # guarantee true happens in this repository.
+      #
+      # No new checkout and no new external target: tflw is already checked out above, so the pin is
+      # read off disk, and the one API lookup is against this repository's own pulls.
+      - name: The commit tflw pins actually landed here
+        if: github.event_name == 'push'
+        run: npm run verify:sibling-pin-landed
+        working-directory: testFlow-tests
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # The controls run on every event, not only on a push: a gate whose verdict logic is only
+      # exercised in the one job shape that can fire it is a gate whose repair nobody sees until it
+      # matters. These touch no network (`M172e`).
+      - name: The landed-clause's own controls fire on the input they exist for
+        run: npm run verify:sibling-pin-landed:self-test
+        working-directory: testFlow-tests
+
       # `M169d1`. The step above reads two corpora now — resolution over every tracked non-prose
       # file, the escaping-link and `**Notation.**` rules over the 14 markdown ones — and a split
       # is indistinguishable from an accident unless something says what breaks when it is undone.

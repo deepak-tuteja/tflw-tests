@@ -36,6 +36,8 @@
     "regression": "node scripts/regression.mjs",
     "regression:smoke": "node scripts/regression-smoke.mjs",
     "verify:grader-reachability": "node scripts/verify-grader-reachability.mjs",
+    "verify:sibling-pin-landed": "node scripts/verify-sibling-pin-landed.mjs",
+    "verify:sibling-pin-landed:self-test": "node scripts/verify-sibling-pin-landed.mjs --self-test",
     "verify:grader-reachability:self-test": "node scripts/verify-grader-reachability.mjs --self-test",
     "verify:external-targets": "node scripts/verify-external-targets.mjs",
     "verify:perf-parity": "node scripts/verify-perf-parity.mjs",

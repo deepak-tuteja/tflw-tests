@@ -129,6 +129,23 @@ const CLASSIFIED = [
   {
     wf: 'ci.yml',
     job: 'acceptance-check',
+    cmd: 'npm run verify:sibling-pin-landed',
+    name: 'The commit tflw pins actually landed here',
+    class: 'ci-only',
+    why: '`M179c` (`D915`/`D917`/`D918`) — and the FIRST `ci-only` in this table, on the exact inverse of the argument `verify:build-provenance:self-test` makes above. That one is a contributor gate because the contributor is the only person who can be in the states it covers; this one is ci-only because CI is. Its subject is the state of `main` immediately after a merge, and a contributor before pushing cannot be in that state: under `D511` the pull request tflw pins is *necessarily* still open at that moment, so run locally the clause takes its tolerate-`OPEN` branch every time and answers nothing. That is not a cost of running it early, it is `M141` — an instrument never pointed at its corpus — which is also why it does not live in tflw\'s CI at all (`D916`). It is gated to `github.event_name == \'push\'` for the same reason. The verdict logic is not left unrunnable by this: the self-test below is a contributor gate and covers every branch',
+  },
+  {
+    wf: 'ci.yml',
+    job: 'acceptance-check',
+    cmd: 'npm run verify:sibling-pin-landed:self-test',
+    name: "The landed-clause's own controls fire on the input they exist for",
+    class: 'gate',
+    local: 'npm run verify:sibling-pin-landed:self-test',
+    why: '`M172e`\'s rule, applied to a clause that is green the day it lands and can only go red on an event nobody wants: the eight controls are the proof it refuses. They run on every event rather than only on a push, because a gate whose verdict logic is exercised solely in the one job shape that can fire it is a gate whose repair nobody sees until it matters. A contributor gate rather than ci-only for `verify:redaction:self-test`\'s reason — milliseconds, no network, no sibling checkout. One control is the whole reason the clause is written the way it is: `gh api .../pulls/N --jq .state` returns **`closed` for a merged pull request** (measured on `#83`, whose `.state` is `closed` and whose `.merged` is `true`), so a clause reading `state === \'MERGED\'` would fail on every correctly merged pull request — `M166`\'s gate that fails *plausibly*. Mutating the verdict back to that spelling reddens two of the eight',
+  },
+  {
+    wf: 'ci.yml',
+    job: 'acceptance-check',
     cmd: 'npm run verify:provenance:self-test',
     name: 'The two provenance corpora are different on purpose',
     class: 'gate',
