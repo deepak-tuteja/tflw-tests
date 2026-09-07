@@ -75,6 +75,7 @@ npm run verify:provenance
 npm run verify:provenance:self-test
 npm run verify:grader-reachability
 npm run verify:grader-reachability:self-test
+npm run verify:sibling-pin-landed:self-test
 npm run verify:build-provenance:self-test
 npm run verify:notation-parity
 npm run verify:notation-parity:self-test
@@ -226,12 +227,37 @@ xvfb-run -a npm run regression -- --group security-ui
   to `scripts/`; that is the edit that creates the failure, and this is milliseconds.
 
 - **`npm run verify:grader-reachability:self-test`** — **the gate above is green the day it lands
-  and this is why that is safe.** The unreachable set and the declared set are the same three files
-  (`exec.mjs`, `derive-perf-bands.mjs`, `measure-construct-evidence.mjs`), so the real run cannot go
-  red today — and `M172e` set the rule for that case: say so in the guard, say so in the close, and
-  ship controls that prove it can refuse. Seven of them, including both directions of the hand list
-  (`D895`): an `EXEMPT` entry naming a file that does not exist, and one that has quietly become
-  reachable, are each a failure in their own right.
+  and this is why that is safe.** The unreachable set and the declared set are the same two files
+  (`derive-perf-bands.mjs`, `measure-construct-evidence.mjs`), so the real run cannot go red today —
+  and `M172e` set the rule for that case: say so in the guard, say so in the close, and ship controls
+  that prove it can refuse. Eight of them, including both directions of the hand list (`D895`): an
+  `EXEMPT` entry naming a file that does not exist, and one that has quietly become reachable, are
+  each a failure in their own right. The eighth is `M178-04`'s: it writes an untracked file into
+  `scripts/` and asserts the corpus does not grade it, because this gate read the working tree until
+  `M178a` and so was green here and red in CI in the same commit.
+
+  This paragraph said **three** files and named `exec.mjs` among them, and said **seven** controls,
+  for as long as `M178a` had been merged — that milestone dropped `exec.mjs` from `EXEMPT` (a file
+  the repository does not track cannot be an unreachable grader in it) and added the eighth control,
+  and the sentence did not move. `verify:contributing` matches command strings and deliberately does
+  not read sentences, so nothing could see it. `D767`, in the prose of the gate whose own milestone
+  filed `M176-07` for exactly this.
+
+- **`npm run verify:sibling-pin-landed:self-test`** — **the controls for a clause that can only go
+  red on an event nobody wants.** tflw pins this repository at `refs/pull/N/head` since its `M179a`,
+  because a branch ref dies on the squash-merge and `main` cannot be pinned at all under `D511`.
+  That removed the follow-up re-pin and with it the guarantee that rode on it — re-pinning at `main`
+  was what retroactively confirmed this repository's prose had **landed** — so the guarantee is now
+  a clause, running here on a push to `main` (`D915`/`D917`). These eight controls are `M172e`'s
+  proof it refuses. One of them is the reason the clause is written as it is: `gh api
+  .../pulls/N --jq .state` returns **`closed` for a merged pull request**, measured on `#83`, so a
+  clause reading `state === 'MERGED'` would fail on every correctly merged pull request — `M166`'s
+  gate that fails *plausibly*. Mutating it back to that spelling reddens two of the eight.
+
+  The clause itself is **not** in this list: it is the first `ci-only` step here, because its subject
+  is the state of `main` just after a merge and a contributor before pushing cannot be in that state
+  — under `D511` the pinned pull request is necessarily still open then, so run early it answers
+  nothing (`D916`).
 
 - **`npm run verify:own-identifiers`** — **what this repository defines for itself, written down
   so the other repository's index cannot answer for it.** tflw pins what this repository *cites*
