@@ -58,6 +58,7 @@
     "verify:construct-coverage": "node scripts/verify-construct-coverage.mjs",
     "refresh:check-coverage": "node scripts/verify-check-diagnostics.mjs --write",
     "verify:redaction:self-test": "node scripts/verify-redaction.mjs --self-test",
+    "verify:second-run": "node scripts/verify-second-run.mjs",
     "verify:construct-acceptance": "node scripts/verify-construct-acceptance.mjs",
     "verify:construct-acceptance:gate": "node scripts/verify-construct-acceptance.mjs --gate",
     "list:mutation-candidates": "node scripts/list-mutation-candidates.mjs",

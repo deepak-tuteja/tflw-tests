@@ -217,10 +217,10 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C78` | `use` (`declaration:use`) | api | two claims, two instruments. The export returns `c78-51f2ab95`, a hash the DSL has no arithmetic to compute; and two files differing by **one** `use` line make the same bogus call, `TF037` on the one without and silence on the one with. The control is load-bearing | a `use` that imports nothing, a call that returns its argument, and a checker that "improves" `TF037` by peeking at a module it must not execute |
 | `C79` | `before` (`declaration:before`) | api | after a three-test run the server holds `c79file` at **1** and `c79each` at **3**; the three tests assert ordinals 1, 2, 3 off the bare hook's own capture. The fourth claim — `before file`'s scope sealed off — is a file that must **not** compile, graded as `TF030` | a `before file` that runs per test, a bare `before` that runs once per file, and a `before file` whose scope leaks into a test |
 | `C80` | `as` (`declaration:as`) | api | **no new fixture.** `tests/examples/sessions-explained.tflw` has been running the pair all along: the same `GET /orders/all` answers 200 in a test declared `as admin` and 401 in one with no clause. The grader requires both verdicts *and* that they came from the same request | an `as` clause that applies no credential, and one that authorizes every test in the file whether it opted in or not |
-| `C81` | `unique("prefix")` (`generator:unique-prefix`) | api | `W3-Widget-0/-1/-2` — the prefix verbatim, then three **consecutive** counter values, identical under two seeds and two run clocks. Plus `SPEC` §7.2's bolded retry clause: three attempts, three distinct values, one mark each | a `unique("…")` that drops its prefix, repeats, became seed-derived, or replays across a retried test's attempts |
-| `C82` | `unique email` (`generator:unique-email`) | api | `user<n>@example.test` where `<n>` continues **`C81`'s** sequence — the plant reads `user3@…` because the test above it drew three prefixes. One counter, shared by the whole group, and nothing in the suite said so | a `unique email` that repeats, stops being an address, or acquires a per-construct counter and so stops being collision-safe against its siblings |
-| `C83` | `unique number` (`generator:unique-number`) | api | the shared counter unwrapped, continuing from `C82`'s last index. **No other site in the repository** — this row and its plant are its entire evidence | a `unique number` that repeats, returns non-digits, or runs off a sequence of its own |
-| `C84` | `unique uuid` (`generator:unique-uuid`) | api | v4-shaped with the counter in its last eight hex digits — `…0000000c/d/e` parsed as 12, 13, 14. Under a changed seed the uuid moves and those digits do not. The counter also jumps by **four**, not one, which is `M154g-07`'s evidence | a `unique uuid` whose tail stopped being the counter, silently downgrading a guarantee to 122 bits of luck |
+| `C81` | `unique("prefix")` (`generator:unique-prefix`) | api | `W3-Widget-emng8w-0/-1/-2` — the prefix verbatim, then the run namespace, then three **consecutive** counter values. Identical under two seeds and **different under a moved clock**, with the counter inside it restarting at 0 either way: `M181` moved the value without moving the counter. Plus `SPEC` §7.2's bolded retry clause: three attempts, three distinct values, one mark each | a `unique("…")` that drops its prefix, repeats, became seed-derived, replays across a retried test's attempts, or went back to re-issuing the previous run's values against a column that outlives the run (`M162-01`) |
+| `C82` | `unique email` (`generator:unique-email`) | api | `user-emng8w-<n>@example.test` where `<n>` continues **`C81`'s** sequence — the plant reads `#3` because the test above it drew three prefixes — and `emng8w` is `C81`'s namespace unchanged. One counter and one namespace, shared by the whole group, and nothing in the suite said either. **This is the construct `M162-01` was measured on**: twelve of thirteen failing steps were *email already registered* | a `unique email` that repeats, stops being an address, acquires a per-construct counter or namespace and so stops being collision-safe against its siblings, or stops being collision-safe against the previous run |
+| `C83` | `unique number` (`generator:unique-number`) | api | the shared counter and the shared namespace in one integer — `7420329097953286` is `884572160 * 2^23 + 6`, the namespace in the high 30 bits of a safe integer and the counter in the low 23, decomposed by the grader and checked against both siblings. **No other site in the repository** — this row and its plant are its entire evidence | a `unique number` that repeats, returns non-digits, runs off a sequence of its own, drops either field, or exceeds a safe integer and starts rounding two counters onto one value |
+| `C84` | `unique uuid` (`generator:unique-uuid`) | api | v4-shaped with **both** guaranteeing halves read back: the counter in its last eight hex digits (`…0000000c/d/e` = 12, 13, 14) and the run namespace in the four bytes before them (`b4b9-8000`, masked past the variant nibble). Under a changed seed the uuid moves and neither half does; under a moved clock the namespace moves and the counter does not. The counter also jumps by **four**, not one, which is `M154g-07`'s evidence, and the namespace agrees with all three siblings, which is `M181`'s | a `unique uuid` whose tail stopped being the counter or whose bytes 8-11 stopped being the namespace, silently downgrading a guarantee to 122 bits of luck on either axis |
 | `C85` | `random number` (`generator:random-number`) | api | inclusive (pinned by `random number 7 to 7`, which an exclusive bound cannot answer at all), repeats under one seed, moves under another, ignores the clock, and refuses an empty range in both forms. Seed-sensitivity asserted on the **decimal**, because a 1-to-100 integer collides one run in a hundred | an exclusive upper bound, a generator that ignores `--seed` or consults the run clock, and a silently-accepted empty range |
 | `C86` | `random date` (`generator:random-date`) | api | the row that needed a **fourth run**: same seed, `--now` a year later, and `random date in past` must move by about a year while `random string 12` must not. `--seed` and `--now` are two promises and three runs cannot separate them | a `random date` that ignores `--now`, puts a "past" date in the future, leaves `between` unbounded, or accepts a reversed or string-typed bound |
 | `C87` | `random of` (`generator:random-of`) | api | membership is satisfied by a generator stuck on the head of the list, so the plant draws three times and the grader requires more than one element — sound rather than lucky because the seed is pinned | a `random of` that returns something outside its list, and one stuck on a single element |
@@ -249,7 +249,7 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C110` | `probe oversized` (`config:probe:oversized`) | security | a granted/withheld pair where **nothing else moves**: granted, `sec/oversized-input-accepted` is applicable and fires twice on one body at two leaves; withheld, the identical assertion lists it not-applicable and **names the missing word**. The reason string is graded, not the count — an opt-in read and never sent looks exactly like a correct withheld half | an opt-in honoured where it was not granted, and one accepted in the config and never sent — both leave the assertion green |
 | `C111` | `probe traversal` (`config:probe:traversal`) | security | the same pair, plus the thing that makes it a different row: **where the grant lives was measured**. Through the sidecar the rule reported applicable, 9 probes sent, 9 answered, no violation — nginx normalises the payload away first, so the app is vulnerable and its deployment is not. The grant sits on `plaintext`, where it fires (`V11`); the sidecar env is the withheld half | a probe class granted where the deployment eats it — indistinguishable from a clean target — and a traversal rule that stands down without saying why |
 | `C112` | `was made` (`matcher:was-made`) | ui | four known answers off one page load: the URL the page fetched **was** made, the same URL under a method it never used was **not**, a URL it never touched was **not**, and the `/health` request **tflw itself** sent was **not** — that last one is what says the observation set is the browser's log rather than the runner's. Two `check` rows are the same assertions with `not` dropped and must fail in the same run | a `was made` that answers `true` for anything observed, one that ignores the `with method` clause, and one that counts the runner's own requests as the page's |
-| `C113` | `unique like "ORD-######"` (`generator:unique-like`) | api | the ratchet's last entry, cleared by tflw rather than by this repository. Three claims, and the shape one is the weakest: `#` fills with digits and three draws are distinct — which is what this plant asserted for a year while the construct had **no guarantee at all**. So the row is graded on what a sample cannot fake: the value is **identical under a second seed and a moved clock**, which is the only thing separating it from `random like` (same pattern language, same regex, moves with the seed); and inside the `retry 2` test it yields three distinct values where `random string` yields one three times. Measured: **3/4 against the pre-fix build, 4/4 after**, and seed-independence is the claim that moved | a `unique like` whose distinctness went back to being probabilistic (it would move under a second seed, since the only way to draw is to consult the RNG), one that replays a value across a retried test's attempts, and one that silently wrapped its pattern instead of refusing to overflow it |
+| `C113` | `unique like "ORD-######"` (`generator:unique-like`) | api | the ratchet's last entry, cleared by tflw rather than by this repository. The shape claim is the weakest: `#` fills with digits and three draws are distinct — which is what this plant asserted for a year while the construct had **no guarantee at all**. So the row is graded on what a sample cannot fake, and since `M181` the discriminator is **two-axis and graded as a pair in one expression**: `unique like` is identical under a second seed and moves under a moved clock, while `random like` — same pattern language, same regex — does exactly the opposite. Read apart, either half is satisfied by a constant. Plus: inside the `retry 2` test it yields three distinct values where `random string` yields one three times; and it moves between runs **without widening**, still six digits and carrying no namespace, which is why this member's cross-run distinctness is the family's one **probabilistic** case (`SPEC` §7.2). Measured: **3/4 against the pre-fix build, 4/4 after**, and seed-independence is the claim that moved | a `unique like` whose distinctness went back to being probabilistic *within* a run (it would move under a second seed, since the only way to draw is to consult the RNG), one that replays a value across a retried test's attempts, one that silently wrapped its pattern instead of refusing to overflow it, and one that stopped moving between runs — which would make it and `random like` tell apart on one axis again |
 | `C114` | `expect button "Save" …` (`subject:locator`) | check | **exactly one** diagnostic from the whole file: `TF042` on the `expect button "Save" was made` line, and its text names the subject *kind* — *"`was made` can't be used on a UI locator"*. The other two legs are silent, and both have to be: `expect button "Save" has count 2` is a compatible pairing, and `click button "Save"` is the identical locator text one word to the left, where the kind rule is never consulted. `D906`'s row, and the one this family costs twice — `C13`-`C18` are the same six spellings in **action** position, and all five of their evidence patterns were measured to anchor on `click`/`fill`/`within`, so not one of them reaches `pollable()` or the compatibility check. Nor is it `C59`'s `TF042` again: that roster grades the code on a *value* subject and says nothing about whether a locator is a subject at all | a locator ceasing to be a *subject* — dropped from the kind rule, so an incompatible pairing checks clean and fails mid-run from the runtime's own matcher switch (`TF042`'s founding scenario); or widened until action position is judged too, so `click` starts being refused |
 
 ### `C1` — the soft assertion records a failure and keeps going
@@ -317,10 +317,20 @@ deliberately leaves an arming unconsumed that a later dialog in the same attempt
 **Two more things this row cost, both worth carrying.**
 
 - The plant first used `unique("C2 Dialog Plant")` for its fixture prefix and collided with its own
-  previous run. `unique("prefix")` promises collision-safety *"across tests/workers/retries"* and
-  that list does not include **runs** — it is a run-scoped counter, and the database survives
-  between runs. tflw's contract says exactly what it covers; the plant had assumed one word more.
+  previous run. `unique("prefix")` promised collision-safety *"across tests/workers/retries"* and
+  that list did not include **runs** — it was a run-scoped counter, and the database survives
+  between runs. tflw's contract said exactly what it covered; the plant had assumed one word more.
   `unique uuid` guarantees distinctness and is what the plant uses now.
+
+  **Both halves of that read differently now, and the second one was wrong when it was written.**
+  The contract changed: since `M181` the list *does* include runs, and this bullet is one of eight
+  recorded sightings of the same collision — the best-diagnosed of them, and still answered locally,
+  which is how a defect gets recorded eight times and repaired none of them. But the escape hatch it
+  reached for was not one: `unique uuid`'s trailing digits **are** the same run-scoped counter, so
+  the only bytes that differed between two runs were its shape half — which carries no part of the
+  guarantee and, under `--seed N`, is byte-identical run to run. The plant was rescued by the shape
+  half being unseeded here, not by the guarantee it named. It is a true guarantee now, on both axes,
+  and `C84` grades it as two halves for exactly this reason.
 - **A plant grades the semantics it was written against, and a language can change under it.**
   `C43` — the third row of the table, and `dismiss dialog`'s own claim — used to grade the one thing
   a single slot let a dismissal do that its absence could not: **overwrite a prior arming**. `D797`
@@ -1124,21 +1134,47 @@ promises — one run seed and one run clock — and C alone cannot tell them apa
 derived purely from the seed satisfies it. D separates them: `random date in past` must move by about
 a year and `random string 12` must not.
 
+**Since `M181` the D column carries the whole `unique` family as well, and that is the change.** The
+family used to be *identical* in all four runs; it is now identical in A/B/C and different in D,
+because every `unique` value carries a run namespace taken from the run clock. So the grid states one
+sentence per family and they are opposites: **`random` moves with the seed and not the clock;
+`unique` moves with the clock and not the seed.** Every row below is graded on both axes, which is
+strictly more than the one axis that told `unique like` and `random like` apart before.
+
 **The family's real known answer is a single shared counter, and it was invisible in 60-odd sites.**
 Measured on `fedora-box`:
 
-    unique("W3-Widget")  ->  W3-Widget-0        W3-Widget-1        W3-Widget-2
-    unique email         ->  user3@example.test user4@example.test user5@example.test
-    unique number        ->  6                  7                  8
-    unique uuid          ->  …09350000000c      …33e90000000d      …37d60000000e
+    unique("W3-Widget")  ->  W3-Widget-emng8w-0          W3-Widget-emng8w-1          W3-Widget-emng8w-2
+    unique email         ->  user-emng8w-3@example.test  user-emng8w-4@example.test  user-emng8w-5@example.test
+    unique number        ->  7420329097953286            7420329097953287            7420329097953288
+    unique like          ->  ORD-407671                  ORD-863898                  ORD-320125
+    unique uuid          ->  …-b4b9-80000000000c         …-b4b9-80000000000d         …-b4b9-80000000000e
 
-`unique email` reads `user3@…` *because the test above it drew three prefixes*. One counter, read by
+`unique email` reads `#3` *because the test above it drew three prefixes*. One counter, read by
 every `unique` construct, restarting at 0 each run — so two `unique` values are distinct because of
 **ordering across the whole run**, not because each construct has a private sequence and not because
-of entropy. That also makes them identical across runs, which is the exact opposite of the `random`
-group and the reason the two are separate constructs at all. `unique uuid`'s trailing eight hex
-digits are that counter, which is what turns v4's usual low collision *probability* into a
-guarantee, and the pair `C84`/`C90` is the only place that difference is stated.
+of entropy. `unique uuid`'s trailing eight hex digits are that counter, which is what turns v4's
+usual low collision *probability* into a guarantee, and the pair `C84`/`C90` is the only place that
+difference is stated.
+
+**`emng8w` is the second half of the table and it is new (`M181`).** It is the **run namespace** —
+30 bits of the run clock, base36 — and it is the same six characters in all three constructs that
+spell it, the integer `884572160` inside `unique number`, and the `b4b9-8000` bytes of every uuid.
+One run, one namespace, five constructs; the counter separates draws inside a run and the namespace
+separates one run from the next. It comes from the clock and never from the seed, because this
+family's whole contract is that it does not consult the RNG — so `--now` is what moves it and
+`--seed` is what cannot.
+
+**This table used to end with a sentence that was the defect, and it is worth keeping the sentence
+visible rather than editing it away:** *"That also makes them identical across runs, which is the
+exact opposite of the `random` group."* It was true, it was graded, and `SPEC` §7.2 prescribed the
+family for *anything with a uniqueness constraint* — while a uniqueness constraint in a database
+outlives the run. Measured in `M162-01`: three whole-suite runs against one live stack went 323 pass
+→ 5 failed → 8 failed, and twelve of the thirteen failing steps were `POST /auth/register` reporting
+*email already registered*. The row that recorded that had blamed four other resource classes; none
+of them had collided at all. `unique like` is the one member whose cross-run distinctness is
+**probabilistic** rather than guaranteed — it permutes its pattern's value space instead of widening
+it, since a namespace rendered into six digits would spend the capacity the pattern promises.
 
 `D739`'s cheap/expensive distinction lands here too, from the other side. `random password` has 29
 sites in this suite and every one of them posts the value to a registration endpoint — so what they
@@ -1162,8 +1198,9 @@ resulting stream. Two runs at one seed produced the identical triple, and `rando
 stream being read twice — so its distinctness was 10⁶-probabilistic rather than guaranteed on a
 construct whose whole purpose is keys under a uniqueness constraint. Filed as `M154g-07`; **tflw
 fixed it on 2026-08-28**, rendering the counter into the pattern's own placeholders through a
-permutation keyed by the pattern alone. The gap in the table therefore stays, and now says *sharing*
-rather than *loss*. It stayed off the roster until then rather than being rostered against a manifest
+permutation keyed by the pattern alone — and, since `M181`, by the pattern **and the run namespace**,
+which is how this member takes the second axis without spending capacity. The gap in the table
+therefore stays, and now says *sharing* rather than *loss*. It stayed off the roster until then rather than being rostered against a manifest
 saying the opposite, which is the laundering `D722` exists to refuse — and it rostered as `C113` on
 the day its stated condition was met, taking the ratchet to zero. **The two claims it is actually
 graded on are neither of the two this paragraph could see**; `C113` below is the row.

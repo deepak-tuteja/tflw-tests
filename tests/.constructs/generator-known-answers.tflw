@@ -29,15 +29,26 @@
 #
 # ## The shared counter, which is the family's real known answer
 #
-# Measured on `fedora-box`, seed 4242 and seed 9999, four runs — re-measured 2026-08-29:
+# Measured on the build box, seed 4242 and seed 9999, four runs — re-measured 2026-09-07 (`M181b`):
 #
-#     unique("W3-Widget")  ->  W3-Widget-0   W3-Widget-1   W3-Widget-2
-#     unique email         ->  user3@example.test  user4@…   user5@…
-#     unique number        ->  6   7   8
-#     unique uuid          ->  …-09350000000c   …-33e90000000d   …-37d60000000e
+#     unique("W3-Widget")  ->  W3-Widget-emng8w-0   W3-Widget-emng8w-1   W3-Widget-emng8w-2
+#     unique email         ->  user-emng8w-3@example.test   user-emng8w-4@…   user-emng8w-5@…
+#     unique number        ->  7420329097953286   7420329097953287   7420329097953288
+#     unique like          ->  ORD-407671   ORD-863898   ORD-320125
+#     unique uuid          ->  …-b4b9-80000000000c   …-b4b9-80000000000d   …-b4b9-80000000000e
+#
+# `emng8w` is the **run namespace** (`M181`, tflw's `D929`) — 30 bits of the run clock in base36,
+# the same six characters in every construct that can spell them, the integer `884572160` inside
+# `unique number`, and the `b4b9-8000` bytes of every uuid. One run, one namespace. It is pinned
+# here only because the grader pins `--now`; with a real clock it is a different six characters
+# every run, which is the whole point.
 #
 # **`unique uuid`'s first four digits moved that day and its last eight did not**, which is the
-# whole of tflw's `D815` in one line. It used to draw its random half from the same sub-seed space
+# whole of tflw's `D815` in one line. Since `M181` a third span is legible in it: the four bytes
+# before the counter (`b4b9-8000` above) are the run namespace, so the uuid now carries the
+# guarantee on both axes in the half that carries it at all — the correction `PLAN_M154`'s carry
+# needed, since the half it had named as the cross-run escape hatch is the shape half, which under
+# `--seed N` is byte-identical from one run to the next. It used to draw its random half from the same sub-seed space
 # a test's own `random` stream is keyed in — one index space indexing two unrelated things
 # (`M154g-15`) — and it has a domain of its own now, so the random half re-derived (`9f77` ->
 # `0935`) while the counter tail could not, because it *is* the counter. Nothing else in this table
@@ -45,12 +56,22 @@
 # to the mixing identity precisely so that every `random` stream replays bit-for-bit.
 #
 # **One counter, shared by every `unique` construct, restarting at 0 each run.** `unique email`
-# reads `user3@…` here *because the test above it drew three prefixes* — and that is the sentence a
-# reader of this suite most needs and could not have got anywhere: two `unique` values are distinct
-# because of **ordering**, not because of entropy. The values are therefore identical across runs
-# (a counter is not seeded), which is the opposite of the `random` group and the reason the two are
-# separate constructs. `unique uuid`'s trailing eight hex digits are that same counter — `0000000c`
-# is 12 — which is what makes its distinctness a guarantee rather than 122 bits of luck.
+# reads the run's `#3` here *because the test above it drew three prefixes* — and that is the
+# sentence a reader of this suite most needs and could not have got anywhere: two `unique` values
+# are distinct because of **ordering**, not because of entropy. `unique uuid`'s trailing eight hex
+# digits are that same counter — `0000000c` is 12 — which is what makes its distinctness a
+# guarantee rather than 122 bits of luck.
+#
+# **This paragraph used to end differently, and the sentence it ended with was the defect.** It read:
+# *"The values are therefore identical across runs (a counter is not seeded), which is the opposite
+# of the `random` group and the reason the two are separate constructs."* True, graded, and beside a
+# `SPEC` §7.2 that prescribed this family for anything with a uniqueness constraint — while a
+# constraint in a database outlives the run. `M162-01` measured what that costs: three whole-suite
+# runs against one live stack went 323 pass -> 5 failed -> 8 failed, twelve of the thirteen failing
+# steps being `POST /auth/register` answering *email already registered*. Since `M181` each value
+# carries a run namespace beside the counter, so the family is identical under a second **seed** and
+# different under a moved **clock** — one axis each, opposite to `random`, and `C113` is graded on
+# both directions in one expression because either half alone is satisfied by a constant.
 #
 # ## `unique like` and the gap in the sequence — what this file found, and what it now grades
 #
@@ -72,13 +93,19 @@
 # `C113` reads it now.
 #
 # Fixed in tflw on 2026-08-28: the counter is rendered into the placeholders themselves, through a
-# permutation keyed by the pattern alone. So the gap stays — one counter shared four ways is what
-# makes `C82`'s and `C83`'s continuations mean anything — but it now says *sharing* rather than
-# *loss*, and `generator:unique-like` left the ratchet for `C113`. The two claims that row is
-# actually graded on are both invisible in this file, because a single run cannot make either: the
-# value must be **identical** under a second seed and a moved clock (which is the only thing
-# separating this construct from `random like`, whose pattern language is the same), and the retry
-# test's three attempts must produce three values rather than one.
+# permutation keyed by the pattern alone — and since `M181` by the pattern **and the run namespace**.
+# So the gap stays — one counter shared four ways is what makes `C82`'s and `C83`'s continuations
+# mean anything — but it now says *sharing* rather than *loss*, and `generator:unique-like` left the
+# ratchet for `C113`. The claims that row is actually graded on are all invisible in this file,
+# because a single run can make none of them: the value must be **identical under a second seed and
+# different under a moved clock**, with `random like` on the same pattern doing exactly the opposite
+# (that pair is the whole discriminator, and shape cannot supply it — same alphabet, same regex);
+# and the retry test's three attempts must produce three values rather than one.
+#
+# This member is also the family's one **probabilistic** case across runs, and `SPEC` §7.2 says so
+# rather than rounding it up: a namespace rendered into six digits would spend the capacity the
+# pattern promises, so the namespace permutes the space instead — a different bijection each run,
+# still exactly 10^6 codes wide. Within a run it is still one bijection and still a guarantee.
 #
 # ## What is stated in-band and what is stated by the grader
 #

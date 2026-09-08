@@ -2359,28 +2359,61 @@ if (GENERATOR_IDS.some((id) => wanted(id))) {
 
     // --- the `unique` group, and the counter underneath all of it ------------------------------
 
+    // `M181a` (`D929`-`D933`) — every value in this family now carries a **run namespace** beside
+    // the counter, and the four runs above became a two-axis grid rather than a one-axis one. The
+    // namespace is fixed-width base36 of 30 bits taken from the run clock, so it is legible in three
+    // of the four constructs and parsed the same way in each.
+    const NS = '[0-9a-z]{6}';
+    const nsNum = (token) => Number.parseInt(String(token), 36);
+    const prefixOf = (s) => new RegExp(`^W3-Widget-(${NS})-(\\d+)$`).exec(String(s));
     const prefixes = trio('unique-prefix');
-    const pIdx = prefixes.map((s) => Number(String(s).slice('W3-Widget-'.length)));
-    recall('C81', prefixes.every((s) => /^W3-Widget-\d+$/.test(String(s))), `the literal prefix survives and something was appended to it (${prefixes.join(', ')})`);
+    const pNs = prefixes.map((s) => prefixOf(s)?.[1]);
+    const pIdx = prefixes.map((s) => Number(prefixOf(s)?.[2]));
+    recall('C81', prefixes.every((s) => prefixOf(s) !== null), `the literal prefix survives and two things were appended to it — the run namespace and the counter (${prefixes.join(', ')})`);
     recall('C81', distinct(prefixes) && consecutive(pIdx), `three draws are three **consecutive** counter values (${pIdx.join(', ')}) — this construct's distinctness is ordering, not entropy, and no site in this repository says so`);
-    recall('C81', same('unique-prefix#1', B) && same('unique-prefix#1', C) && same('unique-prefix#1', D), `and the counter restarts at the same place under every seed and clock (${B.single['unique-prefix#1']} / ${C.single['unique-prefix#1']} / ${D.single['unique-prefix#1']}), which is the exact opposite of the \`random\` group below`);
+    recall('C81', new Set(pNs).size === 1 && pNs[0] !== undefined, `and all three carry one namespace (${pNs[0]}), not one each — a per-draw namespace would pass every distinctness claim in this block and mean nothing`);
+    recall('C81', same('unique-prefix#1', B) && same('unique-prefix#1', C), `the value is identical under a second seed (${B.single['unique-prefix#1']} / ${C.single['unique-prefix#1']}) — this construct never consults the RNG, which is the exact opposite of the \`random\` group below and the property \`M154g-07\` was filed for losing`);
+    // `D933` — this clause used to read *"and the counter restarts at the same place under every seed
+    // AND CLOCK"*, and it was true: that was the defect. A counter that restarts at the same place
+    // every run, against a column that outlives the run, is `M162-01` — thirteen API tests degrading
+    // on the second run against one live stack, twelve of them on `user.email`. The clause is
+    // re-derived rather than deleted, because a clause that asserted the defect as a property is the
+    // strongest evidence that the property was believed. Its own sentence survives inside it: the
+    // counter DOES still restart at the same place under every seed and clock. What is new is that
+    // the counter is no longer the whole value.
+    const dPrefix = prefixOf(D.single['unique-prefix#1']);
+    recall('C81', moved('unique-prefix#1', D) && Number(dPrefix?.[2]) === pIdx[0] && dPrefix?.[1] !== pNs[0],
+      `and it **moves under a moved run clock** (${D.single['unique-prefix#1']}) — while the counter inside it still restarts at ${pIdx[0]} exactly as it did before. The counter is unchanged; the namespace beside it (${pNs[0]} -> ${dPrefix?.[1]}) is what makes the second run's value a new one. That pair is the whole of \`D929\`: \`--seed\` replays the RNG and this family does not consult it, so the run's identity has to come from the clock`);
     const retriedPrefix = A.retried['unique-prefix'] ?? [];
     recall('C81', retriedPrefix.length === 3 && retriedPrefix.every((e) => e.count === 1), `across a retried test's three attempts the counter kept advancing — three distinct values, each marked once (${JSON.stringify(retriedPrefix.map((e) => e.value))}). \`SPEC\` §7.2 states this in bold and nothing here has ever observed it: \`retry-and-flake.tflw\` retries against a \`random\` key, which is the opposite promise`);
     precision('C81', passed('keeps the prefix'), `the plant's own test for it passed`);
 
     const emails = trio('unique-email');
-    const eIdx = emails.map((s) => Number(/^user(\d+)@/.exec(String(s))?.[1]));
-    recall('C82', emails.every((s) => /^user\d+@example\.test$/.test(String(s))), `every draw is an address on one reserved domain (${emails.join(', ')})`);
+    const emailOf = (s) => new RegExp(`^user-(${NS})-(\\d+)@example\\.test$`).exec(String(s));
+    const eNs = emails.map((s) => emailOf(s)?.[1]);
+    const eIdx = emails.map((s) => Number(emailOf(s)?.[2]));
+    recall('C82', emails.every((s) => emailOf(s) !== null), `every draw is an address on one reserved domain (${emails.join(', ')})`);
     recall('C82', distinct(emails) && consecutive(eIdx), `three consecutive counter values again (${eIdx.join(', ')})`);
-    recall('C82', eIdx[0] === pIdx[2] + 1, `and it is the **same** counter \`unique("…")\` uses: the test above drew ${pIdx.join('/')}, so the first address here is user${eIdx[0]}. That is the sentence a reader of this suite most needs — two \`unique\` values are distinct because of ordering across the whole run, not because each construct has its own sequence`);
-    recall('C82', same('unique-email#1', C), `and it too is seed-independent (${C.single['unique-email#1']})`);
+    recall('C82', eIdx[0] === pIdx[2] + 1, `and it is the **same** counter \`unique("…")\` uses: the test above drew ${pIdx.join('/')}, so the first address here is the run's #${eIdx[0]}. That is the sentence a reader of this suite most needs — two \`unique\` values are distinct because of ordering across the whole run, not because each construct has its own sequence`);
+    recall('C82', eNs[0] === pNs[0], `and the **same** namespace, which is the second half of that sentence (${eNs[0]}) — one run, one namespace, however many constructs read it`);
+    recall('C82', same('unique-email#1', C) && moved('unique-email#1', D), `and it too moves on the clock axis and not the seed one (${C.single['unique-email#1']} under a second seed, ${D.single['unique-email#1']} under a moved clock). This is the construct \`M162-01\` was actually measured on: twelve of thirteen failing steps in that row were \`POST /auth/register\` — *email already registered* — because the address a second run issued had been issued by the first`);
     precision('C82', passed('is an address'), `the plant's own test for it passed`);
 
+    // `unique number` is the one member with nowhere to put a separator, so the namespace and the
+    // counter share a single integer: the run namespace in the high 30 bits of a JavaScript safe
+    // integer, the counter in the low 23. The grader takes it apart the way `eval.ts` puts it
+    // together — and the fact that it CAN is the claim, since a value that did not decompose would
+    // be a `unique number` that had quietly stopped carrying one of the two.
+    const NUM_SPAN = 2 ** 23;
     const numbers = trio('unique-number');
-    const nIdx = numbers.map((s) => Number(s));
+    const nNs = numbers.map((s) => Math.floor(Number(s) / NUM_SPAN));
+    const nIdx = numbers.map((s) => Number(s) % NUM_SPAN);
     recall('C83', numbers.every((s) => /^\d+$/.test(String(s))), `digits only (${numbers.join(', ')})`);
-    recall('C83', distinct(numbers) && consecutive(nIdx), `three consecutive values (${nIdx.join(', ')})`);
-    recall('C83', nIdx[0] === eIdx[2] + 1, `and this construct **is** the counter, unwrapped: it continues from user${eIdx[2]} at ${nIdx[0]}. It has no other site in the repository, so this row and its plant are its entire evidence`);
+    recall('C83', numbers.every((s) => Number.isSafeInteger(Number(s))), `and every draw is an exact integer (${numbers.join(', ')}) — the composition uses all 53 bits a double has, so a value past ${Number.MAX_SAFE_INTEGER} would round two counters onto one number and repeat silently, which is why the construct now refuses its ceiling rather than wrapping`);
+    recall('C83', distinct(numbers) && consecutive(nIdx), `three consecutive counter values inside those integers (${nIdx.join(', ')})`);
+    recall('C83', nIdx[0] === eIdx[2] + 1, `and this construct still **is** the counter, now with the run namespace above it: its counter half continues from ${eIdx[2]} at ${nIdx[0]}. It has no other site in the repository, so this row and its plant are its entire evidence`);
+    recall('C83', new Set(nNs).size === 1 && nNs[0] === nsNum(pNs[0]), `and the namespace half decodes to the same run namespace the other constructs spell in base36 — ${nNs[0]} is \`${pNs[0]}\`. One number, two fields, and the grader can only say that because it does the arithmetic a \`.tflw\` file cannot`);
+    recall('C83', same('unique-number#1', C) && moved('unique-number#1', D), `seed-independent, clock-dependent, like the rest of the family (${C.single['unique-number#1']} / ${D.single['unique-number#1']})`);
     precision('C83', passed('is the counter itself'), `the plant's own test for it passed`);
 
     const uuids = trio('unique-uuid');
@@ -2390,7 +2423,23 @@ if (GENERATOR_IDS.some((id) => wanted(id))) {
     recall('C84', uuids.every((s) => V4.test(String(s))), `v4-shaped (${uuids.join(', ')})`);
     recall('C84', distinct(uuids) && consecutive(uIdx), `and the last eight hex digits are the counter, not entropy — ${uuids.map((s) => String(s).slice(-8)).join(', ')} is ${uIdx.join(', ')}. That is what makes distinctness a guarantee instead of 122 bits of luck, and it is the whole difference from \`random uuid\``);
     recall('C84', uIdx[0] - nIdx[2] === 4, `the counter jumped ${nIdx[2]} -> ${uIdx[0]} across the intervening test, which spent three ticks of the **same** sequence on its three \`unique like\` draws (\`SPEC\` §7.5). Until \`M154g-07\` was fixed this gap was the defect's evidence — the ticks were spent and the values did not carry them — and it is now the one place the *sharing* is visible: four constructs reading one counter is what makes \`C82\`'s and \`C83\`'s continuations mean anything, and a build that gave each construct its own sequence would pass every other claim in this block`);
-    recall('C84', same('unique-uuid#1', C) === false && tail(C.single['unique-uuid#1']) === uIdx[0], `under a different seed the uuid changes but its counter digits do not (${C.single['unique-uuid#1']}) — the two halves of this construct have different sources, and only the counter half carries the guarantee`);
+    // Bytes 8-11 — the fourth group and the first four digits of the fifth. The variant nibble owns
+    // the top two bits of that span, which is why the namespace is 30 bits wide and not 32, and the
+    // mask below is what reads it back rather than a truncation.
+    const uuidNs = (s) => Number.parseInt(String(s).slice(19, 23) + String(s).slice(24, 28), 16) & 0x3fffffff;
+    recall('C84', same('unique-uuid#1', C) === false && tail(C.single['unique-uuid#1']) === uIdx[0] && uuidNs(C.single['unique-uuid#1']) === uuidNs(uuids[0]),
+      `under a different seed the uuid changes and **neither** of the two halves that carry the guarantee moves (${C.single['unique-uuid#1']}) — not the counter digits, not the namespace digits. Only the shape half moves, and the shape half is v4 realism`);
+    // `M181a` (`D930`). This construct was named, in `PLAN_M154`'s carry, as the family's escape
+    // hatch for cross-run distinctness. It was not one: its trailing digits ARE the counter and are
+    // identical on the next run, and the only bytes that differed between runs were the shape half
+    // — which is byte-identical run to run under `--seed N`, and which its own docstring says
+    // carries none of the guarantee. A guarantee living in the bytes documented as carrying no
+    // guarantee is not a guarantee, and this clause is where that is now observed rather than
+    // assumed: the namespace sits in the half that carries it.
+    recall('C84', tail(D.single['unique-uuid#1']) === uIdx[0] && uuidNs(D.single['unique-uuid#1']) !== uuidNs(uuids[0]),
+      `and under a moved **clock** the counter digits still do not move — ${String(D.single['unique-uuid#1']).slice(-8)} is ${uIdx[0]} in both runs — while the namespace digits do (${uuidNs(uuids[0])} -> ${uuidNs(D.single['unique-uuid#1'])}). That is the correction \`PLAN_M154\`'s carry needed: the escape hatch it named was the shape half, which under \`--seed N\` is identical run to run`);
+    recall('C84', uuidNs(uuids[0]) === nsNum(pNs[0]) && uuidNs(uuids[0]) === nNs[0] && nsNum(eNs[0]) === nNs[0],
+      `and all four constructs in this run carry **one** namespace — ${nNs[0]} — spelled base36 in two of them, packed into an integer in the third and into four uuid bytes in the fourth. The same claim the counter gap two clauses up makes about ordering, one axis over: a build that gave each construct its own namespace would pass every other claim in this block`);
     precision('C84', passed('carries the counter in its last eight'), `the plant's own test for it passed`);
 
     // --- the `random` group: one seed, one clock, and the operand table -------------------------
@@ -2430,7 +2479,30 @@ if (GENERATOR_IDS.some((id) => wanted(id))) {
     const likes = trio('unique-like');
     recall('C113', likes.every((s) => /^ORD-\d{6}$/.test(String(s))), `\`#\` filled with digits and the literal survives (${likes.join(', ')})`);
     recall('C113', distinct(likes), `three draws, three values (${likes.join(', ')}) — the weakest claim in this row, and the one that passed for a year against an implementation with no guarantee behind it. A sample of three cannot tell a guarantee from a high probability, which is why the two claims below exist`);
-    recall('C113', same('unique-like#1', B) && same('unique-like#1', C) && same('unique-like#1', D), `and it is **identical under a second seed and a moved clock** (${B.single['unique-like#1']} / ${C.single['unique-like#1']} / ${D.single['unique-like#1']}), which places it with \`C81\`-\`C84\` and not with \`C89\`. That is the whole discriminator: \`random like\` on the same pattern moved to ${C.single['random-like#1']} under the same seed change. Before \`M154g-07\` this value moved too, because the only way to draw is to consult the RNG`);
+    // `D931`/`D933` — this clause used to read *"identical under a second seed and a moved clock …
+    // that is the whole discriminator"*, and the discriminator was one-axis: `unique like` moved on
+    // nothing, `random like` moved on the seed. It is now two-axis and strictly stronger, because it
+    // separates the two constructs in **both** directions rather than one. Graded as a pair in one
+    // expression on purpose: read apart, either half is satisfied by a constant.
+    recall('C113', same('unique-like#1', B) && same('unique-like#1', C) && moved('unique-like#1', D)
+      && same('random-like#1', B) && moved('random-like#1', C) && same('random-like#1', D),
+      `and the two constructs that share this pattern language are **opposites on both axes**: \`unique like\` is identical under a second seed (${C.single['unique-like#1']}) and moves under a moved clock (${D.single['unique-like#1']}), while \`random like\` moves under the seed (${C.single['random-like#1']}) and ignores the clock (${D.single['random-like#1']}). Shape cannot tell them apart — same alphabet, same regex — and before \`M154g-07\` neither could this, because \`unique like\` moved with the seed too`);
+    // `D932`. The other four members render the namespace into the value; this one cannot, because
+    // its value space is the pattern's and rendering a namespace into it would cost capacity. It
+    // permutes instead — a different bijection over the same space each run — which is why §7.2
+    // calls this member's cross-run distinctness probabilistic and the other four's guaranteed.
+    //
+    // Graded across runs A and D together: six draws, two namespaces, one value space. What it
+    // states is the cross-run promise §7.2 actually makes for this member — the two runs' codes are
+    // disjoint — and what it does NOT state is that they must be, because they need not: a
+    // permutation of 10^6 codes cannot promise that, and two runs drawing a few hundred each can
+    // legitimately collide. It is a **sample of a probabilistic claim**, which is the same limit
+    // this row's first clause states about itself, and it is written down here rather than dressed
+    // up. The guarantee that *is* provable lives one repository over, where tflw draws a small
+    // pattern's entire value space and asserts every code is distinct.
+    const dLikes = [1, 2, 3].map((i) => D.single[`unique-like#${i}`]);
+    recall('C113', dLikes.every((s) => /^ORD-\d{6}$/.test(String(s))) && distinct([...likes, ...dLikes]),
+      `and the next run's three draws are disjoint from this run's, in the same unwidened space (${dLikes.join(', ')} against ${likes.join(', ')}) — six codes, two namespaces, still exactly six digits each, because a namespace rendered into the pattern would spend the capacity the pattern promises. A sample of a probabilistic promise and not a proof of one: two runs CAN legitimately share a code here, which is exactly why §7.2 calls this member's cross-run distinctness probabilistic where the other four's is guaranteed`);
     const retriedLike = A.retried['unique-like'] ?? [];
     recall('C113', retriedLike.length === 3 && retriedLike.every((e) => e.count === 1), `and across a retried test's three attempts it advances rather than replaying — three distinct values, each marked once (${JSON.stringify(retriedLike.map((e) => e.value))}), against \`C88\`'s one value marked three times. **This mark was written at step 3 and never read until now**, and reading it corrects the record: \`M154g-07\` claimed twice that \`SPEC\` §7.2's bolded retry clause was *false* for this construct, and it never was. The claim followed from a wrong mechanism theory — if the pattern came from the test's replayed \`random\` stream it would follow — but the old build keyed on \`uniqueSeq.next()\`, so the counter advanced across attempts and the three values already differed. The instrument that would have settled it was built here and nothing consulted it`);
     precision('C113', passed('fills `#` with digits'), `the plant's own test for it passed`);

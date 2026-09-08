@@ -78,15 +78,29 @@ test "row-scoped add-to-cart on a search-filtered catalog row, with its async to
     header "Authorization" is "Bearer {ownToken}"
   expect status equals 201
   capture body.id as ownId
-  # **`unique(...)` is collision-safe within a run, not across one** (`M162e`, measured 2026-08-31).
-  # It renders `Cart Item-0`, and the counter restarts at 0 on the next run — so against a database
-  # that outlives the run, which is the whole condition this milestone exists for, the second run
-  # creates a *second* `Cart Item-0`. This test then locates a catalog row by its accessible name
-  # and finds two: `ambiguous locator … matched 2 elements`, runs 2 through 8. SPEC promises
-  # collision-safety "across tests/workers/retries" and never claimed more, so the assumption was
-  # this test's, not the generator's. Only the server can mint an identifier unique across runs, and
-  # it already did — so the row is renamed to carry its own id. Tests that address a product by
-  # `/products/{id}` (the stub and checkout flows below) never needed this and do not do it.
+  # **`unique(...)` was collision-safe within a run, not across one** (`M162e`, measured
+  # 2026-08-31; repaired in tflw by `M181`, 2026-09-07). It rendered `Cart Item-0`, and the counter
+  # restarted at 0 on the next run — so against a database that outlives the run, which is the whole
+  # condition `M162` exists for, the second run created a *second* `Cart Item-0`. This test then
+  # located a catalog row by its accessible name and found two: `ambiguous locator … matched 2
+  # elements`, runs 2 through 8. SPEC promised collision-safety "across tests/workers/retries" and
+  # never claimed more, so the assumption was this test's, not the generator's — and the row is
+  # renamed below to carry its own id. Tests that address a product by `/products/{id}` (the stub
+  # and checkout flows below) never needed this and do not do it.
+  #
+  # **One sentence of that repair was general, and it is now false.** It read: *"Only the server can
+  # mint an identifier unique across runs, and it already did."* Since `M181` every `unique` value
+  # carries a run namespace, so `unique("Cart Item")` renders `Cart Item-<ns>-0` and two runs differ
+  # without the server minting anything. The rename is therefore **redundant as a cross-run measure,
+  # not wrong**, and it is left in place. The hazard that filed the question is **answered and is
+  # not one**: `root(...)` only types its argument into the catalog's Search field, and the locator
+  # that could go ambiguous is `within css "[aria-label='…']"`, an exact attribute match — so
+  # `Cart Item-<ns>-1` and `Cart Item-<ns>-10` cannot select each other even though two tests in
+  # this file draw the same prefix. The rename is therefore removable, and is not removed for a
+  # different reason: `M181e` measured 56 `unique` draws per whole-suite run over three runs on one
+  # stack with **zero** values issued by more than one run, so the suite's power to catch this
+  # defect returning does not rest on these three tests — and dropping a redundant PATCH from three
+  # green browser tests is a fixture-ownership change (`D819`'s territory), not a `unique` one.
   api PATCH /products/{ownId} body { name: "Cart Item {ownId}" }
     header "Authorization" is "Bearer {ownToken}"
   expect status equals 200
@@ -130,8 +144,8 @@ test "the Quick View modal traps focus, adds to cart, and closes on Escape"
     header "Authorization" is "Bearer {qvToken}"
   expect status equals 201
   capture body.id as qvId
-  # Renamed to carry its own id, for the reason spelled out on the first such block above:
-  # `unique(...)`'s counter restarts each run, and this test locates a catalog row by name.
+  # Renamed to carry its own id, for the reason spelled out on the first such block above —
+  # including why the rename is redundant since `M181` and left standing anyway.
   api PATCH /products/{qvId} body { name: "Quick View Item {qvId}" }
     header "Authorization" is "Bearer {qvToken}"
   expect status equals 200
@@ -356,8 +370,8 @@ test "reviews: a first submission succeeds, a duplicate 409s through the shadow-
     header "Authorization" is "Bearer {rvToken}"
   expect status equals 201
   capture body.id as rvId
-  # Renamed to carry its own id, for the reason spelled out on the first such block above:
-  # `unique(...)`'s counter restarts each run, and this test locates a catalog row by name.
+  # Renamed to carry its own id, for the reason spelled out on the first such block above —
+  # including why the rename is redundant since `M181` and left standing anyway.
   api PATCH /products/{rvId} body { name: "Review Item {rvId}" }
     header "Authorization" is "Bearer {rvToken}"
   expect status equals 200

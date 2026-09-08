@@ -44,12 +44,22 @@ test "one `accept dialog` accepts exactly one dialog; with none armed the first 
   # route is scoped to `stock === 0` *and* to the filter, and this is the half of that fence the
   # test owns.
   #
-  # `unique uuid` and not `unique("C2 Dialog Plant")`. The prefix form promises collision-safety
-  # "across tests/workers/retries" and that list does not include *runs*: it is a run-scoped
-  # counter, so two runs both produce `-0`. Against a database that survives between runs — which
+  # `unique uuid` and not `unique("C2 Dialog Plant")`. The prefix form promised collision-safety
+  # "across tests/workers/retries" and that list did not include *runs*: it was a run-scoped
+  # counter, so two runs both produced `-0`. Against a database that survives between runs — which
   # is every run of this plant after the first — the second run then created a second `… alpha` and
-  # the filter matched two elements. tflw's contract says exactly what it covers and this plant had
-  # assumed one word more. `unique uuid` guarantees distinctness instead.
+  # the filter matched two elements. tflw's contract said exactly what it covered and this plant had
+  # assumed one word more.
+  #
+  # **Both halves of that read differently now, and the last sentence was wrong when it was
+  # written.** It said `unique uuid` guarantees distinctness instead — but its trailing eight hex
+  # digits were the *same* run-scoped counter, identical on the next run, and the only bytes that
+  # differed between two runs were its shape half, which carried no part of the guarantee and under
+  # `--seed N` is byte-identical run to run. This plant was rescued by that half being unseeded
+  # here, not by the guarantee it named. Since tflw's `M181` the prefix form does include runs and
+  # `unique uuid` carries the namespace in the half that guarantees, so both are true now. The
+  # construct here is unchanged deliberately: `C2`'s claim list and `C84`'s grader both read this
+  # file, and swapping a plant's fixture identity is how a grader silently stops finding it.
   let prefix = unique uuid
   api POST /products body { name: "{prefix} alpha", price: 5.00, stock: 0, categoryId: {categoryId} }
     header "Authorization" is "Bearer {adminToken}"
