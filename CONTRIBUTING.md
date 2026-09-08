@@ -471,14 +471,18 @@ this decision expires. That is the condition; it is deliberately not tied to a m
   run namespace, so the family is collision-safe **across** runs as well as within one, and
   `second-run-check` runs a file twice on one stack and requires the second run green — so this
   half is measured now rather than assumed. What still needs the restart is what a namespace cannot
-  reach: seeded stock a checkout decrements and only `down -v` replenishes (`M162b`/`D819`), rows
-  that accumulate until a count assertion reads the previous run's (`M181`/`D935`), and any run
-  that pins `--now`, which pins the namespace with it. **That residue is measured now, and it is not
-  small enough** (`M181e`, 2026-09-07, on the build box): three consecutive whole-suite runs on one
-  stack with no `cli.mjs stop` go **323/323, 323/323, 322/323** — two runs clean where the second
-  used to fail on five tests, and the third not. The one failure is a `wait until` reading rows the
-  earlier runs left behind (`M181-01`), which no namespace can reach. The restart stays; what
-  changed is that its reason is now one this repository has measured rather than one it inherited. `xvfb-run -a` is not
+  reach: seeded stock a checkout decrements and only `down -v` replenishes (`M162b`/`D819`), and any
+  run that pins `--now`, which pins the namespace with it. **That residue is measured, and it got
+  smaller by one member.** The list above used to carry a third — *"rows that accumulate until a
+  count assertion reads the previous run's (`M181`/`D935`)"* — and the measurement that put it there
+  (`M181e`, 2026-09-07, on the build box) was three consecutive whole-suite runs on one stack going
+  **323/323, 323/323, 322/323**, the one failure a `wait until` reading rows the earlier runs left
+  behind (`M181-01`). It was **one test**, not a class: `tickets.tflw`'s collection wait counted
+  `?assignedTo=<agent>&slaBreached=true` against a *seeded* agent, so it was counting every prior
+  run's work as well as its own. `M182` gave it a per-run agent (`M182b`/`M182c`/`D939`) and
+  re-measured the same way, 2026-09-08: **325/325, 325/325, 325/325**. The restart stays, for the
+  two members that remain; what changed is that the third turned out to be reachable after all, and
+  the sentence is re-derived here rather than deleted so the next reader can see which claim moved. `xvfb-run -a` is not
   optional either — the `watch-check` phase spawns a real `tflw watch`, which always forces a headed
   browser.
   **The phases are deliberately not listed here, and since `M154g`/`D767` they are not *counted*
