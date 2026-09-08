@@ -431,6 +431,123 @@ export const DECLARED_UNRESOLVABLE = new Map([
   ['M154i', '`verify-provenance.mjs` — names the false red this gate produced against a tree `rsync` carried and git did not. Minted in that comment and referred back to once in tflw\'s `M164-12` row; a mention is not an anchor, and `M154a`-`M154h` are all anchored where this one never was'],
 ]);
 
+/**
+ * How long a pending declaration may stand before this gate fails on it (`D943`).
+ *
+ * Fourteen days. The thing it is waiting for is a tflw pull request that has already been opened —
+ * `M179-01` measured three of them at 40m20s, 28m24s and 29m50s of CI — so the honest bound is
+ * days, not weeks, and every extra day is a day this repository publishes a pointer a reader cannot
+ * follow. Fourteen survives a fortnight away from the machine and nothing longer.
+ */
+export const MAX_PENDING_DAYS = 14;
+
+/**
+ * `D943` — A PENDING CITATION IS DECLARED, AND THE DECLARATION EXPIRES.
+ *
+ * `M179-01`: `D511` makes tflw merge first, and this repository's rule 3 requires every identifier
+ * it cites to resolve in tflw's published index. So a branch here that mentions one new `D`-number
+ * cannot go green until a *separate* tflw pull request has been opened, run and merged — and
+ * `M179-01` measured five of them across one arc, `#180`-`#184`, every one moving the same two
+ * generated paths and **not one carrying a line of engineering**.
+ *
+ * This is the `D860` shape applied to a citation that does not resolve YET rather than one that
+ * never will: a declaration a reader can check, instead of a pointer they cannot follow.
+ *
+ * **The expiry is the point, and it is why this is a milestone rather than a line.** A tolerance in
+ * a gate that enforces something real, in a repository that is public, becomes a permanent hole the
+ * moment it can outlive its cause. Two independent ends, both computable with no network:
+ *
+ *   1. **It resolves now.** tflw merged and published it, so the declaration has become a lie
+ *      excusing a citation that no longer needs excusing. This is exactly the check
+ *      `DECLARED_UNRESOLVABLE` already carries, and the sentence there applies unchanged: *a
+ *      declared non-existence that quietly became a lie is worse than no declaration.*
+ *   2. **It is older than `MAX_PENDING_DAYS`.** The pull request was abandoned, or nobody came
+ *      back. This one turns `main` red on a day nobody touched the repository, which is not a bug
+ *      in it — a promise with a deadline is the only kind that costs anything to break.
+ *
+ * A THIRD END IS DELIBERATELY NOT BUILT: asking GitHub whether the pull request merged. It would be
+ * the sharper signal and it needs the network inside a gate that has none, which is the same
+ * argument `DECLARED_UNRESOLVABLE`'s docblock makes about the sha it declines to check.
+ *
+ * **A pending identifier is subtracted from the pin demand as well, and the first draft of this
+ * docblock said the opposite.** The argument for keeping it demanded was that the pin is how tflw's
+ * index learns to publish it, so subtracting it would make the declaration permanent by
+ * construction. That is wrong, and running the gate is what showed it: `missingFromPin` fired on
+ * `D943` while `undeclared` did not, so the branch stayed red and the tolerance bought **nothing** —
+ * the tflw pull request `M179-01` is about is exactly a re-pin, and requiring the pin is requiring
+ * that pull request.
+ *
+ * It does not become permanent, because the refresher does not read this list. Only
+ * `DECLARED_UNRESOLVABLE` travels to it, through the manifest (`M169d3`), and that is deliberate
+ * there: those identifiers must never be pinned. A pending one is picked up by the *next* refresh
+ * whenever tflw next merges anything, which is the point — the identifier lands on tflw's own
+ * schedule instead of forcing a pull request onto it. Then it resolves, and end 1 fires.
+ *
+ * An empty map is the correct steady state. The mechanism is exercised by `--self-test` rather than
+ * by leaving a specimen in it, because a specimen here is a live promise with a deadline.
+ *
+ * @type {Map<string, {pr: string, since: string, why: string}>}
+ */
+export const DECLARED_PENDING = new Map([
+  ['D943', {
+    pr: 'testFlow-tests m183b-pending-citation',
+    since: '2026-09-09',
+    why: "this decision itself, cited by the mechanism that implements it. `D943` is anchored in tflw's "
+      + '`PLAN_M183`, which is gitignored, so tflw can only publish it by pinning THIS branch and regenerating '
+      + '— which is the re-pin pull request `M179-01` measured five of. It is the first specimen and the '
+      + 'cleanest one: if the tolerance does not work here it works nowhere.',
+  }],
+]);
+
+/**
+ * The pending declarations' own problems, as a pure function so `--self-test` can reach every
+ * branch without a checkout, a clock or a sibling. `today` and `maxDays` are parameters for the
+ * same reason: a rule about expiry that can only be tested by waiting is a rule nobody tests.
+ *
+ * @param {{pending: Map<string, {pr: string, since: string, why: string}>, published: Set<string>,
+ *          claimed: Set<string>, unresolvable: Set<string>, today: Date, maxDays: number}} input
+ * @returns {string[]}
+ */
+export function pendingProblems({ pending, published, claimed, unresolvable, today, maxDays = MAX_PENDING_DAYS }) {
+  const problems = [];
+  const landed = [];
+  const expired = [];
+  for (const [id, decl] of pending) {
+    if (published.has(id)) { landed.push(id); continue; }
+    const since = Date.parse(`${decl.since}T00:00:00Z`);
+    if (Number.isNaN(since)) {
+      problems.push(`${id} is declared pending with an unreadable date ${JSON.stringify(decl.since)}. A declaration whose expiry cannot be computed does not expire, which is the whole hole this is meant to close (D943).`);
+      continue;
+    }
+    const days = Math.floor((today.getTime() - since) / 86_400_000);
+    if (days > maxDays) expired.push(`${id} (${days} days, ${decl.pr})`);
+  }
+  if (landed.length) {
+    problems.push(
+      `${landed.join(' ')} is declared PENDING in verify-provenance.mjs and now resolves in tflw's index.\n` +
+      `    The pull request landed — delete the declaration. A tolerance that outlives its cause is a permanent\n` +
+      `    hole in a gate this repository is public behind (D943).`,
+    );
+  }
+  if (expired.length) {
+    problems.push(
+      `${expired.length} pending declaration(s) older than ${maxDays} days: ${expired.join(', ')}\n` +
+      `    Either the tflw pull request landed and this should be deleted, or it did not and this repository has\n` +
+      `    been publishing a pointer no reader can follow for ${maxDays}+ days. A promise with a deadline is the\n` +
+      `    only kind that costs anything to break (D943).`,
+    );
+  }
+  const both = [...pending.keys()].filter((id) => unresolvable.has(id)).sort();
+  if (both.length) {
+    problems.push(`${both.join(' ')} is BOTH declared pending AND declared unresolvable. Those cannot both be true: one says it is about to resolve, the other says nothing will ever define it.`);
+  }
+  const mine = [...pending.keys()].filter((id) => claimed.has(id)).sort();
+  if (mine.length) {
+    problems.push(`${mine.join(' ')} is declared pending on tflw AND claimed by ${MANIFEST} as an identifier this repository defines. It is not waiting on tflw for anything.`);
+  }
+  return problems;
+}
+
 function main() {
   const corpus = tracked();
   if (corpus.error) {
@@ -486,7 +603,9 @@ function main() {
     mine.get(id).push(path);
   }
 
-  const unresolved = [...mine.keys()].filter((id) => !published.has(id)).sort();
+  // `D943`: a citation declared pending is not unresolved — it is unresolved *yet*, with a
+  // declaration naming the tflw pull request that lands it and a date the expiry is computed from.
+  const unresolved = [...mine.keys()].filter((id) => !published.has(id) && !DECLARED_PENDING.has(id)).sort();
   if (unresolved.length) {
     problems.push(
       `${unresolved.length} identifier(s) this repository's prose cites have no entry in tflw's DECISIONS.md: ${unresolved.join(' ')}\n` +
@@ -551,6 +670,13 @@ function main() {
   // the refresher in the manifest beside the claims (`M169d3`), so the pin will not carry it, and
   // subtracting it here is what keeps the two sides of this comparison describing the same set.
   for (const id of DECLARED_UNRESOLVABLE.keys()) demanded.delete(id);
+  // AND SO IS `DECLARED_PENDING` (`D943`), for a different reason. A declared-unresolvable
+  // identifier is subtracted because it must never be pinned; a pending one is subtracted because
+  // it is not pinned YET, and demanding it here would re-impose the exact tflw pull request this
+  // decision exists to remove. It does not stay unpinned: the refresher does not read this list, so
+  // the next refresh — whenever tflw next merges anything — carries it in, publishes it, and the
+  // declaration expires by end 1.
+  for (const id of DECLARED_PENDING.keys()) demanded.delete(id);
 
   const pinned = new Set(Object.keys(pin.citations ?? {}));
   const missingFromPin = [...demanded].filter((id) => !pinned.has(id)).sort();
@@ -600,7 +726,7 @@ function main() {
   } else {
     const codeUnresolved = [...codeCited.keys()].filter((id) => !published.has(id)).sort();
     const mineNotTheirs = codeUnresolved.filter((id) => claimed.has(id));
-    const undeclared = codeUnresolved.filter((id) => !DECLARED_UNRESOLVABLE.has(id) && !claimed.has(id));
+    const undeclared = codeUnresolved.filter((id) => !DECLARED_UNRESOLVABLE.has(id) && !DECLARED_PENDING.has(id) && !claimed.has(id));
     const staleDecl = [...DECLARED_UNRESOLVABLE.keys()].filter((id) => published.has(id)).sort();
     // THE CONTRADICTION, and it is `M169d1` §0.2's rule turned into a gate. An identifier cannot
     // both be one this repository defines and one that resolves nowhere: if the manifest claims it,
@@ -676,6 +802,24 @@ function main() {
     if (staleDecl.length) {
       problems.push(`${staleDecl.join(' ')} is declared unresolvable in verify-provenance.mjs and now resolves in tflw's index. Remove the declaration — a declared non-existence that quietly became a lie is worse than no declaration.`);
     }
+
+    // `D943`. The pending declarations answer for themselves, on both ends, with no network: one
+    // that has started resolving is a tolerance whose cause is gone, and one older than
+    // `MAX_PENDING_DAYS` is a promise nobody came back for.
+    problems.push(...pendingProblems({
+      pending: DECLARED_PENDING,
+      published,
+      claimed,
+      unresolvable: new Set(DECLARED_UNRESOLVABLE.keys()),
+      today: new Date(),
+      maxDays: MAX_PENDING_DAYS,
+    }));
+    codeLines.push(
+      DECLARED_PENDING.size === 0
+        ? `  0 declared pending (D943) — the steady state; a citation of an unmerged tflw decision goes here, with the PR that lands it and a ${MAX_PENDING_DAYS}-day expiry.`
+        : `  ${DECLARED_PENDING.size} declared PENDING (D943) — not demanded of the pin, picked up by tflw's next refresh, expiring in ${MAX_PENDING_DAYS} days:`,
+    );
+    for (const [id, d] of DECLARED_PENDING) codeLines.push(`    ${id.padEnd(6)} ${d.pr} since ${d.since} — ${d.why}`);
   }
 
   if (problems.length) {
@@ -783,6 +927,55 @@ function selfTest() {
   // What this property asserts is therefore the thing that is still true and still worth guarding:
   // the grammar refuses the digest ON ITS OWN. If that ever regresses, the message says the path
   // rule has silently become load-bearing again.
+  // 6. `D943` — THE PENDING DECLARATION, ALL FOUR WAYS IT MUST FAIL AND THE ONE WAY IT MUST NOT.
+  //
+  // `M164-04`'s rule: a tolerance is worth nothing if nothing demonstrates it refusing. Every branch
+  // is reached here because `pendingProblems` takes its clock and its bound as parameters — a rule
+  // about expiry that can only be tested by waiting fourteen days is a rule nobody tests.
+  {
+    const day = (s) => new Date(`${s}T00:00:00Z`);
+    const decl = (since, pr = 'tflw #999') => ({ pr, since, why: 'a fixture' });
+    const base = { published: new Set(), claimed: new Set(), unresolvable: new Set(), today: day('2026-09-09'), maxDays: 14 };
+    const call = (pending, over = {}) => pendingProblems({ ...base, ...over, pending });
+
+    const fresh = call(new Map([['D943', decl('2026-09-05')]]));
+    if (fresh.length === 0) ok('a fresh pending declaration is silent — 4 days against a 14-day bound');
+    else no('a fresh pending declaration is silent', fresh.join(' | '));
+
+    const landed = call(new Map([['D943', decl('2026-09-05')]]), { published: new Set(['D943']) });
+    if (landed.length === 1 && /now resolves/.test(landed[0])) ok('a pending declaration whose identifier has landed FAILS — the tolerance outlived its cause');
+    else no('a landed pending declaration fails', landed.join(' | ') || 'it was silent');
+
+    const old = call(new Map([['D943', decl('2026-08-01')]]));
+    if (old.length === 1 && /39 days/.test(old[0])) ok('a pending declaration older than the bound FAILS, and the message says how old');
+    else no('an expired pending declaration fails', old.join(' | ') || 'it was silent');
+
+    // The boundary, both sides, because `>` and `>=` are the same test until something sits on it.
+    const at = call(new Map([['D943', decl('2026-08-26')]]));      // exactly 14 days
+    const past = call(new Map([['D943', decl('2026-08-25')]]));    // 15
+    if (at.length === 0 && past.length === 1) ok('the bound is exclusive — 14 days is silent and 15 fails');
+    else no('the bound is exclusive', `at=${at.length} past=${past.length}`);
+
+    const contradicted = call(new Map([['D943', decl('2026-09-05')]]), { unresolvable: new Set(['D943']) });
+    const claimedToo = call(new Map([['D943', decl('2026-09-05')]]), { claimed: new Set(['D943']) });
+    if (contradicted.length === 1 && claimedToo.length === 1) ok('pending contradicts both declared-unresolvable and this repository\'s own manifest');
+    else no('pending contradicts the other two declarations', `unresolvable=${contradicted.length} claimed=${claimedToo.length}`);
+
+    const unreadable = call(new Map([['D943', decl('not-a-date')]]));
+    if (unreadable.length === 1 && /unreadable date/.test(unreadable[0])) ok('a declaration whose expiry cannot be computed FAILS rather than never expiring');
+    else no('an unreadable date fails', unreadable.join(' | ') || 'it was silent');
+
+    // AND THE LIVE LIST ANSWERS TO THE SAME RULES. The map above is a fixture; this is the file's
+    // actual declarations against today's clock, so a specimen left behind reddens the self-test
+    // as well as the gate.
+    const live = pendingProblems({
+      pending: DECLARED_PENDING, published: new Set(), claimed: new Set(),
+      unresolvable: new Set(DECLARED_UNRESOLVABLE.keys()), today: new Date(), maxDays: MAX_PENDING_DAYS,
+    });
+    if (live.length === 0) ok(`the ${DECLARED_PENDING.size} live pending declaration(s) are within the bound and contradict nothing`);
+    else no('the live pending declarations are clean', live.join(' | '));
+  }
+
   const digest = 'sha512-xQe0+cX8ncDDoNfMhoNXtQBg0lVMbAxSJH+M7w==';
   const lockRule = EXCLUSIONS.find((r) => r.label === 'lockfile');
   const dataRule = EXCLUSIONS.find((r) => r.label === 'recorded data');
