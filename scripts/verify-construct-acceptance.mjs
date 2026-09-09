@@ -524,6 +524,39 @@ const flatness = (bins) => {
   return body.length ? Math.max(...body) - Math.min(...body) : 999;
 };
 
+/** `C45`'s spacing tolerance, in ms around a nominal inter-arrival gap (`M184d`, `M180-01`).
+ *  Derived, not chosen: `hold 50 rps` nominates `1000/50 = 20 ms`, and the median gap measured on
+ *  the box reads `20` in every run recorded for this clause. +/-5 is the widest band that still
+ *  refuses both real wrong answers the same run produces — see the clause. */
+const GAP_TOLERANCE_MS = 5;
+
+/**
+ * `C45`'s spacing statistic, and the answer to `D927`'s declared reach.
+ *
+ * The MEDIAN gap, not the min and not the max, and the choice is measured rather than stylistic.
+ * One box run, all four constructs from the same corpus:
+ *
+ *     /hold   n=199  min 15  median 20  max 22
+ *     /ramp   n=99   min 18  median 28  max 166
+ *     /step   n=199  min 11  median 13  max 53
+ *     /spike  n=103  min 7   median 19  max 102
+ *
+ * `spike`'s median is **19** against `hold`'s 20, so a spacing clause cannot tell those two apart
+ * and does not try — `spike`'s claim is `C47`'s. The min and max are recorded by the server and
+ * deliberately NOT graded: they are the noisiest statistics here, and their nearest wrong answers
+ * (`spike` at min 7, `step` at max 53) sit close enough to `hold`'s own 15 and 22 that grading them
+ * would buy a clause that fails plausibly on a loaded box, which is worse than no clause at all
+ * (`M166`). The median cannot move without the whole distribution moving.
+ */
+const gapMedian = (gaps) => (gaps && typeof gaps.medianMs === 'number' ? gaps.medianMs : null);
+
+/** Written once and pointed at four curves, for `D925`'s reason: the control is only worth
+ *  something if it runs THIS predicate rather than a second copy of it. */
+const spacedLike = (gaps, nominalMs) => {
+  const m = gapMedian(gaps);
+  return m !== null && Math.abs(m - nominalMs) <= GAP_TOLERANCE_MS;
+};
+
 if (wanted('C44') || wanted('C45') || wanted('C46') || wanted('C47')) {
   for (const id of ['C44', 'C45', 'C46', 'C47']) {
     if (!wanted(id)) continue;
@@ -604,6 +637,44 @@ if (wanted('C44') || wanted('C45') || wanted('C46') || wanted('C47')) {
         const rampSpread = flatness(ownBins(c500, '/ramp'));
         precision('C45', rampSpread > FLAT_TOLERANCE,
           `and the identical predicate refuses \`/ramp\`'s curve from this same run (spread ${rampSpread}, tolerance ${FLAT_TOLERANCE}) — the flatness test can fail`);
+
+        // --- spacing (`M184d`, closes `M180-01`) ---------------------------------------------
+        //
+        // `D927` declared this reach in place rather than leaving it to be found: 500 ms bins
+        // cannot see sub-bin burstiness, so a generator firing all 25 requests at once at the top
+        // of every bin scores `spread 0` and satisfies every clause above. The declaration was
+        // right and it stood for four milestones. This is it answered.
+        //
+        // The nominal gap is arithmetic, not a tolerance: `hold 50 rps` means one arrival every
+        // `1000/50 = 20 ms`, and the median measures 20 on the box. What the band has to be wide
+        // enough for is the box and narrow enough to refuse the nearest wrong answers, and both
+        // ends are pinned by the controls below rather than by taste.
+        const holdGaps = c500.byPath['/hold']?.gapsMs ?? null;
+        const nominalMs = 1000 / 50;
+        precision('C45', spacedLike(holdGaps, nominalMs),
+          `and its arrivals are SPACED, not batched: median gap ${gapMedian(holdGaps) ?? 'n/a'}ms against a nominal ${nominalMs}ms +/-${GAP_TOLERANCE_MS} `
+          + `(min ${holdGaps?.minMs ?? 'n/a'}, max ${holdGaps?.maxMs ?? 'n/a'}, n=${holdGaps?.n ?? 0} — recorded, not graded)`);
+
+        // TWO REAL CONTROLS, from this same run, for `D926`'s reason: a predicate that has never
+        // been asked to fail is not a predicate. `ramp` spaces its arrivals further apart as it
+        // climbs (median 28) and `step` closer together at its higher plateau (median 13), so the
+        // band is bounded from BOTH sides by curves this generator actually produced — widen it to
+        // catch a batching build and one of these two starts passing as a `hold`.
+        for (const [p2, why] of [['/ramp', 'spreads its gaps as it climbs'], ['/step', 'tightens them at its plateau']]) {
+          const other = c500.byPath[p2]?.gapsMs ?? null;
+          precision('C45', !spacedLike(other, nominalMs),
+            `and the identical predicate refuses \`${p2}\`'s spacing from this same run (median ${gapMedian(other) ?? 'n/a'}ms — it ${why})`);
+        }
+
+        // AND THE SYNTHESISED ONE, because the shape `D927` actually named is not in this corpus.
+        // `/spike` was the obvious candidate and it is measured at median 19 against `hold`'s 20 —
+        // it would PASS, which is why the real controls above are `ramp` and `step`. Nothing here
+        // emits an all-at-the-top-of-the-bin curve, so the only way to assert that the clause
+        // refuses one is to hand it one. 25 arrivals at the top of each 500 ms bin: 24 gaps of 0
+        // and one of 500, median 0.
+        const batched = { n: 199, minMs: 0, medianMs: 0, maxMs: 500 };
+        precision('C45', !spacedLike(batched, nominalMs),
+          `and it refuses a batching curve outright (median ${batched.medianMs}ms — all of a bin at the top of the bin, the shape 500ms bins cannot see)`);
       }
 
       // --- C44 `ramp` ------------------------------------------------------------------------
