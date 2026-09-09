@@ -101,7 +101,9 @@ const OWN = /`?testFlow-tests\s+(?:M\d{1,3}[a-z]?\d?|D\d{1,3}[a-z]?)`?/g;
 const THEIRS = /`?tflw\s+(M\d{1,3}[a-z]?\d?|D\d{1,3}[a-z]?)`?/g;
 
 /** The declaration `D711` requires, matched on the two parts that carry the meaning. */
-const DECLARES = (text) => /\*\*Notation\.\*\*/.test(text) && text.includes('/blob/main/DECISIONS.md');
+// Exported since `M183c`: `verify-notation-parity`'s reading half asserts rule 2's precondition,
+// and it must read the real predicate rather than a copy of it (`D489`).
+export const DECLARES = (text) => /\*\*Notation\.\*\*/.test(text) && text.includes('/blob/main/DECISIONS.md');
 
 /**
  * Which sequence a file's UNQUALIFIED `M<n>` indexes, read from its own declaration. Two files in
@@ -184,13 +186,63 @@ const ROW = /(?<![\w#])(M\d{1,3}[a-z]?\d?|D\d{1,3}[a-z]?)-\d+\b/g;
  * STRICT, and this is the set the declaration's promise is measured against: each of these must
  * have an entry in tflw's index, because each is a bare identifier standing in front of a reader.
  */
+/**
+ * The product's own language, fenced. `M183c` (`D949`) — CONVERGED ONTO tflw's FORM, the second
+ * time this pair has moved that way after `M171d` did it for `RANGE`.
+ *
+ * tflw's `collectCitations` has skipped lines inside a ```` ```tflw ```` or ```` ```console ````
+ * fence since the rule was written; this reader had no fence rule at all. So a `D`- or `M`-form
+ * inside such a block was **demanded here and structurally unable to enter the pin** — a stale-pin
+ * red with no clearing edit in either document, and one whose message proposes the re-pin that
+ * would destroy a correct pin. `M154i`'s false red, arriving from a third direction.
+ *
+ * Measured before changing (`D716`): this repository's tracked corpus contains **0** product
+ * fences — 106 fence lines in its markdown (`<none>` 75, `sh` 25, `ts` 4, `nginx` 1, `json` 1) and
+ * 0 in all 775 code files — so this pins exactly the identifiers it pinned before. That is the
+ * point. What it stops is the first ```` ```tflw ```` block anyone writes here, in the repository
+ * whose whole subject is `.tflw` scripts.
+ *
+ * WHY THIS SIDE MOVED. The other direction would have tflw pin *more*: entries in a **public**
+ * index for identifiers that are coincidences of a sample. And the fence rule is not a blanket
+ * one — `PRODUCT_FENCE_INFO`'s own comment records that excluding every fence would have dropped
+ * 99 citations out of untagged EBNF blocks, which *are* prose addressed to a reader. Untagged
+ * fences stay read here too.
+ *
+ * Implemented independently rather than imported, per `D711`. The self-test is where the two are
+ * held together (`D948`), and it is an assertion, not a reading.
+ */
+const PRODUCT_FENCE = new Set(['tflw', 'console']);
+
+function stripProductFences(text) {
+  let fenceChar = null;
+  let info = '';
+  const out = [];
+  for (const raw of text.split('\n')) {
+    const open = /^\s*(```+|~~~+)\s*(\S*)/.exec(raw);
+    if (open) {
+      if (fenceChar === null) {
+        fenceChar = open[1][0];
+        info = (open[2] || '').toLowerCase();
+      } else {
+        fenceChar = null;
+        info = '';
+      }
+      continue;
+    }
+    out.push(fenceChar !== null && PRODUCT_FENCE.has(info) ? '' : raw);
+  }
+  return out.join('\n');
+}
+
 export function citationsOf(text, prose = true) {
   const own = prose && defaultsToOwn(text);
   // In a file that defaults to this repository's own milestones, an unqualified `M<n>` is not a
   // citation of anything tflw publishes and must not be required to resolve there. Blanking them
   // rather than filtering afterwards keeps the range rule honest too: `M29-M33` in such a file is
   // this repository's cluster A-D, not tflw's workload grammar.
-  const cleaned = (own ? text.replace(/(?<![\w#])M\d{1,3}[a-z]?\d?\b/g, ' ') : text).replace(OWN, ' ');
+  // Fences are stripped AFTER the per-file resolution, mirroring tflw's order: it preprocesses,
+  // then `collectCitations` drops product-fence lines. Same order, same answer.
+  const cleaned = stripProductFences((own ? text.replace(/(?<![\w#])M\d{1,3}[a-z]?\d?\b/g, ' ') : text).replace(OWN, ' '));
   const ids = new Set([...cleaned.matchAll(CITATION)].map((m) => m[1]));
   for (const [, kind, a, b] of cleaned.matchAll(RANGE)) {
     if (Number(b) <= Number(a)) continue;
@@ -213,7 +265,10 @@ export function citationsOf(text, prose = true) {
  */
 export function citationsLoose(text, prose = true) {
   const ids = citationsOf(text, prose);
-  for (const [, id] of text.matchAll(ROW)) ids.add(id);
+  // `M183c` — the row scan reads the fence-stripped text for the same reason the strict set does.
+  // Widening it inside a product fence would be harmless to the sandwich (loose only ever admits),
+  // but a reader comparing the two readings would meet an inconsistency with no reason behind it.
+  for (const [, id] of stripProductFences(text).matchAll(ROW)) ids.add(id);
   return ids;
 }
 
@@ -428,6 +483,7 @@ export const DECLARED_UNRESOLVABLE = new Map([
   // sequence an identifier means was the last file in the repository not answering for its own.
   ['M7w', '`verify-provenance.mjs` — the base64 tail of the `sha512-` digest this file keeps as a self-test fixture. It was also quoted in the `lockfile` exclusion\'s stated reason until `M176f` deleted that rule (`M171-02`); the fixture is what remains, and it is now the *only* thing asserting that the grammar refuses a digest, which is why it earns its place here rather than being tidied away with the rule it used to justify. tflw declares the same identifier for the same shape in its own docblocks, which is two independent readings agreeing (`D711`)'],
   ['M404b', '`verify-provenance.mjs` — the invented half of the self-test\'s planted citation, `a comment mentioning D404 and M404b`. `D404` is a real tflw decision and resolves; only the `M` half is fictional, which is why the plant tests the grammar rather than the index'],
+  ['D999', '`verify-notation-parity.mjs` — the fabricated identifier `M183c`\'s reading-layer control injects into tflw\'s reading to prove the comparison fires in the *other* direction: something tflw takes that nothing here cites even loosely. It has to be an id nobody anchors, and writing it down is what makes this repository cite it — the self-reference family `M164-12` names, where a gate that reads a corpus is in that corpus. tflw declares the same identifier for the same purpose in `gen-decisions.test.mjs`, which is two independent readings agreeing (`D711`). Not hidden behind a runtime concatenation: a declaration a reader can check beats a citation the grammar cannot see (`D860`)'],
   ['M154i', '`verify-provenance.mjs` — names the false red this gate produced against a tree `rsync` carried and git did not. Minted in that comment and referred back to once in tflw\'s `M164-12` row; a mention is not an anchor, and `M154a`-`M154h` are all anchored where this one never was'],
 ]);
 
