@@ -24,12 +24,14 @@
 // static gates.
 
 import { existsSync, mkdirSync, mkdtempSync, copyFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { gzipSync } from 'node:zlib';
 import { readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { resolveTflw, tflwCommand, resolveArtifactContract, RELEASED_ENTRY, BRANCH_ENTRY } from './lib/tflw-bin.mjs';
+import { resolveTflw, tflwCommand, resolveArtifactContract, RELEASED_ENTRY, BRANCH_ENTRY, vendorProvenance, vendorProblem } from './lib/tflw-bin.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 let failures = 0;
@@ -179,8 +181,12 @@ console.log('resolver behaviour\n');
     );
     if (!error) fail('resolveTflw("branch") accepted a vendored build that is not the branch build — M128-04 is open again');
     else if (!/refuses/.test(error.message)) fail(`branch refused the vendored build with an unhelpful message: ${error.message}`);
-    else if (!/vendored build/.test(error.message)) fail(`the refusal did not name it as a vendored build: ${error.message}`);
-    else pass('a vendored build that is not the branch build is refused, and named as vendored');
+    // `M184b`: the word moved from "vendored" to "installed", and the assertion moved with it
+    // rather than being relaxed. `isInstalledEntry` tests for `node_modules` — it can see that an
+    // entry is an INSTALL and cannot see what it was installed FROM, which is the distinction
+    // `vendorProvenance` exists to answer and the one the old wording quietly denied (`D956`).
+    else if (!/installed build/.test(error.message)) fail(`the refusal did not name it as an installed build: ${error.message}`);
+    else pass('an installed build that is not the branch build is refused, and named as an install');
   }
 }
 
@@ -296,6 +302,84 @@ for await (const file of mjsFiles(path.join(repoRoot, 'scripts'))) {
   const source = stripComments(readFileSync(file, 'utf8'));
   for (const { re, what } of PATTERNS) {
     if (re.test(source)) offenders.push(`${rel} — ${what}`);
+  }
+}
+
+// ── HALF C: the install is from the tarball beside it, and the line says which (`M184b`, `D956`) ──
+//
+// `resolveTflw` announced a resolution MODE — `<- default (the vendored tarball)` — beside the sha
+// of the INSTALLED file, and nothing anywhere compared the two. On the box they described different
+// builds for five days (`M184-01`) and the line stayed true-as-written throughout, because a
+// category label cannot be falsified by the artifact it is not about.
+//
+// THE CONTROL IS THE POINT, and it needs no corrupted install. `vendorProvenance` takes the sha to
+// compare, so a wrong sha against the REAL tarball is a genuine `mismatch` — the same verdict the
+// box would have produced — and the fixtures for `unknowable` are directories, which cost nothing
+// to make. What is NOT tested by a fixture is that anything calls this; that is asserted separately
+// below, against the live resolver, because a correct function nothing invokes is the failure this
+// repository has recorded three times.
+const vendorDir = path.join(repoRoot, 'vendor');
+const realTgz = existsSync(vendorDir) ? (await readdir(vendorDir)).find((f) => f.endsWith('.tgz')) : null;
+
+if (!realTgz) {
+  fail('half C: no vendor/*.tgz in this checkout, so the provenance cases cannot run — that is a missing precondition, not a skip (M131-03)');
+} else {
+  const verified = vendorProvenance(vendorProvenance('x'.repeat(64), vendorDir).innerSha, vendorDir);
+  if (verified.state === 'verified' && verified.tarball === realTgz) pass(`half C: the real vendor/${realTgz} verifies against its own inner cli.cjs`);
+  else fail(`half C: the real tarball should verify against its own contents, got ${verified.state} (${verified.reason})`);
+
+  const wrong = vendorProvenance('0'.repeat(64), vendorDir);
+  if (wrong.state !== 'mismatch') fail(`half C control: a wrong installed sha must be a mismatch, got ${wrong.state}`);
+  else if (!wrong.reason.includes('0'.repeat(64)) || !wrong.reason.includes(wrong.innerSha)) {
+    fail('half C control: a mismatch must name BOTH hashes — an alarm that does not say what differs is one nobody can act on');
+  } else pass('half C control: a wrong installed sha reddens, and the reason names both hashes and the tarball');
+
+  if (vendorProblem(wrong) === null) fail('half C: vendorProblem must refuse a mismatch — released MEANS the vendored tarball');
+  else if (vendorProblem(verified) !== null) fail('half C: vendorProblem must not refuse a verified install');
+  else pass('half C: a mismatch refuses and a verified install does not');
+
+  // `unknowable`, four ways, each a real branch rather than a restatement of one.
+  const tmp = mkdtempSync(path.join(tmpdir(), 'tflw-vendor-'));
+  const cases = [
+    ['no directory at all', path.join(tmp, 'absent'), () => {}],
+    ['an empty vendor/', path.join(tmp, 'empty'), (d) => mkdirSync(d, { recursive: true })],
+    ['two tarballs and no way to pick', path.join(tmp, 'two'), (d) => {
+      mkdirSync(d, { recursive: true });
+      writeFileSync(path.join(d, 'a.tgz'), ''); writeFileSync(path.join(d, 'b.tgz'), '');
+    }],
+    ['a .tgz that is not a gzip', path.join(tmp, 'notgz'), (d) => {
+      mkdirSync(d, { recursive: true }); writeFileSync(path.join(d, 'x.tgz'), 'not gzip');
+    }],
+    ['a valid tar with no package/dist/cli.cjs', path.join(tmp, 'nocli'), (d) => {
+      mkdirSync(d, { recursive: true }); writeFileSync(path.join(d, 'x.tgz'), gzipSync(Buffer.alloc(0)));
+    }],
+  ];
+  let unknowableOk = 0;
+  for (const [label, dir, build] of cases) {
+    build(dir);
+    const got = vendorProvenance('0'.repeat(64), dir);
+    if (got.state === 'unknowable' && vendorProblem(got) === null) unknowableOk += 1;
+    else fail(`half C: ${label} must be unknowable and must not refuse, got ${got.state}`);
+  }
+  if (unknowableOk === cases.length) pass(`half C: ${cases.length} ways to be unknowable, all three-state (D737) and none of them fatal`);
+
+  // WIRING. The three findings above are about a function; this is about the resolver calling it.
+  // Deleting the two lines in `resolveTflw` leaves every assertion above green and reddens this.
+  const live = resolveTflw('released', { quiet: true });
+  if (!live.vendor) fail('half C wiring: resolveTflw("released") returned no vendor verdict — the check is not wired in');
+  else if (live.vendor.state !== 'verified') fail(`half C wiring: this checkout's install does not match its tarball (${live.vendor.reason})`);
+  else pass('half C wiring: resolveTflw("released") carries the verdict, and this checkout is verified');
+
+  // And the announcement itself, because the banner is the artifact a human reads (`D956`).
+  const said = [];
+  const realWrite = process.stderr.write.bind(process.stderr);
+  process.stderr.write = (chunk) => { said.push(String(chunk)); return true; };
+  try { resolveTflw('released', { label: 'probe' }); } finally { process.stderr.write = realWrite; }
+  const line = said.join('');
+  if (line.includes(`installed from vendor/${realTgz}`) && line.includes('contents verified')) {
+    pass('half C: the announcement names the artifact it resolved, not only the mode that chose it');
+  } else {
+    fail(`half C: the announcement must name the tarball — got ${JSON.stringify(line.trim())}`);
   }
 }
 

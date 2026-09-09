@@ -21,9 +21,10 @@
 // hash is the only discriminator available, and it is the consumer's business (`D534`).
 
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gunzipSync } from 'node:zlib';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 
@@ -68,8 +69,117 @@ function sha256(file) {
   return createHash('sha256').update(readFileSync(file)).digest('hex');
 }
 
-/** True for any entry that came out of a packed tarball rather than a build tree. */
-function isVendored(entry) {
+/** Where `refresh-tflw` packs to, and the only artifact a `released` install may come from. */
+const VENDOR_DIR = path.join(ROOT, 'vendor');
+
+/**
+ * One named entry out of an *uncompressed* tar, or `null`. Fifty lines of tar format would be a
+ * dependency in any other repository; here it is twenty, and a dependency is the thing this file
+ * exists to avoid taking a position on. Only the fields this needs are read — name at 0, size at
+ * 124 as octal — and entries are walked in 512-byte blocks.
+ */
+function tarEntry(buf, want) {
+  let off = 0;
+  while (off + 512 <= buf.length) {
+    const name = buf.toString('utf8', off, off + 100).replace(/\0.*$/, '');
+    if (!name) return null;
+    const size = parseInt(buf.toString('ascii', off + 124, off + 136).replace(/\0.*$/, '').trim() || '0', 8);
+    const body = off + 512;
+    if (name === want) return buf.subarray(body, body + size);
+    off = body + Math.ceil(size / 512) * 512;
+  }
+  return null;
+}
+
+/**
+ * Does the installed entry actually come from the tarball sitting in `vendor/`? (`M184b`, `D956`.)
+ *
+ * WHY THIS IS NOT ALREADY ANSWERED. `refresh-tflw.mjs` verifies exactly this, by sha256, and it is
+ * the right check — pointed at the one moment it cannot fail. It compares what it just packed
+ * against what it just installed. The drift happens *afterwards*: until `M184a`, `exec.mjs` rsynced
+ * `vendor/` to the box and excluded `node_modules/`, so a `prepare()` replaced the tarball and left
+ * the install standing. Measured 2026-09-09, both machines held the identical tarball whose inner
+ * `cli.cjs` hashed `7a74eade` while the box ran `0f452bb8` — and the box's build was the *better*
+ * one, which is what makes this worse than staleness. Filed as `M184-01`.
+ *
+ * WHY THE RAW SHA IS THE RIGHT INSTRUMENT HERE AND THE WRONG ONE IN `D847`. `D847` measured that
+ * `node_modules/tflw/dist/cli.cjs` moves on **every** rebuild, because `builtAt` is baked into the
+ * bundle — `6f9de43c` to `23aaf15d` across two no-op refreshes — so as a proof that a *mutation*
+ * was installed it says yes unconditionally. That is a statement about build *identity*. This is a
+ * different question: both files here are the same artifact from the same `npm pack`, so equality
+ * is exact and inequality means the two halves stopped being one fact. No normalisation, and none
+ * would be correct — normalising the stamp out is precisely what would hide the box's `0f452bb8`.
+ *
+ * THREE STATES, NEVER TWO, on `D737`'s precedent. `unknowable` is its own answer and is printed:
+ * a tree with no `vendor/*.tgz` has an install this cannot speak about, and answering `verified`
+ * there would be `M131-03`'s green-about-nothing.
+ *
+ * `vendorDir` is a parameter so the gate can point it at a fixture. That is the seam a mutation
+ * control needs; without it the only way to exercise `mismatch` is to corrupt a real install.
+ *
+ * @param {string} installedSha sha256 of the resolved entry
+ * @param {string} [vendorDir]
+ * @returns {{state:'verified'|'mismatch'|'unknowable', tarball:string|null, tarballSha:string|null,
+ *            innerSha:string|null, reason:string}}
+ */
+export function vendorProvenance(installedSha, vendorDir = VENDOR_DIR) {
+  const none = (reason) => ({ state: 'unknowable', tarball: null, tarballSha: null, innerSha: null, reason });
+  if (!existsSync(vendorDir)) return none('there is no vendor/ directory to verify against (unknowable, D737)');
+  const tgzs = readdirSync(vendorDir).filter((f) => f.endsWith('.tgz')).sort();
+  if (tgzs.length === 0) return none('vendor/ holds no .tgz to verify against (unknowable, D737)');
+  if (tgzs.length > 1) {
+    return none(`vendor/ holds ${tgzs.length} tarballs (${tgzs.join(', ')}) and none of them is "the" one — refresh-tflw clears the directory before packing, so this is a hand-made state (unknowable, D737)`);
+  }
+  const tarball = tgzs[0];
+  const file = path.join(vendorDir, tarball);
+  const tarballSha = sha256(file);
+  let inner;
+  try {
+    inner = tarEntry(gunzipSync(readFileSync(file)), 'package/dist/cli.cjs');
+  } catch (err) {
+    return none(`vendor/${tarball} could not be read as a gzipped tar (${err.message}) (unknowable, D737)`);
+  }
+  if (!inner) return none(`vendor/${tarball} contains no package/dist/cli.cjs (unknowable, D737)`);
+  const innerSha = createHash('sha256').update(inner).digest('hex');
+  if (innerSha === installedSha) {
+    return { state: 'verified', tarball, tarballSha, innerSha, reason: 'the install matches the tarball' };
+  }
+  return {
+    state: 'mismatch',
+    tarball,
+    tarballSha,
+    innerSha,
+    reason:
+      `the installed build did NOT come from vendor/${tarball}\n` +
+      `    installed  node_modules/tflw/dist/cli.cjs  sha256 ${installedSha}\n` +
+      `    vendor/${tarball}  package/dist/cli.cjs     sha256 ${innerSha}\n` +
+      `    (tarball file itself: ${tarballSha})\n` +
+      '    One of the two arrived by a route that did not update the other — a copied tarball, or an\n' +
+      '    install this tree never packed. Re-pack and re-install here: npm run refresh-tflw.\n' +
+      '    The refresh is a local act on every machine and no tarball is carried between them (D954).',
+  };
+}
+
+/**
+ * What, if anything, makes a provenance verdict fatal. Separated from `resolveTflw` so the gate can
+ * assert the refusal as a fact about a state rather than by corrupting an install.
+ *
+ * A `mismatch` refuses: `released` *means* the vendored tarball, so if the install is not from it
+ * the question has no answer and grading against it reports on a build nobody named. `unknowable`
+ * does not refuse — it is printed and carried, which is `D737`'s three-state design and the reason
+ * a machine that installed tflw some other way is not bricked by a gate about provenance.
+ */
+export function vendorProblem(prov) {
+  return prov && prov.state === 'mismatch' ? `resolveTflw('released'): ${prov.reason}` : null;
+}
+
+/**
+ * True for any entry that is an INSTALL — something under `node_modules` — rather than a build
+ * tree. The old name (`isVendored`) and its old sentence, *"came out of a packed tarball"*, were
+ * both `D956`'s defect: this predicate cannot see where an install came from, only that it is one.
+ * That is the whole reason `vendorProvenance` below has to exist.
+ */
+function isInstalledEntry(entry) {
   return entry.split(path.sep).includes('node_modules');
 }
 
@@ -115,7 +225,7 @@ export function resolveTflw(question, opts = {}) {
     if (!equivalent) {
       throw new Error(
         `resolveTflw('branch') refuses ${entry} (from ${from}).\n` +
-          `It asks about the branch under review, and this entry is ${isVendored(entry) ? 'a vendored build' : 'not the sibling build'}` +
+          `It asks about the branch under review, and this entry is ${isInstalledEntry(entry) ? 'an installed build' : 'not the sibling build'}` +
           (existsSync(sibling)
             ? ` and its bytes differ from ${sibling}.`
             : `, and ${sibling} does not exist to compare against.`) +
@@ -124,12 +234,29 @@ export function resolveTflw(question, opts = {}) {
     }
   }
 
+  // `M184b` / `D956`. The old line was `... sha=<installed> <- default (the vendored tarball)`:
+  // a *resolution mode* on the right of an arrow, read by every human as a claim about the
+  // artifact on the left. On the box those two were about different builds for five days and the
+  // line stayed true-as-written the whole time, which is `M115-03`'s own distinction — identity is
+  // not provenance — one layer out. Checked only when the entry really is the vendored install; an
+  // override names its own source and has no tarball to be from.
+  const vendor = question === 'released' && entry === path.resolve(RELEASED_ENTRY)
+    ? vendorProvenance(sha)
+    : null;
+  const problem = vendorProblem(vendor);
+  if (problem) throw new Error(problem);
+
   if (!opts.quiet) {
     const who = opts.label ? `${opts.label}: ` : '';
-    process.stderr.write(`${who}tflw[${question}] ${entry} sha=${sha.slice(0, 8)} <- ${from}\n`);
+    const provenance = vendor
+      ? (vendor.state === 'verified'
+          ? ` — installed from vendor/${vendor.tarball} (${vendor.tarballSha.slice(0, 8)}), contents verified`
+          : ` — ${vendor.reason}`)
+      : '';
+    process.stderr.write(`${who}tflw[${question}] ${entry} sha=${sha.slice(0, 8)} <- ${from}${provenance}\n`);
   }
 
-  return { question, entry, sha, from };
+  return { question, entry, sha, from, vendor };
 }
 
 /**
