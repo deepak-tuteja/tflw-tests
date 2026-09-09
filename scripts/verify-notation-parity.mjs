@@ -60,7 +60,7 @@ import { fileURLToPath } from 'node:url'
 // `M183c` — the READING half compares this repository's own reading against tflw's. Importing it
 // here (rather than re-deriving it) is what makes the assertion a third statement and not a third
 // implementation.
-import { citationsLoose, citationsOf, DECLARES } from './verify-provenance.mjs'
+import { citationsLoose, citationsOf, DECLARES, EXCLUSIONS } from './verify-provenance.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 export const SIBLING = join(ROOT, '..', 'testFlow')
@@ -289,6 +289,132 @@ export function readSide(root, sites) {
     out[name] = patternSource(cache.get(rel), declaredAs, rel)
   }
   return out
+}
+
+// ---------------------------------------------------------------------------------------------
+// The CORPUS layer (`M185c`, `M183-02`)
+// ---------------------------------------------------------------------------------------------
+//
+// The third of the three layers, and the one `M183-02` filed as unheld. The patterns are compared
+// above and the reading around them below; this compares WHICH FILES each side applies them to.
+//
+// ## What is compared, and what deliberately is not
+//
+// The RULES, as written — not the file lists they produce. That distinction is what makes this
+// tractable and what keeps it clear of `D866`. A rule set is two files' text and can be compared on
+// a written-down construction, exactly as the pattern layer compares the patterns. A file list is a
+// function of the tree, so comparing the two lists is an output comparison: blind to any file both
+// sides wrongly exclude, and unable to run anywhere the two trees are not both checked out.
+//
+// `M183-02` argued this layer was the hard one *because* a corpus split is a function of the tree.
+// That is true of the list and false of the rule, and the row was reading the wrong noun. The
+// mechanism it needed already existed one layer up.
+//
+// ## Why the sibling's side is read as text
+//
+// `EXCLUSIONS` here is an exported array and could be imported. `EXCLUDED` there is an arrow
+// function in `refresh-sibling-citations.mjs`, which shells out to `gh` at module scope and is
+// therefore unimportable — the same fact `SITES` records for `OWN`/`THEIRS`. So one side is read as
+// data and the other as source, and both are normalised onto the vocabulary below.
+//
+// ## The vocabulary is the mechanism
+//
+// Two lists become one fact by being named against a set declared once. Every member of either side
+// must map onto a canonical id, and a member that maps onto none is a FAILURE, not a skip: a
+// classifier that quietly ignores what it does not recognise would report agreement between two
+// lists it had only half read, which is `D880`'s defect and `M184b`'s.
+
+/**
+ * The canonical exclusion vocabulary, and how each side spells it.
+ *
+ * `ours` is the `label` on the object in `EXCLUSIONS`. `theirs` is a signature matched against one
+ * disjunct of `EXCLUDED`'s body — chosen to be the part that states the RULE (`IMAGE_EXT.has`, the
+ * lockfile alternation) rather than any part a reformat would move.
+ */
+export const CORPUS_VOCABULARY = [
+  { id: 'markdown', ours: 'markdown', theirs: /\.endsWith\('\.md'\)/ },
+  { id: 'image', ours: 'image', theirs: /IMAGE_EXT\.has/ },
+  { id: 'lockfile', ours: 'lockfile', theirs: /package-lock/ },
+  { id: 'manifest', ours: 'the manifest', theirs: /===\s*MANIFEST/ },
+  { id: 'recorded-data', ours: 'recorded data', theirs: /\.endsWith\('\.jsonl'\)/ },
+]
+
+/** This repository's rule set, from the exported array — normalised onto the vocabulary. */
+export function ourCorpusRules(exclusions) {
+  return exclusions.map((rule) => {
+    const known = CORPUS_VOCABULARY.find((v) => v.ours === rule.label)
+    if (!known) {
+      throw new Error(
+        `EXCLUSIONS carries a rule labelled \`${rule.label}\`, which CORPUS_VOCABULARY does not name.\n` +
+        `  A new exclusion on this side is exactly what this layer exists to notice — it narrows this\n` +
+        `  repository's corpus and tflw's pin knows nothing about it. Add it to CORPUS_VOCABULARY with\n` +
+        `  the signature that finds it in tflw's EXCLUDED, and add the rule there too.`,
+      )
+    }
+    return known.id
+  }).sort()
+}
+
+/**
+ * tflw's rule set, read out of `EXCLUDED`'s source — normalised onto the same vocabulary.
+ *
+ * THROWS on a disjunct it cannot name, for `patternSource`'s reason: a reader that skips what it
+ * does not understand agrees with itself.
+ */
+export function theirCorpusRules(text, where = 'scripts/refresh-sibling-citations.mjs') {
+  const m = text.match(/^const EXCLUDED = \(path\) =>([\s\S]*?);\s*$/m)
+  if (m === null) {
+    throw new Error(
+      `\`EXCLUDED\` is not declared as a single arrow expression in \`${where}\`.\n` +
+      `  This layer reads tflw's corpus rule as SOURCE because that file shells out to \`gh\` at module\n` +
+      `  scope and cannot be imported. A rule that moved, was renamed, or became a statement body is\n` +
+      `  unreadable here, and that is a failure rather than a skip.`,
+    )
+  }
+  const disjuncts = m[1].split('||').map((d) => d.trim()).filter(Boolean)
+  return disjuncts.map((d) => {
+    const known = CORPUS_VOCABULARY.find((v) => v.theirs.test(d))
+    if (!known) {
+      throw new Error(
+        `tflw's EXCLUDED carries a disjunct this layer cannot name:\n    ${d}\n` +
+        `  It narrows the corpus tflw pins and nothing here knows what it is. Add it to\n` +
+        `  CORPUS_VOCABULARY — naming it is what makes the comparison below mean anything.`,
+      )
+    }
+    return known.id
+  }).sort()
+}
+
+/**
+ * The two rule sets, compared in both directions.
+ *
+ * Both directions matter and they fail differently, which is why the message names the side. The
+ * refresher's own comment states the stake: *an exclusion only on this side would put an identifier
+ * in the pin that the sibling never asks for, and one only on that side would demand an entry this
+ * pin does not carry. Either way the red is unclearable.*
+ */
+export function compareCorpora(ours, theirs) {
+  const problems = []
+  for (const id of ours) {
+    if (!theirs.includes(id)) {
+      problems.push(
+        `\`${id}\` is excluded HERE and not by tflw's EXCLUDED.\n` +
+        `    tflw's pin therefore carries identifiers from files this repository never reads, and this\n` +
+        `    gate can demand nothing about them. Add the rule there, or drop it here.`,
+      )
+    }
+  }
+  for (const id of theirs) {
+    if (!ours.includes(id)) {
+      problems.push(
+        `\`${id}\` is excluded by tflw's EXCLUDED and not HERE.\n` +
+        `    This repository reads files tflw's pin never looked at, so an identifier appearing in one of\n` +
+        `    them is demanded of a pin that cannot carry it — the red the refresher's own comment calls\n` +
+        `    unclearable. Add the rule here, or drop it there.`,
+      )
+    }
+  }
+  return problems
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -558,6 +684,48 @@ export function selfTest(reading = null) {
       citationsOf('see D9 for why\n', true).size > 0 && !DECLARES('see D9 for why\n'))
   }
 
+  // --- the CORPUS half (`M185c`, `M183-02`) ---------------------------------------------------
+  {
+    const theirText = readFileSync(join(SIBLING, 'scripts', 'refresh-sibling-citations.mjs'), 'utf8')
+    const oursC = ourCorpusRules(EXCLUSIONS)
+    const theirsC = theirCorpusRules(theirText)
+
+    t('the live CORPUS comparison is green — if this fails, the two rule sets have diverged',
+      compareCorpora(oursC, theirsC).length === 0)
+
+    // ANTI-VACUITY, and this layer needs it more than the two above. Two classifiers that both
+    // returned nothing would agree perfectly, which is `M184b`'s defect exactly: an instrument
+    // pointed where it cannot disagree. So each side is asserted against its input.
+    t('NEGATIVE CONTROL — the reader of THIS side returns rules, and as many as EXCLUSIONS declares',
+      oursC.length === EXCLUSIONS.length && oursC.length > 0)
+    t('NEGATIVE CONTROL — the reader of TFLW\'s side returns rules, read out of real source text',
+      theirsC.length > 0 && theirText.includes('const EXCLUDED'))
+
+    // A rule on one side and not the other is caught, in BOTH directions. The `lockfile` case is
+    // the one that was live when this layer was written: tflw excluded lockfiles and this side had
+    // not since 2026-09-06, and nothing said so for three days.
+    t('CONTROL — a rule tflw has and this side does not is caught (the live M183-02 divergence)',
+      compareCorpora(oursC.filter((r) => r !== 'markdown'), theirsC).some((p) => p.includes('`markdown` is excluded by tflw')))
+    t('CONTROL — and a rule this side has and tflw does not is caught, which fails differently',
+      compareCorpora(oursC, theirsC.filter((r) => r !== 'markdown')).some((p) => p.includes('`markdown` is excluded HERE')))
+
+    // AN UNRECOGNISED RULE IS A FAILURE, NOT A SKIP (`D880`). Both sides, because a classifier that
+    // ignores what it cannot name reports agreement between two lists it half read.
+    t('an EXCLUSIONS label the vocabulary does not name THROWS',
+      (() => { try { ourCorpusRules([{ label: 'something new' }]); return false } catch { return true } })())
+    t('a disjunct of tflw\'s EXCLUDED the vocabulary does not name THROWS',
+      (() => { try { theirCorpusRules('const EXCLUDED = (path) => path.endsWith(\'.md\') || path.startsWith(\'secret/\');\n'); return false } catch { return true } })())
+    t('and an EXCLUDED that is not a single arrow expression THROWS rather than reading nothing',
+      (() => { try { theirCorpusRules('function EXCLUDED(path) { return false }\n'); return false } catch { return true } })())
+
+    // The reader is pointed at source, not at a constant: a body with one rule removed reads one
+    // fewer. Without this, a `theirCorpusRules` that returned the vocabulary itself would pass
+    // every assertion above.
+    const trimmed = theirCorpusRules(theirText.replace(/\s*\|\|\s*IMAGE_EXT\.has\([^\n]*?\)\)/, ''))
+    t('NEGATIVE CONTROL — removing a disjunct from the SOURCE removes it from the reading',
+      trimmed.length === theirsC.length - 1 && !trimmed.includes('image'))
+  }
+
   // NEGATIVE CONTROL — the comparison is not trivially true.
   t('NEGATIVE CONTROL — extract() actually returns identifiers',
     extract('D318 and M154b', compile(ours.CITATION), compile(ours.RANGE)).length === 2)
@@ -573,6 +741,12 @@ export function selfTest(reading = null) {
   }
   console.log(`✓ notation parity self-test: ${ok.length} control(s), each shown to fire on the input it exists for`)
   return 0
+}
+
+/** Both rule sets, normalised. Read here so `main` and `selfTest` cannot disagree about the input. */
+export function readCorpora(root = ROOT, siblingRoot = SIBLING, exclusions) {
+  const theirText = readFileSync(join(siblingRoot, 'scripts', 'refresh-sibling-citations.mjs'), 'utf8')
+  return { ours: ourCorpusRules(exclusions), theirs: theirCorpusRules(theirText) }
 }
 
 async function main() {
@@ -606,7 +780,19 @@ async function main() {
     return 1
   }
 
-  const problems = [...(compare(ours, theirs) ?? []), ...(compareReadings(reading, OUR_READING) ?? [])]
+  let corpora
+  try {
+    corpora = readCorpora(ROOT, SIBLING, EXCLUSIONS)
+  } catch (err) {
+    console.error(`✗ notation parity, CORPUS layer: ${String(err.message).split('\n').join('\n  ')}`)
+    return 1
+  }
+
+  const problems = [
+    ...(compare(ours, theirs) ?? []),
+    ...(compareReadings(reading, OUR_READING) ?? []),
+    ...compareCorpora(corpora.ours, corpora.theirs),
+  ]
   if (problems.length === 0) {
     console.log(
       `✓ notation parity: ${TEXTUAL.length} pattern(s) byte-identical, ` +
@@ -619,8 +805,9 @@ async function main() {
       `${READING_PERMITTED.size} declared divergence(s), all still exercised`,
     )
     console.log(
-      `  not compared by either half: the corpus split (EXCLUDED here, EXCLUSIONS there). ` +
-      `Stated so this green does not imply it.`,
+      `✓ notation parity, CORPUS layer (M185c): both sides apply the same ` +
+      `${corpora.ours.length} exclusion rule(s) — ${corpora.ours.join(', ')} — each named against ` +
+      `CORPUS_VOCABULARY, with an unrecognised rule on either side a failure rather than a skip`,
     )
     return 0
   }

@@ -44,7 +44,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { resolveTflw } from './lib/tflw-bin.mjs';
-import { readSpec, siblingState, gradeProvenance, announceProvenance, stalenessBanner } from './lib/tflw-provenance.mjs';
+import { readSpec, siblingState, boxRecords, gradeProvenance, announceProvenance, stalenessBanner } from './lib/tflw-provenance.mjs';
 import { PLANTS, plantFor, plantsFor, assertAcceptancePlantsAreRunnable } from './lib/constructs.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -53,7 +53,7 @@ const onlyIdx = process.argv.indexOf('--only');
 const ONLY = onlyIdx === -1 ? null : new Set(process.argv[onlyIdx + 1].split(','));
 
 const { entry: TFLW_BIN } = resolveTflw('released', { label: 'construct-acceptance' });
-const PROVENANCE = gradeProvenance(readSpec(TFLW_BIN).build, siblingState());
+const PROVENANCE = gradeProvenance(readSpec(TFLW_BIN).build, siblingState(), undefined, boxRecords());
 announceProvenance('construct-acceptance', PROVENANCE);
 
 let failures = 0;

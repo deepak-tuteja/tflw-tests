@@ -35,7 +35,8 @@
 // (`D511`): tflw merges first, then this repo, chained.
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -555,7 +556,76 @@ export const DECLARED_PENDING = new Map([]);
  *          claimed: Set<string>, unresolvable: Set<string>, today: Date, maxDays: number}} input
  * @returns {string[]}
  */
-export function pendingProblems({ pending, published, claimed, unresolvable, today, maxDays = MAX_PENDING_DAYS }) {
+/**
+ * The branch tflw publishes from. Named rather than spelled inline, and the same constant
+ * `scripts/lib/tflw-bin.mjs` reaches for in `RELEASED_REF` — a released decision is one on tflw's
+ * default branch, and the two files must not disagree about which branch that is.
+ */
+export const RELEASED_BRANCH = 'main';
+
+/**
+ * What the tree that answered actually IS (`M185a`, `M184-02`).
+ *
+ * Rule 3 reads tflw's `DECISIONS.md` with `readFileSync` off a working tree — on whatever branch,
+ * with whatever is uncommitted in it. That read is the right one: this gate's job is to compare
+ * prose against the index beside it, and the index beside it is the file on disk. What was wrong
+ * was the sentence built on top of it, which announced *the pull request landed* — an event no
+ * `readFileSync` can witness.
+ *
+ * So the observation is separated from the claim, and this returns the observation. The narrowest
+ * fact that supports or refutes *landed* is not whether the tree is dirty in general but whether
+ * **the file that answered** is committed, and on which branch: a regeneration sitting uncommitted
+ * in `DECISIONS.md` is exactly the thing `M184-02` walked into, and an unrelated dirty file in
+ * `packages/` says nothing about the index at all.
+ *
+ * Three answers, not two, for `D737`'s reason one repository over: outside a git checkout the
+ * question is unanswerable and `committed` is `null` rather than a guess. `verify-provenance` is
+ * already a Mac-only gate (its corpus is `git ls-files`), so `null` is not the ordinary case here —
+ * but it is reachable, and a guess would be worse than a silence.
+ *
+ * @param {string} [root] the tflw checkout to ask
+ * @returns {{branch: string|null, committed: boolean|null}}
+ */
+export function indexWitness(root = SIBLING) {
+  const ask = (args) => {
+    try {
+      return execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    } catch {
+      return null;
+    }
+  };
+  const branch = ask(['rev-parse', '--abbrev-ref', 'HEAD']);
+  if (branch === null) return { branch: null, committed: null };
+  const status = ask(['status', '--porcelain', '--', 'DECISIONS.md']);
+  return {
+    branch: branch.trim() || null,
+    committed: status === null ? null : status.trim() === '',
+  };
+}
+
+/**
+ * Does what this gate saw support the sentence *the pull request landed*? (`M185a`.)
+ *
+ * Only on tflw's own default branch with the index committed. Everything else is a working tree
+ * telling you about itself, and the message says so instead. The asymmetry is deliberate and is
+ * `M185b`'s and `D909`'s: an observation may WEAKEN the claim and may never strengthen it, so an
+ * unanswerable witness (`committed: null`) reports the weak form rather than falling through to
+ * the strong one.
+ */
+function witnessPhrase(witness) {
+  if (!witness || witness.committed === null) {
+    return 'this gate could not ask git what that checkout is, so nothing witnesses a merge';
+  }
+  const branch = witness.branch ?? '(detached)';
+  if (witness.committed === false) return `DECISIONS.md is UNCOMMITTED in the checkout beside this one (branch \`${branch}\`)`;
+  return `the checkout beside this one is on branch \`${branch}\`, not \`${RELEASED_BRANCH}\``;
+}
+
+function landedIsWitnessed(witness) {
+  return Boolean(witness) && witness.committed === true && witness.branch === RELEASED_BRANCH;
+}
+
+export function pendingProblems({ pending, published, claimed, unresolvable, today, maxDays = MAX_PENDING_DAYS, witness = null }) {
   const problems = [];
   const landed = [];
   const expired = [];
@@ -570,10 +640,24 @@ export function pendingProblems({ pending, published, claimed, unresolvable, tod
     if (days > maxDays) expired.push(`${id} (${days} days, ${decl.pr})`);
   }
   if (landed.length) {
+    // WHAT WAS READ WAS A FILE, NOT AN EVENT (`M185a`, `M184-02`).
+    //
+    // `published` comes from `readFileSync` of the sibling's `DECISIONS.md`. On tflw's default
+    // branch with that file committed, *the pull request landed* is a fair reading of it. Anywhere
+    // else it is a guess, and it is at its most confident exactly when it is most likely wrong: a
+    // local regeneration is the most probable thing to be sitting in that checkout DURING the
+    // window `D943`'s tolerance exists to cover, and the advice it gives — delete the declaration —
+    // leaves this repository's `main` red on an unresolvable citation.
+    const where = landedIsWitnessed(witness)
+      ? `    The pull request landed — delete the declaration.`
+      : `    That is a WORKING TREE, not a landed pull request: ${witnessPhrase(witness)}.\n` +
+        `    Confirm the tflw pull request merged before deleting anything. Deleting a declaration on the\n` +
+        `    strength of an uncommitted regeneration leaves this repository's main red on a citation that\n` +
+        `    does not resolve — which is the window D943 exists to cover, and the likeliest tree to be in.`;
     problems.push(
-      `${landed.join(' ')} is declared PENDING in verify-provenance.mjs and now resolves in tflw's index.\n` +
-      `    The pull request landed — delete the declaration. A tolerance that outlives its cause is a permanent\n` +
-      `    hole in a gate this repository is public behind (D943).`,
+      `${landed.join(' ')} is declared PENDING in verify-provenance.mjs and now resolves in the tflw index this gate read.\n` +
+      `${where}\n` +
+      `    A tolerance that outlives its cause is a permanent hole in a gate this repository is public behind (D943).`,
     );
   }
   if (expired.length) {
@@ -856,6 +940,7 @@ function main() {
     problems.push(...pendingProblems({
       pending: DECLARED_PENDING,
       published,
+      witness: indexWitness(),
       claimed,
       unresolvable: new Set(DECLARED_UNRESOLVABLE.keys()),
       today: new Date(),
@@ -992,6 +1077,68 @@ function selfTest() {
     const landed = call(new Map([['D943', decl('2026-09-05')]]), { published: new Set(['D943']) });
     if (landed.length === 1 && /now resolves/.test(landed[0])) ok('a pending declaration whose identifier has landed FAILS — the tolerance outlived its cause');
     else no('a landed pending declaration fails', landed.join(' | ') || 'it was silent');
+
+    // `M185a` (`M184-02`) — AND IT SAYS WHICH OF THE TWO IT SAW.
+    //
+    // The condition above is unchanged: a declared-pending identifier that now resolves still
+    // fails, on every tree. What is under test here is the sentence, because the sentence was the
+    // defect — *the pull request landed* is an event, and every one of these fixtures is a file.
+    //
+    // Four witnesses, and only one of them earns the strong wording. The three that do not are the
+    // point: each is a tree this gate can really be run in, and in all three the old message told
+    // the reader to delete a declaration on evidence that does not support it.
+    {
+      const landedWith = (witness) => call(new Map([['D943', decl('2026-09-05')]]), { published: new Set(['D943']), witness })[0] ?? '';
+      const strong = /The pull request landed/;
+      const weak = /WORKING TREE, not a landed pull request/;
+
+      const onMain = landedWith({ branch: 'main', committed: true });
+      if (strong.test(onMain) && !weak.test(onMain)) ok('a committed DECISIONS.md on main earns *the pull request landed*');
+      else no('main + committed earns the strong sentence', onMain);
+
+      // The reproduction from `M184-02`'s row, as a fixture: an uncommitted regeneration.
+      const dirtyIndex = landedWith({ branch: 'main', committed: false });
+      if (weak.test(dirtyIndex) && !strong.test(dirtyIndex) && /UNCOMMITTED/.test(dirtyIndex)) {
+        ok('an UNCOMMITTED DECISIONS.md does not claim a merge, and the message names what it saw');
+      } else no('an uncommitted index does not claim a merge', dirtyIndex);
+
+      const offBranch = landedWith({ branch: 'm185-says-what-it-saw', committed: true });
+      if (weak.test(offBranch) && !strong.test(offBranch) && /m185-says-what-it-saw/.test(offBranch)) {
+        ok('a committed index on a FEATURE BRANCH does not claim a merge, and the message names the branch');
+      } else no('a feature branch does not claim a merge', offBranch);
+
+      // `committed: null` is git being unanswerable, and it reports the WEAK form. An observation
+      // may weaken the claim and may never strengthen it — the same asymmetry `M185b` turns on.
+      const unaskable = landedWith({ branch: null, committed: null });
+      const noWitness = landedWith(null);
+      if (weak.test(unaskable) && weak.test(noWitness) && !strong.test(unaskable) && !strong.test(noWitness)) {
+        ok('an unanswerable witness falls to the WEAK form, never through it to the strong one');
+      } else no('an unanswerable witness is weak', `unaskable=${unaskable} | none=${noWitness}`);
+
+      // AND THE WITNESS IS TAKEN FROM A REAL TREE, not only from these fixtures. Without this the
+      // four cases above prove the wording and nothing at all about `indexWitness` — `M154f-03`'s
+      // shape, and the defect `M184b` was filed for one module over.
+      const live = indexWitness();
+      if (live.branch !== null && typeof live.committed === 'boolean') {
+        ok(`indexWitness reads the real sibling checkout: branch ${live.branch}, DECISIONS.md ${live.committed ? 'committed' : 'UNCOMMITTED'}`);
+      } else no('indexWitness reads the real sibling checkout', JSON.stringify(live));
+
+      // And it is pointed at a tree, not at a constant: asked about a directory that is not a
+      // checkout it answers `null`/`null` rather than inheriting this one's branch.
+      //
+      // The control has to be OUTSIDE any repository, which `scripts/` is not — git walks upward,
+      // so the first draft of this line asked about a subdirectory of this very checkout and would
+      // have reported `main`/`true` while claiming to prove the opposite. A fresh temp directory is
+      // the only place the answer is genuinely unavailable.
+      const outside = mkdtempSync(join(tmpdir(), 'm185-witness-'));
+      try {
+        const nowhere = indexWitness(outside);
+        if (nowhere.branch === null && nowhere.committed === null) ok('indexWitness outside a checkout answers null, not a guess (D737 one repository over)');
+        else no('indexWitness outside a checkout answers null', JSON.stringify(nowhere));
+      } finally {
+        rmSync(outside, { recursive: true, force: true });
+      }
+    }
 
     const old = call(new Map([['D943', decl('2026-08-01')]]));
     if (old.length === 1 && /39 days/.test(old[0])) ok('a pending declaration older than the bound FAILS, and the message says how old');

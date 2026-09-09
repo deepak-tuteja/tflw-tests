@@ -39,10 +39,12 @@
 // asks git which it is via `merge-base --is-ancestor` rather than reporting an unhelpful "≠".
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { packedFrom } from './tflw-bin.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 
@@ -147,6 +149,56 @@ function git(args) {
  * repo cloned on its own), and a sibling directory with no `.git/` (the `exec.mjs` offload, which
  * rsyncs the tree and deliberately omits history).
  */
+/**
+ * Where the Mac stamps what it sent (`M184c`/`D955`). Defined ONCE and imported by
+ * `scripts/refresh-tflw.mjs`, which read the same path through its own `path.join` until `M185b` —
+ * two hand-maintained copies of one filename, which is `D489` in the small.
+ */
+export const SYNCED_FROM = path.join('.box-state', 'synced-from.json');
+
+/**
+ * What tree `scripts/exec.mjs` says it synced here, or absence.
+ *
+ * The mirror of `packedFrom()` one repository over: that one says what the BUILD was packed from,
+ * this one says what the SOURCE beside it currently is. Both are written by the Mac and both carry
+ * `verified: false`, because the box cannot check either — `exec.mjs` rsyncs without `.git/`.
+ *
+ * @param {string} [root] the sibling checkout the marker sits in
+ * @returns {{present: boolean, ref: string|null, sha: string|null, dirty: boolean|null, at: string|null, by: string|null}}
+ */
+export function syncedFrom(root = SIBLING_ROOT) {
+  try {
+    const rec = JSON.parse(readFileSync(path.join(root, SYNCED_FROM), 'utf8'));
+    return { present: true, ref: rec.ref ?? null, sha: rec.sha ?? null, dirty: rec.dirty ?? null, at: rec.at ?? null, by: rec.by ?? null };
+  } catch {
+    return { present: false, ref: null, sha: null, dirty: null, at: null, by: null };
+  }
+}
+
+/**
+ * The two records `M184c` added, gathered for `gradeProvenance` (`M185b`).
+ *
+ * Read here and passed IN rather than read inside the state machine, for `M164-12`'s reason: every
+ * question `gradeProvenance` asks already names a directory, and the one hard-coded path was the
+ * accident that made five of its states unreachable from a test.
+ */
+export function boxRecords(root = SIBLING_ROOT, vendorDir = undefined) {
+  return { packed: vendorDir === undefined ? packedFrom() : packedFrom(vendorDir), synced: syncedFrom(root) };
+}
+
+/**
+ * Do two short shas name the same commit?
+ *
+ * Prefix-tolerant on purpose. Both records are written by `git rev-parse --short`, and git chooses
+ * that length per repository and lengthens it to avoid collisions — so two records written months
+ * apart can spell the same commit at different widths. An exact `!==` would report a mismatch that
+ * is not one, which in this state machine means announcing a divergence that does not exist.
+ */
+function sameCommit(a, b) {
+  if (!a || !b) return false;
+  return a.startsWith(b) || b.startsWith(a);
+}
+
 export function siblingState() {
   if (!existsSync(SIBLING_ROOT)) return null;
   const head = git(['rev-parse', '--short', 'HEAD']);
@@ -189,8 +241,12 @@ function ancestorOfHead(commit, root = SIBLING_ROOT) {
  *                of its advice.
  *   `diverged`   neither is an ancestor of the other, and both are reachable from some ref.
  *   `unknown`    the sibling has never heard of that commit — a build packed elsewhere.
- *   `unknowable` the stamp carries no commit (`D737`), or there is no sibling git to ask. The
- *                ordinary state on the box, and deliberately not a synonym for `current`.
+ *   `mismatched` the stamp carries no commit, and the two records `M184c` writes DISAGREE — the
+ *                build was packed from one commit and a different tree is synced beside it. NOT
+ *                `diverged`: that is a git verdict about ancestry, this is the absence of one.
+ *   `unknowable` the stamp carries no commit (`D737`), or there is no sibling git to ask, or the
+ *                two records agree — which is not evidence. The ordinary state on the box, and
+ *                deliberately not a synonym for `current`.
  *   `dev`        `source: 'dev'` — an unbundled `tsx` run, which has no provenance at all.
  *
  * `root` defaults to the real sibling checkout and exists so this state machine is reachable from
@@ -204,20 +260,80 @@ function ancestorOfHead(commit, root = SIBLING_ROOT) {
  * @param {ReturnType<typeof siblingState>} sibling
  * @param {string} [root] the checkout to ask; defaults to the real sibling
  */
-export function gradeProvenance(build, sibling, root = SIBLING_ROOT) {
+/**
+ * The no-commit branch, which stopped being one answer when `M184c` shipped (`M185b`, `M184-03`).
+ *
+ * A build packed on the box truthfully reports no commit (`D737`), and until `M184c` that ended the
+ * conversation: nothing on that machine could say what the build came from. Two records changed it.
+ * `vendor/packed-from.json` says what the build was packed from and `.box-state/synced-from.json`
+ * says what tree is synced beside it, and when those two disagree the build under test was packed
+ * from a commit that is not the one being graded — which is `M153b-01`'s incident stated in the
+ * only vocabulary this machine has.
+ *
+ * ## `mismatched` is not `diverged`, and the names are kept apart deliberately
+ *
+ * `diverged` is a git VERDICT: both commits were resolved, neither is an ancestor of the other, and
+ * `merge-base --is-ancestor` said so twice. `mismatched` is the ABSENCE of a verdict: two records
+ * spell different commits and there is no `.git` here to rank them. A reader who takes one for the
+ * other concludes something about branch topology from two JSON files, so the two states never
+ * appear in the same sentence without this distinction beside them.
+ *
+ * ## The asymmetry, which is the whole of the branch
+ *
+ * Records that DISAGREE produce `mismatched`. Records that AGREE produce `unknowable` still —
+ * never `current`. Both records are stamped `verified: false` by the machine that wrote them, and a
+ * disagreement between two unverified records is still a disagreement while an agreement between
+ * two of them is not evidence: they can agree because both are stale, both were written by the same
+ * mistaken sync, or because nothing has moved since a wrong one was written. Promoting that to
+ * `current` would turn `verified: false` into a verdict, which is exactly what `M184c` declined to
+ * do — the same shape as `D909`'s rule that a mechanism may subtract and may never add.
+ *
+ * Direction is not attempted and is not attemptable here. `stale`/`ahead`/`diverged` are separated
+ * by `merge-base --is-ancestor`, which needs the `.git` this machine does not have; `PLAN_M184` §7
+ * keeps that out of scope. The weaker true statement is the deliverable.
+ */
+function withoutCommit(stamp, sibling, records) {
+  const packed = records?.packed;
+  const synced = records?.synced;
+  const both = Boolean(packed?.present && synced?.present && packed.sha && synced.sha);
+  const where = (r) => `${r.ref ?? 'an unknown ref'}@${r.sha}${r.dirty ? ' (dirty)' : ''}`;
+
+  if (both && !sameCommit(packed.sha, synced.sha)) {
+    return {
+      state: 'mismatched',
+      summary:
+        `${stamp} carries no commit (D737), and the two records beside it DISAGREE: ` +
+        `packed from ${where(packed)}, tree synced here is ${where(synced)}.`,
+      detail:
+        '  The build under test was packed from a different commit than the source being graded.\n' +
+        '  Both records are unverified (M184c) — but a disagreement between two unverified records is\n' +
+        '  still a disagreement. Which of the two is newer cannot be answered here: there is no .git on\n' +
+        '  this machine to rank them, so this is NOT `diverged`, which is a git verdict.\n' +
+        '  Run `npm run refresh-tflw` to pack the tree that is actually here — this is M153b-01, where a\n' +
+        '  nine-day-old build reported a gap that had been closed nine days earlier.',
+    };
+  }
+
+  const agree = both
+    ? `\n  The two records beside it AGREE on ${where(packed)} — which is not evidence: both are written\n` +
+      '  unverified (M184c), so they can agree by being stale together. Agreement does not promote to `current`.'
+    : '';
+
+  return {
+    state: 'unknowable',
+    summary: `${stamp} carries no commit — packed outside a git checkout, so its provenance is unknowable (D737).`,
+    detail: (sibling
+      ? `  The sibling checkout is at ${sibling.head}; the build cannot be compared to it.`
+      : '  There is no sibling checkout to compare it against either.') + agree,
+  };
+}
+
+export function gradeProvenance(build, sibling, root = SIBLING_ROOT, records = null) {
   const stamp = `tflw ${build?.version ?? '?'}`;
   if (build?.source === 'dev') {
     return { state: 'dev', summary: `${stamp} built by \`npm run dev\` — no build stamp to check (D737).` };
   }
-  if (!build?.commit) {
-    return {
-      state: 'unknowable',
-      summary: `${stamp} carries no commit — packed outside a git checkout, so its provenance is unknowable (D737).`,
-      detail: sibling
-        ? `  The sibling checkout is at ${sibling.head}; the build cannot be compared to it.`
-        : '  There is no sibling checkout to compare it against either.',
-    };
-  }
+  if (!build?.commit) return withoutCommit(stamp, sibling, records);
   if (!sibling) {
     return {
       state: 'unknowable',
@@ -314,7 +430,19 @@ export function reachableFromAnyRef(commit, root = SIBLING_ROOT) {
 }
 
 /** The states in which a red says something about the code under review rather than about the build. */
-export const GRADEABLE = new Set(['current', 'dirty', 'unknowable']);
+// `mismatched` IS GRADEABLE, AND THAT IS THE DECISION RATHER THAN AN OVERSIGHT (`M185b`).
+//
+// `stalenessBanner` already fires on every state that is not `current`, so the box has printed the
+// loud banner all along; what it said there was uninformative, and `M185b` changes the CONTENT and
+// not whether anything refuses. Leaving `mismatched` out of this set would refuse every box run
+// whenever the build sits behind the tree — the ORDINARY state under `D954`, where the refresh is a
+// deliberate local act — so a message defect would have been repaired by breaking the workflow.
+// `M184-03` is filed S4 precisely because nothing here announces anything false.
+//
+// The condition for promoting it out of this set is named rather than deferred: a wrong conclusion
+// drawn from a run whose banner already said the records disagree. That is `M153b-01` happening a
+// second time WITH the warning present, and it would mean the banner is not enough.
+export const GRADEABLE = new Set(['current', 'dirty', 'unknowable', 'mismatched']);
 
 /**
  * One line for the top of any script that grades tflw, so provenance is on screen before the
@@ -429,6 +557,74 @@ function selfTest() {
     gradeProvenance(build('0'.repeat(40)), sib, fx.dir).state === 'unknown');
   t('a build with no commit is still `unknowable`', gradeProvenance(build(undefined), sib, fx.dir).state === 'unknowable');
   t('a dev build is still `dev`', gradeProvenance({ version: '0.1.0', source: 'dev' }, sib, fx.dir).state === 'dev');
+
+  // `M185b` (`M184-03`) — THE SEVENTH STATE, AND THE ASYMMETRY THAT IS THE POINT OF IT.
+  //
+  // The records are fixtures rather than files on disk, which is why `gradeProvenance` takes them
+  // as an argument: the condition under test only occurs on a machine with no `.git`, and a test
+  // that could only run there would never run.
+  {
+    const rec = (packedSha, syncedSha, over = {}) => ({
+      packed: { present: true, ref: 'main', sha: packedSha, dirty: false, ...(over.packed ?? {}) },
+      synced: { present: true, ref: 'main', sha: syncedSha, dirty: false, ...(over.synced ?? {}) },
+    });
+    const noCommit = build(undefined);
+    const grade = (records) => gradeProvenance(noCommit, sib, fx.dir, records);
+
+    // The live measurement from `M184-03`'s row, as a fixture: box tree 1ff0381, box build 39b0d8a.
+    const differ = grade(rec('39b0d8a', '1ff0381'));
+    t('two records naming different commits grade `mismatched`', differ.state === 'mismatched');
+    t('and the summary names BOTH commits, which is the whole deliverable',
+      /39b0d8a/.test(differ.summary) && /1ff0381/.test(differ.summary));
+    t('and it says it is not `diverged`, because that is a git verdict and this is not one',
+      /NOT `diverged`/.test(differ.detail ?? ''));
+
+    // THE ASYMMETRY. Agreement between two records stamped `verified: false` is not evidence, so it
+    // must not promote to `current` — that would turn `verified: false` into a verdict.
+    const agreeing = grade(rec('39b0d8a', '39b0d8a'));
+    t('two records that AGREE stay `unknowable` — an agreement between unverified records is not evidence',
+      agreeing.state === 'unknowable');
+    t('and the detail says why agreement is not promotion', /not evidence/.test(agreeing.detail ?? ''));
+
+    // Prefix tolerance: git chooses the short length per repository and lengthens it on collision,
+    // so the same commit can be spelled at two widths. An exact compare would announce a divergence
+    // that does not exist.
+    t('the same commit at two short-sha widths is not a mismatch',
+      grade(rec('39b0d8a', '39b0d8a1c4')).state === 'unknowable');
+
+    // Absence is not disagreement. Each half missing, and both — the box before `M184c`, and the
+    // Mac today, which under D954 holds an un-refreshed build on purpose.
+    t('an absent packed-from record is `unknowable`, not `mismatched`',
+      grade({ packed: { present: false, ref: null, sha: null }, synced: { present: true, ref: 'main', sha: 'abc1234' } }).state === 'unknowable');
+    t('an absent synced-from record is `unknowable`, not `mismatched`',
+      grade({ packed: { present: true, ref: 'main', sha: 'abc1234' }, synced: { present: false, ref: null, sha: null } }).state === 'unknowable');
+    t('no records at all is the pre-M184c answer, unchanged', grade(null).state === 'unknowable');
+
+    // `mismatched` IS gradeable, deliberately — the opposite of `orphaned` above, and the reason is
+    // written at the constant. Asserted so a later tightening has to argue with a test.
+    t('`mismatched` is gradeable — the box sits behind its build by design (D954)', GRADEABLE.has('mismatched'));
+
+    // AND A COMMITTED BUILD IGNORES THE RECORDS ENTIRELY. They only speak where git cannot; a build
+    // that carries a commit is graded against the checkout, records or no records.
+    t('records do not reach a build that carries a commit',
+      gradeProvenance(build(fx.head), sib, fx.dir, rec('39b0d8a', '1ff0381')).state === 'current');
+
+    // The readers, against real files rather than only against these fixtures — `M154f-03`.
+    const empty = mkdtempSync(path.join(tmpdir(), 'tflw-synced-'));
+    try {
+      t('syncedFrom reports absence rather than throwing', syncedFrom(empty).present === false);
+      writeFileSync(path.join(empty, 'synced.json'), '{"ref":"main","sha":"deadbee"}');
+      const dir = mkdtempSync(path.join(tmpdir(), 'tflw-synced2-'));
+      const stateDir = path.join(dir, '.box-state');
+      spawnSync('mkdir', ['-p', stateDir]);
+      writeFileSync(path.join(dir, SYNCED_FROM), '{"ref":"main","sha":"deadbee","dirty":false}');
+      const read = syncedFrom(dir);
+      t('syncedFrom reads the record at the path refresh-tflw writes', read.present && read.sha === 'deadbee');
+      rmSync(dir, { recursive: true, force: true });
+    } finally {
+      rmSync(empty, { recursive: true, force: true });
+    }
+  }
 
   // The control that makes the orphan case non-vacuous: with the reachability question removed, the
   // orphan falls through to `diverged` exactly as it did before this repair.

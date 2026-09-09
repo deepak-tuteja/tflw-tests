@@ -36,7 +36,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 import { resolveTflw } from './lib/tflw-bin.mjs';
-import { readSpec, siblingState, gradeProvenance, announceProvenance, stalenessBanner } from './lib/tflw-provenance.mjs';
+import { readSpec, siblingState, boxRecords, gradeProvenance, announceProvenance, stalenessBanner } from './lib/tflw-provenance.mjs';
 
 /**
  * **This corpus is checked against the RELEASED build, and says so** (M128c, then M141).
@@ -79,7 +79,7 @@ const TFLW_BIN = resolveTflw('released', { label: 'check-acceptance' }).entry;
  */
 const PROVENANCE = (() => {
   try {
-    return gradeProvenance(readSpec(TFLW_BIN).build, siblingState());
+    return gradeProvenance(readSpec(TFLW_BIN).build, siblingState(), undefined, boxRecords());
   } catch (e) {
     // A build too old to have `tflw spec` is itself the strongest possible staleness signal, so
     // this reports it as one rather than exiting — the corpora below still check fine against it.
