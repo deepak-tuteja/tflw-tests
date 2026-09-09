@@ -31,7 +31,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { resolveTflw, tflwCommand, resolveArtifactContract, RELEASED_ENTRY, BRANCH_ENTRY, vendorProvenance, vendorProblem } from './lib/tflw-bin.mjs';
+import { resolveTflw, tflwCommand, resolveArtifactContract, RELEASED_ENTRY, BRANCH_ENTRY, vendorProvenance, vendorProblem, packedFrom, packedFromProblem } from './lib/tflw-bin.mjs';
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 let failures = 0;
@@ -381,6 +381,76 @@ if (!realTgz) {
   } else {
     fail(`half C: the announcement must name the tarball — got ${JSON.stringify(line.trim())}`);
   }
+}
+
+// ── HALF D: which ref this build was packed from, and when that disqualifies it (`M184c`, `D955`) ──
+//
+// A SECOND fact about the same install, and independent of half C's: the tarball and the install
+// can agree perfectly about bytes that came from the wrong branch. Conflating the two is how
+// `M184-01` stayed invisible.
+//
+// The record exists because `exec.mjs` rsyncs without `.git/`, so a tflw packed on the box reports
+// `commit: null` truthfully (`D737`) and cannot say which build it is. Option B of `PLAN_M184` §5:
+// the Mac stamps what it sent into `.box-state/synced-from.json`, `refresh-tflw` carries it into
+// `vendor/packed-from.json`, and it is marked `verified: false` **in the value** — the same move
+// `--from-checkout`'s `local: true` makes (`D865`). An unverified ref that says so is evidence; one
+// that looks like an observation is a lie with a timestamp.
+//
+// EVERY DECISION BELOW HAS ITS NEGATIVE CONTROL, because three of the four are decisions NOT to
+// refuse, and a guard is only as good as the cases it deliberately lets through.
+{
+  const tmpD = mkdtempSync(path.join(tmpdir(), 'tflw-packed-'));
+  const write = (name, rec) => {
+    const dir = path.join(tmpD, name);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, 'packed-from.json'), JSON.stringify(rec));
+    return dir;
+  };
+
+  const onMain = write('main', { ref: 'main', sha: 'abc1234', dirty: false, verified: true, source: 'observed' });
+  const onBranch = write('branch', { ref: 'm184c-mark', sha: 'def5678', dirty: false, verified: false, source: 'told by scripts/exec.mjs sync' });
+  const dirtyMain = write('dirty', { ref: 'main', sha: 'abc1234', dirty: true, verified: true, source: 'observed' });
+  const absent = path.join(tmpD, 'absent');
+  mkdirSync(absent, { recursive: true });
+
+  // POSITIVE — the one that refuses.
+  const branchProblem = packedFromProblem(packedFrom(onBranch));
+  if (!branchProblem) fail('half D: a build packed from a feature branch must be refused by a `released` grader');
+  else if (!branchProblem.includes('m184c-mark')) fail('half D: the refusal must NAME the branch — a refusal that does not say which build it got is one nobody can act on');
+  else if (!branchProblem.includes("resolveTflw('branch')")) fail('half D: the refusal must name the other question, because that is the honest way to grade a branch build and the reason no override flag exists here');
+  else pass('half D: a branch-packed build is refused, named, and pointed at the question it should have been asked');
+
+  // NEGATIVES — three deliberate non-refusals, each of which would otherwise look like a bug.
+  const nonRefusals = [
+    ['main', onMain, 'the ordinary case is unchanged'],
+    ['a DIRTY main', dirtyMain, 'a dirty working checkout is the normal state and is announced, not refused'],
+    ['an absent record', absent, 'every install predating M184c has none, and refusing on absence bricks both machines until refreshed (M131-03 says do not be green about nothing, not be red about everything)'],
+  ];
+  let clean = 0;
+  for (const [label, dir, why] of nonRefusals) {
+    if (packedFromProblem(packedFrom(dir)) === null) clean += 1;
+    else fail(`half D: ${label} must NOT be refused — ${why}`);
+  }
+  if (clean === nonRefusals.length) pass(`half D: ${nonRefusals.length} deliberate non-refusals hold (main, dirty main, absent record)`);
+
+  // And absence is a STATE, not a silence: `M184-01` was invisible for five days because a line
+  // printed a category and stopped.
+  const none = packedFrom(absent);
+  if (none.present !== false || !none.source.includes('predates M184c')) {
+    fail(`half D: an absent record must say so in its own terms, got ${JSON.stringify(none.source)}`);
+  } else pass('half D: an absent record is reported as unknowable rather than omitted (D737)');
+
+  // WIRING, on the same principle as half C's: the three findings above are about functions.
+  const live = resolveTflw('released', { quiet: true });
+  if (!live.packedFrom) fail('half D wiring: resolveTflw("released") returned no packed-from record — the check is not wired in');
+  else pass(`half D wiring: resolveTflw("released") carries the record (${live.packedFrom.present ? `${live.packedFrom.ref}@${live.packedFrom.sha}` : 'unknowable here'})`);
+
+  const said = [];
+  const realWrite = process.stderr.write.bind(process.stderr);
+  process.stderr.write = (chunk) => { said.push(String(chunk)); return true; };
+  try { resolveTflw('released', { label: 'probe' }); } finally { process.stderr.write = realWrite; }
+  if (said.join('').includes('packed from ')) pass('half D: the announcement carries the ref, including when it is unknowable');
+  else fail(`half D: the announcement must say what it was packed from — got ${JSON.stringify(said.join('').trim())}`);
 }
 
 // The npm scripts are resolution sites too, and the loudest one: the root `npm test` is a bare

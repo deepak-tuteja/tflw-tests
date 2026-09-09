@@ -103,4 +103,60 @@ if (!fs.existsSync(installedCliPath) || sha(fs.readFileSync(installedCliPath)) !
 }
 console.log('Verified node_modules/tflw matches the freshly packed tarball.');
 
+// ── what this build was packed from (`M184c`, `D955`) ───────────────────────────────────────────
+//
+// `D737` governs what the build could OBSERVE — `tflw spec --json`'s `commit` is `null` outside a
+// git checkout, never a guess. This is the other fact: what the packer was TOLD. They are recorded
+// separately and this one is never written into the build, because a ref inside a bundle that
+// could not see git is precisely the invented stamp `D737` exists to forbid.
+//
+// Two sources, and the record says which one it used. On the Mac the sibling checkout has a `.git`
+// and this OBSERVES it — `verified: true`, because the same machine that packed the bytes read the
+// ref off the tree it packed them from. On the box `exec.mjs` rsyncs without `.git/`, so there is
+// nothing to observe; what there is instead is `.box-state/synced-from.json`, written by the Mac
+// after the rsync, and this carries it through with `verified: false`. An unverified ref that says
+// it is unverified is evidence; one that looks like an observation is a lie with a timestamp.
+//
+// Absent is its own answer (`D737`'s three states, `M131-03`): neither source present means the
+// record says so rather than being omitted, because a missing file and an unknown ref are
+// different claims and a reader is entitled to the second.
+const PACKED_FROM_PATH = path.join(VENDOR_DIR, 'packed-from.json');
+const gitIn = (dir, args) => {
+  try {
+    return execSync(`git -C "${dir}" ${args}`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  } catch { return null; }
+};
+const siblingRepo = path.dirname(path.dirname(CLI_DIR));
+let packedFrom;
+const observedRef = gitIn(siblingRepo, 'rev-parse --abbrev-ref HEAD');
+if (observedRef) {
+  packedFrom = {
+    ref: observedRef,
+    sha: gitIn(siblingRepo, 'rev-parse --short HEAD'),
+    dirty: (gitIn(siblingRepo, 'status --porcelain') ?? '').length > 0,
+    verified: true,
+    source: 'observed in the checkout this was packed from',
+  };
+} else {
+  let told = null;
+  try {
+    told = JSON.parse(fs.readFileSync(path.join(siblingRepo, '.box-state', 'synced-from.json'), 'utf8'));
+  } catch { /* absent, or unreadable — either way there is nothing to carry */ }
+  packedFrom = told
+    ? { ref: told.ref ?? null, sha: told.sha ?? null, dirty: told.dirty ?? null, verified: false,
+        source: `told by ${told.by ?? 'an unnamed writer'} at ${told.at ?? 'an unrecorded time'}` }
+    : { ref: null, sha: null, dirty: null, verified: false,
+        source: 'no checkout to observe and no marker to carry — unknowable (D737)' };
+}
+packedFrom.$comment = 'What this tflw was packed FROM. Never written into the build itself: `commit`'
+  + ' in the build stamp is what the build could observe (D737), and this is what the packer was'
+  + ' told. M184c/D955.';
+packedFrom.tarball = tarballName;
+packedFrom.packedAt = new Date().toISOString();
+fs.writeFileSync(PACKED_FROM_PATH, JSON.stringify(packedFrom, null, 2) + '\n');
+console.log(
+  `Packed from ${packedFrom.ref ?? 'an unknown ref'}${packedFrom.sha ? `@${packedFrom.sha}` : ''}`
+  + `${packedFrom.dirty ? ' (dirty)' : ''} — ${packedFrom.verified ? 'observed' : 'unverified'}.`,
+);
+
 console.log(`Done. tflw installed from ${tarballName}.`);
