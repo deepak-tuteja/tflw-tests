@@ -208,6 +208,15 @@ export function packedFrom(vendorDir = VENDOR_DIR) {
  */
 export function packedFromProblem(rec) {
   if (!rec || !rec.present || rec.ref === null || rec.ref === RELEASED_REF) return null;
+  // A DETACHED CHECKOUT IS UNKNOWABLE, NOT A BRANCH. `git rev-parse --abbrev-ref HEAD` prints the
+  // literal `HEAD` when nothing is checked out by name, which is not a ref this can compare — and
+  // refusing it would be inventing a verdict from an absent fact, `D737`'s error wearing the
+  // guard's clothes. Unreachable today and checked rather than assumed: `refresh-tflw` runs in both
+  // CI job families and `actions/checkout` puts the default branch on a named `main`, which is why
+  // `regression (tooling)` is green on the commit that added this refusal. It becomes reachable the
+  // day anyone adds a `ref:` to that step, and the failure would be every `released` gate in CI
+  // refusing at once with a message naming a branch called `HEAD`.
+  if (rec.ref === 'HEAD') return null;
   return (
     `resolveTflw('released'): this tflw was packed from \`${rec.ref}\`, not \`${RELEASED_REF}\`.\n` +
     `    ${rec.sha ? `at ${rec.sha}${rec.dirty ? ' (dirty)' : ''}, ` : ''}${rec.verified ? 'observed in the checkout it was packed from' : 'unverified — ' + rec.source}\n` +

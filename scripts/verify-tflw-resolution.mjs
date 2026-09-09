@@ -421,8 +421,10 @@ if (!realTgz) {
   else pass('half D: a branch-packed build is refused, named, and pointed at the question it should have been asked');
 
   // NEGATIVES — three deliberate non-refusals, each of which would otherwise look like a bug.
+  const detached = write('detached', { ref: 'HEAD', sha: '0f1e2d3', dirty: false, verified: true, source: 'observed' });
   const nonRefusals = [
     ['main', onMain, 'the ordinary case is unchanged'],
+    ['a DETACHED checkout', detached, "`rev-parse --abbrev-ref HEAD` prints the literal `HEAD` when nothing is checked out by name — that is not a ref to compare, and refusing it invents a verdict from an absent fact (D737). Unreachable today because actions/checkout puts the default branch on a named `main`; reachable the day a `ref:` is added to that step"],
     ['a DIRTY main', dirtyMain, 'a dirty working checkout is the normal state and is announced, not refused'],
     ['an absent record', absent, 'every install predating M184c has none, and refusing on absence bricks both machines until refreshed (M131-03 says do not be green about nothing, not be red about everything)'],
   ];
@@ -431,7 +433,7 @@ if (!realTgz) {
     if (packedFromProblem(packedFrom(dir)) === null) clean += 1;
     else fail(`half D: ${label} must NOT be refused — ${why}`);
   }
-  if (clean === nonRefusals.length) pass(`half D: ${nonRefusals.length} deliberate non-refusals hold (main, dirty main, absent record)`);
+  if (clean === nonRefusals.length) pass(`half D: ${nonRefusals.length} deliberate non-refusals hold (${nonRefusals.map(([l]) => l).join(', ')})`);
 
   // And absence is a STATE, not a silence: `M184-01` was invisible for five days because a line
   // printed a category and stopped.
