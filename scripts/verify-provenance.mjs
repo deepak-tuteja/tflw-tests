@@ -544,16 +544,7 @@ export const MAX_PENDING_DAYS = 14;
  *
  * @type {Map<string, {pr: string, since: string, why: string}>}
  */
-export const DECLARED_PENDING = new Map([
-  ['D943', {
-    pr: 'testFlow-tests m183b-pending-citation',
-    since: '2026-09-09',
-    why: "this decision itself, cited by the mechanism that implements it. `D943` is anchored in tflw's "
-      + '`PLAN_M183`, which is gitignored, so tflw can only publish it by pinning THIS branch and regenerating '
-      + '— which is the re-pin pull request `M179-01` measured five of. It is the first specimen and the '
-      + 'cleanest one: if the tolerance does not work here it works nowhere.',
-  }],
-]);
+export const DECLARED_PENDING = new Map([]);
 
 /**
  * The pending declarations' own problems, as a pure function so `--self-test` can reach every
