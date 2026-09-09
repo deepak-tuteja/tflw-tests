@@ -58,7 +58,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { resolveTflw } from './lib/tflw-bin.mjs';
-import { readSpec, siblingState, gradeProvenance, announceProvenance, GRADEABLE } from './lib/tflw-provenance.mjs';
+import { readSpec, siblingState, boxRecords, gradeProvenance, announceProvenance, GRADEABLE } from './lib/tflw-provenance.mjs';
 import {
   PLANTS,
   PLANT_IDS,
@@ -85,7 +85,7 @@ const ok = (msg) => console.log(`✓ ${msg}`);
 
 const { entry } = resolveTflw('released', { label: 'construct-coverage' });
 const spec = readSpec(entry);
-const provenance = gradeProvenance(spec.build, siblingState());
+const provenance = gradeProvenance(spec.build, siblingState(), undefined, boxRecords());
 announceProvenance('construct-coverage', provenance);
 
 if (!GRADEABLE.has(provenance.state)) {

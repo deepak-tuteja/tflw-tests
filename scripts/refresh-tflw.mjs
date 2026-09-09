@@ -8,6 +8,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { syncedFrom } from './lib/tflw-provenance.mjs';
+
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 /**
  * The sibling checkout's CLI package. `../testFlow` is the layout every human here works in and
@@ -138,12 +140,12 @@ if (observedRef) {
     source: 'observed in the checkout this was packed from',
   };
 } else {
-  let told = null;
-  try {
-    told = JSON.parse(fs.readFileSync(path.join(siblingRepo, '.box-state', 'synced-from.json'), 'utf8'));
-  } catch { /* absent, or unreadable — either way there is nothing to carry */ }
-  packedFrom = told
-    ? { ref: told.ref ?? null, sha: told.sha ?? null, dirty: told.dirty ?? null, verified: false,
+  // Read through `syncedFrom` rather than re-joining the path here (`M185b`). The filename was
+  // spelled in two files until this edit, which is `D489` in the small: the writer is
+  // `scripts/exec.mjs`, and the two readers must not be able to drift apart from it independently.
+  const told = syncedFrom(siblingRepo);
+  packedFrom = told.present
+    ? { ref: told.ref, sha: told.sha, dirty: told.dirty, verified: false,
         source: `told by ${told.by ?? 'an unnamed writer'} at ${told.at ?? 'an unrecorded time'}` }
     : { ref: null, sha: null, dirty: null, verified: false,
         source: 'no checkout to observe and no marker to carry — unknowable (D737)' };
