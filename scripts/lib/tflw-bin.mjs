@@ -160,6 +160,72 @@ export function vendorProvenance(installedSha, vendorDir = VENDOR_DIR) {
   };
 }
 
+/** The ref a `released` build is allowed to have been packed from. One name, stated rather than
+ *  derived, because "the default branch" is a fact about a remote this file never talks to. */
+const RELEASED_REF = 'main';
+
+/**
+ * What this install was packed FROM, as recorded beside the tarball by `refresh-tflw` (`M184c`,
+ * `D955`). Distinct from `vendorProvenance`, which asks whether the install matches the tarball —
+ * these two can disagree in either direction and conflating them is how `M184-01` stayed invisible.
+ *
+ * Absent is `unknowable`, not a pass: a `vendor/` predating `M184c` has no record, and inventing
+ * one from the build stamp is exactly what `D737` forbids.
+ */
+export function packedFrom(vendorDir = VENDOR_DIR) {
+  try {
+    const rec = JSON.parse(readFileSync(path.join(vendorDir, 'packed-from.json'), 'utf8'));
+    return { ...rec, present: true };
+  } catch {
+    return { present: false, ref: null, sha: null, dirty: null, verified: false,
+      source: 'no packed-from.json beside the tarball — this install predates M184c, or was not made by refresh-tflw' };
+  }
+}
+
+/**
+ * Why a `'released'` grader must refuse this build, or `null`.
+ *
+ * `released` asks *does the shipped build still do this?*, and a build packed from a feature branch
+ * is not the shipped build. Grading one as `released` is the failure `M153b-01` recorded from the
+ * other direction — a vendored build nine days stale reported a grammar gap tflw had already
+ * closed, and the red reached a pull request body. Same class: the answer was true of some build
+ * and the question was about a different one.
+ *
+ * ABSENT DOES NOT REFUSE, and that is deliberate rather than lenient. Every install made before
+ * `M184c` has no record, so refusing on absence would brick the two machines this arrangement runs
+ * on until both are refreshed — and `M131-03`'s rule is that a guard must not be green about
+ * nothing, not that it must be red about everything. What it does instead is carry the state into
+ * the announcement, where a reader sees `unknowable` rather than nothing at all.
+ *
+ * DIRTY DOES NOT REFUSE EITHER. A dirty `main` is the normal state of a working checkout and
+ * refusing it would make the guard fire constantly for a condition nobody is asking about; it is
+ * announced, because a grader reporting on uncommitted work should say so.
+ *
+ * THE ESCAPE IS THE ONE THAT ALREADY EXISTS. There is no override flag here — `resolveTflw`
+ * skips this whole check when `TFLW_BIN` points somewhere else, and the honest way to grade a
+ * branch build is to ask `resolveTflw('branch')`, which is what that question is for. A new
+ * suppression flag would rebuild the silent path this removes (`D540`).
+ */
+export function packedFromProblem(rec) {
+  if (!rec || !rec.present || rec.ref === null || rec.ref === RELEASED_REF) return null;
+  // A DETACHED CHECKOUT IS UNKNOWABLE, NOT A BRANCH. `git rev-parse --abbrev-ref HEAD` prints the
+  // literal `HEAD` when nothing is checked out by name, which is not a ref this can compare — and
+  // refusing it would be inventing a verdict from an absent fact, `D737`'s error wearing the
+  // guard's clothes. Unreachable today and checked rather than assumed: `refresh-tflw` runs in both
+  // CI job families and `actions/checkout` puts the default branch on a named `main`, which is why
+  // `regression (tooling)` is green on the commit that added this refusal. It becomes reachable the
+  // day anyone adds a `ref:` to that step, and the failure would be every `released` gate in CI
+  // refusing at once with a message naming a branch called `HEAD`.
+  if (rec.ref === 'HEAD') return null;
+  return (
+    `resolveTflw('released'): this tflw was packed from \`${rec.ref}\`, not \`${RELEASED_REF}\`.\n` +
+    `    ${rec.sha ? `at ${rec.sha}${rec.dirty ? ' (dirty)' : ''}, ` : ''}${rec.verified ? 'observed in the checkout it was packed from' : 'unverified — ' + rec.source}\n` +
+    `    \`released\` asks whether the SHIPPED build still does this, and a branch build is not it.\n` +
+    `    Ask the other question instead — resolveTflw('branch') — or re-pack from \`${RELEASED_REF}\`\n` +
+    '    on this machine: npm run refresh-tflw. The refresh is a local act on every machine (D954).'
+  );
+}
+
 /**
  * What, if anything, makes a provenance verdict fatal. Separated from `resolveTflw` so the gate can
  * assert the refusal as a fact about a state rather than by corrupting an install.
@@ -246,6 +312,13 @@ export function resolveTflw(question, opts = {}) {
   const problem = vendorProblem(vendor);
   if (problem) throw new Error(problem);
 
+  // `M184c` / `D955`. A second, independent fact about the same install: which ref it was packed
+  // from. Checked only where the vendor check is, for the same reason — an override names its own
+  // source and was never packed here.
+  const packedRec = vendor ? packedFrom() : null;
+  const fromProblem = packedFromProblem(packedRec);
+  if (fromProblem) throw new Error(fromProblem);
+
   if (!opts.quiet) {
     const who = opts.label ? `${opts.label}: ` : '';
     const provenance = vendor
@@ -253,10 +326,18 @@ export function resolveTflw(question, opts = {}) {
           ? ` — installed from vendor/${vendor.tarball} (${vendor.tarballSha.slice(0, 8)}), contents verified`
           : ` — ${vendor.reason}`)
       : '';
-    process.stderr.write(`${who}tflw[${question}] ${entry} sha=${sha.slice(0, 8)} <- ${from}${provenance}\n`);
+    // The ref is announced whatever it says, including `unknowable` — `M184-01` was invisible for
+    // five days because the line printed a category and stopped, so a state this cannot establish
+    // is printed as that rather than omitted.
+    const packed = packedRec
+      ? (packedRec.present
+          ? `, packed from ${packedRec.ref ?? 'an unknown ref'}${packedRec.sha ? `@${packedRec.sha}` : ''}${packedRec.dirty ? ' (dirty)' : ''}${packedRec.verified ? '' : ' [unverified]'}`
+          : ', packed from an unrecorded ref [unknowable]')
+      : '';
+    process.stderr.write(`${who}tflw[${question}] ${entry} sha=${sha.slice(0, 8)} <- ${from}${provenance}${packed}\n`);
   }
 
-  return { question, entry, sha, from, vendor };
+  return { question, entry, sha, from, vendor, packedFrom: packedRec };
 }
 
 /**
