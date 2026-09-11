@@ -8,6 +8,21 @@
 # testing — a fixed sleep stays the right tool for this one, not a workaround for a missing
 # feature. Runs for real (~6s), not simulated — same "real timers, not fake" standard as this
 # suite's async-job cluster (M4).
+#
+# The second test is the other side of that boundary, and it exists because `testFlow M181-02` read
+# the paragraph above as a language gap. It is not one. A captured token is a *value*, and the
+# runtime does not renew values — so the first test holds its bearer in a variable precisely in
+# order to observe the 401. A `session` is a *credential*, and since tflw's `P#99a` a 401 on an
+# `api` step re-establishes the test's opted-in sessions and retries once; since `M187` (`D961`) a
+# `wait until api` poll is a request on the same terms, bounded to one refresh per expiry (`D962`).
+# So the second test runs `as admin`, holds the cached session past the same 5s TTL, and then waits
+# with **no header line**: the wait's first poll is the real expiry, the runtime re-establishes
+# `admin` inside the wait, and the wait passes. A wait whose *first* poll meets a dead cached token
+# is the shape a long suite produces in its last minutes, not a compression of a rarer mid-wait
+# crossing (`D966`; the crossing is tflw's own fixture test's subject). Under a tflw without `M187`
+# this test times out — every poll answers 401 and nothing refreshes — and it was run that way once,
+# as the control, before the build with the fix. The evidence is in the report: a *session "admin"
+# re-established* step sits inside the wait's own timeline (`D964`). SPEC §5.5 carries the sentence.
 
 use "../../helpers/wait-seconds.ts"
 
@@ -38,3 +53,22 @@ test "an access token genuinely expires at its configured TTL, and refresh recov
   api GET /auth/profile
     header "Authorization" is "Bearer {freshToken}"
   expect status equals 200
+
+@gaps @tokenexpiry @sessions @identityOps @api
+test "a `wait until api` whose cached session has expired re-establishes it on its first poll (M187)" as admin
+  # A plain step first, so the `admin` session is established (or, late in the suite, refreshed)
+  # *before* the sleep. A test whose first request is the wait itself would log in at the first
+  # poll, fresh, and prove nothing.
+  api GET /auth/profile
+  expect status equals 200
+  expect body.role equals "admin"
+
+  let waited = wait seconds(6)
+  log warn "admin session's cached bearer is now past its 5s TTL; the wait's first poll will answer 401"
+
+  # No header line — the poll carries the session's bearer. Pre-`M187` this waited out its whole
+  # 5s budget on 401s and blamed the matcher (`M181-02`); now the first poll's 401 re-establishes
+  # `admin` and the next poll passes, well inside the budget.
+  wait until api GET /auth/profile
+    expect status equals 200
+    expect body.role equals "admin"

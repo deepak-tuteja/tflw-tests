@@ -6,9 +6,13 @@
 # multi-identity coordination (owner submits, admin decides) and an admin's decision determining
 # which of two real downstream paths (refund job vs. nothing) gets exercised.
 #
-# Inline per-test logins throughout (not `as admin`/a cached session), same reasoning jobs.tflw and
-# user-lifecycle.tflw already settled on: this file sorts late enough in the suite that a cached
-# admin session's 5s-TTL bearer token can be stale by the time these tests run.
+# Inline per-test logins throughout (not `as admin`/a cached session). The reason this paragraph
+# used to give — *this file sorts late enough in the suite that a cached admin session's 5s-TTL
+# bearer token can be stale by the time these tests run* — was already false when it was written
+# (2026-07-25): tflw's `P#99a` had made a stale session refresh itself on the first 401 a week
+# earlier. Amended by `M187c` (`M187`) together with admin/tickets.tflw, which cited this file as
+# its precedent. The logins stay because every test here speaks as two identities (the owner
+# submits, the admin decides) and the config declares a session for one of them.
 
 before
   api GET /categories
