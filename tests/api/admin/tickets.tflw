@@ -8,9 +8,19 @@
 # with `expect body has count N`, distinct from every prior `wait until` which always targets a
 # single resource's own eventual state).
 #
-# Inline per-test logins throughout (not `as admin`/a cached session), same reasoning
-# return-requests.tflw and jobs.tflw already settled on: this file sorts late enough in the suite
-# that a cached admin session's 5s-TTL bearer token can be stale by the time these tests run.
+# Inline per-test logins throughout (not `as admin`/a cached session). This paragraph used to give
+# the reason return-requests.tflw and jobs.tflw gave — *this file sorts late enough in the suite
+# that a cached admin session's 5s-TTL bearer token can be stale by the time these tests run* — and
+# that reason was false on the day it was written (2026-07-25): tflw's `P#99a` had made a stale
+# session refresh itself on the first 401 a week earlier, and identity/interleaved-sessions.tflw
+# already recorded the suite's inline logins as "no longer a forced workaround post-M9, just an
+# existing style choice". Amended by `M187c` (`M187`), the round that gave a `wait until api` poll
+# the same refresh (`D961`) — this file's collection-level wait is exactly the site the old reason
+# would have named next. The logins stay, for the reason that was always the real one: this file
+# speaks as six identities (an admin, two seeded agents, one agent it registers itself, two
+# customers) and the config declares a session for one of them; the `D940` discipline below is
+# independent of any TTL. jobs.tflw's paragraph stands as dated history — it was true when M13
+# wrote it, before `P#99a` existed.
 #
 # Agent-identity discipline, amended in place by `M182c` (`D940`). What this paragraph used to say,
 # quoted rather than deleted because every word of it is still true and it is still the reason two
