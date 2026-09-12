@@ -79,6 +79,7 @@ import { fileURLToPath } from 'node:url';
 import { siblingRoot, readMutations, editsOf, bundleInputs, classify, anchorState } from './lib/mutations.mjs';
 import { plantsFor } from './lib/constructs.mjs';
 import { claimDigest, patchDigest, aggregate, shapeOfRosterOutput } from './lib/census-shape.mjs';
+import { detailFromRosterOutput, mergeProduced } from './lib/kill-detail.mjs';
 import { resolveTflw } from './lib/tflw-bin.mjs';
 import { parseArgv, BOOLEAN, VALUE, REST } from './lib/argv.mjs';
 
@@ -198,7 +199,15 @@ const SHAPE = path.join(OUT_DIR, 'census-shape.json');
 // says `recall 2/3` — and the census kept only the glyph. `D842` cannot be decided from the
 // glyph: a plant that asserted nothing cannot have been covered by anything. So the grader's
 // own page is kept for every killing mutation, which is ten files, not 271.
+//
+// `M188b` (`D968`, `D969`, closing the producer half of `M176-05`): the page is no longer the
+// evidence. `kill-detail.json` is written HERE, beside the matrix, from the same output — one
+// entry per red plant, the block stamped with what produced it — so the transcription a person
+// used to do from these pages is gone, and with it the step that produced `M168-05`. The
+// transcript stays: a debugging aid, untracked, allowed to be perishable, and never to be
+// committed (it carries this machine's home path on its resolution line).
 const TRANSCRIPTS = path.join(OUT_DIR, 'transcripts');
+const DETAIL = path.join(OUT_DIR, 'kill-detail.json');
 
 /**
  * `TFLW_DISCOVER_CONTROL=break` / `=noop` — force the `unbuildable` verdict's two paths on the
@@ -660,6 +669,12 @@ for (const [i, m] of todo.entries()) {
     if (row.state === 'killed') {
       mkdirSync(TRANSCRIPTS, { recursive: true });
       writeFileSync(path.join(TRANSCRIPTS, `${m.id}.txt`), run.out);
+      // The producer (`D968`). Read-modify-write of the whole document per kill, which is ~16
+      // blocks a census — chosen over an append log because the reader wants one document and
+      // a hand-authored block for the same mutation must be REPLACED, not shadowed.
+      const doc = existsSync(DETAIL) ? JSON.parse(readFileSync(DETAIL, 'utf8')) : {};
+      const entries = detailFromRosterOutput(run.out, run.red);
+      writeFileSync(DETAIL, `${JSON.stringify(mergeProduced(doc, m.id, entries, { baseline: BASE_ID, bundle: id, at: new Date().toISOString() }), null, 2)}\n`);
     }
   }
   const problems = revertMutation(applied.entry);

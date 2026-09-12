@@ -331,31 +331,42 @@ test "cart rows are drag-drop reorderable, verified row by row"
   checkout()
 
 @mixed
-# STILL INTERMITTENT, NOT REPRODUCED (`M154h-01`, `M162a`/`D818`, `D821`). The header this replaces
-# said the mechanism was undiagnosed and asked for a measurement rather than a guess. The
-# measurement ran on 2026-08-31 and **did not reproduce it**, so the row stays open and this header
-# stays with it — now carrying the bound instead of the absence of one.
+# DIAGNOSED, FROM THE ARTIFACT NOBODY HAD OPENED (`M154h-01`, closed by `M188c` — `D970`). The
+# header this replaces said *still intermittent, not reproduced*: one CI failure on 2026-08-26
+# (PR #46's first core leg, `FAIL 322/323 · seed 187458591`, the SECOND assertion only, 6710 ms),
+# a 120-iteration loop on the box that went 120/120 green (`D818`), and a row that refused a
+# plausible story. The failing run's `regression-reports-group-core` artifact was still
+# downloadable seventeen days later, and it says exactly what happened:
 #
-#   - The original: CI 2026-08-26, PR #46's first core leg, `FAIL 322/323 · seed 187458591`, on the
-#     SECOND assertion only, 6710 ms — it waited out its settle timeout. A re-run of the same commit
-#     went green.
-#   - The loop: 120 iterations on `fedora-box`, one stack, sequential. 60 against the seeded product
-#     with its review count growing 0 -> 59, 60 against a product each iteration created.
-#     **120/120 green.** Median 1566 ms / 1599 ms; the slowest single iteration of either arm was
-#     1795 ms, against the 6710 ms the CI failure took. Trend across the accumulating arm:
-#     -0.17 ms per iteration, i.e. flat.
-#   - **A clean 120 is not proof of absence** and nothing here claims one. What it rules out is a
-#     defect frequent enough to show up in 120 consecutive trials on one machine.
+#   1. `click "Submit review"` starts `POST /reviews`; it took **77 ms** on CI.
+#   2. `expect text "Exactly as described." is visible` passed in **6 ms** — while the POST was in
+#      flight. At #46 the assertion was UNSCOPED, so it matched the textarea this test had just
+#      typed into (`M162a` §8.6 scoped it to `.review-list` five days later, for a different
+#      stated reason; the block below keeps that reasoning).
+#   3. The test raced on: `click "4 stars"` (39 ms), `fill "Still great."` (9 ms) — inside the 77 ms.
+#   4. The POST resolved 201 and the app's success path ran `setRating(0); setComment('')`
+#      (`ProductReviewsPage.tsx:128-129`), wiping the stars and the comment the test had just
+#      entered, then refetched the list.
+#   5. `click "Submit review"` reached `handleSubmit` with `rating === 0` → *pick a star rating
+#      first* (`:118`). NO REQUEST: the trace holds exactly one `POST /reviews` for the whole test.
+#      The screenshot shows empty stars, an empty comment box, the red client-side message, and the
+#      first review sitting in the list below.
+#   6. The assertion waited out 5 s for a server string that could never appear.
 #
-# **The measurement's real finding was that this test could not be measured.** The 409 is
-# `@Unique(['userId', 'productId'])` and `apiV2` has no `DELETE` for a review at any route, so a
-# fixed reviewer against a fixed product gets exactly ONE usable iteration per stack lifetime —
-# confirmed live, the shipped form of this test passed on run 1 and failed on runs 2 through 8 of
-# the same stack. Both arms had to register their own reviewer to exist at all. A test that owns
-# neither side of the pair it asserts on is not merely fragile; it is uninvestigable.
+# So it was a race between this test's second attempt and the app's post-success reset, reachable
+# only through a vacuous first assertion. The loop could not hit it — on the box the POST is far
+# under the ~90 ms the test needs to reach the fill — and the `.review-list` scoping closes it
+# structurally: the list can show the text only after the refetch's response renders, and the
+# reset was queued before that fetch even started. The `has value ""` line below makes that
+# ordering an assertion rather than an inference. The app's reset is deliberately NOT changed
+# (`D972`): a user who enters a second review inside the 77 ms a POST takes loses it, and no user
+# does. The evidence is archived in `tflw-acceptance/evidence/M154h-01/` (`D971`), because the
+# artifact expires on 2026-11-24 and a CI race cannot be regenerated.
 #
-# So the product below is created by this test (`D819`) and the reviewer stays alice: a fresh
-# product makes the (user, product) pair fresh, which is all the 409 keys on.
+# What the earlier measurement found still stands and still matters: the 409 is
+# `@Unique(['userId', 'productId'])`, `apiV2` has no `DELETE` for a review, so a fixed reviewer
+# against a fixed product gets ONE usable iteration per stack lifetime — which is why the product
+# below is created by this test (`D819`) and the reviewer stays alice.
 test "reviews: a first submission succeeds, a duplicate 409s through the shadow-DOM rating widget"
   # `M162b` (`D819`) — this test creates the product it reviews, for the reason spelled out on the
   # first such block above, plus the one in this test's own header.
@@ -393,6 +404,12 @@ test "reviews: a first submission succeeds, a duplicate 409s through the shadow-
   # `.review-list` is the app's own output (`ProductReviewsPage.tsx:185`).
   within css ".review-list"
     expect text "Exactly as described." is visible
+  # `M188c` (`D970`): the app resets the form on success BEFORE it refetches the list, so once the
+  # list shows the review the comment box is already empty — asserted here, because the second
+  # attempt below depends on it: entered into a form the reset has not yet reached, the 4 stars
+  # and the comment are wiped and the submit is refused client-side, which is `M154h-01`'s one
+  # CI failure in full.
+  expect field "Comment (optional)" has value ""
   within css "star-rating:not([readonly])"
     click button "4 stars"
   fill field "Comment (optional)" with "Still great."

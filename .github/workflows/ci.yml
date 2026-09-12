@@ -332,6 +332,12 @@ jobs:
         run: npm run read:mutation-matrix:gate
         working-directory: testFlow-tests
 
+      # `M188b` (`D968`). The producer behind `kill-detail.json` — the sweep writes the file from the
+      # grader's page, and this is the reader of that page shown to fire on each shape it exists for.
+      - name: The kill-detail producer reads the grader's page the way the reader expects
+        run: npm run verify:kill-detail:self-test
+        working-directory: testFlow-tests
+
       # `M167` (`D767`, `D857`). `D504` keeps the phase *list* out of prose; `D767` extended that to
       # the count, which is the same copy compressed. `M154g` removed seven occurrences across four
       # named files and pointed `verify:contributing` at one of them — and eight days later the count
