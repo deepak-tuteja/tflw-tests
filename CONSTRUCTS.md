@@ -218,7 +218,7 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C45` | `hold` (`step:hold`) | workload | at full rate by its **second** 500ms bin — "a flat target … with no ramp-in" is the claim, and ramping is the only way to be wrong while landing the right total | a hold that ramps in, and a steady rate that drifts |
 | `C46` | `step` (`step:step`) | workload | 20/2s + 80/2s lands ~200, **which is what `hold 50 rps for 4s` lands too** — so the totals cannot discriminate and the plateaus and their 1:4 ratio are the claim | a staircase collapsed to its mean rate, or sloped instead of stepped |
 | `C47` | `spike` (`step:spike`) | workload | peak >3x baseline **and a tail that returns to it** — the recovery is the half a plain step up would also pass | a spike that holds its burst, and a burst that is a rounding artefact |
-| `C48` | `teardown` (`config:key:teardown`) | workload | one file run at three levels of the key: a marker path sees **8** by default (every iteration, the failing ones included), **0** at `never` with `ℹ teardown: disabled` on the summary, **4** at `on success` — and the reported p95 does not move across the three, against a hook that costs 50 ms | a build that ignores the key, one that reinstates `D26`'s default-off gate, teardown skipping the iterations that failed, `on success` reading the *run*'s verdict instead of the iteration's, and hook time back in the reported duration |
+| `C48` | `teardown` (`config:key:teardown`) | workload | one file run at three levels of the key: a marker path sees **7** by default (every iteration of a 4-iteration passing test and a 3-iteration failing one), **0** at `never` with `ℹ teardown: disabled` on the summary, **4** at `on success` — three numbers for three rules, since `M189c`, where the inverted rule answers 3 — and the reported p95 does not move across the three, against a hook that costs 50 ms | a build that ignores the key, one that reinstates `D26`'s default-off gate, teardown skipping the iterations that failed, `on success` reading the *run*'s verdict instead of the iteration's, and hook time back in the reported duration |
 | `C49` | `threshold` (`step:threshold`) | workload | the same request, the same path, every assertion green — and the test bounded at 10ms is **red** while the one bounded at 5000ms is green | a verdict computed from the steps rather than the aggregate metrics |
 | `C50` | `pause` (`step:pause`) | workload | gaps ≥200ms against a <50ms control on an identical path, **and** a reported p50 under 50ms because the column is pause-excluded | a `pause` that is a no-op, and a build that stopped subtracting pacing from duration |
 | `C51` | `probe ciphers` (`config:probe:ciphers`) | security | a granted/withheld pair on one rule, against a host that **negotiates a modern suite** — granted, `sec/tls-weak-cipher` fires and names the suites tflw could not offer; withheld, it is silent and the passing assertion carries `judged only the suite this host gave` | a `probe ciphers` that opens no second handshake, and an opt-in honoured where it was not granted |
@@ -285,6 +285,9 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C112` | `was made` (`matcher:was-made`) | ui | four known answers off one page load: the URL the page fetched **was** made, the same URL under a method it never used was **not**, a URL it never touched was **not**, and the `/health` request **tflw itself** sent was **not** — that last one is what says the observation set is the browser's log rather than the runner's. Two `check` rows are the same assertions with `not` dropped and must fail in the same run | a `was made` that answers `true` for anything observed, one that ignores the `with method` clause, and one that counts the runner's own requests as the page's |
 | `C113` | `unique like "ORD-######"` (`generator:unique-like`) | api | the ratchet's last entry, cleared by tflw rather than by this repository. The shape claim is the weakest: `#` fills with digits and three draws are distinct — which is what this plant asserted for a year while the construct had **no guarantee at all**. So the row is graded on what a sample cannot fake, and since `M181` the discriminator is **two-axis and graded as a pair in one expression**: `unique like` is identical under a second seed and moves under a moved clock, while `random like` — same pattern language, same regex — does exactly the opposite. Read apart, either half is satisfied by a constant. Plus: inside the `retry 2` test it yields three distinct values where `random string` yields one three times; and it moves between runs **without widening**, still six digits and carrying no namespace, which is why this member's cross-run distinctness is the family's one **probabilistic** case (`SPEC` §7.2). Measured: **3/4 against the pre-fix build, 4/4 after**, and seed-independence is the claim that moved | a `unique like` whose distinctness went back to being probabilistic *within* a run (it would move under a second seed, since the only way to draw is to consult the RNG), one that replays a value across a retried test's attempts, one that silently wrapped its pattern instead of refusing to overflow it, and one that stopped moving between runs — which would make it and `random like` tell apart on one axis again |
 | `C114` | `expect button "Save" …` (`subject:locator`) | check | **exactly one** diagnostic from the whole file: `TF042` on the `expect button "Save" was made` line, and its text names the subject *kind* — *"`was made` can't be used on a UI locator"*. The other two legs are silent, and both have to be: `expect button "Save" has count 2` is a compatible pairing, and `click button "Save"` is the identical locator text one word to the left, where the kind rule is never consulted. `D906`'s row, and the one this family costs twice — `C13`-`C18` are the same six spellings in **action** position, and all five of their evidence patterns were measured to anchor on `click`/`fill`/`within`, so not one of them reaches `pollable()` or the compatibility check. Nor is it `C59`'s `TF042` again: that roster grades the code on a *value* subject and says nothing about whether a locator is a subject at all | a locator ceasing to be a *subject* — dropped from the kind rule, so an incompatible pairing checks clean and fails mid-run from the runtime's own matcher switch (`TF042`'s founding scenario); or widened until action position is judged too, so `click` starts being refused |
+| `C115` | `expect duration …` (`subject:duration`) | api | against `/slow` (50 ms), `is greater than 40ms` and `is less than 2000ms` hold and `is less than 10ms` **fails with the measured number in its sentence — between 50 and 1000, with a fractional part** (`D807`); against `/` after three slow requests, `is less than 100ms` holds | a duration read in seconds (0.05 passes `< 10`), a read that stops short of the delayed response (~0), a read cumulative across steps (the fast leg carries ≥150 ms), or one rounded before the comparison |
+| `C116` | `expect header "<name>" …` (`subject:header`) | api | four expectations on one response: `"x-echo-kind" equals "alpha"`, the same header under `"X-Echo-Kind"`, `"x-echo-other" equals "beta"`, `"content-type" contains "json"` — and in a second test `"x-echo-absent" equals ""` **fails with `got undefined`** | a lookup that stops case-folding the written name (the mixed-case leg alone goes red), one that reads the wrong header, or one that turns absence into `""` |
+| `C117` | `expect body text …` (`subject:body-text`) | api | on `text/plain` `healthy ✓ 42`, `equals` and `contains "✓"` hold; on `{ "spaced" : true }` served as JSON, `body text equals` those exact bytes with their whitespace while `body.spaced equals true` parses the same response | a decode under a single-byte charset (`✓` becomes three other characters), or a `body text` that is the parsed body re-serialised (`{"spaced":true}`) |
 
 ### `C1` — the soft assertion records a failure and keeps going
 
@@ -787,7 +790,7 @@ requirement arrives from the other side — the target must never be the constra
 | `C45` | Flatness is asserted at the **start**, not on average. `tflw spec` says "with no ramp-in", and ramping is the only way to be wrong about that while still landing 200. |
 | `C46` | Its total deliberately **collides** with `C45`'s. 20 rps for 2s plus 80 rps for 2s is 200, and so is a flat 50 rps for 4s — so a grader that only counted would pass a build that had collapsed the staircase into its mean. This is the row where the lazy instrument fails. |
 | `C47` | The peak alone is not the claim; a step up has a peak too. The recovery to baseline is what only a spike does, and `tflw spec` calls out that a spike mixes flat and ramped stages in any order — which a two-stage shape cannot demonstrate at all. |
-| `C48` | The plant is a **contrast across three runs of one file**, because no single count means anything on its own: a build that ignored the key answers 8 three times and a build that reinstated the old default-off gate answers 0 three times, since no file can opt in any more. The sharp clause is `on success`: the first test is **red by threshold while all four of its iterations pass**, so keeping its teardown is what distinguishes *reads the iteration* from *reads the run* — a build doing the latter answers 0 and looks plausible. The fourth clause is one no plant here could make before `M157a`: the reported p95 is unchanged across all three levels, which is what proves hook time left the metric (`D782`) — and the hook is deliberately expensive, 50 ms, because that clause is a **null result** and against the zero-latency marker it used to hit, the effect it denied was one local request, smaller than its own tolerance (`M157g`, `M155-03`). *Unchanged* is evidence only when *changed* would have been visible. Re-pointed from `step:cleanup` by `M157f`/`D789` rather than deleted — `D724` forbids dropping coverage of a construct that still exists in changed form, and the ratchet would not have caught it. |
+| `C48` | The plant is a **contrast across three runs of one file**, because no single count means anything on its own: a build that ignored the key answers 7 three times and a build that reinstated the old default-off gate answers 0 three times, since no file can opt in any more. The sharp clause is `on success`: the first test is **red by threshold while all four of its iterations pass**, so keeping its teardown is what distinguishes *reads the iteration* from *reads the run* — a build doing the latter answers 0 and looks plausible. The fourth clause is one no plant here could make before `M157a`: the reported p95 is unchanged across all three levels, which is what proves hook time left the metric (`D782`) — and the hook is deliberately expensive, 50 ms, because that clause is a **null result** and against the zero-latency marker it used to hit, the effect it denied was one local request, smaller than its own tolerance (`M157g`, `M155-03`). *Unchanged* is evidence only when *changed* would have been visible. Re-pointed from `step:cleanup` by `M157f`/`D789` rather than deleted — `D724` forbids dropping coverage of a construct that still exists in changed form, and the ratchet would not have caught it. |
 | `C49` | Every `expect status equals 200` in **both** tests passes — the server really does answer 200 — and one of them is still red. So the verdict cannot have come from the assertions. The cost of this going unchecked is on the record: 2026-08-05, a perf rung that declared no threshold ran at a 100% error rate and reported PASS. |
 | `C50` | Two independent claims. The gap is the obvious one. The second — that tflw's reported duration **excludes** the pause, as its own column label says — is the one with consequences: a build that stopped subtracting pacing would leave every paced workload green while its thresholds silently measured the wrong quantity. |
 
@@ -1547,6 +1550,81 @@ milestones. `D722` says presence is not evidence; this is the sharper form — *
 reads is not evidence either*, and it is worse than an absent one, because the file looks like it
 already checked. Two lines of grader is the whole cost, and the reason it went unwritten is that
 the claim it would have tested was one nobody doubted.
+
+### `C115`–`C117` — the three subjects no fixture read, and the fixture that reads them (`M189c`)
+
+`M176c` put fifteen `subject` ids on the ratchet and grouped their exits by cost. Group (b) was the
+expensive one: `duration`, `header` and `body-text` were read by **no plant fixture at all** — zero
+across all 113 plants — so each needed a fixture before it could need a claim. `subjects.tflw` is
+that fixture, one file for the three, five tests, two of them written to fail, graded against
+`arrival-server.mjs` with no stack. The server gained three paths whose *response* is the plant:
+`/subjects/headers` carries two echo headers, `/subjects/text` is `text/plain` with a `✓` in it,
+`/subjects/json-spaced` is JSON with whitespace no serialiser emits; `/slow`'s 50 ms was already
+there for `C49`.
+
+**The row is the subject's own read, not the matcher's (`D739`).** `subject:status` appears in 79
+plant fixtures and not one of those uses is evidence for a row, because in every one of them the
+known answer is about something else. So each of these three is shaped so that the number moves
+when the *read* breaks: `duration` in seconds passes `< 10ms` on the slow path; a `header` lookup
+that stops folding fails the mixed-case leg and no other; a `body text` that went through the JSON
+parse fails the whitespace leg while `body.spaced` beside it still passes. The failing tests are
+graded on the sentence their failure carries — `but got 51.825053`, `but got undefined` — because
+a subject's read is what the `got` reports, and a wrong read is visible there even when the verdict
+happens to come out right.
+
+Two things the first draft got wrong, both found by running it on the box rather than by reading
+it. The `duration` fast leg was `/` after one slow request under `< 45ms`, and a `--only C117` run
+during a build failed it once — a request's own time on a busy box exceeded the bound, so the
+effect the leg denied (a cumulative read's 50 ms) sat inside the noise of the thing it measured,
+`M157g`'s shape. Now three slow requests precede it and the bound is 100 ms: a cumulative read
+carries at least 150 ms, an own read carries a few, and the margin is on both sides. And `C117`'s
+precision clause counted the whole report's red tests, which coupled it to `C115`'s noise; it now
+reads its own test's steps.
+
+Each of the three was **reddened by a hand mutation of the read on `fedora-box` before its row was
+written** — the table in the next section.
+
+### Reddened by hand — the eleven of `M189c` (`D976`)
+
+`M164b`'s census found eight acceptance-graded plants that no registry mutation had ever turned red
+(`C3`, `C48`, `C93`, `C96`, `C98`, `C101`, `C102`, `C114`), and `M176c`'s ratchet held three
+subjects with no fixture. `D976` bounds `M189c` to those eleven and requires each repair to carry
+its own kill: one hand mutation of tflw, applied on the box, the vendored build refreshed, the
+plant run alone, the source restored. Every one of the eleven is stack-free, which is why this
+could be measured the day it was written. The mutation is named and the red line quoted, verbatim,
+from the grader's page on 2026-09-13.
+
+| plant | hand mutation of tflw | the red line |
+|---|---|---|
+| `C3` | `while (remaining > 0 …)` → `>= 0` in the shared pool (`shared-iteration-pool-runs-one-too-many`) | `--workers 1: /shared received exactly 60 request(s) (got 61)` and `--workers 4: … (got 64)`; also *the counts are identical at --workers 1 and --workers 4* |
+| `C3` | `n < iterationsPerVu` → `<=` in the per-VU loop (`per-user-iterations-run-one-too-many`) | `--workers 1: /per-user received exactly 60 request(s) (got 65)` |
+| `C48` | `on-success ? exec.ok` → `? !exec.ok` (`teardown-on-success-tears-down-the-failures-instead`) | **green against the old 4+4 fixture — measured** — and red against 4+3: `` `--teardown on-success` tears down the passing iterations only: 3 marker(s), 4 expected `` |
+| `C93` | runtime merge `if (config.defaults)` → `&& env.isDefault` (`defaults-merged-for-the-default-env-only`) | **green against the four `check` legs — measured** — and red against the run-time leg added here: `` at run time, under `--env two` … both arrivals carried the `defaults` header (got: {"/base/alpha":[null],"/base/beta":[null]}) `` |
+| `C93` | parser: the duplicate-`defaults` refusal disabled | `` a second `defaults` block is refused (got: 1 file checked, no problems found.) `` |
+| `C96` | `if (exclude.includes(rel))` → `exclude.length > 1 && …` (`a-lone-exclude-line-is-ignored`) | `` discovery reports 1 file with the `exclude` line (got 2: 2 files checked, no problems found.) `` |
+| `C98` | `service: entry.service` → `service: null` (`scoped-header-loses-its-scope`) | `the scoped header is absent from the two arrivals it does not name, so scoping narrows rather than decorates` |
+| `C101` | `workers = entry.count` → `workers = 1` (`workers-key-pinned-to-one`) | `` at `workers 2` it is 2 and both were released as a pair … (got: {"peakWaiting":1,"gatePaired":0,"gateAlone":2,…}) `` |
+| `C102` | `reportDir = entry.dir.value` deleted (`report-key-ignored`) | `` all four artifacts were written under `artifacts/custom` … (got: none) `` and `` `report/` was not written at all under the custom key `` |
+| `C114` | the kind rule exempts `LocatorSubject` (`locator-subject-skips-the-kind-rule`) | `the locator in subject position is judged by the kind rule, and the refusal names the kind (got: no diagnostic at all)` — three clauses red |
+| `C115` | `durationMs = (performance.now() - start) / 1000` | `` `/slow` under `is less than 10ms` failed (got test ok=true, step ok=true) `` — recall 0/3 |
+| `C116` | `response.headers[name.toLowerCase()]` → `[name]` | `the mixed-case name reads the same header — the name is folded before the lookup` |
+| `C117` | `bodyBytes.toString('utf8')` → `'latin1'` | `` the non-ASCII byte sequence survives the decode — a single-byte charset turns `✓` into three other characters `` |
+
+Two rows say **green — measured**, and those are the findings. `C48`'s fixture ran four passing
+and four failing iterations, so *tear down the passes* and *tear down the failures* both counted
+four markers; the failing test now runs three. `C93` graded `defaults` through `tflw check` alone,
+and the checker has its own merge; the runtime's merge — the one a run under `--env two` actually
+uses — had no leg, and now has one beside `C98`'s in the config-keys block. Both repairs are the
+fixture, not the mutation: a mutation that leaves a plant green is a sentence about the plant.
+
+The named mutations are tflw's registry entries as of `M189b` (`D977`) — the eight never-red plants
+had no candidate there, and each hand mutation that reddened one became an entry, killed by tflw's
+own suite. One of them was not, at first: `defaults-merged-for-the-default-env-only` survived tflw's
+runtime suite because every resolver test there selected the default env, and gained its control
+(`defaults-merge.test.ts`) in the same change. The three subject mutations are **not** entries —
+`D977` admits never-red constructs only, and `C115`–`C117` are new rows — so `M190` can grade them
+only through whatever the registry already holds near those reads; that is recorded rather than
+quietly widened.
 
 ## Blocked plants (`D734`)
 
