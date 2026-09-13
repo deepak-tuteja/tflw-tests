@@ -20,6 +20,7 @@ import { PLANTS, plantsFor } from './lib/constructs.mjs';
 import { COVERS } from './lib/mutation-covers.mjs';
 import { readMutations, siblingRoot } from './lib/mutations.mjs';
 import { claimDigest, patchDigest, diffDigests } from './lib/census-shape.mjs';
+import { deriveKind, plantsOf, provenanceTally } from './lib/kill-detail.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DIR = path.join(ROOT, 'tflw-acceptance', 'mutation');
@@ -77,11 +78,14 @@ console.log(`  ${Object.entries(tally).map(([k, v]) => `${k} ${v}`).join('  ')} 
 // and `C79` where `D842` needs them (they asserted, they went false, they are labelled in
 // `lib/mutation-covers.mjs`) while `C42` and `C76` stop claiming to have asserted nothing.
 //
-// And it is DERIVED and then checked against the stored label, because `kill-detail.json` has no
-// producer in this tree: it is transcribed from the grader's per-plant page by hand, once per
-// census, which is the step that mislabelled these two in the first place. A hand step nothing
-// checks is `D767` with a person in the loop. This makes the label falsifiable from the row's own
-// fields; it does not make the transcription unnecessary (see `M176-05`).
+// And it is DERIVED and then checked against the stored label, because `kill-detail.json` had no
+// producer in this tree until `M188b`: it was transcribed from the grader's per-plant page by hand,
+// once per census, which is the step that mislabelled these two in the first place. A hand step
+// nothing checks is `D767` with a person in the loop. This made the label falsifiable from the
+// row's own fields; `M188b` (`D968`) then gave the file a producer — the sweep writes it from the
+// same page, and stamps each block it wrote (`lib/kill-detail.mjs`). The blocks a person wrote stay
+// until the next census replaces them, and the count of each is printed below so that deferral
+// (`M176-05`) is measured, not remembered.
 //
 // So the schema is now load-bearing and a transcriber has to honour it: a skip is the `skipped`
 // field and a tally is the `tally` field, never prose in `note`. A row written the old way is
@@ -89,16 +93,11 @@ console.log(`  ${Object.entries(tally).map(([k, v]) => `${k} ${v}`).join('  ')} 
 // derives as `no-assertions` and says so, naming both readings. That is deliberate. `M166`'s rule
 // is that a gate which fails plausibly is worse than one that refuses, and a silent re-derivation
 // of 267 rows from prose would be exactly the plausible failure.
-function deriveKind(r) {
-  const asserted = typeof r.tally === 'string' && r.tally.length > 0;
-  if (!asserted) return typeof r.skipped === 'string' ? 'refusal' : 'no-assertions';
-  return (r.failed ?? []).length > 0 ? 'assertion' : 'held';
-}
 
 const kinds = {};
 const assertions = [];
-for (const [mid, plants] of Object.entries(detail)) {
-  for (const [pid, d] of Object.entries(plants)) {
+for (const [mid, block] of Object.entries(detail)) {
+  for (const [pid, d] of Object.entries(plantsOf(block))) {
     const derived = deriveKind(d);
     if (derived !== d.kind)
       fail(`${mid} × ${pid} is stored as \`${d.kind}\` in \`kill-detail.json\` and its own fields say \`${derived}\``
@@ -108,13 +107,15 @@ for (const [mid, plants] of Object.entries(detail)) {
     if (derived === 'assertion') assertions.push({ mid, pid, d });
   }
 }
-const skips = Object.values(detail).flatMap((p) => Object.values(p)).filter((d) => typeof d.skipped === 'string');
+const skips = Object.values(detail).flatMap((b) => Object.values(plantsOf(b))).filter((d) => typeof d.skipped === 'string');
+const origin = provenanceTally(detail);
 console.log('how the plants died (from the acceptance grader\'s own per-plant page):');
 console.log(`  refusal        ${String(kinds.refusal ?? 0).padStart(3)}  the fixture was refused at check time — no report, so the plant asserted nothing`);
 console.log(`  no-assertions  ${String(kinds['no-assertions'] ?? 0).padStart(3)}  an empty tally the acceptance gate itself fails on (\`M154f-03\`)`);
 console.log(`  assertion      ${String(kinds.assertion ?? 0).padStart(3)}  the plant ran, produced its known answer, and the answer was false`);
 console.log(`  held           ${String(kinds.held ?? 0).padStart(3)}  the plant produced its known answer, every clause held, and it is red only because the rest of its fixture was refused (\`M168-05\`)`);
-console.log(`  ${String(skips.length).padStart(3)} of those ${Object.values(detail).reduce((n, p) => n + Object.keys(p).length, 0)} were skipped at run time — an orthogonal fact, and the ${skips.filter((d) => d.tally).length} that also carry a tally are why it is one\n`);
+console.log(`  ${String(skips.length).padStart(3)} of those ${Object.values(detail).reduce((n, b) => n + Object.keys(plantsOf(b)).length, 0)} were skipped at run time — an orthogonal fact, and the ${skips.filter((d) => d.tally).length} that also carry a tally are why it is one`);
+console.log(`  ${String(origin.produced).padStart(3)} of ${origin.produced + origin.hand} mutation block(s) written by the sweep (D968), ${origin.hand} by hand — the hand-authored ones stand until the next census replaces them (M176-05)\n`);
 
 // ── the hand table must match the measurement exactly, both ways (`D767`) ─────────────────────
 const measured = new Set(assertions.map((a) => `${a.mid}|${a.pid}`));

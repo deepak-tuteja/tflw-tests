@@ -1,0 +1,180 @@
+{
+ "kind": "functional",
+ "name": "reviews: a first submission succeeds, a duplicate 409s through the shadow-DOM rating widget",
+ "ok": false,
+ "durationMs": 6710,
+ "steps": [
+  {
+   "kind": "open",
+   "source": "# own ad-hoc products (e.g. authz.tflw's `unique(\"Authz Widget\")`) can sort ahead of \"Bulk Item…\"",
+   "line": 23,
+   "ok": true,
+   "durationMs": 106,
+   "detail": "open http://localhost:8090/login"
+  },
+  {
+   "kind": "fill",
+   "source": "# and push it off page 1. Filtering first is robust to that regardless of suite composition.",
+   "line": 24,
+   "ok": true,
+   "durationMs": 45,
+   "detail": "fill form: `field \"Email\"` = \"•••(USER_A_EMAIL)\", `field \"Password\"` = \"•••(USER_A_PW)\""
+  },
+  {
+   "kind": "click",
+   "source": "import \"../shared/webv2-login.tflw\"",
+   "line": 27,
+   "ok": true,
+   "durationMs": 54,
+   "detail": "click `button \"Log in\"`"
+  },
+  {
+   "kind": "expect",
+   "source": "import \"../../shared/root.tflw\"",
+   "line": 28,
+   "ok": true,
+   "durationMs": 315,
+   "detail": "`button \"Log out\"` to be visible"
+  },
+  {
+   "kind": "call",
+   "source": "# against the webV2 storefront (`env local`'s `web` base, the Vite+React SPA served on :8090),",
+   "line": 2,
+   "ok": true,
+   "durationMs": 520,
+   "detail": "login(\"•••(USER_A_EMAIL)\", \"•••(USER_A_PW)\") = undefined"
+  },
+  {
+   "kind": "open",
+   "source": "# walking the Tier A/B/C difficulty gradient webV2-0..3 built — see testFlow-tests/PROGRESS.md.",
+   "line": 3,
+   "ok": true,
+   "durationMs": 50,
+   "detail": "open http://localhost:8090/"
+  },
+  {
+   "kind": "expect",
+   "source": "# This is real, ongoing coverage (not a throwaway demo): every scenario here exercises a distinct",
+   "line": 4,
+   "ok": true,
+   "durationMs": 338,
+   "detail": "`button \"Log out\"` to be visible"
+  },
+  {
+   "kind": "fill",
+   "source": "# tflw browser capability against a real corner of a real app, no mocking of the app under test",
+   "line": 5,
+   "ok": true,
+   "durationMs": 16,
+   "detail": "fill `field \"Search\"` with \"Bulk Item 1\""
+  },
+  {
+   "kind": "call",
+   "source": "root(\"Bulk Item 1\")",
+   "line": 196,
+   "ok": true,
+   "durationMs": 925,
+   "detail": "root(\"Bulk Item 1\") = undefined"
+  },
+  {
+   "kind": "click",
+   "source": "click text \"Reviews\"",
+   "line": 198,
+   "ok": true,
+   "durationMs": 33,
+   "detail": "click `text \"Reviews\"`"
+  },
+  {
+   "kind": "within",
+   "source": "within css \"[aria-label='Bulk Item 1']\"",
+   "line": 197,
+   "ok": true,
+   "durationMs": 142,
+   "detail": "within `css \"[aria-label='Bulk Item 1']\"`"
+  },
+  {
+   "kind": "click",
+   "source": "click button \"5 stars\"",
+   "line": 200,
+   "ok": true,
+   "durationMs": 25,
+   "detail": "click `button \"5 stars\"`"
+  },
+  {
+   "kind": "within",
+   "source": "within css \"star-rating:not([readonly])\"",
+   "line": 199,
+   "ok": true,
+   "durationMs": 130,
+   "detail": "within `css \"star-rating:not([readonly])\"`"
+  },
+  {
+   "kind": "fill",
+   "source": "fill field \"Comment (optional)\" with \"Exactly as described.\"",
+   "line": 201,
+   "ok": true,
+   "durationMs": 9,
+   "detail": "fill `field \"Comment (optional)\"` with \"Exactly as described.\""
+  },
+  {
+   "kind": "click",
+   "source": "click button \"Submit review\"",
+   "line": 202,
+   "ok": true,
+   "durationMs": 43,
+   "detail": "click `button \"Submit review\"`"
+  },
+  {
+   "kind": "expect",
+   "source": "expect text \"Exactly as described.\" is visible",
+   "line": 203,
+   "ok": true,
+   "durationMs": 6,
+   "detail": "`text \"Exactly as described.\"` to be visible"
+  },
+  {
+   "kind": "click",
+   "source": "click button \"4 stars\"",
+   "line": 205,
+   "ok": true,
+   "durationMs": 39,
+   "detail": "click `button \"4 stars\"`"
+  },
+  {
+   "kind": "within",
+   "source": "within css \"star-rating:not([readonly])\"",
+   "line": 204,
+   "ok": true,
+   "durationMs": 42,
+   "detail": "within `css \"star-rating:not([readonly])\"`"
+  },
+  {
+   "kind": "fill",
+   "source": "fill field \"Comment (optional)\" with \"Still great.\"",
+   "line": 206,
+   "ok": true,
+   "durationMs": 9,
+   "detail": "fill `field \"Comment (optional)\"` with \"Still great.\""
+  },
+  {
+   "kind": "click",
+   "source": "click button \"Submit review\"",
+   "line": 207,
+   "ok": true,
+   "durationMs": 75,
+   "detail": "click `button \"Submit review\"`"
+  },
+  {
+   "kind": "expect",
+   "source": "expect text \"you have already reviewed this product\" is visible",
+   "line": 208,
+   "ok": false,
+   "durationMs": 5196,
+   "detail": "expected `text \"you have already reviewed this product\"` to be visible, but got no matching element",
+   "screenshot": "failure.png"
+  }
+ ],
+ "error": "expected `text \"you have already reviewed this product\"` to be visible, but got no matching element",
+ "concurrency": "sequential",
+ "file": "tests/mixed/storefront.tflw"
+}

@@ -191,6 +191,15 @@ const CLASSIFIED = [
   {
     wf: 'ci.yml',
     job: 'acceptance-check',
+    cmd: 'npm run verify:kill-detail:self-test',
+    name: "The kill-detail producer reads the grader's page the way the reader expects",
+    class: 'gate',
+    local: 'npm run verify:kill-detail:self-test',
+    why: "`scripts/lib/kill-detail.mjs` — the producer `M188b` (`D968`) gave `tflw-acceptance/mutation/kill-detail.json`, which until then was transcribed from the grader's page by hand once per census and had no writer in either tree (`M176-05`). Its controls drive `detailFromRosterOutput` over a page carrying all four kinds, the `M168-05` shape (asserted, held, skipped), a `got:` payload with its own ✗, and a red id the table does not carry, which must refuse. A contributor gate rather than ci-only because it is milliseconds with no stack, and because the thing it catches — a page shape the reader has silently stopped matching — would otherwise surface as a census writing a wrong file two box-days later",
+  },
+  {
+    wf: 'ci.yml',
+    job: 'acceptance-check',
     cmd: 'npm run verify:argv-contract',
     name: 'Two scripts\' flags are validated and read from one table',
     class: 'gate',

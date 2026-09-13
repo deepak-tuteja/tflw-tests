@@ -1,0 +1,5 @@
+# Every request whose URL mentions a review, from the Playwright trace of the failing run.
+# Two clicks on "Submit review"; ONE POST.
+GET http://localhost:8090/v1/products/08a6fa21-6f83-4363-acf2-068ac56be872/reviews?limit=50 -> 200  started 2026-08-26T21:00:17.704Z  8 ms
+POST http://localhost:8090/v1/products/08a6fa21-6f83-4363-acf2-068ac56be872/reviews -> 201  started 2026-08-26T21:00:17.873Z  77 ms
+GET http://localhost:8090/v1/products/08a6fa21-6f83-4363-acf2-068ac56be872/reviews?limit=50 -> 200  started 2026-08-26T21:00:17.951Z  16 ms

@@ -82,6 +82,7 @@ npm run verify:notation-parity:self-test
 npm run verify:construct-coverage
 npm run verify:redaction:self-test
 npm run read:mutation-matrix:gate
+npm run verify:kill-detail:self-test
 npm run verify:argv-contract
 ```
 
@@ -340,6 +341,15 @@ xvfb-run -a npm run regression -- --group security-ui
   drift. That line informs and does not fail, because a mutation added in tflw is the right change
   and reddening this repository's CI for it would leave the person who tripped it with a
   seven-hour box run as their only remedy.
+- **`npm run verify:kill-detail:self-test`** — **the producer behind `kill-detail.json` still reads
+  the grader's page the way `read-mutation-matrix.mjs` expects.** Until `M188b` (`D968`) nothing in
+  either tree wrote that file: the census kept the grader's page per killing mutation as an
+  untracked transcript and a person derived the file from it, which is the step that produced
+  `M168-05` and the reason `M176-05` was filed. The sweep now writes it, one entry per red plant,
+  each block stamped with what produced it; `read:mutation-matrix` prints how many blocks the sweep
+  wrote and how many a person did. This runs the producer's own controls — all four kinds, the
+  asserted-held-skipped shape, a `got:` payload carrying its own ✗, and a red id the table lacks,
+  which must refuse rather than write a partial block. Milliseconds, no stack.
 - **`npm run verify:argv-contract`** — **two scripts' flags are validated and read from one table,
   and the cases proving it are held against the implementation each of them replaced.**
   `discover-mutation-kills.mjs` decides whether a retraction's stated cause is recorded, whether a
