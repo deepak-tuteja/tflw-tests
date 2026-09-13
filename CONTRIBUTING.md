@@ -83,6 +83,9 @@ npm run verify:construct-coverage
 npm run verify:redaction:self-test
 npm run read:mutation-matrix:gate
 npm run verify:kill-detail:self-test
+npm run verify:reach:self-test
+npm run verify:reach-verdicts:self-test
+npm run verify:reach-verdicts
 npm run verify:argv-contract
 ```
 
@@ -350,6 +353,30 @@ xvfb-run -a npm run regression -- --group security-ui
   wrote and how many a person did. This runs the producer's own controls — all four kinds, the
   asserted-held-skipped shape, a `got:` payload carrying its own ✗, and a red id the table lacks,
   which must refuse rather than write a partial block. Milliseconds, no stack.
+- **`npm run verify:reach:self-test`**, **`npm run verify:reach-verdicts:self-test`** and
+  **`npm run verify:reach-verdicts`** — **the census's `survived` is split into what the roster
+  never executes and what it executes without asserting, and the hand-read half of that split is
+  held to the measured half.** `M189a` (`D974`). The census records 99 runtime mutations no plant
+  went red under, and that one word covers two situations with two different repairs: a plant runs
+  through the mutated line and its known answer does not depend on the result, or no plant ever
+  runs the line at all. `scripts/measure-mutation-reach.mjs` measures which — one roster run per
+  census against **unmutated** tflw, each plant under its own `NODE_V8_COVERAGE` directory so a line
+  is attributed to the process tree that plant's own clauses spawned, the bundle's source map taking
+  every executed range back to `packages/*/src`, and each registry mutation's `find` region asked
+  whether any of its lines ran. It writes `tflw-acceptance/mutation/reach.json` under a `$produced`
+  stamp and refuses to write at all unless three controls behave: every named function V8 reports
+  maps to a source line carrying its name (the offsets are the file's own), every `assertion` kill
+  in `kill-detail.json` reads reached by the plant it killed, and every `lsp-server` survivor reads
+  unreached. Needs the box and the stack, like the census; `--only` runs are stamped partial.
+  **Reached is necessary, never sufficient** — a region is usually a whole `if` and its guard line
+  running says nothing about its body — so the reached survivors are the ones a person reads, in
+  `reach-verdicts.json`: `not-asserted` (the dogfood is shallow there; a row is filed per construct
+  family) or `out-of-reach-by-design` (the result is visible only in the report, an exit code, the
+  LSP or a log line). The two self-tests drive the fold and the reading against the inputs they
+  exist for; the gate holds the table and the reached set to each other in both directions
+  (`mutation-covers.mjs`'s arrangement, `D842`) and refuses a missing or partial measurement
+  outright, because a gate green about nothing is `D722`. `read:mutation-matrix` prints the same
+  bins without gating, naming the reached survivors and whether each has a verdict yet.
 - **`npm run verify:argv-contract`** — **two scripts' flags are validated and read from one table,
   and the cases proving it are held against the implementation each of them replaced.**
   `discover-mutation-kills.mjs` decides whether a retraction's stated cause is recorded, whether a

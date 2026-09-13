@@ -65,7 +65,11 @@
     "discover:mutation-kills": "node scripts/discover-mutation-kills.mjs",
     "read:mutation-matrix": "node scripts/read-mutation-matrix.mjs",
     "read:mutation-matrix:gate": "node scripts/read-mutation-matrix.mjs --gate",
-    "verify:kill-detail:self-test": "node scripts/lib/kill-detail.mjs --self-test"
+    "verify:kill-detail:self-test": "node scripts/lib/kill-detail.mjs --self-test",
+    "measure:mutation-reach": "node scripts/measure-mutation-reach.mjs",
+    "verify:reach:self-test": "node scripts/lib/reach.mjs --self-test",
+    "verify:reach-verdicts": "node scripts/verify-reach-verdicts.mjs",
+    "verify:reach-verdicts:self-test": "node scripts/lib/reach-verdicts.mjs --self-test"
   },
   "dependencies": {
     "tflw": "file:vendor/tflw-0.1.0.tgz"

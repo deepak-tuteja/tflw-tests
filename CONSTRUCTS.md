@@ -77,6 +77,40 @@ entries are argued, one exit condition each.
 This distinction is written down because a list that reads as "constructs this suite never
 exercises" would be false of a third of it, and a list nobody believes is a list nobody defends.
 
+## What "reached" means here, and what it does not (`D974`)
+
+A plant with a row is not thereby a plant that would go red. `M164b`'s census measured that
+directly — every one of tflw's bundle-reachable mutations applied in turn, the whole roster run
+under each — and found 99 runtime mutations that no plant went red under. Each is a precise
+sentence: tflw's own unit tests can tell that line from its opposite, and nothing in this ledger
+can. But `survived` folds two situations into one word, and their repairs are different. A plant
+may run straight through the mutated line and assert nothing that depends on it — the row is
+shallow, and the repair is an assertion. Or no plant may ever execute the line — the roster does
+not go there, and the repair is a fixture, or a decision that it has no business going there.
+
+`npm run measure:mutation-reach` (`scripts/measure-mutation-reach.mjs`) says which. It runs the
+roster once against **unmutated** tflw with V8's block coverage on, each plant under its own
+coverage directory so a line is attributed to the process tree that plant's own clauses spawned,
+maps every executed range back through the bundle's source map, and asks each registry mutation
+whether any line of its `find` region ran. The answer is committed as
+`tflw-acceptance/mutation/reach.json`, stamped with the run that produced it, and refused unless
+three controls behave — the offsets are the file's own, every assertion kill the census recorded
+reads reached by the plant that asserted, and every `lsp-server` survivor reads unreached.
+
+**Reached is necessary and never sufficient.** A `find` region is usually a whole `if` and its
+body; a guard line that runs says nothing about the body, and a module-level constant is reached
+by every plant the moment the bundle loads. So an *unreached* survivor is the strong verdict — no
+assertion anywhere could have depended on it — and a *reached* survivor is a question a person has
+to answer, in `tflw-acceptance/mutation/reach-verdicts.json`: `not-asserted`, the dogfood is
+shallow there and a row is filed per construct family; or `out-of-reach-by-design`, the result is
+visible only where the roster does not look (the HTML report, an exit code, the LSP, a log line).
+`npm run verify:reach-verdicts` holds that table and the measured reached set to each other in
+both directions. `npm run read:mutation-matrix` prints the bins and names the reached survivors.
+
+This is written down because "the census found 99 survivors" reads as a statement about the
+plants' depth, and for most of the 99 it is a statement about the roster's reach — which is a
+different defect with a different cost, and the measurement is what keeps the two apart.
+
 ## Ground truth is the binary (`D723`)
 
 The construct set is **not a list in this repository**. It comes from `tflw spec --json`, emitted by
