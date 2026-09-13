@@ -21,6 +21,7 @@ import { COVERS } from './lib/mutation-covers.mjs';
 import { readMutations, siblingRoot } from './lib/mutations.mjs';
 import { claimDigest, patchDigest, diffDigests } from './lib/census-shape.mjs';
 import { deriveKind, plantsOf, provenanceTally } from './lib/kill-detail.mjs';
+import { binsOf, loadReach, loadVerdicts, PRODUCED as REACH_PRODUCED } from './lib/reach-verdicts.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DIR = path.join(ROOT, 'tflw-acceptance', 'mutation');
@@ -43,6 +44,7 @@ const killers = [...matrix.values()].filter((r) => r.state === 'killed').sort((a
 
 let failures = 0;
 const fail = (msg) => { failures += 1; console.log(`✗ ${msg}`); };
+const name = (ids) => (ids.length > 8 ? `${ids.slice(0, 8).join(', ')} +${ids.length - 8} more` : ids.join(', '));
 
 // ── the census, restated ──────────────────────────────────────────────────────────────────────
 const tally = {};
@@ -173,6 +175,50 @@ console.log(`  refusal-only         ${String(buckets['refusal-only'].length).pad
 console.log(`  never-red            ${String(buckets['never-red'].length).padStart(3)}  no candidate mutation made it red at all`);
 for (const [name, ids] of Object.entries(buckets)) if (name !== 'refusal-only' && ids.length > 0) console.log(`    ${name}: ${ids.join(', ')}`);
 
+// ── reach: which survivors the roster even executes (`M189a`, `D974`) ─────────────────────────
+//
+// The census's `survived` is one word for two situations — a plant runs through the mutated line
+// and asserts nothing that depends on it, or no plant ever executes the line — and the repair is
+// different for each. `measure-mutation-reach.mjs` measures which, once per census, under V8's
+// block coverage; this prints the split over the surviving RUNTIME mutants, the population the
+// plan is about, and names the reached ones because those are the ones a person has to read
+// (`lib/reach-verdicts.mjs`; `verify:reach-verdicts` is the gate that holds that reading to this
+// measurement). This block informs. A missing or partial measurement is said, not failed on.
+{
+  const reach = loadReach(DIR);
+  const survivors = [...matrix.values()].filter((r) => r.state === 'survived' && r.file.startsWith('packages/runtime/'));
+  console.log(`\nreach of the ${survivors.length} surviving runtime mutant(s) (\`D974\`, measured by \`measure-mutation-reach.mjs\`):`);
+  if (!reach) {
+    console.log('  not measured — no `reach.json` beside the matrix; run `npm run measure:mutation-reach` on the box');
+  } else {
+    const st = reach[REACH_PRODUCED] ?? {};
+    const bins = binsOf(reach, matrix);
+    console.log(`  ${String(bins.reached.length).padStart(3)} reached      a plant executed at least one line of the find region — a person has to say whether anything asserted through it`);
+    console.log(`  ${String(bins.unreached.length).padStart(3)} unreached    no plant executed any line of it — a fact about the roster's reach, not its depth`);
+    if (bins.unmapped.length > 0) console.log(`  ${String(bins.unmapped.length).padStart(3)} unmapped     the region has no mapping in the bundle at all (${bins.unmapped.join(', ')})`);
+    if (bins['not-located'].length > 0) console.log(`  ${String(bins['not-located'].length).padStart(3)} not located  the find string no longer occurs exactly once in the source — the registry moved (${bins['not-located'].join(', ')})`);
+    if (bins.unmeasured.length > 0) console.log(`  ${String(bins.unmeasured.length).padStart(3)} unmeasured   survivors the measurement does not know (${bins.unmeasured.join(', ')})`);
+    const verdicts = loadVerdicts(DIR);
+    for (const id of bins.reached) {
+      const x = reach.mutations[id];
+      const v = verdicts[id];
+      console.log(`    ${v ? (v.verdict === 'not-asserted' ? '·' : '~') : '?'} ${id.padEnd(52)} ${x.file.replace('packages/', '').replace('/src/', ':')}:${x.lines.join(',')}  ${x.plants.length} plant(s)${v ? `  ${v.verdict}` : '  (no verdict yet)'}`);
+    }
+    if (bins.reached.length > 0) console.log('    · not-asserted   ~ out-of-reach-by-design   ? no verdict in reach-verdicts.json');
+    console.log(`  measured ${st.at?.slice(0, 10) ?? '?'} on the ${st.machine ?? '?'} over ${st.plants?.length ?? '?'} of ${GRADED.length} plant(s), tflw ${st.tflw?.ref ?? '?'}@${st.tflw?.sha ?? '?'}, bundle ${st.bundle ?? '?'}`
+      + `${st.bundle && meta.baselineBundle ? (st.bundle === meta.baselineBundle ? ' — the census\'s own baseline build' : ` — NOT the census\'s baseline build (${meta.baselineBundle}); the two saw different tflws`) : ''}`);
+    if (st.partial) console.log(`  PARTIAL — \`unreached\` above means unreached by the ${st.plants.length} plant(s) that ran, and \`verify:reach-verdicts\` refuses it`);
+    const notGreen = Object.entries(st.rosterVerdicts ?? {}).filter(([, v]) => v.verdict !== 'green');
+    if (notGreen.length > 0) console.log(`  ${notGreen.length} plant(s) not green under their own \`--only\` in that run: ${notGreen.map(([id]) => id).join(', ')} — a plant only ever green in company has someone else's evidence`);
+    try {
+      const { mutations } = await readMutations();
+      const moved = mutations.filter((m) => reach.mutations[m.id] && reach.mutations[m.id].patch !== patchDigest(m)).map((m) => m.id);
+      const added = mutations.filter((m) => !reach.mutations[m.id]).length;
+      if (moved.length > 0 || added > 0) console.log(`  registry since the measurement: ${moved.length} patch(es) rewritten${moved.length ? ` (${name(moved)})` : ''}, ${added} added — their reach is unmeasured`);
+    } catch { /* the sibling's absence is reported by the age block below */ }
+  }
+}
+
 // ── how old this measurement is, measured rather than asserted (`D854`) ───────────────────────
 //
 // `D851` refused the ratchet, so nothing re-runs the census — and a committed measurement nothing
@@ -238,7 +284,6 @@ if (stamps.length > 1) {
 // verdict is still keyed to a live id and now means something else.
 const shapePath = path.join(DIR, 'census-shape.json');
 const shape = fs.existsSync(shapePath) ? JSON.parse(fs.readFileSync(shapePath, 'utf8')) : null;
-const name = (ids) => (ids.length > 8 ? `${ids.slice(0, 8).join(', ')} +${ids.length - 8} more` : ids.join(', '));
 
 const liveClaims = new Map(plantsFor('acceptance').map((p) => [p.id, claimDigest(p)]));
 if (!shape) {

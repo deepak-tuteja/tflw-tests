@@ -338,6 +338,25 @@ jobs:
         run: npm run verify:kill-detail:self-test
         working-directory: testFlow-tests
 
+      # `M189a` (`D974`). The census's `survived` folds two situations into one word — a plant runs
+      # through the mutated line and asserts nothing that depends on it, or no plant executes the
+      # line at all — and `measure-mutation-reach.mjs` measures which, once per census, under V8's
+      # block coverage on the box. Its fold (source-map decode, innermost-range sweep, region
+      # location) and the reading's vocabulary are each shown to fire on the input they exist for,
+      # and the hand-read half — `reach-verdicts.json`, one verdict per reached survivor — is held to
+      # the measured half in both directions, `mutation-covers.mjs`'s arrangement. Three committed
+      # files, no stack, milliseconds; and it refuses a missing or partial measurement rather than
+      # passing on nothing.
+      - name: The reach fold's controls fire
+        run: npm run verify:reach:self-test
+        working-directory: testFlow-tests
+      - name: The reach reading's controls fire
+        run: npm run verify:reach-verdicts:self-test
+        working-directory: testFlow-tests
+      - name: Every reached survivor has a verdict, and every verdict names a reached survivor
+        run: npm run verify:reach-verdicts
+        working-directory: testFlow-tests
+
       # `M167` (`D767`, `D857`). `D504` keeps the phase *list* out of prose; `D767` extended that to
       # the count, which is the same copy compressed. `M154g` removed seven occurrences across four
       # named files and pointed `verify:contributing` at one of them — and eight days later the count

@@ -828,9 +828,15 @@ if (wanted('C48')) {
     if (!dflt.report || !never.report || !onSuccess.report) {
       fail(`C48 — no report\n${(dflt.output || never.output || onSuccess.output).trim().split('\n').slice(-10).join('\n')}`);
     } else {
-      // Clause 1. 8, not 4: the four iterations of the second test **failed**, and they tear down
+      // Clause 1. 7, not 4: the three iterations of the second test **failed**, and they tear down
       // too. Before `M157b` the throw sat above the hook loop and this read 4.
-      recall('C48', dflt.markers === 8, `by default every iteration tears down, the failing ones included: ${dflt.markers} marker(s), 8 expected`);
+      //
+      // `M189c` — three failing iterations, not four. With four and four the third clause below
+      // could not tell `on success` from its inversion (tear down the failures, skip the passes):
+      // both count four markers. tflw's registry holds that inversion since `M189b`, and this plant
+      // was measured green under it on the box before the fixture moved; with 4 + 3 the inversion
+      // answers 3 where the rule answers 4, and the default answers 7.
+      recall('C48', dflt.markers === 7, `by default every iteration tears down, the failing ones included: ${dflt.markers} marker(s), 7 expected`);
       // Clause 2, both halves — the count and the sentence. `D785` makes the announcement part of
       // the contract, on the grounds that a config key set to debug one afternoon and committed is
       // otherwise a run that leaks in silence forever.
@@ -839,7 +845,7 @@ if (wanted('C48')) {
       // Clause 3, and the sharp one. The first test is RED (its threshold cannot be satisfied) while
       // all four of its iterations PASS. A build reading the test's verdict rather than the
       // iteration's answers 0 here.
-      recall('C48', onSuccess.markers === 4, `\`--teardown on-success\` tears down the passing iterations only: ${onSuccess.markers} marker(s), 4 expected`);
+      recall('C48', onSuccess.markers === 4, `\`--teardown on-success\` tears down the passing iterations only: ${onSuccess.markers} marker(s), 4 expected — the inverted rule answers 3, the default 7`);
       const firstRed = (onSuccess.report.tests ?? []).find((t) => (t.name ?? '').includes('red by threshold'));
       recall('C48', firstRed?.ok === false, `and the test those four iterations belong to is itself RED — without that this clause cannot tell \`on success\` from "reads the run's verdict"`);
       // Clause 4 — the one no plant here could make before `M157a`. Hook time is out of the
@@ -2802,7 +2808,10 @@ if (DIRECTIVE_IDS.some((id) => wanted(id))) {
 
 const KEY_IDS = ['C97', 'C98', 'C99', 'C100', 'C101', 'C102', 'C103', 'C104'];
 
-if (KEY_IDS.some((id) => wanted(id))) {
+// `C93`'s run-time leg lives in this block too (`M189c`): its four `check` legs stay in the
+// directives block above, and the one that needs the wire is here beside `C98`'s, because the
+// arrival server is already up and the header log is what answers it.
+if (KEY_IDS.some((id) => wanted(id)) || wanted('C93')) {
   const FIX = path.join(ROOT, 'tests', '.constructs', 'config-keys');
   const CONFORMANCE = path.join(ROOT, 'tflw-acceptance', 'conformance');
   console.log('\nC97-C104 — the config keys, graded on the wire\n  target: `arrival-server.mjs` — committed configs, copied in as `tflw.config`, no stack');
@@ -2890,6 +2899,22 @@ if (KEY_IDS.some((id) => wanted(id))) {
       // being equally wrong.
       precision('C97', pathsOf(underBase) === JSON.stringify([ABS]) && pathsOf(underOther) === JSON.stringify([ABS]),
         `and each leg recorded that one path and no other, under both bases (got: ${pathsOf(underBase)} and ${pathsOf(underOther)})`);
+    }
+
+    // ---- C93, the run-time leg: `defaults` is merged for the NON-default env at run time ---------
+    // The directives block grades `defaults` through `tflw check`, and the checker has its own
+    // merge. A hand mutation of the RUNTIME merge — `if (config.defaults && env.isDefault)` — left
+    // all four of those legs green on `fedora-box` (2026-09-13), which is the shape `D739` warns
+    // about from the other side: a construct with two readers and a row that reads one of them.
+    if (wanted('C93')) {
+      const defRt = corpus('defaults-runtime', ['two-steps.tflw'], 'defaults-runtime.config');
+      await arrivals('__reset');
+      const twoOut = runRun(['--env', 'two'], { cwd: defRt });
+      const twoHeaders = await headersOf('x-def');
+      const at = (h, p) => (h.byPath[p] ?? []);
+      recall('C93', at(twoHeaders, ALPHA).length === 1 && at(twoHeaders, BETA).length === 1 && at(twoHeaders, ALPHA)[0] === 'c93-shared' && at(twoHeaders, BETA)[0] === 'c93-shared',
+        `at run time, under \`--env two\` — the env that is NOT the default — both arrivals carried the \`defaults\` header (got: ${JSON.stringify(twoHeaders.byPath)})`);
+      precision('C93', /PASS 1\/1/.test(twoOut), 'and that run is green, so the header was read off a run that completed rather than off a refusal');
     }
 
     if (wanted('C98')) {
@@ -3358,6 +3383,70 @@ if (wanted('C114')) {
     actionLine !== null && !new RegExp(`subject-position-locator\\.tflw:${actionLine}:`).test(out),
     `C114 nothing is said about line ${at(actionLine)}, where the same locator text stands in action position and the kind rule is never consulted`,
   );
+}
+
+// =============================================================================
+// C115-C117 — the three subjects no fixture read: `duration`, `header`, `body text` (`M189c`)
+// =============================================================================
+
+// `M176c` measured these three at zero plant fixtures and put them on the ratchet as its group (b),
+// the group that needs a fixture before it can need a claim. One run of `subjects.tflw` grades all
+// three: five tests, two of them written to fail, and the failing ones graded on the SENTENCE their
+// failure carries — a subject's read is what the sentence's `got` reports, so a wrong read is
+// visible there even when the verdict happens to come out right. Each row's known answer is shaped
+// to move when the subject's own read breaks and not when its matcher does (`D739`).
+if (wanted('C115') || wanted('C116') || wanted('C117')) {
+  const subjectsCorpus = path.join(ROOT, 'tflw-acceptance', 'conformance');
+  console.log('\nC115-C117 — the three subjects no fixture read\n  target: `arrival-server.mjs` — `subjects.tflw`, one run, five tests, two written to fail; no stack');
+  let server = null;
+  try {
+    server = await startArrivalServer(subjectsCorpus);
+    const { report, output } = runCorpus(subjectsCorpus, ['subjects.tflw']);
+    if (!report) {
+      for (const id of ['C115', 'C116', 'C117']) if (wanted(id)) { fail(`${id} — no report\n${output.trim().split('\n').slice(-10).join('\n')}`); scores.get(id).skipped = 'no report'; }
+    } else {
+      const named = (needle) => report.tests.find((t) => (t.name ?? '').includes(needle));
+      const stepsOf = (t) => t?.steps ?? [];
+      const step = (t, needle) => stepsOf(t).find((s) => s.source.includes(needle));
+      const got = (s) => /but got ([\d.]+)/.exec(s?.detail ?? '')?.[1] ?? null;
+
+      if (wanted('C115')) {
+        const pass = named('duration reads');
+        const red = named('written to fail, carries the measured number');
+        const slow = step(red, 'is less than 10ms');
+        recall('C115', pass?.ok === true, `the passing test held: \`/slow\` ≥ 40ms and < 2000ms, three times, then \`/\` < 100ms (got ok=${pass?.ok})`);
+        recall('C115', red?.ok === false && slow?.ok === false, `\`/slow\` under \`is less than 10ms\` failed (got test ok=${red?.ok}, step ok=${slow?.ok})`);
+        const n = got(slow) === null ? NaN : Number(got(slow));
+        recall('C115', n >= 50 && n < 1000, `and the failure carries the measured number in milliseconds: got ${got(slow) ?? 'nothing'} — a read in seconds reports 0.05, a read that stops short of the delayed response reports ~0`);
+        precision('C115', /but got \d+\.\d+/.test(slow?.detail ?? ''), `reported unrounded (\`D807\`): the sentence carries a fractional millisecond (${slow?.detail ?? 'no detail'})`);
+        // The fast leg's bound is 100 ms against a cumulative read's floor of 150 ms — three slow
+        // requests precede it. The first draft had one slow request and `< 45ms`, and the box failed
+        // it once during a build: the effect denied (50 ms) sat inside the noise of the thing measured.
+        precision('C115', stepsOf(pass).filter((s) => s.kind === 'expect').length === 5 && step(pass, 'is less than 100ms')?.ok === true, 'the fast leg after three slow ones holds — a cumulative read would carry at least 150 ms into it');
+      }
+      if (wanted('C116')) {
+        const pass = named('header reads');
+        const red = named('does not carry is absent');
+        const absent = step(red, 'x-echo-absent');
+        recall('C116', pass?.ok === true, `four header expectations held on one response (got ok=${pass?.ok})`);
+        recall('C116', step(pass, '"X-Echo-Kind"')?.ok === true, 'the mixed-case name reads the same header — the name is folded before the lookup');
+        recall('C116', red?.ok === false && /but got undefined$/.test(absent?.detail ?? ''), `a header the response does not carry reads as absent, not as \`""\` (got: ${absent?.detail ?? 'no detail'})`);
+        precision('C116', step(pass, '"x-echo-other"')?.ok === true && step(pass, '"content-type"')?.ok === true, 'the second echoed header and `content-type` are each read by their own name — a read that returned the first header for every name would fail both');
+      }
+      if (wanted('C117')) {
+        const t = named('body text is the raw body');
+        recall('C117', t?.ok === true, `the body-text test held (got ok=${t?.ok})`);
+        recall('C117', step(t, 'healthy ✓ 42')?.ok === true, 'the non-ASCII byte sequence survives the decode — a single-byte charset turns `✓` into three other characters');
+        recall('C117', step(t, '"{ \\"spaced\\" : true }"')?.ok === true, 'the raw JSON bytes equal, whitespace and all — a parse-and-reserialise reads `{"spaced":true}`');
+        precision('C117', step(t, 'body.spaced')?.ok === true, 'and `body.spaced` parses the same response, so the two subjects are two reads of one body');
+        precision('C117', stepsOf(t).filter((s) => s.kind === 'expect').length === 4 && stepsOf(t).every((s) => s.ok), 'all four expectations ran and held — nothing in the test was skipped or red for another reason');
+      }
+    }
+  } catch (e) {
+    for (const id of ['C115', 'C116', 'C117']) if (wanted(id)) { fail(`${id} could not run: ${e.message}`); scores.get(id).skipped = e.message; }
+  } finally {
+    server?.kill();
+  }
 }
 
 console.log('\nper-plant precision and recall:\n');

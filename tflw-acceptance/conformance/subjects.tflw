@@ -1,0 +1,59 @@
+# `M189c` / `C115`-`C117` — the known-answer plants for the three `subject` constructs no fixture in
+# this repository read at all: `duration`, `header`, `body text` (`M176c`'s ratchet group (b)).
+#
+# **Two of the five tests below are meant to end red**, and both reds are part of the known answer.
+# `verify-construct-acceptance.mjs` reads `report/results.json`, not the exit status — the same
+# arrangement `teardown.tflw` uses. Every test is graded on its own steps, and the failing ones are
+# graded on the *sentence* their failure carries: a subject's read is what the sentence's `got`
+# reports, so a wrong read is visible there even when the verdict happens to come out right.
+#
+# What each test is shaped to distinguish (`D739`: a use of the subject is not a row; a row is a
+# known answer that moves when the subject's OWN read breaks and not when its matcher does):
+#
+#   `duration`   read in milliseconds, unrounded (`D807`), for THIS request. `/slow` answers after
+#                50 ms and `/` at once, so a read in seconds, a read of the previous request, or a
+#                read that stops at the headers all move the numbers below. The fast leg comes after
+#                THREE slow requests and allows 100 ms: a cumulative read carries at least 150 ms
+#                into it, and a request's own time on a box mid-build was measured above 45 ms once
+#                (the first draft's bound), so the margin is on both sides of the effect (`M157g`).
+#   `header`     one response header by name, and the name is case-folded on the way in — HTTP
+#                header names are case-insensitive and tflw stores them lowercased, so the
+#                mixed-case leg is the one that reads the folding. A header the response does not
+#                carry is absent, not empty.
+#   `body text`  the raw body as a UTF-8 string, nothing parsed: `✓` is the byte that a latin1
+#                decode changes, and `{ "spaced" : true }` is whitespace a parse-and-reserialise
+#                would not keep — while `body.spaced` on the same response is the JSON read.
+
+test "duration reads this request's wall time in milliseconds"
+  api GET /slow
+  expect duration is greater than 40ms
+  expect duration is less than 2000ms
+  api GET /slow
+  expect duration is greater than 40ms
+  api GET /slow
+  expect duration is greater than 40ms
+  api GET /
+  expect duration is less than 100ms
+
+test "duration on the slow path, written to fail, carries the measured number"
+  api GET /slow
+  expect duration is less than 10ms
+
+test "header reads the named response header, case-folded, and nothing else"
+  api GET /subjects/headers
+  expect header "x-echo-kind" equals "alpha"
+  expect header "X-Echo-Kind" equals "alpha"
+  expect header "x-echo-other" equals "beta"
+  expect header "content-type" contains "json"
+
+test "a header the response does not carry is absent, written to fail"
+  api GET /subjects/headers
+  expect header "x-echo-absent" equals ""
+
+test "body text is the raw body decoded as UTF-8, and nothing is parsed"
+  api GET /subjects/text
+  expect body text equals "healthy ✓ 42"
+  expect body text contains "✓"
+  api GET /subjects/json-spaced
+  expect body text equals "{ \"spaced\" : true }"
+  expect body.spaced equals true

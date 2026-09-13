@@ -2555,6 +2555,75 @@ export const PLANTS = [
       "a locator ceasing to be a *subject*: either dropped from the kind rule (leg 1 goes silent and an incompatible pairing checks clean, then fails mid-run from the runtime's own matcher switch — `TF042`'s own founding scenario), or widened so that action position is judged too (leg 3 starts refusing `click`). `D906` is why this is not `locator:*` twice over: `C13`-`C18` each anchor their evidence on an ACTION-position use — `click text`, `fill field`, `within list`, `click css`, `click xpath` — measured, all five, so not one of them reaches `pollable()` or the compatibility check. And it is not `C59`'s `TF042` again either: that roster grades the code on a *value* subject and says nothing about whether a locator is a subject at all.",
     blockedOn: null,
   },
+  // `M189c` (`D976`) — the three `subject` constructs `M176c` measured at zero plant fixtures, its
+  // ratchet group (b). One fixture, `tflw-acceptance/conformance/subjects.tflw`, five tests, two of
+  // them written to fail; each row's known answer is shaped so that it moves when the SUBJECT'S
+  // OWN READ breaks and not when the matcher does, which is `D739`'s distinction and the whole cost
+  // of a row in this family. Each was reddened by a hand mutation of that read on `fedora-box`
+  // before its row was written — the mutation is named in `CONSTRUCTS.md`'s section.
+  {
+    id: 'C115',
+    construct: 'subject:duration',
+    family: 'subject',
+    tier: 'api',
+    title: '`duration` is this request\'s wall time, in milliseconds, unrounded',
+    target: '`arrival-server.mjs` — `/slow` (50 ms) and `/` (immediate), `subjects.tflw`',
+    evidence: { file: 'tflw-acceptance/conformance/subjects.tflw', pattern: '^\\s*expect duration is (less|greater) than \\d+ms$', min: 4 },
+    run: 'subjects.tflw',
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'Against `/slow`, `is greater than 40ms` and `is less than 2000ms` both hold and `is less than 10ms` '
+      + 'fails with the measured number in its sentence — **between 50 and 1000, with a fractional part** '
+      + '(`D807`: unrounded). Against `/` immediately after, `is less than 45ms` holds. The three legs '
+      + 'separate three wrong reads a matcher test cannot see: a value in seconds (0.05 passes `< 10`), '
+      + 'a read that stops at the response headers (`/slow` delays the headers too, so that one is caught '
+      + 'by the 50 ms floor only in combination with the fast leg), and a cumulative read across steps '
+      + '(the fast leg would carry the slow leg\'s 50 ms).',
+    catches: 'a duration read in the wrong unit, of the wrong request, or rounded before the comparison (`D807`).',
+    blockedOn: null,
+  },
+  {
+    id: 'C116',
+    construct: 'subject:header',
+    family: 'subject',
+    tier: 'api',
+    title: '`header "<name>"` reads one response header by case-folded name, and an absent one is absent',
+    target: '`arrival-server.mjs` — `/subjects/headers` answers with `x-echo-kind: alpha` and `x-echo-other: beta`, `subjects.tflw`',
+    evidence: { file: 'tflw-acceptance/conformance/subjects.tflw', pattern: '^\\s*expect header "X-Echo-Kind" equals "alpha"$', min: 1 },
+    run: 'subjects.tflw',
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'Four expectations hold on one response: `header "x-echo-kind" equals "alpha"`, the same header '
+      + 'under the mixed-case name `"X-Echo-Kind"`, `"x-echo-other" equals "beta"`, and `"content-type" '
+      + 'contains "json"`. The mixed-case leg is the row: tflw stores response headers lowercased and '
+      + 'folds the written name before the lookup, so a read that stopped folding fails exactly that leg '
+      + 'and no other. In a second test, `header "x-echo-absent" equals ""` **fails with `got undefined`** '
+      + '— a header the response does not carry is absent, not empty, and a read that defaulted to `""` '
+      + 'would pass it.',
+    catches: 'a header lookup that is case-sensitive, that reads the wrong header, or that turns absence into an empty string.',
+    blockedOn: null,
+  },
+  {
+    id: 'C117',
+    construct: 'subject:body-text',
+    family: 'subject',
+    tier: 'api',
+    title: '`body text` is the raw body decoded as UTF-8, and nothing is parsed',
+    target: '`arrival-server.mjs` — `/subjects/text` (`text/plain`, `healthy ✓ 42`) and `/subjects/json-spaced` (`{ "spaced" : true }`), `subjects.tflw`',
+    evidence: { file: 'tflw-acceptance/conformance/subjects.tflw', pattern: '^\\s*expect body text equals "healthy ✓ 42"$', min: 1 },
+    run: 'subjects.tflw',
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'On a `text/plain` response, `body text equals "healthy ✓ 42"` and `contains "✓"` hold — the `✓` '
+      + 'is three UTF-8 bytes, and a decode under any single-byte charset turns it into three other '
+      + 'characters and fails `equals` while leaving every ASCII assertion green. On a JSON response '
+      + 'served as `{ "spaced" : true }`, `body text equals` those exact bytes with their whitespace, '
+      + 'while `body.spaced equals true` on the same response parses it — a `body text` that went '
+      + 'through the JSON parse and back would read `{"spaced":true}` and fail the first while passing '
+      + 'the second.',
+    catches: 'a body-text read under the wrong charset, or one that is the parsed body re-serialised rather than the bytes.',
+    blockedOn: null,
+  },
 ];
 
 /**
@@ -2639,7 +2708,7 @@ export const expandReferenceRosters = (manifestConstructs) =>
  * exercised*. `step:api` sits here with 1139 occurrences behind it.
  */
 export const RATCHET = [
-  // --- subject (15) ---
+  // --- subject (12) ---
   //
   // **`M176c`. The ratchet was empty and this puts fifteen back on it, and the number going up is
   // the point rather than the embarrassment.** `M174` (`#177`, `44e2d79`) gave tflw a `subject`
@@ -2675,7 +2744,9 @@ export const RATCHET = [
   // **(b) No plant fixture reads it at all** — `duration`, `header`, `body-text`. Measured at zero
   // across all 113 plants. These need a fixture before they can need a claim, which is the more
   // expensive half and the honest reason they are not being cleared in the same milestone that
-  // filed them.
+  // filed them. **Cleared by `M189c`** (`C115`-`C117`, `subjects.tflw`): the ratchet went 15 -> 12
+  // and the ceiling with it; the group is kept in this comment because the argument for the
+  // other two groups is the same one.
   //
   // **(c) Spun out by name** — `request`. Two plant fixtures (`C6`, `C7`) read it, and
   // `PLAN_M96_VALUE_SUBJECT.md` is scoped and unstarted; `D904`'s exhaustiveness map is what will
@@ -2683,10 +2754,7 @@ export const RATCHET = [
   //
   // None of the fifteen is blocked on tflw. Every one of them is this repository's to write.
   'subject:status',
-  'subject:duration',
-  'subject:header',
   'subject:body',
-  'subject:body-text',
   'subject:body-bytes',
   'subject:body-csv',
   'subject:body-pdf-text',
@@ -2966,8 +3034,14 @@ export const RATCHET = [
  * expensive part on purpose. The fifteen entries above carry their exits grouped by what each would
  * cost — the claim is missing (11), no fixture exists at all (3), spun out by name (1) — so the next
  * milestone to lower this number can start from a measurement instead of from a re-reading.
+ *
+ * **`15` → `12` (`M189c`, `D976`): group (b) cleared.** The three subjects no fixture read —
+ * `duration`, `header`, `body-text` — got one fixture (`subjects.tflw`) and three rows
+ * (`C115`-`C117`), each reddened by a hand mutation of the subject's own read on the box before
+ * the row was written. Groups (a) and (c) are untouched, and the twelve entries above are still
+ * argued by exit, not by count.
  */
-export const RATCHET_CEILING = 15;
+export const RATCHET_CEILING = 12;
 
 /**
  * `CONSTRUCTS.md` carries one row per plant and prose a human reads; this asserts their id sets

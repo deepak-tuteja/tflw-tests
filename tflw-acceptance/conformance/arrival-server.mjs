@@ -296,6 +296,36 @@ const server = createServer((req, res) => {
     }, 50);
     return;
   }
+  // `M189c` / `C115`-`C117` — three paths whose RESPONSE is the plant, for the three `subject`
+  // constructs no fixture read at all (`M176c`'s group (b)). Everything above answers `{"ok":true}`
+  // with one header, which is why `header`, `body text` and `duration` could not be graded here:
+  // there was nothing distinctive to read. Each path below is shaped so that the subject's own read
+  // is what the assertion depends on — a header the name must be case-folded to find, a body whose
+  // bytes are not valid latin1 and whose whitespace a parse-and-reserialise would not keep, and
+  // (for `duration`) the 50 ms of `/slow` above, which is already the one measurable delay here.
+  if (path === '/subjects/headers') {
+    count(path, req);
+    res.writeHead(200, { 'content-type': 'application/json', 'x-echo-kind': 'alpha', 'x-echo-other': 'beta' });
+    res.end('{"ok":true}');
+    return;
+  }
+  if (path === '/subjects/text') {
+    count(path, req);
+    // `text/plain`, so `body` (the JSON subject) has nothing to parse and `body text` is the only
+    // way in — and a non-ASCII character, so a decoder that is not UTF-8 changes the string.
+    res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
+    res.end('healthy \u2713 42');
+    return;
+  }
+  if (path === '/subjects/json-spaced') {
+    count(path, req);
+    // Valid JSON with whitespace no serialiser would emit: `body.spaced` reads it as JSON and
+    // `body text` must return these exact bytes, which is the raw-versus-parsed distinction the
+    // subject's own summary makes.
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end('{ "spaced" : true }');
+    return;
+  }
   // Counted on *arrival*, before any work and before the response is written. A counter incremented
   // on the way out would undercount anything the process failed to answer, which is the opposite of
   // what this measures: the question is what tflw issued, not what it got back.

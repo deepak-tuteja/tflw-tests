@@ -23,7 +23,7 @@
 # The contrast IS the plant, and it is now three-way rather than two-way. `/after-each-marker` is
 # hit once per iteration whose teardown runs, so the marker count answers the whole question:
 #
-#   - **default** (`teardown always`) -> **8**. Every iteration of both tests, including the four
+#   - **default** (`teardown always`) -> **7**. Every iteration of both tests, including the three
 #     that failed. That last part is the half `M154e-01` did not know about: until `M157b` the
 #     interpreter threw on a failing body *above* the hook loop, so a run at a 5% error rate cleaned
 #     up after 95% of its iterations and leaked on precisely the 5% worth investigating.
@@ -31,14 +31,23 @@
 #   - **`--teardown on success`** -> **4**. Only the first test's iterations, because only they
 #     passed.
 #
-# A build that ignored the key answers 8 three times; one that reinstated the old gate answers 0
+# **Four and three, not four and four (`M189c`).** The two tests ran the same number of iterations
+# until 2026-09-13, and that made the third answer unable to tell `on success` from its inversion:
+# a build that tore down the FAILING iterations and skipped the passing ones also counts four
+# markers, so `C48` was green under a rule that deletes exactly the residue a forensic reader
+# wanted kept. tflw's registry gained that inversion as a mutation the same day
+# (`teardown-on-success-tears-down-the-failures-instead`, `M189b`), and this file was the fixture
+# that could not see it. With three failing iterations the inversion answers **3**, the real rule
+# answers **4**, and the default answers **7** — three numbers, three rules, no coincidence.
+#
+# A build that ignored the key answers 7 three times; one that reinstated the old gate answers 0
 # three times, since no file can opt in any more.
 #
 # ## The hook is deliberately expensive (`M157g`)
 #
 # `/after-each-marker` sleeps 50 ms, matching `/slow`, and that is load-bearing rather than
 # incidental. The fourth clause the grader reads is a **null result** — `D782` says hook time leaves
-# the reported iteration duration, so the p95 must not move as the hook count goes 8 -> 0 -> 4 — and
+# the reported iteration duration, so the p95 must not move as the hook count goes 7 -> 0 -> 4 — and
 # a null result only means something if the movement it denies would have been visible. Against a
 # zero-latency marker the denied effect was one local request, smaller than the jitter it was being
 # compared under. Now a build that put hook time back into the duration moves the p95 by ~50 ms per
@@ -64,7 +73,7 @@ test "an iteration that passed tears down, even though the test is red by thresh
   threshold error rate is less than 0%
 
 test "an iteration that failed tears down too — the leak M154e-01 did not know it had"
-  run 4 iterations across 1 users
+  run 3 iterations across 1 users
   api GET /teardown-fail
   expect status equals 500
   threshold error rate is less than 1%
