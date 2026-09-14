@@ -1,5 +1,5 @@
 {
- "$comment": "M189a (D974): one verdict per reached survivor of the census's runtime mutants, held to tflw-acceptance/mutation/reach.json by `npm run verify:reach-verdicts` in both directions. `not-asserted` = a plant runs through it and its known answer does not depend on the result (the dogfood is shallow there; a row is filed per family in testFlow/REVIEW_FINDINGS.md). `out-of-reach-by-design` = the result is visible only where the acceptance roster does not look, or is graded by a reference gate the census does not run (D751, D846). Read 2026-09-13 against the reach measured the same day over 106 plants at tflw main@29dfa0a.",
+ "$comment": "M189a (D974): one verdict per reached survivor of the census's runtime mutants, held to tflw-acceptance/mutation/reach.json by `npm run verify:reach-verdicts` in both directions. `not-asserted` = a plant runs through it and its known answer does not depend on the result (the dogfood is shallow there; a row is filed per family in testFlow/REVIEW_FINDINGS.md). `out-of-reach-by-design` = the result is visible only where the acceptance roster does not look, or is graded by a reference gate the census does not run (D751, D846). Read 2026-09-13 against the reach measured the same day over 106 plants at tflw main@29dfa0a. Re-read 2026-09-14 against `M190`'s re-census (the same 106 plants, tflw main@46750a0): 42 reached survivors again, 41 verdicts carried unchanged and one added (`threshold-scope-falls-back-to-the-whole-histogram`, added to the registry after the previous census and reached in this one).",
  "ambiguity-count-from-a-second-query": {
   "verdict": "not-asserted",
   "family": "locator:diagnosis",
@@ -169,6 +169,11 @@
   "verdict": "not-asserted",
   "family": "locator:diagnosis",
   "why": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
+ },
+ "threshold-scope-falls-back-to-the-whole-histogram": {
+  "verdict": "not-asserted",
+  "family": "run:verdict",
+  "why": "the endpoint lookup behind `threshold … for \"label\"`: all eight workload plants (C3, C44–C50) evaluate thresholds through this line and none of them states a scoped one — C49's `verdict.tflw` grades an unscoped p95 and an unscoped error rate, so `scope === undefined` on every evaluation and the fallback to the whole histogram is the path the plant already takes; the only scoped threshold in either corpus is `perf/tflw/checkout-burst.tflw`, which the acceptance roster does not run. Not a candidate in the previous census — the `m172a` entry postdates it — so `M190`'s is its first measurement and this its first verdict. A plant would need a two-endpoint workload whose scoped p95 differs from the whole's"
  },
  "tls-facts-absent-counts-as-applicable": {
   "verdict": "out-of-reach-by-design",

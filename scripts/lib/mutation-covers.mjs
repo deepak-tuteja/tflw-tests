@@ -52,6 +52,26 @@
 // mutation meant to weaken a precondition quietly turned out to make a *checker* refuse 74 configs
 // out loud.
 //
+// ## `M190`, 2026-09-14 — the re-census, and the table's first whole replacement
+//
+// `D980`: a census is one directory and a new census is a new one, so this table was re-read
+// against a fresh matrix rather than resumed — 286 candidates, 106 plants, 311 kill relations, of
+// which **35 `assertion`**. Sixteen rows were added, all for mutations that did not exist or plants
+// that did not exist when the rows above were written; the nineteen already here were checked
+// against the new `kill-detail.json` field by field and none needed a word changed, which is the
+// measurement `D842` wanted from a hand table: it survives a re-census untouched where the
+// measurement agrees and is refused where it does not.
+//
+// Nine of the sixteen cover — the nine `M189b` mutations, each killing the plant whose hand row
+// became it — and that moves `D841`'s covering set from 7 to **15** and `D846`'s *covered* bin from
+// 7 plants to 15. The seven collateral rows are two shapes and both were already in this file:
+// the arrival-count control (`C49`, `C50`, and `C48` under the pool overrun) is `C107`'s "the control
+// working rather than the plant covering", and the displaced diagnostic (`C78`, `C79`, `C114`) is
+// the paragraph under `C79` above, now with a plant fifteen milestones younger in it. One
+// `assertion` relation the census recorded is **not** here because it was retracted before this
+// table was read: `C48` under `empty-tag-on-every-tag`, a timing clause gone false under a mutation
+// the plant never reaches — the reach control's refusal is what `M190-02` is about.
+//
 // ## What `covers` means here
 //
 // A relation is `covers: true` when the mutation breaks **the construct the plant is named for**,
@@ -154,6 +174,36 @@ export const COVERS = {
         + "a key that stopped being read. `C99` is the only plant in the census that both ran and went red under a lexer "
         + "break, and it is still collateral.",
     },
+    // `M190`, 2026-09-14: three more plants ran and went red under this lexer break, and all three are the
+    // displaced-diagnostic shape rather than `C99`'s destroyed-input shape. Their fixtures carry a `5s`, which
+    // now lexes as `5` followed by the name `s`, and `TF001` fires before the diagnostic each plant asserts.
+    // grader: `✗ C78 recall — with the world closed, the same bogus call is a TF037 (got: error[TF001]: exponent notation is not supported — this reads as 5 followed by the name s)`
+    C78: {
+      covers: false,
+      why:
+        "`C78` is `use` and asserts a `TF037`; it got a `TF001` from the lexer one pass earlier. The same clause went "
+        + "false under `require-env-guards-only-the-first-name-on-the-line` for the same reason with a different code, and "
+        + "the observation there stands: a plant asserting the presence of a specific diagnostic is falsified by any "
+        + "earlier diagnostic. Its other recall clause and both precision clauses held.",
+    },
+    // grader: `✗ C79 recall — a test that reads a before file binding does not compile (got: error[TF001]: exponent notation is not supported — this reads as 5 followed by the name s)`
+    C79: {
+      covers: false,
+      why:
+        "`C79`'s single clause is that a test reading a `before file` binding does not compile *for that reason*, and it "
+        + "did not compile for the lexer's. The third time this plant has been red in a census and the third time by "
+        + "displacement; it has still never been red for `before`.",
+    },
+    // grader: `✗ C114 recall — the locator in subject position is judged by the kind rule, and the refusal names the kind (got: error[TF001] …)`
+    //         `✗ C114 recall — the diagnostic points at line 13, the subject-position leg`
+    C114: {
+      covers: false,
+      why:
+        "`C114` asserts one `TF042` at line 13 and got `TF001` from the `5s` in its fixture. Its precision clauses held "
+        + "(2/2) because they assert silence on lines 16 and 18, and a lexer refusal is one diagnostic for the whole file. "
+        + "Compare the row under `locator-subject-skips-the-kind-rule`, where the same two recall clauses went false with "
+        + "*no diagnostic at all* — that is the construct broken, this is its input.",
+    },
   },
 
   // ── `M168`, 2026-09-03 ──────────────────────────────────────────────────────────────────────
@@ -197,6 +247,16 @@ export const COVERS = {
         + "another one. A plant asserting the presence of a specific diagnostic is falsified by any earlier diagnostic, "
         + "which makes this class of clause collateral-prone in a way a behavioural assertion is not — worth saying because "
         + "the roster has many of them.",
+    },
+    // `M190`, 2026-09-14. grader: `✗ C114 recall — … (got: error[TF077]: ADMIN_PW is read here but no require env line declares it)`
+    //                             `✗ C114 precision — exactly one diagnostic from the whole file (got 9: TF077 ×9)`
+    C114: {
+      covers: false,
+      why:
+        "`C114` (`subject:locator`) did not exist when this mutation's 74-refusal storm was first read; it does now, and "
+        + "its fixture reads a second environment variable, so it is in the storm too — nine `TF077`s where it asserts "
+        + "one `TF042`. Collateral by the same argument as `C78` and `C79`, and the reason the argument was worth writing "
+        + "down: a plant added fifteen milestones later fell into it unchanged.",
     },
   },
   'log-level-filters-the-record-instead-of-the-console': {
@@ -327,6 +387,158 @@ export const COVERS = {
         + "localhost:8091/` renders a page that satisfies it. Both applications swallow a garbage path; only one of them "
         + "swallows it into a page that lacks the answer. A fixture written only in the console-base direction would have "
         + "passed under this mutation and killed nothing.",
+    },
+  },
+
+  // ── `M189b` / `M190`, 2026-09-14 — the nine runtime mutations, re-censused ────────────────────
+  // `M189b` authored nine mutations against the constructs `M189a`'s reading found reached-but-not-
+  // asserted, and `M189c` deepened the plants they aim at. `M190` measured them over the whole roster
+  // in one census (`D981`): 9 of 9 killed, 12 `assertion` relations, of which nine cover and three are
+  // collateral — all three the same shape, an iteration-count overrun falsifying another plant's
+  // arrival-count *control*. Every `covers: true` here is the first time its plant has been covered.
+  'shared-iteration-pool-runs-one-too-many': {
+    // grader: `✗ C3 recall — --workers 1: /shared received exactly 60 request(s) (got 61) — counted by the server, not by tflw`
+    //         `✗ C3 recall — --workers 4: /shared received exactly 60 request(s) (got 64)`
+    //         `✗ C3 recall — the counts are identical at --workers 1 and --workers 4 — the "independent of --workers" half of the contract`
+    C3: {
+      covers: true,
+      why:
+        "`C3` is `step:run` and its known answer is two numbers counted by the server: `/shared` receives exactly 60, at "
+        + "`--workers 1` and at `--workers 4` alike. It got 61 and 64 — one surplus per shard that received a VU, which "
+        + "is the mutation's `what` to the digit — and the independence clause went false with them. The two per-user "
+        + "clauses held (that spelling is the entry one line down), and all four precision clauses held: nothing landed "
+        + "off the two declared paths. The first mutation in either census to make `C3` red by assertion; it had been "
+        + "refusal-only through `M164` and `M168`.",
+    },
+    // grader: `✗ C48 recall — by default every iteration tears down, the failing ones included: 9 marker(s), 7 expected`
+    //         `✗ C48 recall — --teardown on-success tears down the passing iterations only: 5 marker(s), 4 expected`
+    C48: {
+      covers: false,
+      why:
+        "`C48` is `teardown`, and teardown did what it should after every iteration that ran — there were simply more "
+        + "of them. 9 markers against 7 is the default rule applied to two extra iterations; 5 against 4 is `on-success` "
+        + "applied to one extra passing one. The grader's own message names the inverted rule's answer as 3, and 5 is not "
+        + "3: the plant discriminated correctly over a wrong denominator. Collateral, and the cleanest kind — the "
+        + "mutated construct is one the fixture consumes, not the one it watches.",
+    },
+    // grader: `✗ C49 precision — both tests really ran: 18 request(s) reached /slow (16 expected, 8 iterations each)`
+    C49: {
+      covers: false,
+      why:
+        "all three of `C49`'s recall clauses held — the satisfied threshold passed, the breaching one failed, and it "
+        + "failed with every assertion green — so the verdict still came from the threshold. What went false is the "
+        + "control that both tests really ran: 18 arrivals where 8 + 8 were expected, one surplus per test. Collateral.",
+    },
+    // grader: `✗ C50 precision — both tests issued their full 12 iterations (/paced 13, /unpaced 13) — pacing slowed them, it did not drop them`
+    C50: {
+      covers: false,
+      why:
+        "the same control clause as `C49`'s, in `pause`'s plant: 13 and 13 where 12 and 12 were expected. Its recall "
+        + "clauses — that pacing stretched the paced test's wall time and not the unpaced one's — all held. Collateral, "
+        + "and the third plant this one mutation reached through an arrival count.",
+    },
+  },
+  'per-user-iterations-run-one-too-many': {
+    // grader: `✗ C3 recall — --workers 1: /per-user received exactly 60 request(s) (got 65)`
+    //         `✗ C3 recall — --workers 4: /per-user received exactly 60 request(s) (got 65)`
+    C3: {
+      covers: true,
+      why:
+        "the other spelling: `run 12 iterations per user across 5 users` landed (12 + 1) × 5 = 65 at both worker "
+        + "counts, the `what`'s arithmetic exactly, while the shared-pool clauses held at 60. Worth one sentence: the "
+        + "independence clause *held* here (65 = 65), because a per-VU overrun is the same size in every shard — so of "
+        + "`C3`'s three kinds of clause, only the exact count can see this mutation, and it did. The sibling wrote `C3` "
+        + "with both spellings for exactly this reason (`M189c`), and the pair of rows is the evidence that the two "
+        + "branches are graded separately.",
+    },
+  },
+  'teardown-on-success-tears-down-the-failures-instead': {
+    // grader: `✗ C48 recall — --teardown on-success tears down the passing iterations only: 3 marker(s), 4 expected — the inverted rule answers 3, the default 7`
+    C48: {
+      covers: true,
+      why:
+        "one clause false and it is the one the mutation is about: under `on-success` the run left 3 markers, and 3 is "
+        + "the number the grader's message had computed in advance for the inverted rule. The default clause held at 7 "
+        + "(`always` is untouched), the `never` clause held, and the marker count is read off the server. This kill exists "
+        + "because `M189c` made the passing and failing iteration counts *differ* (4 against 3) — the mutation's own `what` "
+        + "records that the earlier `teardown.tflw` counted the same number of markers under either rule. `C48`'s first "
+        + "cover; it had been collateral once and refusal-only otherwise.",
+    },
+  },
+  'defaults-merged-for-the-default-env-only': {
+    // grader: `✗ C93 recall — at run time, under --env two — the env that is NOT the default — both arrivals carried the defaults header (got: {"/base/alpha":[null],"/base/beta":[null]})`
+    C93: {
+      covers: true,
+      why:
+        "`C93` is the `defaults` directive. Its four `tflw check` legs held — the checker has its own merge and the "
+        + "mutation leaves it alone — and the one run-time leg went false: under `--env two`, neither arrival carried the "
+        + "header the shared block declares. That leg is the one `M189c` added, for the reason the mutation's `what` "
+        + "states: four check legs cannot see a runtime merge. The first cover of a plant whose construct is a config "
+        + "directive read at run time rather than at check time.",
+    },
+  },
+  'a-lone-exclude-line-is-ignored': {
+    // grader: `✗ C96 recall — discovery reports 1 file with the exclude line (got 2: 2 files checked, no problems found.)`
+    C96: {
+      covers: true,
+      why:
+        "`C96` is `exclude`, and its discovery half went false — two files checked where the single `exclude` line "
+        + "should have left one — while the explicit-path half held, exactly the split the `what` predicts (an explicit "
+        + "file argument runs either way). The mutation is an off-by-one on the *number of lines*, which is why it is "
+        + "visible to a plant whose config has one `exclude` and would be invisible to one with two; every config in the "
+        + "sibling writes one.",
+    },
+  },
+  'scoped-header-loses-its-scope': {
+    // grader: `✗ C98 precision — the scoped header is absent from the two arrivals it does not name, so scoping narrows rather than decorates`
+    C98: {
+      covers: true,
+      why:
+        "`C98` is the `header` key. All three recall clauses held — every header arrived where it should — and the "
+        + "precision clause asking whether the scoped one is *absent* from the two services it does not name went false. "
+        + "That clause is the difference between scoping that narrows and scoping that decorates, which is the "
+        + "mutation's `what` verbatim, and it is the clause `M189c` added: a plant that asks only \"is it there?\" stays "
+        + "green under this.",
+    },
+  },
+  'workers-key-pinned-to-one': {
+    // grader: `✗ C101 recall — at workers 2 it is 2 and both were released as a pair — one digit, over an unchanged corpus (got: {"peakWaiting":1,"gatePaired":0,"gateAlone":2,…})`
+    C101: {
+      covers: true,
+      why:
+        "`C101` is the `workers` key and reads the rendezvous watermark off the wire: at `workers 2` both files should "
+        + "arrive at the gate together. `gatePaired 0, gateAlone 2` is the answer the `what` says the mutation gives — "
+        + "\"alone\" — and the `workers 1` clause held, since resolving to 1 is what that leg asks for. One digit in a "
+        + "config, and the plant is the only thing in either repository that would notice, because `--workers` on the "
+        + "command line still works.",
+    },
+  },
+  'report-key-ignored': {
+    // grader: `✗ C102 recall — all four artifacts were written under artifacts/custom, a nested directory the run created (got: none)`
+    //         `✗ C102 precision — report/ was not written at all under the custom key, so the artifacts moved rather than being copied`
+    C102: {
+      covers: true,
+      why:
+        "`C102` is the `report` key. Both halves of its known answer went false together: nothing under the configured "
+        + "directory, and `report/` written after all — the artifacts did not move. The other recall and precision "
+        + "clauses held (the `--report` flag still moves them, which the `what` says is why an operator reading the flag's "
+        + "documentation would not notice the key). Cover, and the precision clause is what makes it one: a plant that "
+        + "only looked in `artifacts/custom` would have gone red without saying where the files went.",
+    },
+  },
+  'locator-subject-skips-the-kind-rule': {
+    // grader: `✗ C114 recall — the locator in subject position is judged by the kind rule, and the refusal names the kind (got: no diagnostic at all)`
+    //         `✗ C114 recall — the diagnostic points at line 13, the subject-position leg`
+    //         `✗ C114 precision — exactly one diagnostic from the whole file … (got 0: none)`
+    C114: {
+      covers: true,
+      why:
+        "`C114` is `subject:locator`, and the mutation exempts exactly that subject kind from the matcher-compatibility "
+        + "rule. Its first leg went silent — *no diagnostic at all* where a `TF042` naming the kind is asserted — and the "
+        + "count clause went false with it (0, not 1), while the precision clause that lines 16 and 18 stay silent held, "
+        + "because they stay silent under the mutation too. That is the `what`'s last sentence measured: one leg goes "
+        + "quiet and the other two were always quiet, which is the row's whole reason for having three. The first cover "
+        + "of a checker-rule plant in either census; the roster's other diagnostic plants have only ever been displaced.",
     },
   },
 };

@@ -1,6 +1,6 @@
 {
-  "at": "2026-09-03T12:15:05.135Z",
-  "aggregate": "9895df4f1e86",
+  "at": "2026-09-14T08:08:42.809Z",
+  "aggregate": "122ea0cf5f5c",
   "plants": {
     "C1": {
       "claim": "5d8a4bcd27a1",
@@ -92,7 +92,7 @@
     },
     "C23": {
       "claim": "aa21a15180d0",
-      "shape": "2/3"
+      "shape": "2/4"
     },
     "C24": {
       "claim": "048241fc55b3",
@@ -180,7 +180,7 @@
     },
     "C45": {
       "claim": "bbc4f12339da",
-      "shape": "2/2"
+      "shape": "2/7"
     },
     "C46": {
       "claim": "97c6f1f65a8a",
@@ -291,20 +291,20 @@
       "shape": "3/2"
     },
     "C81": {
-      "claim": "a3c4ee4bfe76",
-      "shape": "4/2"
+      "claim": "6df8b4f7fce0",
+      "shape": "6/2"
     },
     "C82": {
-      "claim": "f0d4503b6086",
-      "shape": "4/2"
+      "claim": "17f5162eac82",
+      "shape": "5/2"
     },
     "C83": {
-      "claim": "50afd2251191",
-      "shape": "3/2"
+      "claim": "9b37efb11d9a",
+      "shape": "6/2"
     },
     "C84": {
-      "claim": "c3a73dabde63",
-      "shape": "4/2"
+      "claim": "f0071428904b",
+      "shape": "6/2"
     },
     "C85": {
       "claim": "a45741f891dd",
@@ -340,7 +340,7 @@
     },
     "C93": {
       "claim": "0374af3013e2",
-      "shape": "4/2"
+      "shape": "5/3"
     },
     "C94": {
       "claim": "9d14b1b76295",
@@ -407,8 +407,24 @@
       "shape": "4/3"
     },
     "C113": {
-      "claim": "05ca5d558b24",
-      "shape": "4/2"
+      "claim": "eb1fd6ca0a04",
+      "shape": "5/2"
+    },
+    "C114": {
+      "claim": "2c8179b6ae06",
+      "shape": "2/2"
+    },
+    "C115": {
+      "claim": "6f4b110e76b7",
+      "shape": "3/2"
+    },
+    "C116": {
+      "claim": "336c57cbc1cd",
+      "shape": "3/1"
+    },
+    "C117": {
+      "claim": "4ee17a565331",
+      "shape": "3/2"
     }
   },
   "registry": {
@@ -576,7 +592,7 @@
     "contract-never-reaches-the-consumer": "adf9d3f4beb5",
     "enabled-payloads-classes-default": "4810a9d0f1d1",
     "coverage-comment-denies-the-gate": "8864b23a1929",
-    "shard-count-of-stale": "d97e98f78c87",
+    "shard-count-of-stale": "63d58b44c43d",
     "csrf-attached-to-safe-methods": "a027a13756fd",
     "csrf-token-miss-binds-undefined": "56a30575dfb1",
     "csrf-owner-token-not-identity": "e67b9edc3592",
@@ -695,6 +711,18 @@
     "log-destination-console-reaches-the-html-report-too": "ac21568f88f4",
     "sequential-tests-batch-with-each-other": "57963c330c56",
     "insecure-arms-the-tls-switch-only-on-the-second-acquire": "005083984fe1",
+    "threshold-scope-falls-back-to-the-whole-histogram": "a4d36879f06f",
+    "lang-build-guard-goes-quiet-when-the-bundle-is-absent": "e5f67dea99d0",
+    "coverage-gate-goes-quiet-when-the-pin-says-nothing": "86d8eda565b7",
+    "shared-iteration-pool-runs-one-too-many": "87a37cabbafa",
+    "per-user-iterations-run-one-too-many": "bc3ebfceae02",
+    "teardown-on-success-tears-down-the-failures-instead": "1c1977efc562",
+    "defaults-merged-for-the-default-env-only": "7c633e10b8ef",
+    "a-lone-exclude-line-is-ignored": "cc04fca78a01",
+    "scoped-header-loses-its-scope": "ca908958f6ad",
+    "workers-key-pinned-to-one": "69181e8a5985",
+    "report-key-ignored": "bd7c54e06068",
+    "locator-subject-skips-the-kind-rule": "c4b6b430cfdf",
     "signal-handlers-removed": "5d84447569d0",
     "journal-opened-after-the-write": "a333bd6e09ab",
     "stale-journal-left-alone": "87c554300907",
@@ -713,10 +741,25 @@
     "cross-workspace-mutation-scored-stale": "9817f704e3db",
     "baseline-cost-never-measured": "56de992c88c4",
     "shard-budget-is-the-limit-itself": "8991f784334c",
-    "plan-claims-guessed-when-git-is-absent": "a5dae5eb923b",
+    "plan-claims-guessed-when-git-is-absent": "f33694c5a7a8",
+    "the-stamp-read-is-the-first-one-written": "8fcda796872d",
+    "a-close-claim-below-the-window-is-not-seen-at-all": "d47740485177",
+    "the-scrub-gate-reads-one-region-of-one-file": "b0c43d68e27d",
+    "an-exemption-outlives-its-specimen": "bf0f8d14f3a0",
+    "the-host-rule-widens-past-its-declared-corpus": "fcb3ff3d3ad0",
     "helper-resolution-back-to-a-character-window": "922579ff7347",
     "conformance-forgets-the-orphan-direction": "ba9776d57e42",
     "the-ci-tier-prints-the-green-it-did-not-earn": "f03a53e476db",
+    "the-demand-corpus-swallows-its-own-publish-half": "d94688ca601c",
+    "svg-path-data-is-read-as-citations": "6f20026b84b6",
+    "the-declared-unresolvable-list-stops-applying": "f5c0801dfcba",
+    "the-widening-M164-06-proposed-ships-after-all": "5196fb9907bf",
+    "a-declared-non-existence-can-become-a-lie": "70e8e0b29f62",
+    "the-citation-grammar-loses-its-base64-lookbehind": "b8c3dbf0c7b2",
+    "the-citation-grammar-loses-its-base64-lookahead": "e202ffa1b132",
+    "a-possessive-is-read-as-a-sub-milestone": "0f69083b0e4e",
+    "a-range-crosses-two-sequences-again": "e3362fd09222",
+    "ranges-expand-in-a-corpus-that-did-not-author-them": "5d23d1a2918d",
     "the-fence-exemption-goes-blanket": "d7dea987c4ba",
     "the-wrapped-tail-flips-code-span-parity": "fe5139a1138e",
     "the-slug-hyphenates-before-it-deletes": "9889c02774d4",
@@ -727,6 +770,6 @@
     "the-label-rule-reaches-forward-from-any-bold-lead": "9e8a4d4daf42",
     "a-fenced-line-is-read-as-prose": "1e6c67c33052",
     "an-exemption-outlives-the-page-it-describes": "52dac9a728a4",
-    "the-notation-is-matched-case-insensitively": "a5ddeec78379"
+    "the-notation-is-matched-case-insensitively": "1d4c20104cc1"
   }
 }

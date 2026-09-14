@@ -1,4 +1,167 @@
 {
+  "shared-iteration-pool-runs-one-too-many": {
+    "C3": {
+      "kind": "assertion",
+      "tally": "2/5 / 4/4",
+      "failed": [
+        "recall: --workers 1: /shared received exactly 60 request(s) (got 61) — counted by the server, not by tflw",
+        "recall: --workers 4: /shared received exactly 60 request(s) (got 64) — counted by the server, not by tflw",
+        "recall: the counts are identical at --workers 1 and --workers 4 — the \"independent of `--workers`\" half of the contract `tflw spec` states"
+      ]
+    },
+    "C48": {
+      "kind": "assertion",
+      "tally": "4/6 / 1/1",
+      "failed": [
+        "recall: by default every iteration tears down, the failing ones included: 9 marker(s), 7 expected",
+        "recall: `--teardown on-success` tears down the passing iterations only: 5 marker(s), 4 expected — the inverted rule answers 3, the default 7"
+      ]
+    },
+    "C49": {
+      "kind": "assertion",
+      "tally": "3/3 / 0/1",
+      "failed": [
+        "precision: both tests really ran: 18 request(s) reached /slow (16 expected, 8 iterations each)"
+      ]
+    },
+    "C50": {
+      "kind": "assertion",
+      "tally": "3/3 / 0/1",
+      "failed": [
+        "precision: both tests issued their full 12 iterations (/paced 13, /unpaced 13) — pacing slowed them, it did not drop them"
+      ]
+    },
+    "$produced": {
+      "by": "discover-mutation-kills.mjs",
+      "baseline": "b0752a2786e1d336",
+      "bundle": "236f666d9d7be65f",
+      "at": "2026-09-13T19:31:33.355Z"
+    }
+  },
+  "per-user-iterations-run-one-too-many": {
+    "C3": {
+      "kind": "assertion",
+      "tally": "3/5 / 4/4",
+      "failed": [
+        "recall: --workers 1: /per-user received exactly 60 request(s) (got 65) — counted by the server, not by tflw",
+        "recall: --workers 4: /per-user received exactly 60 request(s) (got 65) — counted by the server, not by tflw"
+      ]
+    },
+    "$produced": {
+      "by": "discover-mutation-kills.mjs",
+      "baseline": "b0752a2786e1d336",
+      "bundle": "92c1735767e8ff06",
+      "at": "2026-09-13T19:33:09.383Z"
+    }
+  },
+  "teardown-on-success-tears-down-the-failures-instead": {
+    "C48": {
+      "kind": "assertion",
+      "tally": "5/6 / 1/1",
+      "failed": [
+        "recall: `--teardown on-success` tears down the passing iterations only: 3 marker(s), 4 expected — the inverted rule answers 3, the default 7"
+      ]
+    },
+    "$produced": {
+      "by": "discover-mutation-kills.mjs",
+      "baseline": "b0752a2786e1d336",
+      "bundle": "949cee3f7c89468d",
+      "at": "2026-09-13T19:34:45.560Z"
+    }
+  },
+  "defaults-merged-for-the-default-env-only": {
+    "C93": {
+      "kind": "assertion",
+      "tally": "4/5 / 3/3",
+      "failed": [
+        "recall: at run time, under `--env two` — the env that is NOT the default — both arrivals carried the `defaults` header (got: {\"/base/alpha\":[null],\"/base/beta\":[null]})"
+      ]
+    },
+    "$produced": {
+      "by": "discover-mutation-kills.mjs",
+      "baseline": "b0752a2786e1d336",
+      "bundle": "d680d70599a338b9",
+      "at": "2026-09-13T19:36:21.502Z"
+    }
+  },
+  "a-lone-exclude-line-is-ignored": {
+    "C96": {
+      "kind": "assertion",
+      "tally": "2/3 / 1/1",
+      "failed": [
+        "recall: discovery reports 1 file with the `exclude` line (got 2: 2 files checked, no problems found.)"
+      ]
+    },
+    "$produced": {
+      "by": "discover-mutation-kills.mjs",
+      "baseline": "b0752a2786e1d336",
+      "bundle": "3261d68ca2edc983",
+      "at": "2026-09-13T19:37:57.262Z"
+    }
+  },
+  "scoped-header-loses-its-scope": {
+    "C98": {
+      "kind": "assertion",
+      "tally": "3/3 / 1/2",
+      "failed": [
+        "precision: the scoped header is absent from the two arrivals it does not name, so scoping narrows rather than decorates"
+      ]
+    },
+    "$produced": {
+      "by": "discover-mutation-kills.mjs",
+      "baseline": "b0752a2786e1d336",
+      "bundle": "d9b40e7865086eaf",
+      "at": "2026-09-13T19:39:33.459Z"
+    }
+  },
+  "workers-key-pinned-to-one": {
+    "C101": {
+      "kind": "assertion",
+      "tally": "1/2 / 1/1",
+      "failed": [
+        "recall: at `workers 2` it is 2 and both were released as a pair — one digit, over an unchanged corpus (got: {\"peakWaiting\":1,\"gatePaired\":0,\"gateAlone\":2,\"holdMs\":1500,\"gateN\":2})"
+      ]
+    },
+    "$produced": {
+      "by": "discover-mutation-kills.mjs",
+      "baseline": "b0752a2786e1d336",
+      "bundle": "740936d347a090b8",
+      "at": "2026-09-13T19:41:12.951Z"
+    }
+  },
+  "report-key-ignored": {
+    "C102": {
+      "kind": "assertion",
+      "tally": "1/2 / 1/2",
+      "failed": [
+        "recall: all four artifacts were written under `artifacts/custom`, a nested directory the run created (got: none)",
+        "precision: `report/` was not written at all under the custom key, so the artifacts moved rather than being copied"
+      ]
+    },
+    "$produced": {
+      "by": "discover-mutation-kills.mjs",
+      "baseline": "b0752a2786e1d336",
+      "bundle": "86d2117aaa3c5873",
+      "at": "2026-09-13T19:42:49.034Z"
+    }
+  },
+  "locator-subject-skips-the-kind-rule": {
+    "C114": {
+      "kind": "assertion",
+      "tally": "0/2 / 1/2",
+      "failed": [
+        "recall: C114 the locator in subject position is judged by the kind rule, and the refusal names the kind (got: no diagnostic at all)",
+        "recall: C114 the diagnostic points at line 13, the subject-position leg",
+        "precision: C114 exactly one diagnostic from the whole file — the compatible pairing on line 16 and the action-position use on line 18 are both silent (got 0: none)"
+      ]
+    },
+    "$produced": {
+      "by": "discover-mutation-kills.mjs",
+      "baseline": "b0752a2786e1d336",
+      "bundle": "3d696cc8c7e7018b",
+      "at": "2026-09-13T19:44:24.716Z"
+    }
+  },
   "duration-any-adjacent-word": {
     "C81": {
       "kind": "refusal",
@@ -47,6 +210,12 @@
     "C113": {
       "kind": "refusal",
       "skipped": "no report"
+    },
+    "$produced": {
+      "by": "discover-mutation-kills.mjs",
+      "baseline": "b0752a2786e1d336",
+      "bundle": "c92475854d9425ef",
+      "at": "2026-09-13T20:08:52.817Z"
     }
   },
   "number-rule-broadened": {
@@ -211,7 +380,9 @@
       "skipped": "no report"
     },
     "C42": {
-      "kind": "refusal",
+      "kind": "held",
+      "tally": "2/2 / 3/3",
+      "failed": [],
       "skipped": "no report"
     },
     "C43": {
@@ -219,28 +390,22 @@
       "skipped": "no report"
     },
     "C44": {
-      "kind": "no-assertions",
-      "note": "the grader recorded no assertions at all for this plant"
+      "kind": "no-assertions"
     },
     "C45": {
-      "kind": "no-assertions",
-      "note": "the grader recorded no assertions at all for this plant"
+      "kind": "no-assertions"
     },
     "C46": {
-      "kind": "no-assertions",
-      "note": "the grader recorded no assertions at all for this plant"
+      "kind": "no-assertions"
     },
     "C47": {
-      "kind": "no-assertions",
-      "note": "the grader recorded no assertions at all for this plant"
+      "kind": "no-assertions"
     },
     "C49": {
-      "kind": "no-assertions",
-      "note": "the grader recorded no assertions at all for this plant"
+      "kind": "no-assertions"
     },
     "C50": {
-      "kind": "no-assertions",
-      "note": "the grader recorded no assertions at all for this plant"
+      "kind": "no-assertions"
     },
     "C60": {
       "kind": "refusal",
@@ -307,7 +472,9 @@
       "skipped": "no report"
     },
     "C76": {
-      "kind": "refusal",
+      "kind": "held",
+      "tally": "n/a / 1/1",
+      "failed": [],
       "skipped": "no report"
     },
     "C77": {
@@ -315,11 +482,19 @@
       "skipped": "no report"
     },
     "C78": {
-      "kind": "refusal",
+      "kind": "assertion",
+      "tally": "1/2 / 2/2",
+      "failed": [
+        "recall: with the world closed, the same bogus call is a `TF037` (got: error[TF001]: exponent notation is not supported — this reads as `5` followed by the name `s`)"
+      ],
       "skipped": "no report"
     },
     "C79": {
-      "kind": "refusal",
+      "kind": "assertion",
+      "tally": "0/1 / n/a",
+      "failed": [
+        "recall: a test that reads a `before file` binding does not compile (got: error[TF001]: exponent notation is not supported — this reads as `5` followed by the name `s`)"
+      ],
       "skipped": "no report"
     },
     "C80": {
@@ -376,10 +551,10 @@
       "failed": [
         "recall: the tight config fails the 50 ms step and the detail quotes the configured duration back, so the number was read rather than the key noticed",
         "recall: the same corpus is green when the only change is `10ms` -> `5s`",
-        "recall: and under the tight config the step with its own `timeout 5s` still passes \u2014 a default a step can overrule, not a refusal to wait",
+        "recall: and under the tight config the step with its own `timeout 5s` still passes — a default a step can overrule, not a refusal to wait",
         "precision: exactly one of the two tests failed under the tight config, so the override is the difference between them and not the run",
         "recall: `timeout api 10ms` bounds the request even though `timeout step` is 5s beside it, so the narrow key wins for HTTP",
-        "recall: and the same corpus is green with the two numbers swapped \u2014 `timeout step 10ms` no longer reaches an HTTP request at all",
+        "recall: and the same corpus is green with the two numbers swapped — `timeout step 10ms` no longer reaches an HTTP request at all",
         "precision: exactly one of the two tests failed under the narrowed config, so the per-step override still overrules `timeout api` as it overruled `timeout step`"
       ]
     },
@@ -390,6 +565,32 @@
     "C113": {
       "kind": "refusal",
       "skipped": "no report"
+    },
+    "C114": {
+      "kind": "assertion",
+      "tally": "0/2 / 2/2",
+      "failed": [
+        "recall: C114 the locator in subject position is judged by the kind rule, and the refusal names the kind (got: error[TF001]: exponent notation is not supported — this reads as `5` followed by the name `s`)",
+        "recall: C114 the diagnostic points at line 13, the subject-position leg"
+      ]
+    },
+    "C115": {
+      "kind": "refusal",
+      "skipped": "no report"
+    },
+    "C116": {
+      "kind": "refusal",
+      "skipped": "no report"
+    },
+    "C117": {
+      "kind": "refusal",
+      "skipped": "no report"
+    },
+    "$produced": {
+      "by": "discover-mutation-kills.mjs",
+      "baseline": "b0752a2786e1d336",
+      "bundle": "8cfb403c61263dd0",
+      "at": "2026-09-13T20:14:31.344Z"
     }
   },
   "empty-tag-on-every-tag": {
@@ -630,7 +831,9 @@
       "skipped": "no report"
     },
     "C76": {
-      "kind": "refusal",
+      "kind": "held",
+      "tally": "n/a / 1/1",
+      "failed": [],
       "skipped": "no report"
     },
     "C77": {
@@ -638,11 +841,15 @@
       "skipped": "no report"
     },
     "C78": {
-      "kind": "refusal",
+      "kind": "held",
+      "tally": "2/2 / 2/2",
+      "failed": [],
       "skipped": "no report"
     },
     "C79": {
-      "kind": "refusal",
+      "kind": "held",
+      "tally": "1/1 / n/a",
+      "failed": [],
       "skipped": "no report"
     },
     "C80": {
@@ -696,6 +903,12 @@
     "C113": {
       "kind": "refusal",
       "skipped": "no report"
+    },
+    "$produced": {
+      "by": "discover-mutation-kills.mjs",
+      "baseline": "b0752a2786e1d336",
+      "bundle": "6fb14d6a1e7ba8c2",
+      "at": "2026-09-14T08:09:50.702Z"
     }
   },
   "mask-rule-inverted": {
@@ -758,6 +971,12 @@
     "C37": {
       "kind": "refusal",
       "skipped": "no report"
+    },
+    "$produced": {
+      "by": "discover-mutation-kills.mjs",
+      "baseline": "b0752a2786e1d336",
+      "bundle": "41e10005c286b785",
+      "at": "2026-09-13T21:09:15.315Z"
     }
   },
   "absolute-api-target-still-gets-the-base-prepended": {
@@ -765,7 +984,7 @@
       "kind": "assertion",
       "tally": "2/4 / 3/4",
       "failed": [
-        "recall: an absolute target arrived at exactly `/absolute` while the default base names `/base` \u2014 the address is the whole address, not a path to be appended to something (got: {\"/base/http://127.0.0.1:4507/absolute\":1})",
+        "recall: an absolute target arrived at exactly `/absolute` while the default base names `/base` — the address is the whole address, not a path to be appended to something (got: {\"/base/http://127.0.0.1:4507/absolute\":1})",
         "recall: and at the same `/absolute` once that base line moves to `/other`: the base moved and the wire did not (got: {\"/other/http://127.0.0.1:4507/absolute\":1})",
         "precision: and each leg recorded that one path and no other, under both bases (got: [\"/base/http://127.0.0.1:4507/absolute\"] and [\"/other/http://127.0.0.1:4507/absolute\"])"
       ]
@@ -774,10 +993,32 @@
       "kind": "assertion",
       "tally": "1/3 / 1/2",
       "failed": [
-        "recall: and exactly one request arrived when `\"localhost\"` was added \u2014 same listener, same step, one config line apart",
+        "recall: and exactly one request arrived when `\"localhost\"` was added — same listener, same step, one config line apart",
         "recall: the refusal names the host it refused, so the red is this guardrail rather than an unrelated failure",
         "precision: the socket counter rose only in the permitted leg (1 -> 1), so the refusal is before the connection and not after the response"
       ]
+    },
+    "$produced": {
+      "by": "discover-mutation-kills.mjs",
+      "baseline": "b0752a2786e1d336",
+      "bundle": "4c2949685f882bc4",
+      "at": "2026-09-13T22:41:29.751Z"
+    }
+  },
+  "absolute-open-target-still-gets-the-web-base-prepended": {
+    "C108": {
+      "kind": "assertion",
+      "tally": "3/4 / 2/3",
+      "failed": [
+        "recall: an absolute `open` target reaches the console while the `web` base names the storefront, so a configured base is not prepended to an address",
+        "precision: the one config line that inverts a bare path's verdict leaves the absolute target's alone, so what the `web` key governs is exactly the paths that need a base"
+      ]
+    },
+    "$produced": {
+      "by": "discover-mutation-kills.mjs",
+      "baseline": "b0752a2786e1d336",
+      "bundle": "f36bebb43941cd9c",
+      "at": "2026-09-13T22:43:10.965Z"
     }
   },
   "random-range-rejects-equal-bounds": {
@@ -828,6 +1069,12 @@
     "C113": {
       "kind": "refusal",
       "skipped": "no report"
+    },
+    "$produced": {
+      "by": "discover-mutation-kills.mjs",
+      "baseline": "b0752a2786e1d336",
+      "bundle": "d48669b37b30bae9",
+      "at": "2026-09-13T22:50:16.056Z"
     }
   },
   "decode-test-rederived-in-the-checker": {
@@ -842,6 +1089,12 @@
     "C10": {
       "kind": "refusal",
       "skipped": "no report"
+    },
+    "$produced": {
+      "by": "discover-mutation-kills.mjs",
+      "baseline": "b0752a2786e1d336",
+      "bundle": "597020193ade282f",
+      "at": "2026-09-13T22:51:51.982Z"
     }
   },
   "session-scope-never-narrows": {
@@ -852,6 +1105,12 @@
         "recall: and a `TF028` under the env it does not (got: 1 file checked, no problems found.)",
         "recall: and the help text quotes the clause back, so the refusal names its own cause"
       ]
+    },
+    "$produced": {
+      "by": "discover-mutation-kills.mjs",
+      "baseline": "b0752a2786e1d336",
+      "bundle": "1d5e06330dd116a8",
+      "at": "2026-09-14T02:30:04.965Z"
     }
   },
   "session-scope-drops-the-unscoped": {
@@ -872,6 +1131,12 @@
       "failed": [
         "precision: the unscoped sibling resolves in that same env, so what was refused is the clause and not the session table"
       ]
+    },
+    "$produced": {
+      "by": "discover-mutation-kills.mjs",
+      "baseline": "b0752a2786e1d336",
+      "bundle": "398b4174351943ee",
+      "at": "2026-09-14T02:31:40.470Z"
     }
   },
   "out-of-scope-map-always-empty": {
@@ -882,49 +1147,12 @@
         "recall: and a `TF028` under the env it does not (got: error[TF028]: unknown session \"scoped\")",
         "recall: and the help text quotes the clause back, so the refusal names its own cause"
       ]
-    }
-  },
-  "insecure-arms-the-tls-switch-only-on-the-second-acquire": {
-    "C105": {
-      "kind": "assertion",
-      "tally": "1/2 / 2/2",
-      "failed": [
-        "recall: with `insecure true` the request completes against a certificate signed by a CA the container invented at start-up"
-      ]
     },
-    "C106": {
-      "kind": "assertion",
-      "tally": "0/2 / 0/1",
-      "failed": [
-        "recall: the client certificate gets the request past `ssl_verify_client on`",
-        "recall: and deleting the two lines leaves nginx's own 400 \u2014 the pair that has always run under two envs in two files, here as one file and one config line",
-        "precision: the no-certificate leg fails on the status rather than on the transport, so the connection was made and refused by the listener"
-      ]
-    },
-    "C107": {
-      "kind": "assertion",
-      "tally": "2/2 / 0/1",
-      "failed": [
-        "precision: the matching pair over the identical fixture passes, so what failed above is the pairing and not the listener"
-      ]
-    }
-  },
-  "log-destination-console-reaches-the-html-report-too": {
-    "C103": {
-      "kind": "assertion",
-      "tally": "2/3 / 1/1",
-      "failed": [
-        "recall: `log destination console` keeps both calls out of `report.html` and `log destination html` puts them in (got 2 / 2)"
-      ]
-    }
-  },
-  "log-level-filters-the-record-instead-of-the-console": {
-    "C103": {
-      "kind": "assertion",
-      "tally": "3/3 / 0/1",
-      "failed": [
-        "precision: `results.json` carries both calls identically under all three configs (got 3 / 4 / 4), so what these keys filter is rendering"
-      ]
+    "$produced": {
+      "by": "discover-mutation-kills.mjs",
+      "baseline": "b0752a2786e1d336",
+      "bundle": "41fa4c9cfd4cd311",
+      "at": "2026-09-14T02:36:32.326Z"
     }
   },
   "require-env-guards-only-the-first-name-on-the-line": {
@@ -1241,8 +1469,8 @@
       "tally": "1/4 / 1/1",
       "failed": [
         "recall: neither variable set: the run is refused naming both (got: error: missing required environment variable: C95_TOKEN)",
-        "recall: `C95_UNUSED` is referenced nowhere in that config and is required just as hard \u2014 the refusal names it alone (got: 11:58:40.686 \u2717 a discoverable file with nothing else to say)",
-        "recall: `tflw check` over the identical config now says so \u2014 an advisory note naming both variables, beside \"no problems found\" and an exit 0 (`D779`, reversing `M154g-11`) (got: 1 file checked, no problems found.)"
+        "recall: `C95_UNUSED` is referenced nowhere in that config and is required just as hard — the refusal names it alone (got: 05:22:12.992 ✗ a discoverable file with nothing else to say)",
+        "recall: `tflw check` over the identical config now says so — an advisory note naming both variables, beside \"no problems found\" and an exit 0 (`D779`, reversing `M154g-11`) (got: 1 file checked, no problems found.)"
       ]
     },
     "C112": {
@@ -1252,6 +1480,51 @@
     "C113": {
       "kind": "refusal",
       "skipped": "no report"
+    },
+    "C114": {
+      "kind": "assertion",
+      "tally": "0/2 / 1/2",
+      "failed": [
+        "recall: C114 the locator in subject position is judged by the kind rule, and the refusal names the kind (got: error[TF077]: `ADMIN_PW` is read here but no `require env` line declares it)",
+        "recall: C114 the diagnostic points at line 13, the subject-position leg",
+        "precision: C114 exactly one diagnostic from the whole file — the compatible pairing on line 16 and the action-position use on line 18 are both silent (got 9: TF077, TF077, TF077, TF077, TF077, TF077, TF077, TF077, TF077)"
+      ]
+    },
+    "$produced": {
+      "by": "discover-mutation-kills.mjs",
+      "baseline": "b0752a2786e1d336",
+      "bundle": "dcbf8986afa15dbd",
+      "at": "2026-09-14T03:22:37.459Z"
+    }
+  },
+  "log-level-filters-the-record-instead-of-the-console": {
+    "C103": {
+      "kind": "assertion",
+      "tally": "3/3 / 0/1",
+      "failed": [
+        "precision: `results.json` carries both calls identically under all three configs (got 3 / 4 / 4), so what these keys filter is rendering"
+      ]
+    },
+    "$produced": {
+      "by": "discover-mutation-kills.mjs",
+      "baseline": "b0752a2786e1d336",
+      "bundle": "8a8677e99f41c6d4",
+      "at": "2026-09-14T03:24:13.070Z"
+    }
+  },
+  "log-destination-console-reaches-the-html-report-too": {
+    "C103": {
+      "kind": "assertion",
+      "tally": "2/3 / 1/1",
+      "failed": [
+        "recall: `log destination console` keeps both calls out of `report.html` and `log destination html` puts them in (got 2 / 2)"
+      ]
+    },
+    "$produced": {
+      "by": "discover-mutation-kills.mjs",
+      "baseline": "b0752a2786e1d336",
+      "bundle": "24bc97a7bee39df7",
+      "at": "2026-09-14T03:25:48.905Z"
     }
   },
   "sequential-tests-batch-with-each-other": {
@@ -1259,7 +1532,7 @@
       "kind": "assertion",
       "tally": "2/3 / 2/2",
       "failed": [
-        "recall: \"cart rows are drag-drop reorderable\u2026\" is green (got ok=false)"
+        "recall: \"cart rows are drag-drop reorderable…\" is green (got ok=false)"
       ]
     },
     "C79": {
@@ -1275,16 +1548,43 @@
       "failed": [
         "recall: the same two marked `sequential` never did (got: {\"peakWaiting\":2,\"gatePaired\":2,\"gateAlone\":0,\"holdMs\":1500,\"gateN\":2})"
       ]
+    },
+    "$produced": {
+      "by": "discover-mutation-kills.mjs",
+      "baseline": "b0752a2786e1d336",
+      "bundle": "f195426f00094d82",
+      "at": "2026-09-14T03:26:57.187Z"
     }
   },
-  "absolute-open-target-still-gets-the-web-base-prepended": {
-    "C108": {
+  "insecure-arms-the-tls-switch-only-on-the-second-acquire": {
+    "C105": {
       "kind": "assertion",
-      "tally": "3/4 / 2/3",
+      "tally": "1/2 / 2/2",
       "failed": [
-        "recall: an absolute `open` target reaches the console while the `web` base names the storefront, so a configured base is not prepended to an address",
-        "precision: the one config line that inverts a bare path's verdict leaves the absolute target's alone, so what the `web` key governs is exactly the paths that need a base"
+        "recall: with `insecure true` the request completes against a certificate signed by a CA the container invented at start-up"
       ]
+    },
+    "C106": {
+      "kind": "assertion",
+      "tally": "0/2 / 0/1",
+      "failed": [
+        "recall: the client certificate gets the request past `ssl_verify_client on`",
+        "recall: and deleting the two lines leaves nginx's own 400 — the pair that has always run under two envs in two files, here as one file and one config line",
+        "precision: the no-certificate leg fails on the status rather than on the transport, so the connection was made and refused by the listener"
+      ]
+    },
+    "C107": {
+      "kind": "assertion",
+      "tally": "2/2 / 0/1",
+      "failed": [
+        "precision: the matching pair over the identical fixture passes, so what failed above is the pairing and not the listener"
+      ]
+    },
+    "$produced": {
+      "by": "discover-mutation-kills.mjs",
+      "baseline": "b0752a2786e1d336",
+      "bundle": "a65d8a1002edfc54",
+      "at": "2026-09-14T03:28:32.822Z"
     }
   }
 }
