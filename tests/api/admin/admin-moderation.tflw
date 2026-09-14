@@ -29,10 +29,10 @@ test "an admin retries a flaky upstream dependency check before starting moderat
 
 @moderation @datatables @adminOps @api
 with each
-  | label            | price | stock |
-  | "Mod Catalog A"   | 9     | 20    |
-  | "Mod Catalog B"   | 19    | 5     |
-  | "Mod Catalog C"   | 29    | 0     |
+  | label           | price | stock |
+  | "Mod Catalog A" | 9     | 20    |
+  | "Mod Catalog B" | 19    | 5     |
+  | "Mod Catalog C" | 29    | 0     |
 test "admin adds {label} to the catalog at price {price}, stock {stock}"
   api POST /products body { name: unique("{label}"), price: {price}, stock: {stock}, categoryId: {categoryId} }
     header "Authorization" is "Bearer {adminToken}"
@@ -54,12 +54,12 @@ test "a bulk catalog import batch reports mixed success without failing the whol
   let goodName = unique("Bulk Import Good")
   let badCategoryId = random uuid
   api POST /products/batch body {
-      items: [
-        { name: {goodName}, price: 15, stock: 10, categoryId: {categoryId} },
-        { name: "Bulk Import Bad Price", price: -1, stock: 10, categoryId: {categoryId} },
-        { name: "Bulk Import Bad Category", price: 15, stock: 10, categoryId: {badCategoryId} }
-      ]
-    }
+    items: [
+      { name: {goodName}, price: 15, stock: 10, categoryId: {categoryId} },
+      { name: "Bulk Import Bad Price", price: -1, stock: 10, categoryId: {categoryId} },
+      { name: "Bulk Import Bad Category", price: 15, stock: 10, categoryId: {badCategoryId} }
+    ]
+  }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 207
   expect body.succeeded equals 1

@@ -64,6 +64,7 @@ not a subset of the truth.
 
 ```sh
 npm run check:acceptance
+npm run verify:fmt
 npm run verify:external-targets
 npm run verify:perf-parity
 npm run verify:perf-baseline
@@ -131,6 +132,13 @@ xvfb-run -a npm run regression -- --group security-ui
   current tflw. That tree is excluded from bare discovery on purpose, and before this gate existed
   nothing checked it either: two checker tightenings silently un-parsed 10 of 12 files across four
   milestones, with nothing red anywhere.
+- **`npm run verify:fmt`** — every tracked `.tflw` (`tests/`, `tflw-acceptance/`, `shared/`) is
+  formatted, by `tflw fmt --check` against the vendored build (`M191`, tflw `D997`). The formatter
+  re-emits the lexer's own tokens, so a file it accepts keeps its tokens, its indent structure and
+  its comments — that guarantee is tflw's, held by tflw's `verify:fmt-roundtrip`; this gate only
+  asserts the corpus *is* formatted. It never writes (`M141-01`): a red prints the `tflw fmt` line
+  that fixes it. `tests/.checkonly/` is excluded by name — ten of its fixtures exist so as not to
+  lex, and the rest are the diagnostics gate's inputs, whose bytes are the test.
 - **`npm run verify:external-targets`** — the one host this repo does not own stays fenced
   (functional API tests only: no load runs, no security scans, not on CI and not on any repeated
   schedule), and **a new external target anywhere in the repo fails until somebody writes down what

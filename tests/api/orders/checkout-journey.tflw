@@ -45,7 +45,7 @@ test "a new shopper registers, browses, checks out idempotently, and watches ful
 
   # --- checkout: an idempotent order, repeating the key returns the same order ---
   let idempotencyKey = unique("journey-order-key")
-  api POST /orders body { items: [ { productId: {productIdA}, quantity: 2 }, { productId: {productIdB}, quantity: 1 } ] }
+  api POST /orders body { items: [{ productId: {productIdA}, quantity: 2 }, { productId: {productIdB}, quantity: 1 }] }
     header "Authorization" is "Bearer {shopperToken}"
     header "Idempotency-Key" is "{idempotencyKey}"
   expect status equals 201
@@ -53,7 +53,7 @@ test "a new shopper registers, browses, checks out idempotently, and watches ful
   capture body.id as orderId
   log "order {orderId} placed by shopper, checking out idempotently"
 
-  api POST /orders body { items: [ { productId: {productIdA}, quantity: 2 }, { productId: {productIdB}, quantity: 1 } ] }
+  api POST /orders body { items: [{ productId: {productIdA}, quantity: 2 }, { productId: {productIdB}, quantity: 1 }] }
     header "Authorization" is "Bearer {shopperToken}"
     header "Idempotency-Key" is "{idempotencyKey}"
   expect status equals 200

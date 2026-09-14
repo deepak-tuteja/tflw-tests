@@ -27,7 +27,7 @@ test "any/all over an array-returning endpoint's items"
   expect status equals 201
   capture body.id as productIdB
 
-  api POST /orders body { items: [ { productId: {productIdA}, quantity: 2 }, { productId: {productIdB}, quantity: 5 } ] }
+  api POST /orders body { items: [{ productId: {productIdA}, quantity: 2 }, { productId: {productIdB}, quantity: 5 }] }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body.id as orderId

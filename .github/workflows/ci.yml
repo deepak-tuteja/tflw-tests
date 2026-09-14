@@ -109,6 +109,15 @@ jobs:
         run: npm run check:acceptance
         working-directory: testFlow-tests
 
+      # `M191` (tflw `D997`). The corpus is formatted — `tflw fmt --check` over every tracked `.tflw`
+      # this repository holds, against the same refreshed build the step above grades. `--check`
+      # only: a gate that rewrites what it grades reports on a tree nobody committed (`M141-01`).
+      # `tests/.checkonly/` is excluded by name, because ten of its fixtures exist so as not to
+      # lex; the script says why it grades none of that directory rather than half.
+      - name: The corpus is formatted
+        run: npm run verify:fmt
+        working-directory: testFlow-tests
+
       # Static, sends no request, and deliberately in the job that already walks every corpus. It
       # asserts the ruling on the one host this repo does not own — functional API tests only: no
       # load runs, no security scans, not on CI — and fails on any NEW external target that arrives

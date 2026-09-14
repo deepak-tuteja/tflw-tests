@@ -32,7 +32,7 @@ test "logging in as admin reaches the dashboard, and logging out returns to the 
 test "a wrong password shows an inline error and leaves the user logged out"
   open "/login"
   fill form
-    | "Email"    | env(ADMIN_EMAIL) |
+    | "Email"    | env(ADMIN_EMAIL)            |
     | "Password" | "definitely-wrong-password" |
   click button "Log in"
   expect text "invalid email or password" is visible

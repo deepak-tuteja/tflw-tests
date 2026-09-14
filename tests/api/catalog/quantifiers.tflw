@@ -35,7 +35,7 @@ test "quantifiers over one order's items"
   expect status equals 201
   capture body.id as productIdB
 
-  api POST /orders body { items: [ { productId: {productIdA}, quantity: 3 }, { productId: {productIdB}, quantity: 1 } ] }
+  api POST /orders body { items: [{ productId: {productIdA}, quantity: 3 }, { productId: {productIdB}, quantity: 1 }] }
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 201
   capture body.id as orderId
