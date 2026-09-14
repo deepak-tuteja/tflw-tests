@@ -24,7 +24,7 @@ test "logging in via the UI form grants access, and logging out returns to a log
 test "a wrong password shows an inline error and leaves the user logged out"
   open "/login"
   fill form
-    | "Email"    | env(USER_A_EMAIL) |
+    | "Email"    | env(USER_A_EMAIL)           |
     | "Password" | "definitely-wrong-password" |
   click button "Log in"
   expect text "invalid email or password" is visible

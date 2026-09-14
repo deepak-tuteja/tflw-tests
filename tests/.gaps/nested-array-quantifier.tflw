@@ -23,7 +23,7 @@ test "cannot quantify into a nested array — GET /orders/all's per-order items[
   expect status equals 201
   capture body.id as productId
 
-  api POST /orders body { items: [ { productId: {productId}, quantity: 3 } ] }
+  api POST /orders body { items: [{ productId: {productId}, quantity: 3 }] }
   expect status equals 201
 
   api GET /orders/all

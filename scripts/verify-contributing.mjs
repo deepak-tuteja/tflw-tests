@@ -84,6 +84,15 @@ const CLASSIFIED = [
   {
     wf: 'ci.yml',
     job: 'acceptance-check',
+    cmd: 'npm run verify:fmt',
+    name: 'The corpus is formatted',
+    class: 'gate',
+    local: 'npm run verify:fmt',
+    why: "`M191` (tflw `D997`). `tflw fmt --check` over every tracked `.tflw` here — `tests/`, `tflw-acceptance/`, `shared/` — against the vendored build, which is the formatter this corpus has to satisfy. The round-trip claim (same tokens, same indent structure, same comments) is tflw's and is held by tflw's own `verify:fmt-roundtrip`; this gate asserts only that the corpus IS formatted, so a hand edit that drifts from the rule goes red here. `--check` only, never in place (`M141-01`). `tests/.checkonly/` is excluded by name: ten of its sixty fixtures exist so as not to lex, and the other fifty are `verify-check-diagnostics.mjs`'s inputs, whose bytes are the test. Seconds, no Docker",
+  },
+  {
+    wf: 'ci.yml',
+    job: 'acceptance-check',
     cmd: 'npm run verify:external-targets',
     name: 'Every external target is declared and fenced',
     class: 'gate',

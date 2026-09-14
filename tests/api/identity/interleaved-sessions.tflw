@@ -64,7 +64,7 @@ test "admin (bearer) and shopper (cookie) alternate within one test" as admin, s
   expect status equals 200
   expect body.email equals env(USER_A_EMAIL)
 
-  api POST /orders body { items: [ { productId: {productId}, quantity: 1 } ] }
+  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
   expect status equals 201
   capture body.id as orderId
   log "order {orderId} placed while alternating admin bearer/shopper cookie sessions"

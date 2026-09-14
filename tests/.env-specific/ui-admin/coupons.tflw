@@ -12,11 +12,11 @@ test "creating a percent-type coupon through the form shows its confirmation tab
     click text "Coupons"
   select "percent" from field "Type"
   fill form
-    | "Code"                                             | unique("UIPercentCoupon") |
-    | "Value (percent: 0-100, fixed: currency amount)"    | "15"                     |
-    | "Expires at"                                        | "2027-06-01T10:00"       |
-    | "Minimum order amount"                              | "0"                      |
-    | "Usage limit"                                       | "10"                     |
+    | "Code"                                           | unique("UIPercentCoupon") |
+    | "Value (percent: 0-100, fixed: currency amount)" | "15"                      |
+    | "Expires at"                                     | "2027-06-01T10:00"        |
+    | "Minimum order amount"                           | "0"                       |
+    | "Usage limit"                                    | "10"                      |
   click button "Create coupon"
   expect css "tr:has(th:text-is('type')) td:text-is('percent')" is visible
   expect css "tr:has(th:text-is('value')) td:text-is('15')" is visible
