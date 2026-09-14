@@ -476,26 +476,32 @@ if (base.red.length > 0) {
 // `D767` keeps finding. `read-mutation-matrix.mjs` compares both against the live sibling and
 // reports the drift (`D854`).
 /**
- * `startedAt` is carried forward from the EARLIEST of two files, not from the state directory
- * alone — because `M164e` repaired the wrong one.
+ * `startedAt` is the earliest `at` stamp in THIS directory's matrix — never the committed
+ * `run-meta.json` — because `M164e` repaired the wrong file and `M190` then inherited from it.
  *
- * That milestone found `startedAt` being rewritten at every invocation, and fixed it twice: the
- * carry-forward below, and a hand-edit of the committed `run-meta.json` putting `09:42` back. The
- * carry-forward reads `OUT_DIR`, which by the siting argument above is outside every rsynced tree
- * and so was **not** the file that got repaired. The box's copy still says `16:29`, so the next
- * resume — `M168`'s, the first one there has ever been — would have written the wrong value
- * straight back over the repair, with the harness fix present and working exactly as designed.
- * A repair applied to an artefact while the mechanism that regenerates it keeps the bad input is
- * `M168-04`.
+ * `M164e` found `startedAt` rewritten at every invocation and fixed it twice: a carry-forward
+ * reading `OUT_DIR`'s prior meta, and a hand-edit of the committed artefact putting `09:42` back.
+ * The carry-forward read the file that had not been repaired (`OUT_DIR` is outside every rsynced
+ * tree), so the committed copy was added as a *floor*: the earliest of the two stamps won. That
+ * floor assumed the committed census and the one in `OUT_DIR` are the same census. `D980` says a
+ * new census is a new directory, and the first census run under that rule (`M190`, in
+ * `~/.tflw-mutation-m190`) was dated `2026-09-01T09:42` — `M164`'s first row — with its own first
+ * row stamped `2026-09-13T19:31`. Twelve days of another measurement's age, carried into an
+ * artefact whose only job is to date this one (`D979`, finding `M190-01`).
  *
- * The committed artefact is therefore read as a *floor* rather than as the source: neither file is
- * authoritative and the earliest surviving stamp wins. `M164e`'s own argument is that a census is
- * dated by the measurement of its first row, and nothing recorded later can make that earlier.
+ * `M164e`'s argument stands and is applied to the right file: the matrix's rows are the
+ * measurements, each carries `at`, and the census starts when the first of them did. Neither
+ * meta file is read for it — not the committed one, which says nothing about a directory it was
+ * not written from, and not this directory's own prior meta either, because a prior meta written
+ * under the old rule carries the inherited stamp and a fix that keeps reading it repairs nothing
+ * (the first run of this fix on the `M190` directory still wrote `09-01`). Before the first row
+ * exists the value is this invocation's start, and the first resume moves it later by one
+ * baseline roster; that wobble is the rule's, and it is bounded by a known number.
  */
-const readMeta = (p) => { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; } };
-const priorMeta = readMeta(META);
-const committedMeta = readMeta(path.join(ROOT, 'tflw-acceptance', 'mutation', 'run-meta.json'));
-const earliestStart = [priorMeta?.startedAt, committedMeta?.startedAt].filter(Boolean).sort()[0];
+const firstRowAt = existsSync(MATRIX)
+  ? readFileSync(MATRIX, 'utf8').split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l).at; } catch { return null; } }).filter(Boolean).sort()[0]
+  : null;
+const earliestStart = firstRowAt;
 writeFileSync(META, `${JSON.stringify({
   machine: process.env.TFLW_EXEC_MACHINE ?? (process.platform === 'darwin' ? 'mac' : 'box'),
   startedAt: earliestStart ?? new Date().toISOString(),

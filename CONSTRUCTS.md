@@ -1626,6 +1626,52 @@ runtime suite because every resolver test there selected the default env, and ga
 only through whatever the registry already holds near those reads; that is recorded rather than
 quietly widened.
 
+### Graded a second time — the eleven under `M190`'s census (`D984`)
+
+The table above is eleven hand mutations, each applied once and its plant run alone. `M190` ran
+the registry — 286 buildable entries, the nine that came out of the table among them — over the
+whole roster in one census (`D980`, `D981`), and the same eleven are graded here a second time
+from that census's own artefacts (`kill-detail.json`, `read:mutation-matrix`, 2026-09-14). The
+first table asked *can this plant be reddened*; this one asks *what the roster does to it when
+nothing is aimed*. The bin is `D846`'s: **covered** means a mutation about the plant's own
+construct made its own known answer false, **collateral** that it went red on its assertions under
+a break elsewhere, **refusal-only** that the only reds it has ever had were fixtures refused at
+check time.
+
+| plant | bin | registry kills by `assertion` (`covers`) | and otherwise |
+|---|---|---|---|
+| `C3` | **covered** | `shared-iteration-pool-runs-one-too-many` (61 / 64, and the two counts no longer identical) and `per-user-iterations-run-one-too-many` (65 at both worker counts) — both cover; the census's only plant covered by two mutations of one construct, one per spelling | nothing else — two relations in the census, both `assertion`; no lexer break refuses its fixture |
+| `C48` | **covered** | `teardown-on-success-tears-down-the-failures-instead` — 3 markers under `on-success`, the number the grader's message names for the inverted rule; the default clause held at 7 | collateral under `shared-iteration-pool-runs-one-too-many` (9 and 5 markers: teardown right, iteration count wrong); an `assertion` kill under `empty-tag-on-every-tag` **retracted** — the reach control found the lexer's `@tag` branch unreached by `C48`, the row was recorded inside a co-tenant swap-thrash, and the re-measure killed 76 with `C48` not among them |
+| `C93` | **covered** | `defaults-merged-for-the-default-env-only` — the run-time leg alone: both arrivals under `--env two` carried no `defaults` header; the four `check` legs held | the duplicate-`defaults` refusal is not a registry entry (`D977` admits never-red constructs, and that row was the plant's second red, not its first); nothing else — one relation |
+| `C96` | **covered** | `a-lone-exclude-line-is-ignored` — discovery reported 2 files where the one `exclude` line should leave 1; the explicit-path half held | nothing else — one relation |
+| `C98` | **covered** | `scoped-header-loses-its-scope` — the precision clause alone: the scoped header was present where it should be and *not absent* from the two services it does not name | nothing else — one relation |
+| `C101` | **covered** | `workers-key-pinned-to-one` — `gatePaired 0, gateAlone 2` at `workers 2`; the `workers 1` leg held | nothing else — one relation |
+| `C102` | **covered** | `report-key-ignored` — nothing under `artifacts/custom` and `report/` written after all, both halves false together | nothing else — one relation |
+| `C114` | **covered** | `locator-subject-skips-the-kind-rule` — *no diagnostic at all* where one `TF042` is asserted; the two silent legs stayed silent | collateral twice, both displaced diagnostics: `TF001` under `number-rule-broadened` (its fixture's `5s`) and nine `TF077`s under `require-env-guards-only-the-first-name-on-the-line` — the `C78`/`C79` shape from `M168`, in a plant fifteen milestones younger |
+| `C115` | refusal-only | none — no registry entry is near `durationMs` | red once, refused under `number-rule-broadened` (`10ms` no longer lexes) |
+| `C116` | refusal-only | none — no registry entry is near the header-name fold | the same one refusal |
+| `C117` | refusal-only | none — no registry entry is near the body decode | the same one refusal |
+
+Eight of eight never-red plants are **covered** now, each by the mutation its hand row became — and
+seven of the eight have *no other relation in the census at all*: the lexer breaks that refuse 263
+fixtures elsewhere do not refuse theirs, so these are plants that were never red for any reason
+until a mutation was aimed at their construct. That is the sharper reading of "never-red", and
+the three subject plants are **refusal-only**, which is the sentence the paragraph above predicted:
+`D977` admitted no entry for them, so the census grades them with whatever it holds near those
+reads, and what it holds is a lexer break that refuses their fixtures. `never-red` is 0 for the
+first time and that number is one part measurement and one part vocabulary — `C115`–`C117` left the
+bin by being refused, not by being graded. The reach measurement says the same from the other side:
+of the 99 surviving runtime mutants, 42 are reached by a plant and 57 are not, and the three
+subject reads are in neither, because nothing in the registry mutates them (`D974`).
+
+Two of the census's rows are about the census. `C48` is the one plant in the roster whose known
+answer includes a timing number (*the reported p95 does not move across the three levels*), and it
+is the plant that took a false `assertion` kill under a mutation that cannot reach it, during the
+window another session's ComfyUI was swap-thrashing beside the sweep; `C31` — a browser drag — went
+red once in a baseline roster with nothing mutated the same evening. The reach control caught the
+first; the window's baseline re-roster caught the second; neither cost a verdict. A census that
+runs beside a co-tenant needs both, and had them.
+
 ## Blocked plants (`D734`)
 
 A plant that goes red because tflw is genuinely broken **keeps its row**, gets a row in tflw's
