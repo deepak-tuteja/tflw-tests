@@ -48,11 +48,22 @@ const CLAUSE = /^✗\s+(C\d+)\s+(recall|precision)\s+—\s+(.*\S)\s*$/;
  *         no          no          no-assertions    an empty tally the acceptance gate fails on (`M154f-03`)
  *         yes         either      assertion        it produced its known answer and the answer was FALSE
  *         yes         either      held             it produced its known answer and every clause HELD
+ *
+ * and a fifth, `M190b` (`D990`/`D993`), from one more field the sweep writes for asserting plants:
+ *
+ *         yes, false  control.unmutated === 'red'   contended   it answered falsely ALONE on the
+ *                                                               restored tree too — the box, not the
+ *                                                               mutation, is what it measured
+ *
+ * `control.unmutated === 'green'` leaves `assertion` as it is: the kill was checked and stood.
+ * `M190-02` is the row this exists for — a timing plant red under a lexer mutation its fixture
+ * never reaches, during a co-tenant's swap-thrash, recorded as `assertion` on first sight.
  */
 export function deriveKind(r) {
   const asserted = typeof r.tally === 'string' && r.tally.length > 0;
   if (!asserted) return typeof r.skipped === 'string' ? 'refusal' : 'no-assertions';
-  return (r.failed ?? []).length > 0 ? 'assertion' : 'held';
+  if ((r.failed ?? []).length === 0) return 'held';
+  return r.control?.unmutated === 'red' ? 'contended' : 'assertion';
 }
 
 /**
@@ -148,6 +159,14 @@ function selfTest() {
   t('a green plant is not written even when the page has it', !('C96' in d));
   t('the produced entry derives to its own kind, which is what `read-mutation-matrix.mjs` checks',
     Object.values(d).every((e) => deriveKind(e) === e.kind));
+  t('`M190b`: an asserting entry the control found red alone is `contended`',
+    deriveKind({ kind: 'contended', tally: '5/6 / 1/1', failed: ['recall: p95 moved'], control: { unmutated: 'red', failed: ['recall: p95 moved'], at: 'x' } }) === 'contended');
+  t('`M190b`: the control finding it green alone leaves `assertion` alone',
+    deriveKind({ kind: 'assertion', tally: '5/6 / 1/1', failed: ['recall: p95 moved'], control: { unmutated: 'green', at: 'x' } }) === 'assertion');
+  t('`M190b`: a control on an entry with no false clause changes nothing — `held` needs no control',
+    deriveKind({ kind: 'held', tally: '2/2 / 2/2', failed: [], control: { unmutated: 'red', at: 'x' } }) === 'held');
+  t('`M190b`: an entry with no control at all is still `assertion` — the census before this kind is readable',
+    deriveKind({ kind: 'assertion', tally: '1/4 / 1/1', failed: ['x'] }) === 'assertion');
 
   // The refusal: a red id the table does not carry.
   let threw = null;

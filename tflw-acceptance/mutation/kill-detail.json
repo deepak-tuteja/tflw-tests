@@ -7,7 +7,11 @@
         "recall: --workers 1: /shared received exactly 60 request(s) (got 61) — counted by the server, not by tflw",
         "recall: --workers 4: /shared received exactly 60 request(s) (got 64) — counted by the server, not by tflw",
         "recall: the counts are identical at --workers 1 and --workers 4 — the \"independent of `--workers`\" half of the contract `tflw spec` states"
-      ]
+      ],
+      "control": {
+        "unmutated": "green",
+        "at": "2026-09-14T09:55:10.537Z"
+      }
     },
     "C48": {
       "kind": "assertion",
@@ -15,27 +19,39 @@
       "failed": [
         "recall: by default every iteration tears down, the failing ones included: 9 marker(s), 7 expected",
         "recall: `--teardown on-success` tears down the passing iterations only: 5 marker(s), 4 expected — the inverted rule answers 3, the default 7"
-      ]
+      ],
+      "control": {
+        "unmutated": "green",
+        "at": "2026-09-14T09:55:10.537Z"
+      }
     },
     "C49": {
       "kind": "assertion",
       "tally": "3/3 / 0/1",
       "failed": [
         "precision: both tests really ran: 18 request(s) reached /slow (16 expected, 8 iterations each)"
-      ]
+      ],
+      "control": {
+        "unmutated": "green",
+        "at": "2026-09-14T09:55:10.537Z"
+      }
     },
     "C50": {
       "kind": "assertion",
       "tally": "3/3 / 0/1",
       "failed": [
         "precision: both tests issued their full 12 iterations (/paced 13, /unpaced 13) — pacing slowed them, it did not drop them"
-      ]
+      ],
+      "control": {
+        "unmutated": "green",
+        "at": "2026-09-14T09:55:10.537Z"
+      }
     },
     "$produced": {
       "by": "discover-mutation-kills.mjs",
       "baseline": "b0752a2786e1d336",
       "bundle": "236f666d9d7be65f",
-      "at": "2026-09-13T19:31:33.355Z"
+      "at": "2026-09-14T09:55:00.361Z"
     }
   },
   "per-user-iterations-run-one-too-many": {

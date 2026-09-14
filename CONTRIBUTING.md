@@ -86,6 +86,8 @@ npm run verify:kill-detail:self-test
 npm run verify:reach:self-test
 npm run verify:reach-verdicts:self-test
 npm run verify:reach-verdicts
+npm run verify:contention:self-test
+npm run verify:exec-argv:self-test
 npm run verify:argv-contract
 ```
 
@@ -350,9 +352,19 @@ xvfb-run -a npm run regression -- --group security-ui
   untracked transcript and a person derived the file from it, which is the step that produced
   `M168-05` and the reason `M176-05` was filed. The sweep now writes it, one entry per red plant,
   each block stamped with what produced it; `read:mutation-matrix` prints how many blocks the sweep
-  wrote and how many a person did. This runs the producer's own controls — all four kinds, the
+  wrote and how many a person did. This runs the producer's own controls — all five kinds, the
   asserted-held-skipped shape, a `got:` payload carrying its own ✗, and a red id the table lacks,
-  which must refuse rather than write a partial block. Milliseconds, no stack.
+  which must refuse rather than write a partial block. Milliseconds, no stack. The fifth kind is
+  `M190b`'s `contended` (`D990`): an asserting plant that is red *alone on the restored tree too*,
+  which the sweep now checks before recording any `assertion` kill — `M190`'s one false kill was a
+  timing plant answering a co-tenant's render, not the mutation.
+- **`npm run verify:contention:self-test`** and **`npm run verify:exec-argv:self-test`** — **the
+  two refusals the overnight census taught** (`M190b`, `D991`/`D992`). The sweep asks the box
+  before its baseline and before each window close (`statsctl tenants`, `statsctl check`) and
+  refuses beside a render in flight, a running model server or a memory stall; the driver refuses
+  a command whose last token is `&`, because a detached child held it and its lease open all night
+  (`M190-03`). Both decisions are pure functions shown to fire on the incidents' own shapes.
+  Milliseconds, no box, no render.
 - **`npm run verify:reach:self-test`**, **`npm run verify:reach-verdicts:self-test`** and
   **`npm run verify:reach-verdicts`** — **the census's `survived` is split into what the roster
   never executes and what it executes without asserting, and the hand-read half of that split is

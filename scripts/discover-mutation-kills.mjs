@@ -79,7 +79,8 @@ import { fileURLToPath } from 'node:url';
 import { siblingRoot, readMutations, editsOf, bundleInputs, classify, anchorState } from './lib/mutations.mjs';
 import { plantsFor } from './lib/constructs.mjs';
 import { claimDigest, patchDigest, aggregate, shapeOfRosterOutput } from './lib/census-shape.mjs';
-import { detailFromRosterOutput, mergeProduced } from './lib/kill-detail.mjs';
+import { readBox } from './lib/box-contention.mjs';
+import { deriveKind, detailFromRosterOutput, mergeProduced, plantsOf } from './lib/kill-detail.mjs';
 import { resolveTflw } from './lib/tflw-bin.mjs';
 import { parseArgv, BOOLEAN, VALUE, REST } from './lib/argv.mjs';
 
@@ -252,9 +253,11 @@ const GRADED = plantsFor('acceptance').map((p) => p.id);
  * stops the sweep rather than silently shrinking the kill set, which is `M153b-01`'s failure mode
  * (a confident wrong answer from a stale read) applied to a table instead of a build.
  */
-function runRoster() {
+function runRoster(only = null) {
   const t = Date.now();
-  const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'verify-construct-acceptance.mjs')], {
+  const args = [path.join(ROOT, 'scripts', 'verify-construct-acceptance.mjs')];
+  if (only) args.push('--only', only.join(','));
+  const r = spawnSync(process.execPath, args, {
     cwd: ROOT,
     encoding: 'utf8',
     maxBuffer: 256 * 1024 * 1024,
@@ -266,8 +269,9 @@ function runRoster() {
     const m = /^\s{2}([✓✗–])\s+(C\d+)\s/.exec(line);
     if (m) seen.set(m[2], m[1]);
   }
-  const missing = GRADED.filter((id) => !seen.has(id));
-  const red = GRADED.filter((id) => seen.get(id) === '✗');
+  const graded = only ? GRADED.filter((id) => only.includes(id)) : GRADED;
+  const missing = graded.filter((id) => !seen.has(id));
+  const red = graded.filter((id) => seen.get(id) === '✗');
   // `M168-09`. The same table, one column further along: `recall 4/4  precision 3/3`. The
   // DENOMINATORS only — the numerator is the measurement and moving it is the whole point of a
   // mutation, so only a baseline's shape is meaningful and only a baseline records it.
@@ -276,6 +280,20 @@ function runRoster() {
 
 // ── the journal (tflw's own) ──────────────────────────────────────────────────────────────────
 const journal = await import(`file://${path.join(SIB, 'scripts', 'mutation-journal.mjs')}`);
+
+// ── the contention gate (`D991`) ──────────────────────────────────────────────────────────────
+// `M190` took a false kill and a baseline drift beside a rendering co-tenant, and caught both by
+// placement. Asked before the baseline and before every window's re-roster; refuses with exit 75
+// and the matrix untouched, which is resumable. Mid-window, `controlRun` below is the measure.
+function refuseIfContended(where) {
+  const verdict = readBox();
+  if (verdict.skipped) { console.log(`  contention gate: ${verdict.skipped}`); return; }
+  console.log(`  contention gate (${where}): ${verdict.ok ? 'clear' : 'REFUSED'} — ${verdict.seen.join('; ')}`);
+  if (verdict.ok) return;
+  for (const r of verdict.reasons) console.error(`  ✗ ${r}`);
+  console.error('  A census beside a render records the render as kills (`M190-02`). Nothing is recorded; resume when the box is quiet.');
+  process.exit(75);
+}
 
 function refuseIfJournalOpen() {
   const open = journal.readJournal();
@@ -442,6 +460,7 @@ refuseIfJournalOpen();
 // A plant already red for an unrelated reason would otherwise read as killed by every mutation in
 // the sweep — 271 false kills, all of them confident. `D842` cares about which mutation killed
 // which plant; a dirty baseline makes that question meaningless before it is asked.
+refuseIfContended('before the baseline');
 console.log('baseline: re-vendoring the unmutated tree ...');
 let r = refresh();
 if (r.code !== 0) {
@@ -588,6 +607,7 @@ function recycleStack() {
 function closeWindow(ids) {
   if (ids.length === 0) return true;
   console.log(`\n── closing a window of ${ids.length} candidate(s): re-verifying the baseline ...`);
+  refuseIfContended('at the window close');
   const rv = refresh();
   if (rv.code !== 0) {
     console.error(`✗ the window's closing re-vendor failed (exit ${rv.code}) — cannot validate ${ids.length} verdict(s).`);
@@ -624,6 +644,32 @@ function closeWindow(ids) {
   }
   console.log(`  retracted ${retracted} verdict(s); they will be re-run against a fresh stack`);
   return false;
+}
+
+/**
+ * `D990` — the plants a mutation reddened by assertion, run alone with nothing mutated. The vendored
+ * build still holds the mutated bundle after `revertMutation`, so this refreshes first (~5 s) — the
+ * next mutation's `refresh()` was going to do that anyway. Returns the ids red alone and, per id,
+ * the clauses that failed, so a contended entry carries the control's own evidence.
+ */
+function controlRun(plants) {
+  const t = Date.now();
+  const rv = refresh();
+  if (rv.code !== 0) {
+    console.error(`✗ the control's re-vendor failed (exit ${rv.code}) — cannot tell a kill from a contended run.`);
+    process.exit(1);
+  }
+  const run = runRoster(plants);
+  if (run.missing.length > 0) {
+    console.error(`✗ the control did not grade ${run.missing.join(', ')} — refusing to record a kill it cannot check.`);
+    process.exit(1);
+  }
+  const failed = {};
+  if (run.red.length > 0) {
+    const entries = detailFromRosterOutput(run.out, run.red);
+    for (const p of run.red) failed[p] = entries[p]?.failed ?? [];
+  }
+  return { red: run.red, failed, secs: Number(((Date.now() - t) / 1000).toFixed(1)) };
 }
 
 // ── the sweep ─────────────────────────────────────────────────────────────────────────────────
@@ -685,6 +731,33 @@ for (const [i, m] of todo.entries()) {
   }
   const problems = revertMutation(applied.entry);
   inFlight = null;
+  // `D990`: an `assertion` kill is a kill only if the plant is green alone on the restored tree.
+  // A refusal is check-time and deterministic; a `held` clause proves nothing either way; only a
+  // plant that RAN and answered falsely can have been answering the box rather than the mutation.
+  if (row.state === 'killed' && problems.length === 0) {
+    const doc = JSON.parse(readFileSync(DETAIL, 'utf8'));
+    const block = plantsOf(doc[m.id]);
+    const asserted = row.killed.filter((p) => deriveKind(block[p]) === 'assertion');
+    if (asserted.length > 0) {
+      const ctl = controlRun(asserted);
+      const at = new Date().toISOString();
+      for (const p of asserted) {
+        const redAlone = ctl.red.includes(p);
+        block[p].control = redAlone ? { unmutated: 'red', failed: ctl.failed[p] ?? [], at } : { unmutated: 'green', at };
+        if (redAlone) block[p].kind = 'contended';
+      }
+      writeFileSync(DETAIL, `${JSON.stringify(doc, null, 2)}\n`);
+      const contended = asserted.filter((p) => ctl.red.includes(p));
+      if (contended.length > 0) {
+        row.contended = contended;
+        row.killed = row.killed.filter((p) => !contended.includes(p));
+        if (row.killed.length === 0) row.state = 'survived';
+        console.log(`  ! ${contended.length} plant(s) red with nothing mutated (${contended.join(', ')}) — contended, not killed (${ctl.secs}s)`);
+      } else {
+        console.log(`  control: ${asserted.length} asserting plant(s) green alone on the restored tree (${ctl.secs}s)`);
+      }
+    }
+  }
   if (problems.length > 0) {
     console.error(`✗ ${m.id}: the revert failed — ${problems.join('; ')}`);
     console.error(`  Stopping. ${SIB} holds a mutated tracked source and this sweep will not add to it.`);

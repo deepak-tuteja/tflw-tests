@@ -116,6 +116,7 @@ console.log(`  refusal        ${String(kinds.refusal ?? 0).padStart(3)}  the fix
 console.log(`  no-assertions  ${String(kinds['no-assertions'] ?? 0).padStart(3)}  an empty tally the acceptance gate itself fails on (\`M154f-03\`)`);
 console.log(`  assertion      ${String(kinds.assertion ?? 0).padStart(3)}  the plant ran, produced its known answer, and the answer was false`);
 console.log(`  held           ${String(kinds.held ?? 0).padStart(3)}  the plant produced its known answer, every clause held, and it is red only because the rest of its fixture was refused (\`M168-05\`)`);
+console.log(`  contended      ${String(kinds.contended ?? 0).padStart(3)}  the plant answered falsely alone on the restored tree too — the box, not the mutation, is what it measured; never \`covers\` (\`M190b\`, \`D990\`)`);
 console.log(`  ${String(skips.length).padStart(3)} of those ${Object.values(detail).reduce((n, b) => n + Object.keys(plantsOf(b)).length, 0)} were skipped at run time — an orthogonal fact, and the ${skips.filter((d) => d.tally).length} that also carry a tally are why it is one`);
 console.log(`  ${String(origin.produced).padStart(3)} of ${origin.produced + origin.hand} mutation block(s) written by the sweep (D968), ${origin.hand} by hand — the hand-authored ones stand until the next census replaces them (M176-05)\n`);
 
