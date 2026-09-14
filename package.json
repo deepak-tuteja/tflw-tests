@@ -69,7 +69,9 @@
     "measure:mutation-reach": "node scripts/measure-mutation-reach.mjs",
     "verify:reach:self-test": "node scripts/lib/reach.mjs --self-test",
     "verify:reach-verdicts": "node scripts/verify-reach-verdicts.mjs",
-    "verify:reach-verdicts:self-test": "node scripts/lib/reach-verdicts.mjs --self-test"
+    "verify:reach-verdicts:self-test": "node scripts/lib/reach-verdicts.mjs --self-test",
+    "verify:contention:self-test": "node scripts/lib/box-contention.mjs --self-test",
+    "verify:exec-argv:self-test": "node scripts/lib/exec-argv.mjs --self-test"
   },
   "dependencies": {
     "tflw": "file:vendor/tflw-0.1.0.tgz"

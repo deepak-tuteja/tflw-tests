@@ -357,6 +357,17 @@ jobs:
         run: npm run verify:reach-verdicts
         working-directory: testFlow-tests
 
+      # `M190b` (`D990`–`D992`). Two refusals the overnight census taught. The sweep asks the box
+      # before it starts and before it closes a window — a rendering co-tenant reads as kills — and
+      # the driver refuses a command that detaches, which held it and its lease open all night. Both
+      # are pure functions shown to fire on the incident's own shape, with no box and no render.
+      - name: The contention gate fires on the incident's shape
+        run: npm run verify:contention:self-test
+        working-directory: testFlow-tests
+      - name: The driver refuses a detaching command
+        run: npm run verify:exec-argv:self-test
+        working-directory: testFlow-tests
+
       # `M167` (`D767`, `D857`). `D504` keeps the phase *list* out of prose; `D767` extended that to
       # the count, which is the same copy compressed. `M154g` removed seven occurrences across four
       # named files and pointed `verify:contributing` at one of them — and eight days later the count
