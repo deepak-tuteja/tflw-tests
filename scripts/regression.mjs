@@ -103,10 +103,30 @@ const PHASES = [
   { name: 'cli-flags-check', cmd: 'node scripts/verify-cli-flags.mjs' },
   // M42 (PLAN_WEBV2_M40.md decision 3): CLI-verb dogfooding for `migrate`/`watch` — same "script it,
   // don't trust a one-time manual check forever" reasoning, now covering the two remaining
-  // scriptable CLI verbs (`refactor apply` is deliberately one-off/mutating/human-reviewed, not
-  // scripted here; `pick` is deliberately manual, see PROGRESS.md's M42 section).
+  // scriptable CLI verbs (`refactor apply` was deliberately one-off/mutating/human-reviewed and
+  // unscripted until `M195`'s `refactor-check` below took it against a copy; `pick` is deliberately
+  // manual, see PROGRESS.md's M42 section).
   { name: 'migrate-check', cmd: 'node scripts/verify-migrate.mjs' },
   { name: 'watch-check', cmd: 'node scripts/verify-watch.mjs' },
+  // `M195` S1 (tflw `PLAN_M195_REGRESSION_GAP.md`, `D1011`): `tflw ui` had no phase — the page
+  // that runs `tflw run` as a child and streams it was driven once, by hand, in tflw's `M192` U7,
+  // and that one run found three defects in the run's own artefacts (`M192-01`–`03`). Every route
+  // of the server, a `--tag smoke` run and a two-file run through it, a cancel, and the three
+  // rows' graders. No `stackEnv`: the page runs the ordinary suite against the clean app.
+  { name: 'ui-check', cmd: 'node scripts/verify-ui.mjs' },
+  // `M195` S2 (`D1017`): `tflw lsp` as a process on stdio, driven by a real client
+  // (`scripts/lib/lsp-client.mjs`) about this corpus — the unit suite mocks the transport, and the
+  // transport was the gap. Needs no stack; pays the restart like every phase.
+  { name: 'lsp-check', cmd: 'node scripts/verify-lsp.mjs' },
+  // `M195` S3: `tflw init` in a fresh directory — scaffold, `check`, `run` against the demo
+  // service tflw starts itself, a second `init` refusing (`B6-11`). No stack needed.
+  { name: 'init-check', cmd: 'node scripts/verify-init.mjs' },
+  // `M195` S3 (`D1016`): `refactor apply` against a COPY of the suite — the first hint the checker
+  // accepts applied, `check` clean after, the files it changed run green. The line above that
+  // called `refactor apply` *not scripted here* was true of the tracked corpus and stays true:
+  // whether to extract is a human's call; whether an extraction can be applied at all is this
+  // phase's, and its first run found twelve of twenty refused (`M195-01`).
+  { name: 'refactor-check', cmd: 'node scripts/verify-refactor.mjs' },
   // M47 (PLAN_WEBV2_M45.md): --forbid-insecure/--evidence had stale "already covered" claims in
   // verify-cli-flags.mjs's own comment — neither was actually invoked/proven anywhere. Same
   // reasoning as migrate-check/watch-check above, own phase since both are safety/policy knobs.
@@ -443,7 +463,7 @@ const PHASES = [
 // this is the eighth placement to say so.
 const PHASE_GROUPS = {
   core: ['full suite', '--tag orderOps', '--tag smoke,catalogOps', 'demo-fail-check', '--tag orgOps', '--tag inventoryOps', 'migrate-check', 'secure-local-check', 'security-acceptance-gate', 'input-acceptance'],
-  tooling: ['--tag api', 'watch-check', 'pick-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check', 'security-target-check', 'sarif-acceptance', 'construct-acceptance'],
+  tooling: ['--tag api', 'watch-check', 'ui-check', 'lsp-check', 'init-check', 'refactor-check', 'pick-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check', 'security-target-check', 'sarif-acceptance', 'construct-acceptance'],
   safety: ['--tag identityOps', '--tag mixed', '--tag smoke,orderOps', '--tag adminOps', '--tag catalogOps', 'safety-flags-check', 'check-diagnostics', 'artifact-contract', 'safety-redaction-check', 'screenshot-step-check'],
   'security-ui': ['--tag smoke,identityOps', 'cli-flags-check', '--tag smoke,adminOps', '--tag ui', 'webv2-admin-check', '--tag smoke,inventoryOps', 'logging-check', 'mtls-rejection', 'vuln-slice-hidden-check', 'second-run-check'],
 };
