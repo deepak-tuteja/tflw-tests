@@ -1,14 +1,19 @@
 {
  "$comment": "M189a (D974): one verdict per reached survivor of the census's runtime mutants, held to tflw-acceptance/mutation/reach.json by `npm run verify:reach-verdicts` in both directions. `not-asserted` = a plant runs through it and its known answer does not depend on the result (the dogfood is shallow there; a row is filed per family in testFlow/REVIEW_FINDINGS.md). `out-of-reach-by-design` = the result is visible only where the acceptance roster does not look, or is graded by a reference gate the census does not run (D751, D846). Read 2026-09-13 against the reach measured the same day over 106 plants at tflw main@29dfa0a. Re-read 2026-09-14 against `M190`'s re-census (the same 106 plants, tflw main@46750a0): 42 reached survivors again, 41 verdicts carried unchanged and one added (`threshold-scope-falls-back-to-the-whole-histogram`, added to the registry after the previous census and reached in this one).",
  "ambiguity-count-from-a-second-query": {
-  "verdict": "not-asserted",
+  "verdict": "out-of-reach-by-design",
   "family": "locator:diagnosis",
-  "why": "the ambiguity message when a locator matches several elements: ten plants run through the formatter on a page where the locator was unambiguous, so the count and the list are never read; a plant would need a deliberately ambiguous locator and read the sentence back"
+  "why": "the unmutated message reports the length of the list it is about to print and the mutant reports the count the step observed; the two differ only on a DOM that changed between the step's `.count()` and the single describing query — microseconds apart inside one failure path, with no gesture in between, so a fixture staging it would make its own known answer a race, and the unmutated code already has a named branch for that race. Measured rather than argued: applied to tflw on `fedora-box` 2026-09-15 with `M198` S3's whole plant in place — twelve matches, five shown, discriminators and all — the grader stayed green, 0 red lines. `M198` S3's ten legs kill the other nine.",
+  "was": "the ambiguity message when a locator matches several elements: ten plants run through the formatter on a page where the locator was unambiguous, so the count and the list are never read; a plant would need a deliberately ambiguous locator and read the sentence back"
  },
  "ambiguity-list-without-discriminators": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "locator:diagnosis",
-  "why": "the per-candidate discriminator in the ambiguity list — same ten plants, same unambiguous pages; no known answer here has ever been a sentence about several matches"
+  "why": "twelve `Retire` buttons with one distinct label between them: the grader requires every shown candidate to carry a discriminator and all of them to differ; computed and then not printed, the list is N identical quoted strings carrying zero bits for the choice it demands the reader make",
+  "plant": "C13",
+  "redLine": "✗ C13 recall — twelve identical `Retire` buttons are listed with what tells them apart (0/5 candidate(s), 0 distinct discriminator(s)) — computed and then not printed, the list is N identical quoted strings carrying zero bits for the choice it demands (`ambiguity-list-without-discriminators`)",
+  "at": "2026-09-15",
+  "was": "the per-candidate discriminator in the ambiguity list — same ten plants, same unambiguous pages; no known answer here has ever been a sentence about several matches"
  },
  "api-wait-ignores-its-own-budget": {
   "verdict": "not-asserted",
@@ -30,9 +35,13 @@
   "was": "48 plants serialise an inline body here and none of them writes an array body, so the spread into an object never has an array to flatten; the wire is where it shows and the arrival server can echo a body"
  },
  "assertion-diagnosis-never-fires": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "locator:diagnosis",
-  "why": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
+  "why": "`locator-diagnosis.tflw`'s first test misses on `button \"Save drarft\"` through `expect`, not through an action, and the grader reads the nearest-matches list out of the failure text; fired on actions only, the `expect` says nothing but \"no matching element\" while the identical `click` names the real button",
+  "plant": "C13",
+  "redLine": "✗ C13 recall — a miss on `button \"Save drarft\"` names the real button (NO LIST) — fired on actions only, the identical `click` names it and the `expect` says nothing but \"no matching element\" (`assertion-diagnosis-never-fires`)",
+  "at": "2026-09-15",
+  "was": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
  },
  "backoff-hold-kind": {
   "verdict": "not-asserted",
@@ -74,9 +83,13 @@
   "was": "82 plants run through the CSRF attachment and none declares a session with a CSRF header, so the verb condition never has a token to withhold; the arrival server records request headers, so a session fixture against it can read the wire"
  },
  "diagnosis-ignores-the-resolved-element": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "locator:diagnosis",
-  "why": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
+  "why": "`expect button \"Publish release\" is disabled` resolves the element and fails on its *state*, and the grader asserts the failure text carries no list at all; without the zero-match guard it is answered with the other buttons on the page — a diagnosis pointing away from the cause",
+  "plant": "C13",
+  "redLine": "✗ C13 recall — a button that RESOLVED and failed on its state is answered about the state, not with a list of other buttons (\"expected `button \\\"Publish release\\\"` to be disabled, but got (see above)\\n  nearest matches \") — without the zero-match guard the diagnosis points away from the cause (`diagnosis-ignores-the-resolved-element`)",
+  "at": "2026-09-15",
+  "was": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
  },
  "floor-filters-findings-not-rules": {
   "verdict": "out-of-reach-by-design",
@@ -94,9 +107,13 @@
   "why": "a module-level pattern every plant loads; it fires on an input-probe finding, and input probing is graded by the security reference gates (C51-C58, verify:security-acceptance, D751), not by the acceptance roster"
  },
  "nearest-matches-not-deduped": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "locator:diagnosis",
-  "why": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
+  "why": "`/diagnose-fixture` renders two buttons named `Save draft`, so the grader counts the lines that offer that suggestion and requires exactly one; offered again byte-identically, one string takes two of five candidate slots and the unnamed control is crowded out of the list entirely",
+  "plant": "C13",
+  "redLine": "✗ C13 recall — and names it exactly once for the two elements that render it (2 line(s)) — offered again byte-identically, one string takes two of five candidate slots and a genuinely different candidate cannot be shown at all (`nearest-matches-not-deduped`)",
+  "at": "2026-09-15",
+  "was": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
  },
  "oauth2-session-ctx": {
   "verdict": "asserted",
@@ -128,9 +145,13 @@
   "why": "a module-level constant every plant loads; its effect — arrivals queuing inside the generator past 50 concurrent sockets and reporting the wait as service time — needs a workload that holds more than 50 connections open at once, and the perf plants are deliberately small (25 rps against a 50 ms path)"
  },
  "passing-assertion-gets-annotated": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "locator:diagnosis",
-  "why": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
+  "why": "`expect button \"Sprocket calibration\" is hidden` *passes* — absence is the asserted state — and the grader reads that green step's own `detail`; appended regardless of outcome, a success reports \"nearest matches on the page\" stapled to it",
+  "plant": "C13",
+  "redLine": "✗ C13 recall — an `is hidden` that passes on absence carries no diagnosis (ok=true, detail \"`button \\\"Sprocket calibration\\\"` to be hidden\\n  nearest matches on the \") — appended regardless of outcome, a green step reports success with \"nearest matches\" stapled to it (`passing-assertion-gets-annotated`)",
+  "at": "2026-09-15",
+  "was": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
  },
  "request-headers-not-lowercased": {
   "verdict": "out-of-reach-by-design",
@@ -190,14 +211,22 @@
   "was": "same 37 plants, same numeric operands; `expect duration is less than 2 seconds` — the spelled-out form the unwrap exists for — appears in no fixture"
  },
  "suggestion-offered-without-its-ambiguity-caveat": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "locator:diagnosis",
-  "why": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
+  "why": "the deduped `button \"Save draft\"` line must say that two elements render it; printed bare it looks like a clean, unique, ready-to-paste suggestion, and pasting it produces the *ambiguity* error — a different failure from the one being diagnosed",
+  "plant": "C13",
+  "redLine": "✗ C13 recall — and the deduped line carries its own ambiguity (\"- `button \\\"Save draft\\\"`\") — SPEC §9.3 calls these ready-to-paste, and pasting this one produces the *ambiguity* error, a different failure from the one being diagnosed (`suggestion-offered-without-its-ambiguity-caveat`)",
+  "at": "2026-09-15",
+  "was": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
  },
  "text-diagnosis-offers-structural-css-paths": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "locator:diagnosis",
-  "why": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
+  "why": "a miss on `text \"Inventroy reconciled\"` must be answered with `text` suggestions only — `text`'s scan is `*` and a name is computed only for leaves, so the unnamed arm fired here answers with `css \"html\"`, `css \"html > head\"` and `css \"html > body\"`: structural containers in document order, one of which can never be visible",
+  "plant": "C14",
+  "redLine": "✗ C14 recall — and offers no structural container among its 5 suggestion(s) (2 `css \"html…\"`) — `text`'s scan is `*` and a name is computed only for leaves, so the unnamed arm fired here answers with `css \"html\"`, `css \"html > head\"` and `css \"html > body\"`: document order, one of which can never be visible (`text-diagnosis-offers-structural-css-paths`)",
+  "at": "2026-09-15",
+  "was": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
  },
  "threshold-scope-falls-back-to-the-whole-histogram": {
   "verdict": "not-asserted",
@@ -220,9 +249,13 @@
   "why": "eight workload plants evaluate thresholds through this line and every one of them has successful iterations, so `actual === null` is never the case; C49 grades a red and a green threshold on a path that answers — a workload whose every request fails is the plant"
  },
  "unnamed-arm-dropped-for-every-kind": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "locator:diagnosis",
-  "why": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
+  "why": "the fixture carries an icon-only button with no accessible name, and the grader requires a generated `css` path among the `button` miss's suggestions — it is a real candidate no name can reach, and dropping the arm removes it from the one list that could have named it",
+  "plant": "C13",
+  "redLine": "✗ C13 recall — and the icon-only button with no accessible name is surfaced as a generated CSS path — a real candidate no name can reach, dropped for every kind and it disappears from the one list that could have named it (`unnamed-arm-dropped-for-every-kind`)",
+  "at": "2026-09-15",
+  "was": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
  },
  "verdict-not-restamped-after-splice": {
   "verdict": "not-asserted",
@@ -235,8 +268,12 @@
   "why": "the `wait until status of request to \"…\"` form: fifteen plants reach the reader and none of their fixtures writes the network-ref form, so the ordering of the two reads is never exercised; a browser fixture with `wait until … of request to` is the plant"
  },
  "wait-until-diagnosis-dropped": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "locator:diagnosis",
-  "why": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
+  "why": "the plant writes the same miss a second time as `wait until button \"Save drarft\" is visible` and the grader requires the timeout's text to carry the list too — the half of the fix a suite covering only `expect`/`check` would never notice was missing",
+  "plant": "C13",
+  "redLine": "✗ C13 recall — `wait until` carries the same diagnosis when it gives up (NO LIST) — the half of the fix a suite covering only `expect`/`check` would never notice was missing (`wait-until-diagnosis-dropped`)",
+  "at": "2026-09-15",
+  "was": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
  }
 }

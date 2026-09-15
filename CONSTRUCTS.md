@@ -1694,9 +1694,18 @@ with that reason, and the fact that its registry entry guards a flag tflw does n
 | `C65` | the non-number refusal replaced by `Number(value)` (`comparison-coerces-operands`) | `` `is less than` refuses boolean by name (got ok=true: no error) `` — and the same for `null`, a numeric string and a one-element array: four written-to-fail tests all green |
 | `C65` | `dateOffsetMs(value)` no longer consulted (`spelled-out-duration-not-a-number`) | `` `expect duration is less than 2 seconds` compares as 2000 milliseconds (got ok=false: `is less than` expects a number, got object) `` |
 | `C97` | `guardDemoUrl` returns the URL unexamined (`reserved-scheme-passes-through`) | `` `api GET tflw://demoo/health` is refused by the sentence that names the only legal spelling (got ok=false: request failed: GET tflw://demoo/health — fetch failed) `` |
-| `C80` | `sessionCtx` no longer rebases `lines` onto the config (`session-source-lines`) | `` every one of the hand-written session's 4 reported step(s) carries the text of its own line in `tflw.config` (0/4; first: line 195 reads "") `` — and the `oauth2` clause with it, 0/1
-| `C80` | the `oauth2` arm handed the caller's raw `tc` (`oauth2-session-ctx`) | `` every one of the oauth2 session's 1 reported step(s) carries the text of its own line in `tflw.config` (0/1; first: line 249 reads "") `` — and that clause alone
-| `C80` | the `isSafeMethod` condition dropped (`csrf-attached-to-safe-methods`) | `` and the `GET` carried none (saw ["csrf-6f1e"]) `` — read off the socket, not the report
+| `C80` | `sessionCtx` no longer rebases `lines` onto the config (`session-source-lines`) | `` every one of the hand-written session's 4 reported step(s) carries the text of its own line in `tflw.config` (0/4; first: line 195 reads "") `` — and the `oauth2` clause with it, 0/1 |
+| `C80` | the `oauth2` arm handed the caller's raw `tc` (`oauth2-session-ctx`) | `` every one of the oauth2 session's 1 reported step(s) carries the text of its own line in `tflw.config` (0/1; first: line 249 reads "") `` — and that clause alone |
+| `C80` | the `isSafeMethod` condition dropped (`csrf-attached-to-safe-methods`) | `` and the `GET` carried none (saw ["csrf-6f1e"]) `` — read off the socket, not the report |
+| `C13` | the nearest-candidate diagnosis fires on actions only (`assertion-diagnosis-never-fires`) | `` a miss on `button "Save drarft"` names the real button (NO LIST) `` — and six more clauses with it, the whole list gone from `expect` and `wait until` |
+| `C13` | the zero-match guard dropped (`diagnosis-ignores-the-resolved-element`) | `` a button that RESOLVED and failed on its state is answered about the state, not with a list of other buttons `` — the state failure grew a `nearest matches` list |
+| `C13` | the diagnosis appended regardless of outcome (`passing-assertion-gets-annotated`) | `` an `is hidden` that passes on absence carries no diagnosis (ok=true, detail … `nearest matches on the` …) `` |
+| `C13` | the locator arm of `waitUntilReader` unwired (`wait-until-diagnosis-dropped`) | `` `wait until` carries the same diagnosis when it gives up (NO LIST) `` — and that clause alone |
+| `C13` | byte-identical suggestions offered again (`nearest-matches-not-deduped`) | `` and names it exactly once for the two elements that render it (2 line(s)) `` |
+| `C13` | the deduped suggestion printed bare (`suggestion-offered-without-its-ambiguity-caveat`) | `` and the deduped line carries its own ambiguity ("- `button \"Save draft\"`") `` |
+| `C13` | the unnamed arm dropped for every kind (`unnamed-arm-dropped-for-every-kind`) | `` and the icon-only button with no accessible name is surfaced as a generated CSS path `` |
+| `C13` | the per-candidate discriminator computed and not printed (`ambiguity-list-without-discriminators`) | `` twelve identical `Retire` buttons are listed with what tells them apart (0/5 candidate(s), 0 distinct discriminator(s)) `` |
+| `C14` | the unnamed arm fires for `text` too (`text-diagnosis-offers-structural-css-paths`) | `` and offers no structural container among its 5 suggestion(s) (2 `css "html…"`) `` — and the precision clause with it |
 
 The first four rows are one run of `tflw-acceptance/conformance/singletons.tflw` against the arrival
 server — eight tests, five written to fail, each red graded on the *sentence* it carries, because
@@ -1720,6 +1729,24 @@ answer 200 either way — an application ignores a token it did not ask for — 
 `arrival-server.mjs` which arrival carried the header. Three routes were added for it
 (`/session/issue`, `/session/safe`, `/session/mutating`) and the corpus declares its first session.
 Nothing in tflw changed here either.
+
+The nine `C13`/`C14` rows are `M189-02`, and they are one page and one plant. A locator that
+resolves has a token to write and `locator-near-miss.tflw` reads it; a locator that resolves to
+**nothing** has only a sentence, and that sentence is what every browser plant here runs through
+and none reads. So six of `tests/.constructs/locator-diagnosis.tflw`'s seven tests are written to
+fail, none is graded by its own `ok`, and two of the nine clauses assert what the text must **not**
+contain — the half a "does it fail?" assertion can never reach. `/diagnose-fixture`
+(`webV2/src/pages/DiagnoseFixturePage.tsx`) is the fourth fixture page in this suite and exists for
+`D729`'s reason plus a sharper one: its markup is *collisions* — two buttons under one name, an
+icon-only control under none, twelve identical rows — and `/locator-fixture`'s known answers are
+resolutions, which collisions would change.
+
+The tenth mutation of that family, `ambiguity-count-from-a-second-query`, is
+`out-of-reach-by-design` and was **measured rather than argued**: applied on the box with this
+whole plant in place, the grader stayed green with zero red lines. It diverges only on a DOM that
+changed between the step's own `.count()` and the single describing query — microseconds apart
+inside one failure path, with no gesture in between — so a fixture staging it would make its own
+known answer a race, and the unmutated formatter already carries a named branch for that race.
 
 ## Blocked plants (`D734`)
 

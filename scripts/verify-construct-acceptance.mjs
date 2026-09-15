@@ -3635,6 +3635,87 @@ if (wanted('C80')) {
   }
 }
 
+// =============================================================================
+// `M198` S3 — the diagnosis: what a locator failure SAYS, for `C13` and `C14` (`M189-02`)
+// =============================================================================
+
+// Nine registry mutations of one formatter, every one of them `reached and not asserted`: every
+// browser plant in this repository runs through it and reads the element that answered. A locator
+// that resolves has a token to write and `locator-near-miss.tflw` reads it; a locator that resolves
+// to *nothing* has only a sentence. Six of the plant's seven tests are written to fail, and none of
+// them is graded by its own `ok` — the grader reads the failure text and asks what it contains,
+// and twice what it must not contain, which is the half no assertion in a `.tflw` file can reach.
+//
+// The tenth, `ambiguity-count-from-a-second-query`, has no leg here and cannot have one: it only
+// diverges when the DOM changes *between* the step's count and the describing query, microseconds
+// apart inside one failure path with no gesture in between. A fixture that staged it would make its
+// own known answer a race. `out-of-reach-by-design` in `reach-verdicts.json`, with that reason.
+if (wanted('C13') || wanted('C14')) {
+  console.log('\nM198 S3 — the locator diagnosis\n  target: `tests/.constructs/locator-diagnosis.tflw` against `/diagnose-fixture`, graded on the sentences in report/results.json');
+  const { report, output } = runCorpus(ROOT, ['tests/.constructs/locator-diagnosis.tflw']);
+  const alive = await lifecycleCounts();
+  if (!report || !alive) {
+    for (const id of ['C13', 'C14']) if (wanted(id)) { fail(`${id} (M198 S3) produced no ${report ? lifecycleSkipReason() : 'report'}. Needs the stack and a browser.\n${output.trim().split('\n').slice(-12).join('\n')}`); }
+  } else {
+    const say = (needle) => named(report, needle)?.error ?? '';
+    const control = named(report, 'the page is the one the other six ran against');
+    const nearMiss = say('a near miss on a button names the real buttons');
+    const resolved = say('resolved and failed on its state');
+    const textMiss = say('a near miss on text is not answered');
+    const waited = say('wait until carries the same diagnosis');
+    const ambiguous = say('an ambiguous locator lists what tells');
+    const passing = named(report, 'an assertion that passes carries no diagnosis');
+    const LIST = 'nearest matches on the page';
+
+    if (wanted('C13')) {
+      // The control first: every assertion below is about a sentence, so a page that failed to
+      // render would produce six plausible failures and no signal at all.
+      recall('C13', control?.ok === true, `the fixture page rendered (ok=${control?.ok}) — without this the six sentences below are a stack-down message wearing a diagnosis's clothes`);
+
+      recall('C13', nearMiss.includes(LIST) && nearMiss.includes('`button "Save draft"`'),
+        `a miss on \`button "Save drarft"\` names the real button (${nearMiss.includes(LIST) ? 'listed' : 'NO LIST'}) — fired on actions only, the identical \`click\` names it and the \`expect\` says nothing but "no matching element" (\`assertion-diagnosis-never-fires\`)`);
+
+      const saveLines = nearMiss.split('\n').filter((l) => l.includes('`button "Save draft"`'));
+      recall('C13', saveLines.length === 1,
+        `and names it exactly once for the two elements that render it (${saveLines.length} line(s)) — offered again byte-identically, one string takes two of five candidate slots and a genuinely different candidate cannot be shown at all (\`nearest-matches-not-deduped\`)`);
+      recall('C13', saveLines.some((l) => /2 elements render this same locator/.test(l)),
+        `and the deduped line carries its own ambiguity (${JSON.stringify((saveLines[0] ?? '').trim().slice(0, 110))}) — SPEC §9.3 calls these ready-to-paste, and pasting this one produces the *ambiguity* error, a different failure from the one being diagnosed (\`suggestion-offered-without-its-ambiguity-caveat\`)`);
+      recall('C13', /\n\s*-\s*css "/.test(nearMiss),
+        `and the icon-only button with no accessible name is surfaced as a generated CSS path — a real candidate no name can reach, dropped for every kind and it disappears from the one list that could have named it (\`unnamed-arm-dropped-for-every-kind\`)`);
+
+      recall('C13', resolved.length > 0 && !resolved.includes(LIST),
+        `a button that RESOLVED and failed on its state is answered about the state, not with a list of other buttons (${JSON.stringify(resolved.slice(0, 90))}) — without the zero-match guard the diagnosis points away from the cause (\`diagnosis-ignores-the-resolved-element\`)`);
+
+      const passStep = stepsOf(passing).find((s) => s.kind === 'expect');
+      recall('C13', passing?.ok === true && !(passStep?.detail ?? '').includes(LIST) && !(passing?.error ?? '').includes(LIST),
+        `an \`is hidden\` that passes on absence carries no diagnosis (ok=${passing?.ok}, detail ${JSON.stringify((passStep?.detail ?? '').slice(0, 70))}) — appended regardless of outcome, a green step reports success with "nearest matches" stapled to it (\`passing-assertion-gets-annotated\`)`);
+
+      recall('C13', waited.includes(LIST) && waited.includes('`button "Save draft"`'),
+        `\`wait until\` carries the same diagnosis when it gives up (${waited.includes(LIST) ? 'listed' : 'NO LIST'}) — the half of the fix a suite covering only \`expect\`/\`check\` would never notice was missing (\`wait-until-diagnosis-dropped\`)`);
+
+      const ambLines = ambiguous.split('\n').filter((l) => /^\s+\d+\.\s/.test(l));
+      const discriminated = ambLines.filter((l) => / — \S/.test(l));
+      const distinct = new Set(discriminated.map((l) => l.split(' — ')[1]?.trim()));
+      recall('C13', ambiguous.includes('matched 12 elements') && ambLines.length > 1 && discriminated.length === ambLines.length && distinct.size === ambLines.length,
+        `twelve identical \`Retire\` buttons are listed with what tells them apart (${discriminated.length}/${ambLines.length} candidate(s), ${distinct.size} distinct discriminator(s)) — computed and then not printed, the list is N identical quoted strings carrying zero bits for the choice it demands (\`ambiguity-list-without-discriminators\`)`);
+
+      precision('C13', !nearMiss.includes('css "html"') && !/- `button "Retire"`/.test(nearMiss),
+        `and the miss's own list offers neither the page's structure nor a candidate that is ambiguous twelve ways — the suggestions are a shortlist, not the scan`);
+    }
+
+    if (wanted('C14')) {
+      const bullets = textMiss.split('\n').filter((l) => /^\s*-\s/.test(l));
+      const structural = bullets.filter((l) => /css "html/.test(l));
+      recall('C14', textMiss.includes(LIST) && textMiss.includes('`text "Inventory reconciled across every warehouse."`'),
+        `a miss on \`text "Inventroy reconciled"\` names the real sentence on the page (${textMiss.includes(LIST) ? 'listed' : 'NO LIST'})`);
+      recall('C14', bullets.length > 0 && structural.length === 0,
+        `and offers no structural container among its ${bullets.length} suggestion(s) (${structural.length} \`css "html…"\`) — \`text\`'s scan is \`*\` and a name is computed only for leaves, so the unnamed arm fired here answers with \`css "html"\`, \`css "html > head"\` and \`css "html > body"\`: document order, one of which can never be visible (\`text-diagnosis-offers-structural-css-paths\`)`);
+      precision('C14', bullets.every((l) => /`text "/.test(l)),
+        `every suggestion offered for a \`text\` miss is itself a \`text\` locator (${bullets.length}/${bullets.length}) — the arm is opt-in per kind, not a \`!== 'text'\` exclusion`);
+    }
+  }
+}
+
 console.log('\nper-plant precision and recall:\n');
 // `M154f-03`. Iterate the plants THIS gate grades, not every plant on the roster. Seven rows are
 // graded by reference under `D751` — `security`, `diagnostics`, `redaction` — and this driver never

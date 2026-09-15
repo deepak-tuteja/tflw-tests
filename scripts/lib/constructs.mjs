@@ -336,7 +336,7 @@ export const PLANTS = [
     family: 'locator',
     tier: 'ui',
     title: 'the button, and not the three decoys wearing its text',
-    target: 'webV2 `/locator-fixture` — one `<button>` and three same-text decoys with different roles',
+    target: 'webV2 `/locator-fixture` — one `<button>` and three same-text decoys with different roles; plus `M198` S3\'s `/diagnose-fixture` and `tests/.constructs/locator-diagnosis.tflw`, six tests written to fail',
     evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: '^\\s*click button "Archive', min: 1 },
     graders: ['acceptance', 'coverage'],
     knownAnswer:
@@ -344,8 +344,25 @@ export const PLANTS = [
       'shipment", and each writes its own token. The answer is `button/true`. A `button` locator ' +
       'that had degenerated into a text search reports a decoy’s token or hard-errors on ' +
       'ambiguity — and would still pass all ninety-three existing uses, which name things that ' +
-      'are unique on their page.',
-    catches: 'a `button` locator that stopped resolving by role.',
+      'are unique on their page.\n\n' +
+      '**`M198` S3 (`M189-02`) added the other half: what a `button` locator says when it resolves ' +
+      'to nothing.** A miss has no token to write, so its whole answer is a sentence in ' +
+      '`results.json`, and eight registry mutations move that sentence without moving any verdict. ' +
+      'On `/diagnose-fixture` a near miss must name the real button (`assertion-diagnosis-never-fires`), ' +
+      'name it exactly **once** for the two elements that render it ' +
+      '(`nearest-matches-not-deduped`), say on that line that two elements do ' +
+      '(`suggestion-offered-without-its-ambiguity-caveat`, because pasting it produces the ' +
+      '*ambiguity* error — a different failure from the one being diagnosed), and still have a slot ' +
+      'for the icon-only button no name can reach (`unnamed-arm-dropped-for-every-kind`). Twelve ' +
+      'identical `Retire` rows are listed with per-candidate discriminators, all distinct ' +
+      '(`ambiguity-list-without-discriminators`). `wait until` carries the same diagnosis when it ' +
+      'gives up (`wait-until-diagnosis-dropped`). And twice the claim is what the text must **not** ' +
+      'contain: a button that *resolved* and failed on its state is answered about the state ' +
+      '(`diagnosis-ignores-the-resolved-element`), and an `is hidden` that passes on absence is not ' +
+      'annotated at all (`passing-assertion-gets-annotated`). A seventh test is the control — ' +
+      'every clause is about a sentence, so a page that failed to render would produce six ' +
+      'plausible failures and no signal.',
+    catches: 'a `button` locator that stopped resolving by role; and a failure sentence that stops naming what the author probably meant — silently, on a run where every other assertion is green.',
     blockedOn: null,
   },
   {
@@ -354,7 +371,7 @@ export const PLANTS = [
     family: 'locator',
     tier: 'ui',
     title: 'rendered content, not the four attributes that spell the same phrase',
-    target: 'webV2 `/locator-fixture` — the phrase repeated in a `value`, an `alt`, a `title` and an `aria-label`',
+    target: 'webV2 `/locator-fixture` — the phrase repeated in a `value`, an `alt`, a `title` and an `aria-label`; plus `M198` S3\'s `/diagnose-fixture` miss, graded on what the diagnosis does not offer',
     evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: '^\\s*click text "', min: 1 },
     graders: ['acceptance', 'coverage'],
     knownAnswer:
@@ -362,8 +379,15 @@ export const PLANTS = [
       'match must not look. The answer is `text/true`, and any attribute starting to match makes ' +
       'the step ambiguous rather than merely wrong. The decoy input is deliberately `type="text"`: ' +
       'Playwright’s text engine matches `input[type=button|submit]` by `value` **by design**, so ' +
-      'making it a submit would turn a correct engine red.',
-    catches: 'a `text` locator that widened past rendered text content.',
+      'making it a submit would turn a correct engine red.\n\n' +
+      '**`M198` S3 added the miss.** `text`\'s diagnosis scan is `*` and a name is computed only ' +
+      'for leaves, so *every* element with children lands in the unnamed arm — which is why that ' +
+      'arm is opt-in per kind and `text` is deliberately not in it (`M119-01`). A miss on ' +
+      '`text "Inventroy reconciled"` must be answered with `text` suggestions only; with the arm ' +
+      'firing it answers `css "html"`, `css "html > head"` and `css "html > body"`, structural ' +
+      'containers in document order, one of which can never be visible, all offered as ' +
+      'ready-to-paste (`text-diagnosis-offers-structural-css-paths`).',
+    catches: 'a `text` locator that widened past rendered text content; and a diagnosis offering the page\'s structure as though it were a candidate.',
     blockedOn: null,
   },
   {

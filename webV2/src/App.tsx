@@ -16,6 +16,7 @@ import { AccessibilityDemoPage } from './pages/AccessibilityDemoPage';
 import { RenderFixturePage } from './pages/RenderFixturePage';
 import { LocatorFixturePage } from './pages/LocatorFixturePage';
 import { StepFixturePage } from './pages/StepFixturePage';
+import { DiagnoseFixturePage } from './pages/DiagnoseFixturePage';
 
 export function App() {
   return (
@@ -33,6 +34,7 @@ export function App() {
               <Route path="render-fixture" element={<RenderFixturePage />} />
               <Route path="locator-fixture" element={<LocatorFixturePage />} />
               <Route path="step-fixture" element={<StepFixturePage />} />
+              <Route path="diagnose-fixture" element={<DiagnoseFixturePage />} />
               <Route element={<ProtectedRoute />}>
                 <Route path="cart" element={<CartPage />} />
                 <Route path="orders/:id" element={<OrderConfirmationPage />} />

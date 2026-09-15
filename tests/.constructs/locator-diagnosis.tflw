@@ -1,0 +1,68 @@
+# `M198` S3 / `C114` — the known-answer plant for what a locator failure *says* (`M189-02`).
+#
+# Six of these seven tests are **meant to fail**. That is the whole construction: a locator that
+# resolves has a token to write and `locator-near-miss.tflw` reads it, but a locator that resolves
+# to nothing has only a sentence, and the sentence is what ten registry mutations move without
+# moving any verdict. Every browser plant in this repository runs through the diagnosis formatter
+# and reads the element that answered instead, which is `M189a`'s measurement of this family.
+#
+# So nothing below is graded by its own `ok`. `scripts/verify-construct-acceptance.mjs` reads the
+# failure text out of `report/results.json` and asks what it contains — and, for two of them, what
+# it must *not* contain, which is the half a "does it fail?" assertion can never reach.
+#
+# The page is `/diagnose-fixture` (`webV2/src/pages/DiagnoseFixturePage.tsx`), whose header says
+# what each section is for.
+
+@constructs @locators @ui @diagnosis
+test "a near miss on a button names the real buttons, once each, with the ambiguity of the suggestion"
+  # **Meant to fail.** Two `Save draft` buttons and one unnamed icon-only button: the diagnosis
+  # must dedupe the pair into one suggestion, say that two elements render it, and still have a
+  # slot left for the unnamed control's generated CSS path.
+  open "/diagnose-fixture"
+  expect button "Save drarft" is visible
+
+@constructs @locators @ui @diagnosis
+test "a button that resolved and failed on its state is not answered with other buttons"
+  # **Meant to fail**, on the state. `Publish release` is right there and enabled — a nearest-matches
+  # list here points away from the cause, which is the zero-match guard's whole job.
+  open "/diagnose-fixture"
+  expect button "Publish release" is disabled
+
+@constructs @locators @ui @diagnosis
+test "an assertion that passes carries no diagnosis"
+  # **Meant to pass.** `is hidden` against a name nothing renders is satisfied by the absence, so
+  # the element is legitimately not found and the step is a success. A diagnosis appended regardless
+  # of outcome staples "nearest matches on the page" to a green step.
+  open "/diagnose-fixture"
+  expect button "Sprocket calibration" is hidden
+
+@constructs @locators @ui @diagnosis
+test "a near miss on text is not answered with the page's structure"
+  # **Meant to fail.** `text`'s scan is `*` and a name is computed only for leaves, so every element
+  # with children is unnamed — the arm that rescues an icon-only button would answer here with
+  # `css "html"` and its neighbours, structural containers in document order, one of which can never
+  # be visible.
+  open "/diagnose-fixture"
+  expect text "Inventroy reconciled" is visible
+
+@constructs @locators @ui @diagnosis
+test "wait until carries the same diagnosis when it gives up"
+  # **Meant to fail**, by timeout. A suite that only ever wired the diagnosis into `expect`/`check`
+  # would never notice this one was missing.
+  open "/diagnose-fixture"
+  wait until button "Save drarft" is visible
+
+@constructs @locators @ui @diagnosis
+test "an ambiguous locator lists what tells the matches apart"
+  # **Meant to fail**, on ambiguity. Twelve `Retire` buttons with one distinct label between them:
+  # a list of twelve identical quoted strings carries zero bits for the choice it is demanding.
+  open "/diagnose-fixture"
+  click button "Retire"
+
+@constructs @locators @ui @diagnosis
+test "the page is the one the other six ran against"
+  # **Meant to pass**, and it is the control: every assertion above is about a sentence, so a page
+  # that failed to render would produce six plausible failures and no signal at all.
+  open "/diagnose-fixture"
+  expect text "Inventory reconciled across every warehouse." is visible
+  expect button "Publish release" is visible
