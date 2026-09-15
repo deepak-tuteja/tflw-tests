@@ -1712,7 +1712,7 @@ server — eight tests, five written to fail, each red graded on the *sentence* 
 the mutation it is written against turns the red green (`Number(true)` is `1`, and `1 < 5`). Two
 routes were added to the arrival server for it: `/subjects/echo`, which returns the request's
 bytes under its own content-type, and `/subjects/values`, one object of operands a comparison must
-refuse. Nothing in tflw changed; the four were sentences about the dogfood (`D975`) and they were
+refuse. Nothing in tflw changed; the four were sentences about the dogfood and they were
 true.
 
 The three `C80` rows are `M189-06`, and they are graded off two things a `.tflw` file cannot
