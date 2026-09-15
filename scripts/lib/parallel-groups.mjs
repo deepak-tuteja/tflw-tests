@@ -1,9 +1,9 @@
 // `M197` (tflw `D1026`–`D1028`): the four phase groups at once, one stack each.
 //
 // The serial sweep costs 42 minutes on the box and about 28 of them are the stack's fresh restart
-// before every phase — the isolation model (D8) is right and the price of paying it in series is
-// not. CI has run the groups apart on four runners since PLAN_CI decision 16; this is the same
-// partition on one machine: worker `k` gets `PHASE_GROUPS`' k-th group, a `COMPOSE_PROJECT_NAME`
+// before every phase — the isolation model (`regression.mjs`'s head comment, `D822`) is right and the
+// price of paying it in series is not. CI has run the groups apart on four runners since PLAN_CI
+// decision 16; this is the same partition on one machine: worker `k` gets `PHASE_GROUPS`' k-th group, a `COMPOSE_PROJECT_NAME`
 // of its own, every host port offset by `100·k` (`stack-ports.mjs`, read by the compose file,
 // `cli.mjs`, `tflw.config` through tflw's `env NAME default "…"` override, and the phase scripts),
 // and **a copy of the tree** — because nineteen phase scripts read `report/` and twelve write into the tree, and one
