@@ -7,14 +7,16 @@
 // automated run had ever taken one. So: the suite copied to a temporary directory, `check` there
 // for the ids it offers, the first one applied, `check` clean afterwards, the action file written
 // where the hint said, the call sites rewritten, and the files it changed run green against the
-// stack — the extraction executes, not only parses. The tracked tree is not touched.
+// stack — the extraction executes, not only parses. The tracked tree is not touched. Since
+// `M196` (tflw D1020) it is every hint to a fixpoint, not the first one the checker accepts, and a
+// refusal is a violation: the pass offers only windows that are frames now (`M195-01`).
 //
 // The copy is `tests/`, `shared/`, `tflw.config`, `.env`, `package.json` and `nginx/certs/`: what
 // `tflw run` resolves from the root. `.env` because the affected tests log in with
 // `env(ADMIN_EMAIL)`; the certs because the config's mTLS env names them and `refactor apply`
 // refuses a tree whose `check` warns (`TF043`), the same way it refuses one whose `check` errors.
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -53,7 +55,23 @@ function hintsOf(checkOut) {
   return hints;
 }
 
+/** Every `.tflw` under the real root's `tests/` and `shared/`, by content — the untouched-tree
+ *  assertion's before-state, taken before any apply. */
+function snapshotTree() {
+  const out = new Map();
+  const walk = (d) => {
+    for (const e of readdirSync(path.join(ROOT, d), { withFileTypes: true })) {
+      const rel = path.posix.join(d, e.name);
+      if (e.isDirectory()) walk(rel);
+      else if (e.name.endsWith('.tflw')) out.set(rel, readFileSync(path.join(ROOT, rel), 'utf8'));
+    }
+  };
+  for (const d of ['tests', 'shared']) if (existsSync(path.join(ROOT, d))) walk(d);
+  return out;
+}
+
 const dir = mkdtempSync(path.join(tmpdir(), 'tflw-verify-refactor-'));
+const beforeTree = snapshotTree();
 try {
   for (const m of COPIED) if (existsSync(path.join(ROOT, m))) cpSync(path.join(ROOT, m), path.join(dir, m), { recursive: true });
   const before = tflw(dir, 'check', '--no-color');
@@ -61,50 +79,81 @@ try {
   ok(`\`tflw check\` over the copy is clean and offers reuse hints — ${hints.length}`, before.status === 0 && /no problems found/.test(before.out) && hints.length > 0, before.out.slice(0, 300));
   if (hints.length === 0) throw new Error('no hint to apply');
 
-  // The first hint the checker accepts. `refactor apply` builds every byte in memory and re-checks
-  // before it writes (`B5-02`), so a refused apply leaves the copy as it was and the ids stand; the
-  // refusals are printed one line each, because a hint the pass offers and the checker refuses is
-  // a fact about the pass worth seeing every sweep (`M195-01`: the first sweep found `RF001` refused
-  // with `TF039` — an action of three `expect`s has no `api` before its `expect status`).
-  let hint = null;
-  let apply = null;
+  // `M196` (tflw D1020): every hint, to a fixpoint. Until `M196` this applied the first hint the
+  // checker accepted and printed the refusals as facts about the pass (`M195-01`: twelve of twenty
+  // refused with `TF039`, every one a window that read a response before any `api` inside it —
+  // an action `call` could never satisfy). Now the pass offers only windows that are frames, so a
+  // refusal is a defect and counts as one; and one apply was standing in for "the hints can be
+  // taken", so the phase takes all of them: apply the first, re-`check`, repeat until `check`
+  // offers none. Each apply reshapes the next round's hints (the ids renumber, a longer window
+  // vanishes and a shorter one it shadowed appears), so the phase prints the trajectory rather
+  // than asserting a count. Bounded twice: a round whose accepted apply does not lower the hint
+  // count fails, and so does a fortieth round.
+  const applied = [];
   const refused = [];
-  for (const h of hints) {
+  const touched = new Set();
+  let remaining = hints;
+  let round = 0;
+  while (remaining.length > 0) {
+    round++;
+    if (round > 40) throw new Error(`no fixpoint after 40 rounds — ${remaining.length} hint(s) still offered`);
+    const h = remaining[0];
     const r = tflw(dir, 'refactor', 'apply', h.id);
-    if (r.status === 0) {
-      hint = h;
-      apply = r;
+    if (r.status !== 0) {
+      const firstLine = r.out.split('\n').find((l) => /^(error|warning)\[/.test(l)) ?? r.out.split('\n')[0];
+      refused.push({ id: h.id, round, why: firstLine });
+      console.log(`  round ${round}: ${h.id} REFUSED (exit ${r.status}): ${firstLine}`.slice(0, 200));
+      // A refused hint stays offered under the same id, so skip past it this round rather than
+      // spin on it; the violation is counted below.
+      remaining = remaining.slice(1);
+      continue;
+    }
+    const updated = /updated: (.+)$/m.exec(r.out)?.[1]?.split(', ') ?? [];
+    const namedFiles = [...h.files].sort();
+    ok(`round ${round}: \`refactor apply ${h.id}\` extracted ${h.actionName} into ${h.actionFile} and updated exactly the files the hint named`,
+      new RegExp(`applied ${h.id}: extracted`).test(r.out) && JSON.stringify([...updated].sort()) === JSON.stringify(namedFiles) && existsSync(path.join(dir, h.actionFile)),
+      r.out.slice(0, 300));
+    for (const f of h.files) {
+      touched.add(f);
+      const text = readFileSync(path.join(dir, f), 'utf8');
+      if (!(/^import "/m.test(text) && text.includes(`${h.actionName}(`))) ok(`${f} imports the action file and calls ${h.actionName}`, false);
+    }
+    applied.push({ id: h.id, round, actionName: h.actionName, actionFile: h.actionFile, files: h.files.length });
+    const again = tflw(dir, 'check', '--no-color');
+    const next = hintsOf(again.out);
+    console.log(`  round ${round}: ${h.id} → action ${h.actionName} (${h.files.length} file(s)); ${next.length} hint(s) remain`);
+    if (again.status !== 0 || !/no problems found/.test(again.out)) {
+      ok(`round ${round}: \`tflw check\` is still clean after ${h.id}`, false, again.out.slice(0, 300));
       break;
     }
-    const firstLine = r.out.split('\n').find((l) => /^(error|warning)\[/.test(l)) ?? r.out.split('\n')[0];
-    refused.push({ id: h.id, exit: r.status, why: firstLine });
+    if (next.length >= remaining.length) {
+      ok(`round ${round}: applying ${h.id} lowered the hint count (${remaining.length} → ${next.length})`, false);
+      break;
+    }
+    remaining = next;
   }
-  for (const r of refused) console.log(`  refused ${r.id} (exit ${r.exit}): ${r.why}`.slice(0, 200));
-  console.log(`  hints: ${hints.length} offered, ${refused.length} refused before one applied`);
-  ok(`at least one offered hint can be applied — ${hint?.id ?? 'none'} after ${refused.length} refusal(s)`, hint !== null, refused.map((r) => `${r.id}: ${r.why}`).join(' | ').slice(0, 300));
-  if (!hint) throw new Error('no applicable hint');
-  console.log(`  applied ${hint.id}: action ${hint.actionName} into ${hint.actionFile}; touches ${hint.files.join(', ')}`);
-  const originals = new Map(hint.files.map((f) => [f, readFileSync(path.join(ROOT, f), 'utf8')]));
-  ok(`\`tflw refactor apply ${hint.id}\` exits 0 and reports the extraction`, apply.status === 0 && new RegExp(`applied ${hint.id}: extracted`).test(apply.out), `exit ${apply.status}: ${apply.out.slice(0, 300)}`);
-  ok(`the action file it proposed exists in the copy: ${hint.actionFile}`, existsSync(path.join(dir, hint.actionFile)));
-  const updated = /updated: (.+)$/m.exec(apply.out)?.[1]?.split(', ') ?? [];
-  ok('the files it says it updated are the files the hint named, and each changed', JSON.stringify([...updated].sort()) === JSON.stringify([...hint.files].sort()) && hint.files.every((f) => readFileSync(path.join(dir, f), 'utf8') !== originals.get(f)), updated.join(', '));
-  ok('each updated file now imports the action file and calls the action', hint.files.every((f) => {
-    const s = readFileSync(path.join(dir, f), 'utf8');
-    return /^import "/m.test(s) && s.includes(`${hint.actionName}(`);
-  }));
+  console.log(`  fixpoint: ${applied.length} applied in ${round} round(s), ${refused.length} refused, ${touched.size} file(s) touched`);
+  ok(`every hint the pass offers is one the checker accepts — ${refused.length} refused (M195-01, fixed M196)`, refused.length === 0,
+    refused.map((x) => `${x.id}: ${x.why}`).join('; '));
+  ok(`the fixpoint is reached — \`tflw check\` offers no reuse hint after ${applied.length} apply(s)`, remaining.length === 0 && applied.length > 0);
 
   const after = tflw(dir, 'check', '--no-color');
-  ok('`tflw check` after the apply is still clean', after.status === 0 && /no problems found/.test(after.out), after.out.slice(0, 300));
-  const hintsBefore = (before.out.match(/^reuse\[RF/gm) ?? []).length;
-  const hintsAfter = (after.out.match(/^reuse\[RF/gm) ?? []).length;
-  ok(`the applied hint is no longer offered — ${hintsBefore} hint(s) before, ${hintsAfter} after`, hintsAfter < hintsBefore);
+  ok('`tflw check` over the copy is clean at the fixpoint', after.status === 0 && /no problems found/.test(after.out), after.out.slice(0, 300));
 
-  const run = tflw(dir, 'run', '--no-color', ...hint.files);
+  const files = [...touched].sort();
+  const run = tflw(dir, 'run', '--no-color', ...files);
   const summary = /(PASS|FAIL) (\d+)\/(\d+) passed/.exec(run.out);
-  ok(`the changed files run green against the stack through the extracted action — ${summary?.[0] ?? 'no summary'}`, run.status === 0 && summary?.[1] === 'PASS', `exit ${run.status}: ${run.out.slice(-600)}`);
+  ok(`every touched file (${files.length}) runs green against the stack through the extracted actions — ${summary?.[0] ?? 'no summary'}`,
+    run.status === 0 && summary?.[1] === 'PASS', run.out.split('\n').filter((l) => /FAIL|✗|error/.test(l)).slice(0, 12).join('\n'));
 
-  ok('the tracked tree is untouched — no action file appeared under the real root', !existsSync(path.join(ROOT, hint.actionFile)) && hint.files.every((f) => readFileSync(path.join(ROOT, f), 'utf8') === originals.get(f)));
+  // Snapshotted BEFORE the loop (`M196`): the `M195` version of this read the originals from the
+  // real root after the apply and compared the root to itself — green with the tracked tree
+  // rewritten, which is the assertion's one job.
+  const now = snapshotTree();
+  const changed = [...beforeTree.keys()].filter((f) => now.get(f) !== beforeTree.get(f));
+  const appeared = applied.map((a) => a.actionFile).filter((f) => existsSync(path.join(ROOT, f)));
+  ok('the tracked tree is untouched — no file under tests/ or shared/ changed and no action file appeared under the real root',
+    changed.length === 0 && appeared.length === 0, [...changed, ...appeared].join(', '));
 } catch (error) {
   ok('the phase ran to its end', false, String(error?.stack ?? error).slice(0, 600));
 } finally {
@@ -115,4 +164,4 @@ if (violations > 0) {
   console.error(`\n${violations} tflw refactor violation(s).`);
   process.exit(1);
 }
-console.log('\ntflw refactor apply extracts a reuse hint that still checks and still runs.');
+console.log('\ntflw refactor apply takes every reuse hint the pass offers, to a fixpoint that still checks and still runs.');

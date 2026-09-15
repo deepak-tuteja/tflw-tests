@@ -121,11 +121,13 @@ const PHASES = [
   // `M195` S3: `tflw init` in a fresh directory — scaffold, `check`, `run` against the demo
   // service tflw starts itself, a second `init` refusing (`B6-11`). No stack needed.
   { name: 'init-check', cmd: 'node scripts/verify-init.mjs' },
-  // `M195` S3 (`D1016`): `refactor apply` against a COPY of the suite — the first hint the checker
-  // accepts applied, `check` clean after, the files it changed run green. The line above that
+  // `M195` S3 (`D1016`): `refactor apply` against a COPY of the suite. The line above that
   // called `refactor apply` *not scripted here* was true of the tracked corpus and stays true:
   // whether to extract is a human's call; whether an extraction can be applied at all is this
-  // phase's, and its first run found twelve of twenty refused (`M195-01`).
+  // phase's, and its first run found twelve of twenty refused (`M195-01`). Since `M196` (tflw
+  // `D1020`) it is EVERY hint to a fixpoint — apply, re-`check`, repeat until none is offered —
+  // then the touched files run against the stack, because one apply had been green for a day
+  // over extractions that checked clean and failed ten tests when all were taken (`M196-02`).
   { name: 'refactor-check', cmd: 'node scripts/verify-refactor.mjs' },
   // M47 (PLAN_WEBV2_M45.md): --forbid-insecure/--evidence had stale "already covered" claims in
   // verify-cli-flags.mjs's own comment — neither was actually invoked/proven anywhere. Same
