@@ -58,7 +58,7 @@ const SIBLING = join(ROOT, '..', 'testFlow');
  * tflw's `gen-decisions.mjs` collects, written out again — see the header.
  *
  * **`M154d` — the D-form was `D\d{2,3}` and the sentence above was false, which is the only kind of
- * duplication bug this arrangement can have.** tflw's `CITATION` is `D\d{1,3}`. Nothing noticed
+ * duplication bug this arrangement can have.** tflw's `CITATION` is `D\d{1,4}`. Nothing noticed
  * while no tracked prose here cited a single-digit decision; `M154d`'s locator rows cited `D6`
  * (`field`'s cascade order) and `D7`, and the two instruments then disagreed about whether those
  * were citations at all. tflw's refresher put them in the pin, this file could not see them, and
@@ -88,7 +88,7 @@ const SIBLING = join(ROOT, '..', 'testFlow');
  * identifiers**, 0 lost and 0 gained, which is why this could land in the same commit as the guard
  * instead of leaving a red behind.
  */
-const CITATION = /(?<![\w#+=])(D\d{1,3}[a-rt-z]?|M\d{1,3}[a-rt-z]?\d?|P#\d{1,3}[a-rt-z]?)s?\b(?![+=])(?!-\d)/g;
+const CITATION = /(?<![\w#+=])(D\d{1,4}[a-rt-z]?|M\d{1,4}[a-rt-z]?\d?|P#\d{1,4}[a-rt-z]?)s?\b(?![+=])(?!-\d)/g;
 
 /**
  * A citation marked as belonging to the other repository than the file's default. `D711`'s whole
@@ -98,8 +98,8 @@ const CITATION = /(?<![\w#+=])(D\d{1,3}[a-rt-z]?|M\d{1,3}[a-rt-z]?\d?|P#\d{1,3}[
 // Widened with `CITATION` above, for parity rather than for a symptom: measured across every
 // tracked file, no marked citation here is a single-digit D-form today, so this changes nothing —
 // which is the point. Leaving these two narrow would rebuild the divergence that just cost a red.
-const OWN = /`?testFlow-tests\s+(?:M\d{1,3}[a-z]?\d?|D\d{1,3}[a-z]?)`?/g;
-const THEIRS = /`?tflw\s+(M\d{1,3}[a-z]?\d?|D\d{1,3}[a-z]?)`?/g;
+const OWN = /`?testFlow-tests\s+(?:M\d{1,4}[a-z]?\d?|D\d{1,4}[a-z]?)`?/g;
+const THEIRS = /`?tflw\s+(M\d{1,4}[a-z]?\d?|D\d{1,4}[a-z]?)`?/g;
 
 /** The declaration `D711` requires, matched on the two parts that carry the meaning. */
 // Exported since `M183c`: `verify-notation-parity`'s reading half asserts rule 2's precondition,
@@ -164,12 +164,12 @@ export function escapingLinks(path, text) {
  * The `\1` backreference is the repair: a range must name one sequence, so `D93-122` is one citation
  * and `D12-M15` is two, not a span of four.
  */
-const RANGE = /(?<![\w#])([DM])(\d{1,3})[a-z]?[-–—]\1(\d{1,3})[a-z]?\b/g;
+const RANGE = /(?<![\w#])([DM])(\d{1,4})[a-z]?[-–—]\1(\d{1,4})[a-z]?\b/g;
 
 /**
  * A ledger row: `M138b-01`. Names a row, not the milestone — see `citationsLoose`.
  *
- * `M164-10`: the D-form is `D\d{1,3}` for the same reason `CITATION` above is, and the divergence
+ * `M164-10`: the D-form is `D\d{1,4}` for the same reason `CITATION` above is, and the divergence
  * runs the *other* way here. tflw's collector carries no `(?!-\d)` at all, so it reads `D4` out of
  * `D4-1` and pins it; at `D\d{2,3}` this rule could not take that prefix back, and the pin then held
  * an identifier `citationsLoose` did not — the same unclearable stale-pin red `M154d` describes,
@@ -179,7 +179,7 @@ const RANGE = /(?<![\w#])([DM])(\d{1,3})[a-z]?[-–—]\1(\d{1,3})[a-z]?\b/g;
  * Measured: no tracked file here writes a single-digit D-form row today, and this rule only ever
  * adds to the loose set, so widening it can clear a false red and cannot create one.
  */
-const ROW = /(?<![\w#])(M\d{1,3}[a-z]?\d?|D\d{1,3}[a-z]?)-\d+\b/g;
+const ROW = /(?<![\w#])(M\d{1,4}[a-z]?\d?|D\d{1,4}[a-z]?)-\d+\b/g;
 
 /**
  * Every identifier a file cites, with the ones it has claimed for itself removed.
@@ -243,7 +243,7 @@ export function citationsOf(text, prose = true) {
   // this repository's cluster A-D, not tflw's workload grammar.
   // Fences are stripped AFTER the per-file resolution, mirroring tflw's order: it preprocesses,
   // then `collectCitations` drops product-fence lines. Same order, same answer.
-  const cleaned = stripProductFences((own ? text.replace(/(?<![\w#])M\d{1,3}[a-z]?\d?\b/g, ' ') : text).replace(OWN, ' '));
+  const cleaned = stripProductFences((own ? text.replace(/(?<![\w#])M\d{1,4}[a-z]?\d?\b/g, ' ') : text).replace(OWN, ' '));
   const ids = new Set([...cleaned.matchAll(CITATION)].map((m) => m[1]));
   for (const [, kind, a, b] of cleaned.matchAll(RANGE)) {
     if (Number(b) <= Number(a)) continue;

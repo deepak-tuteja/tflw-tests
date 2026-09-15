@@ -173,7 +173,7 @@ export const FIXTURES = [
   // because not one of the sixteen fixtures carried a single-digit D. The reading half caught it
   // and this half could not. A fixture list assembled around the divergences known at the time is
   // blind to the divergence that came before them.
-  { text: 'D9 is a single-digit decision', why: '`M154d`\'s case — the D-form is `D\\d{1,3}` on BOTH sides, and nothing here exercised it until M183c' },
+  { text: 'D9 is a single-digit decision', why: '`M154d`\'s case — the D-form is `D\\d{1,4}` on BOTH sides, and nothing here exercised it until M183c' },
   { text: 'D318 and M154b and P#12', why: 'NEGATIVE CONTROL — the three plain forms must agree' },
   { text: 'M88c2 is a sub-milestone', why: 'NEGATIVE CONTROL — letter-then-digit suffix' },
   { text: 'D12–D15 with an en dash', why: 'NEGATIVE CONTROL — a qualified range in both grammars' },
@@ -634,7 +634,7 @@ export function selfTest(reading = null) {
     compare({ ...ours, OWN: ours.OWN.replace('testFlow-tests', 'testFlow-test') }, theirs) !== null)
 
   // Behavioural parity actually bites — put the OLD range pattern back and the D93-122 case returns.
-  const preConvergence = { ...ours, RANGE: String.raw`/(?<![\w#])([DM])(\d{1,3})[a-z]?\s*[-–—]\s*(?:[DM])?(\d{1,3})[a-z]?\b/g` }
+  const preConvergence = { ...ours, RANGE: String.raw`/(?<![\w#])([DM])(\d{1,4})[a-z]?\s*[-–—]\s*(?:[DM])?(\d{1,4})[a-z]?\b/g` }
   const reverted = compare(preConvergence, theirs)
   t('reverting RANGE to its pre-convergence form reddens the gate',
     reverted !== null && reverted.some((p) => p.includes('D93')))
