@@ -11,4 +11,4 @@
 test "a drifted endpoint fails contract validation on its missing documented field"
   api GET /contract-demo/drifted
   expect status equals 200
-  expect body matches schema "DriftedWidgetResponseDto" from "http://localhost:4001/openapi.json"
+  expect body matches schema "DriftedWidgetResponseDto" from root "/openapi.json"

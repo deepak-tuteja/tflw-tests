@@ -93,7 +93,7 @@ crawl "the documented surface, walked as a non-owner" as peer
   # The document's paths already carry the `/v1` prefix (NestJS `setGlobalPrefix`), and it declares no
   # `servers`, so every route resolves to `<origin>/v1/…` and **not** to the `api` base's path twice
   # over. That is `M137c1`/D480, and this line is the run that would catch it regressing.
-  seed openapi "http://localhost:4001/openapi.json"
+  seed openapi root "/openapi.json"
   seed traffic
 
   # One `exclude`, and it moves a number. `/contract-demo/drifted` is a fixture route that exists to

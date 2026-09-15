@@ -49,6 +49,8 @@
 
 /** Where the fixture values are defined, and how to find each one. `pattern` must capture the
  *  literal in group 1. */
+import { urls } from './stack-ports.mjs';
+
 export const FIXTURE_SOURCE = 'apiV2/src/load-admin/load-target.constants.ts';
 
 /** The k6 rungs that log in. k6 has no `.env` loading and no shared module the way Artillery's
@@ -158,7 +160,7 @@ export const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0', 
 export const TARGETS = {
   apiV2: {
     what: 'the real dogfood target — NestJS + Postgres, in Docker',
-    health: 'http://localhost:4001/v1/health',
+    health: `${urls().TFLW_API_BASE}/health`, // `M197`: offset per worker
     managed: 'external',
   },
   echo: {

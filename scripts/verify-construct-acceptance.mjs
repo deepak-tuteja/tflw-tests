@@ -46,6 +46,7 @@ import { fileURLToPath } from 'node:url';
 import { resolveTflw } from './lib/tflw-bin.mjs';
 import { readSpec, siblingState, boxRecords, gradeProvenance, announceProvenance, stalenessBanner } from './lib/tflw-provenance.mjs';
 import { PLANTS, plantFor, plantsFor, assertAcceptancePlantsAreRunnable } from './lib/constructs.mjs';
+import { urls } from './lib/stack-ports.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const GATE = process.argv.includes('--gate');
@@ -928,7 +929,7 @@ if (wanted('C50')) {
 // would show C5's numbers under C4's name and produce a confident, meaningless mismatch. Same
 // family of mistake as the stale-report guard in `runCorpus` above, one layer out.
 
-const LIFECYCLE_COUNTS = 'http://localhost:4001/v1/lifecycle/counts';
+const LIFECYCLE_COUNTS = `${urls().TFLW_API_BASE}/lifecycle/counts`; // `M197`: offset per worker
 
 /** Read the server's own record of what happened. Returns null (rather than throwing) so a stack
  *  that is down is reported as a skip against the plant, not as a crash in the grader.
@@ -2849,6 +2850,27 @@ if (KEY_IDS.some((id) => wanted(id)) || wanted('C93')) {
     const plainHeaders = await headersOf('x-plant');
 
     if (wanted('C97')) {
+      // `M197` (tflw D1024): the `env NAME default "…"` override, graded on the wire like the
+      // literal. The fixture's default base is `:1`, where nothing listens — so arrivals prove the
+      // variable was read, the unset run proves the literal is the default, and the report's own
+      // evidence proves the value is plain: a base URL that came through `env()` would be
+      // `•••(TFLW_C97_BASE)` in every request line, which is the reason the construct is not `env()`.
+      const overDir = corpus('api-override', ['two-steps.tflw', 'named-service.tflw'], 'services-override.config');
+      await arrivals('__reset');
+      const overOut = runRun([], { cwd: overDir, env: { TFLW_C97_BASE: 'http://127.0.0.1:4507/base' } });
+      const overPaths = await arrivals('__arrivals');
+      recall('C97', (overPaths.byPath[ALPHA] ?? 0) === 1 && (overPaths.byPath[BETA] ?? 0) === 1 && (overPaths.byPath[GAMMA] ?? 0) === 1,
+        `\`api env TFLW_C97_BASE default "…:1/base"\` with the variable set: \`/alpha\` and \`/beta\` arrived at \`${ALPHA}\`/\`${BETA}\` — the override was read (got: ${JSON.stringify(overPaths.byPath)})`);
+      const overReport = readIn(overDir, 'report', 'results.json');
+      recall('C97', overReport.includes('http://127.0.0.1:4507/base/alpha') && !overReport.includes('•••'),
+        'and the report carries the overridden URL verbatim — a plain value, not a redacted secret');
+      await arrivals('__reset');
+      const unsetOut = runRun([], { cwd: overDir, env: { TFLW_C97_BASE: '' } });
+      const unsetPaths = await arrivals('__arrivals');
+      precision('C97', (unsetPaths.byPath[ALPHA] ?? 0) === 0 && (unsetPaths.byPath[BETA] ?? 0) === 0 && /127\.0\.0\.1:1\b/.test(unsetOut),
+        `with the variable unset the literal \`:1\` is the base — nothing arrived at \`${ALPHA}\` and the run names \`127.0.0.1:1\` (got: ${JSON.stringify(unsetPaths.byPath)})`);
+      void overOut;
+
       recall('C97', (plainPaths.byPath[ALPHA] ?? 0) === 1 && (plainPaths.byPath[BETA] ?? 0) === 1,
         `\`/alpha\` and \`/beta\` arrived at \`${ALPHA}\` and \`${BETA}\` — the base URL's own path segment is joined, not replaced (got: ${JSON.stringify(plainPaths.byPath)})`);
       recall('C97', (plainPaths.byPath[GAMMA] ?? 0) === 1,
@@ -3124,10 +3146,15 @@ if (TARGET_IDS.some((id) => wanted(id))) {
 
   const scratch = mkdtempSync(path.join(tmpdir(), 'tflw-config-targets-'));
   const useConfig = (dir, config) => copyFileSync(path.join(FIX, config), path.join(dir, 'tflw.config'));
+  // `M197`: `open-absolute-console.tflw` opens the admin console by an ABSOLUTE URL on purpose —
+  // the construct is that an absolute `open` ignores the `web` base — and a step's string has no
+  // override, so the fixture keeps its literal and the copy carries the offset stack's origin.
+  // Identity at offset 0; the configs beside it take the override form and need no rewrite.
+  const atThisStack = (text) => text.replaceAll('http://localhost:8091', urls().TFLW_WEB_ADMIN_BASE).replaceAll('http://localhost:8090', urls().TFLW_WEB_BASE);
   const corpus = (name, files, config) => {
     const dir = path.join(scratch, name);
     mkdirSync(dir, { recursive: true });
-    for (const f of files) copyFileSync(path.join(FIX, f), path.join(dir, f));
+    for (const f of files) writeFileSync(path.join(dir, f), atThisStack(readFileSync(path.join(FIX, f), 'utf8')));
     useConfig(dir, config);
     return dir;
   };

@@ -4,7 +4,9 @@
 // unless exactly one request succeeded (200) and the rest were rejected (401) — previously a
 // separate assertLive+revoke pair let multiple concurrent requests each mint their own successor
 // pair from the same token.
-const BASE_URL = 'http://localhost:4001/v1';
+// `M197`: the stack's port comes from the environment the run was started under (the same
+// `TFLW_API_BASE` `tflw.config` reads, offset per regression worker); the literal is the default.
+const BASE_URL = process.env.TFLW_API_BASE || 'http://localhost:4001/v1';
 
 export async function assertConcurrentRefresh(
   _ctx: { env: NodeJS.ProcessEnv },

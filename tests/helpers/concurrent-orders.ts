@@ -6,7 +6,9 @@
 // decrement under real concurrency) from inside a single test needs raw `fetch` + `Promise.all`.
 // The call itself is the assertion (same pattern as schema-and-shape.tflw's `assert matches
 // schema(...)`) — throws if the observed succeeded/failed split doesn't match exactly.
-const BASE_URL = 'http://localhost:4001/v1';
+// `M197`: the stack's port comes from the environment the run was started under (the same
+// `TFLW_API_BASE` `tflw.config` reads, offset per regression worker); the literal is the default.
+const BASE_URL = process.env.TFLW_API_BASE || 'http://localhost:4001/v1';
 
 export async function assertConcurrentOversell(
   _ctx: { env: NodeJS.ProcessEnv },

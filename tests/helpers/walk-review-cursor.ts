@@ -6,7 +6,9 @@
 // microsecond precision but the cursor is JS-Date-encoded to millisecond precision) never leaks a
 // boundary row onto the next page twice or drops it entirely. The call itself is the assertion,
 // same pattern as concurrent-orders.ts/schema-check.ts.
-const BASE_URL = 'http://localhost:4001/v1';
+// `M197`: the stack's port comes from the environment the run was started under (the same
+// `TFLW_API_BASE` `tflw.config` reads, offset per regression worker); the literal is the default.
+const BASE_URL = process.env.TFLW_API_BASE || 'http://localhost:4001/v1';
 
 export async function assertReviewCursorWalk(
   _ctx: { env: NodeJS.ProcessEnv },

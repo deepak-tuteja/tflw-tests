@@ -51,6 +51,7 @@ import { resolveTflw } from './lib/tflw-bin.mjs';
 import { GRADERS, PLANTS, PLANT_IDS, isPlantFinding, plantsFor } from './lib/plants.mjs';
 import { ALL_GRADERS, unclaimedGraders } from './lib/graders.mjs';
 import { plantsFor as constructPlantsFor, GRADERS as CONSTRUCT_GRADERS } from './lib/constructs.mjs';
+import { urls } from './lib/stack-ports.mjs';
 
 /**
  * **`D752` — the construct index, checked in both directions.**
@@ -580,7 +581,7 @@ const DECLINES = {
     // the point: the others move whenever somebody adds an endpoint, while this one is a statement
     // about what tflw can and cannot see. The day somebody teaches the spider to render, this row
     // fails and the claim has to be revisited on purpose rather than quietly stopping being true.
-    { scan: 'security', subject: 'http://localhost:8090/', reason: /needs rendering|client-rendered/, why: 'the SPA the fetching spider cannot walk — a graded gap, never a silent zero (D442)', count: 1 },
+    { scan: 'security', subject: `${urls().TFLW_WEB_BASE}/`, reason: /needs rendering|client-rendered/, why: 'the SPA the fetching spider cannot walk — a graded gap, never a silent zero (D442)', count: 1 },
   ],
   secureLocal: [
     // **The subject moved from `shopper` to `shopperNoCsrf` in M137b, and the two rows are otherwise

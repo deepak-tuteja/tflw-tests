@@ -5,7 +5,9 @@
 // genuinely needs one — the DSL itself can only ever assert a single page's shape directly.
 // `q` scopes to this test's own unique-tagged products, replacing v1's `X-Test-NS` header (gone
 // in v2) — the same per-test-unique-facet isolation the rest of this suite already relies on.
-const BASE_URL = 'http://localhost:4001/v1';
+// `M197`: the stack's port comes from the environment the run was started under (the same
+// `TFLW_API_BASE` `tflw.config` reads, offset per regression worker); the literal is the default.
+const BASE_URL = process.env.TFLW_API_BASE || 'http://localhost:4001/v1';
 
 export async function walkAllPages(_ctx: { env: NodeJS.ProcessEnv }, q: string, pageSize: number): Promise<number> {
   let page = 1;

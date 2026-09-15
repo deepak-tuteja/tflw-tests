@@ -7,7 +7,9 @@
 // on an untested array-literal-as-argument DSL call shape. The call itself is the assertion:
 // throws unless exactly one request succeeded (201) and the other two were rejected with a
 // usage-limit conflict (409).
-const BASE_URL = 'http://localhost:4001/v1';
+// `M197`: the stack's port comes from the environment the run was started under (the same
+// `TFLW_API_BASE` `tflw.config` reads, offset per regression worker); the literal is the default.
+const BASE_URL = process.env.TFLW_API_BASE || 'http://localhost:4001/v1';
 
 export async function assertConcurrentCouponRedeem(
   _ctx: { env: NodeJS.ProcessEnv },

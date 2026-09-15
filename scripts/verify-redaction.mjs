@@ -53,6 +53,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tflwCommand } from './lib/tflw-bin.mjs';
 import { GRADERS, plantsFor } from './lib/constructs.mjs';
+import { urls } from './lib/stack-ports.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const SELF_PATH = 'scripts/verify-redaction.mjs';
@@ -420,7 +421,7 @@ console.log('Running tests/api/identity/safety-redaction.tflw ...');
 execSync(`${TFLW} run --env safetyRedaction tests/api/identity/safety-redaction.tflw`, { cwd: ROOT, stdio: 'inherit' });
 
 console.log('Fetching real, unredacted PII directly from the api as ground truth ...');
-const loginRes = await fetch('http://localhost:4001/v1/auth/login', {
+const loginRes = await fetch(`${urls().TFLW_API_BASE}/auth/login`, {
   method: 'POST',
   headers: { 'content-type': 'application/json' },
   body: JSON.stringify({ email: env.ADMIN_EMAIL, password: env.ADMIN_PW }),
@@ -431,7 +432,7 @@ if (!loginRes.ok) {
 }
 const { accessToken } = await loginRes.json();
 
-const profileRes = await fetch('http://localhost:4001/v1/profile/export', {
+const profileRes = await fetch(`${urls().TFLW_API_BASE}/profile/export`, {
   headers: { authorization: `Bearer ${accessToken}` },
 });
 if (!profileRes.ok) {

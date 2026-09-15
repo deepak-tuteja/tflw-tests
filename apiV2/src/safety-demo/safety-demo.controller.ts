@@ -26,7 +26,9 @@ import type { Response } from 'express';
 export class SafetyDemoController {
   @Get('offsite-redirect')
   redirectOffsite(@Res() res: Response) {
-    const port = process.env.PORT ?? '4001';
+    // `M197`: `PUBLIC_PORT` is the host-published port (compose sets it from the stack's offset);
+    // the container's own `PORT` is where it listens, which is not where a host client can follow.
+    const port = process.env.PUBLIC_PORT ?? process.env.PORT ?? '4001';
     res.redirect(302, `http://127.0.0.1:${port}/v1/health`);
   }
 }
