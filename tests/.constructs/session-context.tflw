@@ -1,0 +1,36 @@
+# `M198` S2 / `C80` — the known-answer plant for a session's *context*: the two fields a session's
+# derived `TestCtx` takes from the config rather than from whichever test happened to establish it.
+#
+# Sessions are declared in `tflw.config`, not in a `.tflw` file, so `sessionCtx()` rebases the
+# caller's context onto the config's own document before the body runs — `baseDir`, `filePath` and
+# `lines`. A step's reported `source` is `lines[line - 1]`, which makes the third one observable
+# with no failure anywhere: drop it and every session step is rendered by reading a `tflw.config`
+# line number out of *this* file — text from one document at coordinates from another. What that
+# prints depends on how long the caller happens to be; this file is forty lines and the
+# declarations sit at 195 and 249, so it prints **nothing at all**.
+#
+# Two mutations live here and the difference between them is the point. `session-source-lines`
+# drops the rebase for a hand-written session (`admin`, below); `oauth2-session-ctx` hands the
+# `oauth2` arm the caller's raw context, which is how it was for all of `M97c-03` — the rebase was
+# applied *inside* one arm of the branch instead of above it. Both are invisible to every
+# assertion: the requests still authorize, the statuses are still 200, and the report is wrong on
+# success as much as on failure. So this file's own tests are the honest pair, and the grader reads
+# the source lines out of `report/results.json`.
+#
+# **The pair.** `GET /orders/all` is 200 under a credential and 401 without one, in one run against
+# one path, so the `as` clause and nothing else is what moved the status. `C80` grades that same
+# pair out of `tests/examples/sessions-explained.tflw` for `admin`; what is new here is the
+# `oauth2` sugar, whose 200 is the only thing proving the client-credentials grant was made, spent
+# and accepted.
+
+test "an oauth2 credential authorizes the request" as oauthLong
+  api GET /orders/all
+  expect status equals 200
+
+test "a hand-written credential authorizes the same request" as admin
+  api GET /orders/all
+  expect status equals 200
+
+test "the same request with no credential is refused"
+  api GET /orders/all
+  expect status equals 401

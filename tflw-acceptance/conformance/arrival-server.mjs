@@ -338,6 +338,29 @@ const server = createServer((req, res) => {
     res.end('{"n":3,"s":"3","t":true,"nil":null,"arr":[5]}');
     return;
   }
+  // `M198` S2 — the three routes the csrf plant needs, and they are an instrument for a claim no
+  // counter can make. `csrf from … send as header` attaches the token to mutating methods **and not
+  // to safe ones** (SPEC §3.3), so the observation is per-arrival and per-verb: which request
+  // carried the header, not how many did. `/session/issue` is the establishment response the clause
+  // reads its token out of; `/session/safe` and `/session/mutating` are two ordinary counted paths
+  // whose only job is to be reached by a `GET` and a `POST` under the same credential, so
+  // `/__headers?name=x-csrf-token` answers the question directly.
+  //
+  // The token is a constant rather than a random value on purpose: the grader asserts the *exact*
+  // string arrived, so a mutant that attached something else — the literal `"undefined"` of
+  // `csrf-token-miss-binds-undefined`, say — is a different red from one that attached nothing.
+  if (path === '/session/issue') {
+    count(path, req);
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end('{"csrfToken":"csrf-6f1e","note":"the establishment response a `csrf from` clause reads"}');
+    return;
+  }
+  if (path === '/session/safe' || path === '/session/mutating') {
+    count(path, req);
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ path, method: req.method }));
+    return;
+  }
   if (path === '/subjects/json-spaced') {
     count(path, req);
     // Valid JSON with whitespace no serialiser would emit: `body.spaced` reads it as JSON and

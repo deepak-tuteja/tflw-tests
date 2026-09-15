@@ -65,9 +65,13 @@
   "was": "79 plants resolve config file references and every grader runs `tflw` with its cwd at the config directory, where cwd-relative and config-relative are the same path; C106/C107 (`cert`/`key`) would need one run from elsewhere"
  },
  "csrf-attached-to-safe-methods": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "declaration:session",
-  "why": "82 plants run through the CSRF attachment and none declares a session with a CSRF header, so the verb condition never has a token to withhold; the arrival server records request headers, so a session fixture against it can read the wire"
+  "why": "`session carrier` declares `csrf from body.csrfToken send as header`, and `sessions.tflw` issues one `GET` and one `POST` under it; `/__headers?name=x-csrf-token` on the arrival server says which arrival carried the token. Dropped, the verb condition sends it on the `GET` too — which no assertion inside the file can see, because both requests answer 200 either way",
+  "plant": "C80",
+  "redLine": "✗ C80 recall — and the `GET` carried none (saw [\"csrf-6f1e\"]) — a browser does not send one to a safe method and an application may reject it if it arrives, which is why the token has its own channel instead of joining a `header` step's (`csrf-attached-to-safe-methods`)",
+  "at": "2026-09-15",
+  "was": "82 plants run through the CSRF attachment and none declares a session with a CSRF header, so the verb condition never has a token to withhold; the arrival server records request headers, so a session fixture against it can read the wire"
  },
  "diagnosis-ignores-the-resolved-element": {
   "verdict": "not-asserted",
@@ -95,9 +99,13 @@
   "why": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
  },
  "oauth2-session-ctx": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "declaration:session",
-  "why": "C80 reaches the `if (decl.oauth2)` test and no plant declares an `oauth2` session, so the arm is never entered; whether apiV2 can serve one is the first question a plant here would have to answer"
+  "why": "the same plant declares `as oauthLong`, so the `oauth2` arm is entered for the first time by any plant: its one reported step must carry `tflw.config`'s line 249. Handed the caller's raw context it prints nothing. This is the narrower of the pair — `session-source-lines` reddens both arms because the rebase is applied above the branch, and this one reddens only the `oauth2` clause, which is that structure stated as a measurement",
+  "plant": "C80",
+  "redLine": "✗ C80 recall — every one of the oauth2 session's 1 reported step(s) carries the text of its own line in `tflw.config` (0/1; first: line 249 reads \"\") — rendered from the caller's document instead, a line number past this 36-line file's end prints nothing at all (`oauth2-session-ctx`)",
+  "at": "2026-09-15",
+  "was": "C80 reaches the `if (decl.oauth2)` test and no plant declares an `oauth2` session, so the arm is never entered; whether apiV2 can serve one is the first question a plant here would have to answer"
  },
  "ok-ignores-no-verdict": {
   "verdict": "not-asserted",
@@ -159,9 +167,13 @@
   "why": "the generator self-diagnosis (`saturated`) is computed on every load run and lands in results.json; seven or eight perf plants read the arrival curve and never the diagnosis, and none of them drives its own generator hard enough to trip either arm — a deliberately saturating fixture is possible and expensive on a shared box"
  },
  "session-source-lines": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "declaration:session",
-  "why": "C80 establishes a session and grades 200-with versus 401-without; the report `source` lines of the session steps — which document they were rendered from — are read by nothing"
+  "why": "`session-context.tflw` is 36 lines and names two sessions declared at `tflw.config` 195 and 249; the grader asserts every session step's reported `source` is the text at its own line in the config, and the plant's own steps against the plant. Without the rebase both arms render a config line number out of the caller's document and print the empty string",
+  "plant": "C80",
+  "redLine": "✗ C80 recall — every one of the hand-written session's 4 reported step(s) carries the text of its own line in `tflw.config` (0/4; first: line 195 reads \"\") — rendered from the caller's document instead, a line number past this 36-line file's end prints nothing at all (`session-source-lines`)",
+  "at": "2026-09-15",
+  "was": "C80 establishes a session and grades 200-with versus 401-without; the report `source` lines of the session steps — which document they were rendered from — are read by nothing"
  },
  "speculative-line-replaces-the-final-diagnosis": {
   "verdict": "not-asserted",

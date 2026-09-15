@@ -1685,7 +1685,7 @@ export const PLANTS = [
     family: 'declaration',
     tier: 'api',
     title: '`as <session>` is what makes the request authorized — the same GET is 200 with it and 401 without',
-    target: 'tests/examples/sessions-explained.tflw, graded out of report/results.json — an existing file, no new fixture',
+    target: 'tests/examples/sessions-explained.tflw, graded out of report/results.json — an existing file, no new fixture; plus `M198` S2\'s two plants, `tests/.constructs/session-context.tflw` against apiV2 and `tflw-acceptance/conformance/sessions.tflw` against the arrival server',
     evidence: { file: 'tests/examples/sessions-explained.tflw', pattern: '^test ".*" as admin$', min: 1 },
     graders: ['acceptance'],
     knownAnswer:
@@ -1698,8 +1698,23 @@ export const PLANTS = [
       'not a pair. A third test, `as admin, shopper`, covers the manifest\'s "one or more": both ' +
       'sessions\' contributions land, later-listed winning a conflict. What this row adds over the ' +
       'file is the *statement* — `M154a` counted this file as evidence of `as` and never asked ' +
-      'what it proved (`D722`).',
-    catches: 'an `as` clause that applies no credential, and one that authorizes every test in the file whether it opted in or not.',
+      'what it proved (`D722`).\n\n' +
+      '**`M198` S2 (`M189-06`) added what the pair cannot see.** A session is declared in ' +
+      '`tflw.config` and not in a `.tflw` file, so its context is rebased onto the config before ' +
+      'its body runs; a step\'s reported `source` is `lines[line - 1]`, which makes that rebase ' +
+      'observable with nothing failing. `session-context.tflw` is 36 lines and the declarations it ' +
+      'names sit at 195 and 249, so a session step rendered from the caller\'s document prints the ' +
+      'empty string — for the hand-written arm (`session-source-lines`) and for the `oauth2` arm, ' +
+      'which had the rebase applied *inside* one branch instead of above it (`oauth2-session-ctx`). ' +
+      'The rule graded is the general one: a step\'s source is the text at its own line, in the ' +
+      'document it was declared in — the plant\'s own steps are checked against the plant. ' +
+      'The third is what a session *sends*: `csrf from … send as header` attaches its token to ' +
+      'mutating requests and not to safe ones, so `sessions.tflw` issues one `GET` and one `POST` ' +
+      'under one credential and the grader asks `arrival-server.mjs` which arrival carried the ' +
+      'header. Both answer 200 either way — an application ignores a token it did not ask for — so ' +
+      'this one is graded off the socket and could not have been asserted in the file at all ' +
+      '(`csrf-attached-to-safe-methods`).',
+    catches: 'an `as` clause that applies no credential, and one that authorizes every test in the file whether it opted in or not; a session whose steps are reported out of the wrong document, in either arm of the `oauth2` branch; and a CSRF token attached to every request rather than to the mutating ones.',
     blockedOn: null,
   },
 

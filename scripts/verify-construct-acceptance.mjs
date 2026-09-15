@@ -3551,6 +3551,90 @@ if (wanted('C65') || wanted('C67') || wanted('C97')) {
   }
 }
 
+// =============================================================================
+// `M198` S2 — the sessions: what a session's steps SAY, and what a session's requests SEND
+// (`M189-06`)
+// =============================================================================
+
+// Three registry mutations, all three `reached and not asserted` by `M189a`, and all three
+// invisible to every assertion that can be written inside a `.tflw` file — which is the family's
+// whole shape. A session that reports its steps from the wrong document still authorizes; a CSRF
+// token that rides a `GET` as well as a `POST` is still accepted. Nothing goes red. So both halves
+// below are graded off something the fixture cannot fake: the first off the *coordinates* in
+// `results.json`, the second off the socket.
+if (wanted('C80')) {
+  const configPath = path.join(ROOT, 'tflw.config');
+  const configLines = readFileSync(configPath, 'utf8').split('\n');
+  const plantPath = path.join(ROOT, 'tests', '.constructs', 'session-context.tflw');
+  const plantLines = readFileSync(plantPath, 'utf8').split('\n');
+  const lineOf = (lines, n) => (lines[n - 1] ?? '').trim();
+
+  console.log('\nM198 S2 — the session context\n  target: `tests/.constructs/session-context.tflw` against apiV2, graded on the `source` of its session steps');
+  const { report, output } = runCorpus(ROOT, ['tests/.constructs/session-context.tflw']);
+  const alive = await lifecycleCounts();
+  if (!report || !alive) {
+    fail(`C80 (M198 S2) produced no ${report ? lifecycleSkipReason() : 'report'}. Is the stack up (\`node cli.mjs start\`)?\n${output.trim().split('\n').slice(-12).join('\n')}`);
+  } else {
+    const oauth = named(report, 'an oauth2 credential authorizes');
+    const hand = named(report, 'a hand-written credential authorizes');
+    const anon = named(report, 'no credential is refused');
+
+    recall('C80', oauth?.ok === true, `the \`oauth2\` sugar authorized the request (ok=${oauth?.ok}) — the client-credentials grant was made, spent and accepted`);
+    recall('C80', hand?.ok === true && anon?.ok === true, `and the hand-written credential's 200 (ok=${hand?.ok}) stands against the same path's 401 with no clause (ok=${anon?.ok})`);
+
+    // A step reported at a line beyond this file's own length cannot be one of this file's
+    // statements: it is a session step, declared in `tflw.config` and merged into the report of
+    // whichever test established it. The plant is 36 lines and the declarations sit at 195 and 249
+    // precisely so this discriminator is a fact about the numbers rather than a guess.
+    const sessionSteps = (t) => stepsOf(t).filter((s) => s.line > plantLines.length);
+    const ownSteps = (t) => stepsOf(t).filter((s) => s.line <= plantLines.length);
+    const fromConfig = (t) => sessionSteps(t).filter((s) => (s.source ?? '').trim() === lineOf(configLines, s.line));
+
+    for (const [who, test, mutation] of [['oauth2', oauth, 'oauth2-session-ctx'], ['hand-written', hand, 'session-source-lines']]) {
+      const steps = sessionSteps(test);
+      const good = fromConfig(test);
+      const sample = steps[0];
+      recall('C80', steps.length > 0 && good.length === steps.length,
+        `every one of the ${who} session's ${steps.length} reported step(s) carries the text of its own line in \`tflw.config\` (${good.length}/${steps.length}; first: line ${sample?.line ?? '—'} reads ${JSON.stringify(sample?.source ?? '')}) — rendered from the caller's document instead, a line number past this 36-line file's end prints nothing at all (\`${mutation}\`)`);
+    }
+    const own = [...ownSteps(oauth), ...ownSteps(hand), ...ownSteps(anon)];
+    const ownRight = own.filter((s) => (s.source ?? '').trim() === lineOf(plantLines, s.line));
+    precision('C80', own.length > 0 && ownRight.length === own.length,
+      `and the plant's own ${own.length} step(s) read out of the plant (${ownRight.length}/${own.length}) — so the rule is "a step's source is the text at its own line, in the document it was declared in", not "session steps are special"`);
+  }
+
+  console.log('\nM198 S2 — the csrf channel\n  target: `arrival-server.mjs` — `sessions.tflw` under `session carrier`, graded on which arrival carried the token; no stack');
+  const corpus = path.join(ROOT, 'tflw-acceptance', 'conformance');
+  let server = null;
+  try {
+    server = await startArrivalServer(corpus);
+    await arrivals('__reset');
+    const { report: csrfReport, output: csrfOutput } = runCorpus(corpus, ['sessions.tflw']);
+    if (!csrfReport) {
+      fail(`C80 (M198 S2) — no report from sessions.tflw\n${csrfOutput.trim().split('\n').slice(-10).join('\n')}`);
+    } else {
+      const safe = named(csrfReport, 'a safe method under a csrf session');
+      const mutating = named(csrfReport, 'a mutating method under the same csrf session');
+      const seen = await arrivals('__headers?name=x-csrf-token');
+      const at = (p) => seen.byPath?.[p] ?? [];
+      const TOKEN = 'csrf-6f1e';
+
+      recall('C80', at('/session/mutating').length > 0 && at('/session/mutating').every((v) => v === TOKEN),
+        `the \`POST\` carried \`X-CSRF-Token: ${TOKEN}\` (saw ${JSON.stringify(at('/session/mutating'))}) — the token the establishment response issued, off the socket rather than out of the report`);
+      recall('C80', at('/session/safe').length > 0 && at('/session/safe').every((v) => v === null),
+        `and the \`GET\` carried none (saw ${JSON.stringify(at('/session/safe'))}) — a browser does not send one to a safe method and an application may reject it if it arrives, which is why the token has its own channel instead of joining a \`header\` step's (\`csrf-attached-to-safe-methods\`)`);
+      precision('C80', at('/session/issue').length > 0 && at('/session/issue').every((v) => v === null),
+        `the establishment \`POST\` itself carried none (saw ${JSON.stringify(at('/session/issue'))}) — it is mutating too, and the token did not exist yet when it was made`);
+      precision('C80', safe?.ok === true && mutating?.ok === true,
+        `and both requests answered 200 (safe ok=${safe?.ok}, mutating ok=${mutating?.ok}) — the target ignores a token it did not ask for, which is exactly why no assertion in the file can see any of this`);
+    }
+  } catch (e) {
+    fail(`C80 (M198 S2) csrf leg could not run: ${e.message}`);
+  } finally {
+    server?.kill();
+  }
+}
+
 console.log('\nper-plant precision and recall:\n');
 // `M154f-03`. Iterate the plants THIS gate grades, not every plant on the roster. Seven rows are
 // graded by reference under `D751` — `security`, `diagnostics`, `redaction` — and this driver never

@@ -1694,14 +1694,32 @@ with that reason, and the fact that its registry entry guards a flag tflw does n
 | `C65` | the non-number refusal replaced by `Number(value)` (`comparison-coerces-operands`) | `` `is less than` refuses boolean by name (got ok=true: no error) `` — and the same for `null`, a numeric string and a one-element array: four written-to-fail tests all green |
 | `C65` | `dateOffsetMs(value)` no longer consulted (`spelled-out-duration-not-a-number`) | `` `expect duration is less than 2 seconds` compares as 2000 milliseconds (got ok=false: `is less than` expects a number, got object) `` |
 | `C97` | `guardDemoUrl` returns the URL unexamined (`reserved-scheme-passes-through`) | `` `api GET tflw://demoo/health` is refused by the sentence that names the only legal spelling (got ok=false: request failed: GET tflw://demoo/health — fetch failed) `` |
+| `C80` | `sessionCtx` no longer rebases `lines` onto the config (`session-source-lines`) | `` every one of the hand-written session's 4 reported step(s) carries the text of its own line in `tflw.config` (0/4; first: line 195 reads "") `` — and the `oauth2` clause with it, 0/1
+| `C80` | the `oauth2` arm handed the caller's raw `tc` (`oauth2-session-ctx`) | `` every one of the oauth2 session's 1 reported step(s) carries the text of its own line in `tflw.config` (0/1; first: line 249 reads "") `` — and that clause alone
+| `C80` | the `isSafeMethod` condition dropped (`csrf-attached-to-safe-methods`) | `` and the `GET` carried none (saw ["csrf-6f1e"]) `` — read off the socket, not the report
 
-All four are one run of `tflw-acceptance/conformance/singletons.tflw` against the arrival
+The first four rows are one run of `tflw-acceptance/conformance/singletons.tflw` against the arrival
 server — eight tests, five written to fail, each red graded on the *sentence* it carries, because
 the mutation it is written against turns the red green (`Number(true)` is `1`, and `1 < 5`). Two
 routes were added to the arrival server for it: `/subjects/echo`, which returns the request's
 bytes under its own content-type, and `/subjects/values`, one object of operands a comparison must
 refuse. Nothing in tflw changed; the four were sentences about the dogfood (`D975`) and they were
 true.
+
+The three `C80` rows are `M189-06`, and they are graded off two things a `.tflw` file cannot
+assert. The first is the *coordinates* in `results.json`: a session is declared in `tflw.config`,
+so its context is rebased onto that document before its body runs, and a step's reported `source`
+is `lines[line - 1]` — `tests/.constructs/session-context.tflw` is 36 lines and names declarations
+at 195 and 249, so an unrebased session step prints the empty string while every request still
+authorizes and every status is still 200. The pair of mutations is asymmetric on purpose and the
+asymmetry is the evidence: `session-source-lines` reddens **both** arms because `sessionCtx` is
+applied above the `oauth2` branch, and `oauth2-session-ctx` reddens only the `oauth2` clause,
+which is that structure measured rather than asserted. The second is the **socket**:
+`csrf from … send as header` attaches its token to mutating requests and not to safe ones, both
+answer 200 either way — an application ignores a token it did not ask for — so the grader asks
+`arrival-server.mjs` which arrival carried the header. Three routes were added for it
+(`/session/issue`, `/session/safe`, `/session/mutating`) and the corpus declares its first session.
+Nothing in tflw changed here either.
 
 ## Blocked plants (`D734`)
 
