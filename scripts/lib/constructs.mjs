@@ -1003,11 +1003,12 @@ export const PLANTS = [
     family: 'step',
     tier: 'workload',
     title: 'a flat target is at full rate from the start, with no ramp-in',
-    target: 'tflw-acceptance/conformance/arrival-server.mjs — the recorded arrival curve',
+    target: 'tflw-acceptance/conformance/arrival-server.mjs — the recorded arrival curve; plus `M198` S7\'s two plants, `self-report.tflw` (a report field and the socket counter) and `short-run.tflw` (150ms of held load)',
     evidence: { file: 'tflw-acceptance/conformance/shapes.tflw', pattern: '^\\s*hold\\s+\\d+\\s+rps\\s+for\\b', min: 1 },
     graders: ['acceptance', 'coverage'],
-    knownAnswer: '`hold 50 rps for 4s` lands ~200 requests AND is already at ~25 per 500ms bin in its second bin. `tflw spec` says "a flat target for the whole duration, **with no ramp-in**", and the only way to be wrong about that while landing the right total is to ramp — so the opening rate is asserted against the target, not merely against zero.',
-    catches: 'a hold that ramps in, and a hold whose steady rate drifts.',
+    knownAnswer: '`hold 50 rps for 4s` lands ~200 requests AND is already at ~25 per 500ms bin in its second bin. `tflw spec` says "a flat target for the whole duration, **with no ramp-in**", and the only way to be wrong about that while landing the right total is to ramp — so the opening rate is asserted against the target, not merely against zero.'
+      + '\n\n**`M198` S7** reads what the engine says about **itself**, which the arrival curve cannot move. Three legs. (1) A closed-model `hold N users` reports its own `backOff` ratio, and says the target did not degrade — the arrival server answers from memory, so `warning: false` is the negative control the mutation\'s registry note says would otherwise have nothing left to check. Written as `hold N users` and paced: `run N iterations across M users` is not one of the four closed kinds and reports no ratio at all, which the first draft did. (2) 248 arrivals across one file reach the server over **4** connections; one keep-alive pool per arrival makes it **63**, measured — a structural test asking "did an arrival use a keep-alive agent" stays green under that, which is why the claim is reuse observed at the socket. (3) 150 ms of held load reads ~112% of a core, over the 90 that trips the CPU arm, and still reports `saturated: false` — the claim is the *pair*, because a run whose rate sat under the threshold would satisfy the verdict for the wrong reason and be green under the mutant too. Its own file, since `selfDiagnosis` is stamped once per run and not per scenario.',
+    catches: 'a hold that ramps in, and a hold whose steady rate drifts; a back-off diagnostic that stops applying to the shape it was written for; an open model that builds a connection pool per arrival; and a saturation floor removed, so a run too short to mean anything calls tflw its own bottleneck.',
     blockedOn: null,
   },
   {

@@ -48,9 +48,13 @@
   "was": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
  },
  "backoff-hold-kind": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "workload:closed-model",
-  "why": "a module-level constant every plant loads; the D17 back-off diagnostic it names lands in the report as `backOff`, and C45 (`step:hold`) grades the arrival curve, not whether the run reported backing off — a `hold N users` against a path slow enough to back off is the fixture"
+  "why": "a module-level constant every plant loads; the D17 back-off diagnostic it names lands in the report as `backOff`, and C45 (`step:hold`) grades the arrival curve, not whether the run reported backing off — a `hold N users` against a path slow enough to back off is the fixture",
+  "was": "not-asserted",
+  "plant": "C45",
+  "redLine": "the closed-model `hold N users` scenario reported its own back-off ratio (null)",
+  "at": "2026-09-15"
  },
  "blocked-port-hint-reads-undicis-prose": {
   "verdict": "out-of-reach-by-design",
@@ -138,19 +142,27 @@
   "at": "2026-09-15"
  },
  "open-model-agents-per-arrival": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "workload:open-model",
-  "why": "same eight plants, same curve-only grading — a fresh TCP handshake per arrival moves the reported latency and not the arrival count"
+  "why": "same eight plants, same curve-only grading — a fresh TCP handshake per arrival moves the reported latency and not the arrival count",
+  "was": "not-asserted",
+  "plant": "C45",
+  "redLine": "248 arrivals across this file reached the server over 63 connection(s) — against 4 on the shipped build",
+  "at": "2026-09-15"
  },
  "open-model-back-to-fetch": {
-  "verdict": "not-asserted",
+  "verdict": "out-of-reach-by-design",
   "family": "workload:open-model",
-  "why": "eight perf plants run open-model arrivals through this line and grade the arrival curve the server recorded; none grades the reported latency, which is where the unpinned fetch path shows (p50 36 ms against 0 ms in the same process)"
+  "why": "MEASURED 2026-09-15 on fedora-box, twice. The entry's stated consequence (M118-02: a 0.2ms endpoint reporting p50 36ms under `hold 10 rps`) no longer reproduces: at 20 rps the mutant reports p50 1.2ms against the shipped build's 1.0ms, and at 200 rps 1.1ms against 0.91ms. Only `max` separates them (27-30ms vs 1.6-9.7ms), which is one sample. The `fetch` this falls back to is undici, which keeps connections alive by default now, so the handshake-per-request cost the original measurement was made of is gone — and the connection counter that catches `open-model-agents-per-arrival` sees nothing here for the same reason. Filed as `M198-02`.",
+  "was": "not-asserted",
+  "at": "2026-09-15"
  },
  "open-model-maxsockets-bounded": {
-  "verdict": "not-asserted",
+  "verdict": "out-of-reach-by-design",
   "family": "workload:open-model",
-  "why": "a module-level constant every plant loads; its effect — arrivals queuing inside the generator past 50 concurrent sockets and reporting the wait as service time — needs a workload that holds more than 50 connections open at once, and the perf plants are deliberately small (25 rps against a 50 ms path)"
+  "why": "Refused by its own registry entry, which says the cap is \"a decision, not tuning\" and that reaching 50 concurrent sockets \"needs a slow endpoint driven hard enough to make the test both expensive and flaky\". A plant would be the flake that sentence refuses. The entry credits a decision number tflw mentions in `httpPinned.ts` but never published in DECISIONS.md, so it is deliberately not quoted here — a citation this repository's reader cannot follow is worse than the sentence without it.",
+  "was": "not-asserted",
+  "at": "2026-09-15"
  },
  "passing-assertion-gets-annotated": {
   "verdict": "asserted",
@@ -176,24 +188,34 @@
   "was": "82 plants pass their base URL through the reserved-scheme guard and every one is `http://`; a fixture whose `api` is a misspelt `tflw://` scheme, graded on the one-sentence refusal, is the plant"
  },
  "saturation-cpu-arm-never-fires": {
-  "verdict": "not-asserted",
+  "verdict": "out-of-reach-by-design",
   "family": "workload:self-diagnosis",
-  "why": "the generator self-diagnosis (`saturated`) is computed on every load run and lands in results.json; seven or eight perf plants read the arrival curve and never the diagnosis, and none of them drives its own generator hard enough to trip either arm — a deliberately saturating fixture is possible and expensive on a shared box"
+  "why": "Same as `saturation-lag-arm-never-fires`, and worse: `M119-02` records the busy-block test reading 46.2% against sixteen competing busy loops on a sixteen-core box, which is this box under `--parallel-groups`. Measured for scale: at 20 rps the generator reports 3-4% CPU against a 90% threshold.",
+  "was": "not-asserted",
+  "at": "2026-09-15"
  },
  "saturation-flips-a-gradable-threshold": {
-  "verdict": "not-asserted",
+  "verdict": "out-of-reach-by-design",
   "family": "run:verdict",
-  "why": "reached by C3; the verdict-collapse it inverts needs a saturated generator, which no plant produces, so the merged `ok` is only ever computed over scenarios that all measured cleanly"
+  "why": "Needs `selfDiagnosis.saturated` true on the shipped build with every scenario otherwise green, so it inherits the whole saturation problem above — see `saturation-lag-arm-never-fires`. `saturation-ignores-the-min-window` is the one of the four that needs no saturation at all, only a run too short to be judged, which is why it has a plant and this does not.",
+  "was": "not-asserted",
+  "at": "2026-09-15"
  },
  "saturation-ignores-the-min-window": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "workload:self-diagnosis",
-  "why": "the generator self-diagnosis (`saturated`) is computed on every load run and lands in results.json; seven or eight perf plants read the arrival curve and never the diagnosis, and none of them drives its own generator hard enough to trip either arm — a deliberately saturating fixture is possible and expensive on a shared box"
+  "why": "the generator self-diagnosis (`saturated`) is computed on every load run and lands in results.json; seven or eight perf plants read the arrival curve and never the diagnosis, and none of them drives its own generator hard enough to trip either arm — a deliberately saturating fixture is possible and expensive on a shared box",
+  "was": "not-asserted",
+  "plant": "C45",
+  "redLine": "a 150ms run reads 125% of a core and still reports `saturated: false` (true) — and inconclusive=true, ok=false beside it",
+  "at": "2026-09-15"
  },
  "saturation-lag-arm-never-fires": {
-  "verdict": "not-asserted",
+  "verdict": "out-of-reach-by-design",
   "family": "workload:self-diagnosis",
-  "why": "the generator self-diagnosis (`saturated`) is computed on every load run and lands in results.json; seven or eight perf plants read the arrival curve and never the diagnosis, and none of them drives its own generator hard enough to trip either arm — a deliberately saturating fixture is possible and expensive on a shared box"
+  "why": "Needs a genuinely saturated generator, which `M119-02` already settled inside tflw: the arms' only driven coverage was a busy-block test racing the OS scheduler, and the repair was to extract `isSaturated` as a pure function and pin the thresholds where no scheduler gets a vote. Driving it from the dogfood re-introduces the flake tflw removed, on a box that runs this sweep as four contending groups. Measured for scale: at 20 rps the generator reports 0.3ms of average event-loop lag against a 100ms threshold.",
+  "was": "not-asserted",
+  "at": "2026-09-15"
  },
  "session-source-lines": {
   "verdict": "asserted",

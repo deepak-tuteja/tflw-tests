@@ -411,6 +411,17 @@ const server = createServer((req, res) => {
   // percentile of, so `actual` is null and the run has to say the threshold could not be judged
   // instead of reporting it as met. `/gate` and `/slow` above are slow; nothing here was ever
   // *broken*, and a threshold's null arm was unreachable for that reason alone.
+  // `M198` S7 / `C45` (`D1035`) — two ordinary counted paths whose only job is to be reached by one
+  // workload each, so the generator's own report about itself can be read without the samples of
+  // any other plant mixed into it. They answer exactly like the default branch; what makes them
+  // worth naming is the *isolation*, because `/__arrivals`' connection counter is global to the
+  // process and `arrivals ÷ connections` is only a number if one file's scenarios made them.
+  if (path === '/selfreport-closed' || path === '/selfreport-open') {
+    count(path, req);
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end('{"ok":true}');
+    return;
+  }
   if (path === '/always-500') {
     count(path, req);
     res.writeHead(500, { 'content-type': 'application/json' });

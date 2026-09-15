@@ -1700,6 +1700,41 @@ overwritten, and no plant driving `tflw run` can ever see it — only a consumer
 directly, which is tflw's own unit tests. That is defence in depth working, not a defect, so no
 row is filed against tflw; `out-of-reach-by-design`, with the measurement and the mechanism.
 
+`M198` S7 leaves **five** out of reach, which is the largest group in the drawdown and the one the
+plan predicted. Two are declared by tflw's own records and three were measured here.
+
+`open-model-maxsockets-bounded` is refused by its own registry entry, which says the cap is *"a
+decision, not tuning"* and that reaching 50 concurrent sockets *"needs a slow endpoint driven hard
+enough to make the test both expensive and flaky"*. A plant would be the flake that sentence
+refuses. (The entry credits a decision number tflw mentions in `httpPinned.ts` but never published
+in `DECISIONS.md`, so it is deliberately not quoted here — a citation this repository's reader
+cannot follow is worse than the sentence without it.)
+
+`saturation-lag-arm-never-fires`, `saturation-cpu-arm-never-fires` and
+`saturation-flips-a-gradable-threshold` all need a generator that is **genuinely saturated**, and
+`M119-02` already settled that question inside tflw: the CPU arm's only coverage used to be a
+busy-block test racing the OS scheduler, it read **46.2%** against sixteen competing busy loops on a
+sixteen-core box, and the repair was to extract `isSaturated` as a pure function and pin the
+thresholds where no scheduler gets a vote. Driving real saturation from the dogfood would
+re-introduce exactly the flake tflw removed — and it would do it on a box that runs this sweep as
+four contending groups, which is the condition that produced the 46.2%. Measured here for scale: at
+20 rps the generator reports 3–4% CPU and 0.3 ms of average event-loop lag, against thresholds of
+90% and 100 ms. `saturation-ignores-the-min-window` is the one of the four that needs no saturation
+at all — only a run too short to be judged — which is why it has a plant and the others do not.
+
+`open-model-back-to-fetch` is the interesting one, because its registry entry states a consequence
+that **no longer reproduces**. The entry records `M118-02`: a 0.2 ms endpoint reporting p50 36 ms
+under `hold 10 rps` while `hold 1 users` read 0 ms in the same process. Applied on the box against
+this plant, twice: at 20 rps the mutant reports **p50 1.2 ms against the shipped build's 1.0 ms**,
+and at 200 rps **1.1 ms against 0.91 ms**. Only `max` separates them — 27–30 ms against 1.6–9.7 ms
+— and that is one sample, which is a coin-flip to assert on. The reason is not tflw's: the `fetch`
+this mutation falls back to is `undici`, and `undici` keeps connections alive by default now, so the
+handshake-per-request cost the original measurement was made of is gone. The connection counter that
+catches `open-model-agents-per-arrival` sees nothing here for the same reason. Recorded as
+`out-of-reach-by-design` with both measurements, and filed as `M198-02`: **a mutation whose kill
+criterion is a third-party runtime's behaviour stops being killable when that runtime improves, and
+nothing says so.**
+
 | plant | mutation of tflw (registry id) | the red line |
 |---|---|---|
 | `C67` | `JSON.stringify(evalValue(...))` → `JSON.stringify({ ...evalValue(...) })` (`array-body-flattened-to-an-object`) | `` the bytes that left are the array itself — `[{"name":"Widget"},{"name":"Sprocket"}]` — where a body spread into an object leaves as `{"0":{…},"1":{…}}` `` — and the index reads beside it, three clauses red |
@@ -1725,6 +1760,9 @@ row is filed against tflw; `out-of-reach-by-design`, with the measurement and th
 | `C49` | the threshold's null arm answers `true` (`ungradable-threshold-passes`) | `` a duration threshold over a scenario whose every iteration failed is NOT met (actual=null, ok=true) `` — the threshold's own row, because `TF033` keeps the test red under both builds |
 | `C49` | the scope lookup dropped (`threshold-scope-falls-back-to-the-whole-histogram`) | `` a scoped threshold read its own endpoint's bucket (actual=55ms against a 25ms bound, ok=false) `` — 55 ms is the scenario's p95, 1 ms is the `"fast"` bucket's |
 | `C49` | `ok` back to "nothing that ran failed" (`ok-ignores-no-verdict`) | `` and it is `ok: false` (true) `` — on **both** legs, single-process and `--workers 4`, because `finalizeVerdict` is the one derivation |
+| `C45` | `HoldUsersWorkload` dropped from `CLOSED_USERS_KINDS` (`backoff-hold-kind`) | `` the closed-model `hold N users` scenario reported its own back-off ratio (null) `` — the field is gone entirely, which is not the same as a field with a wrong value |
+| `C45` | a keep-alive pool built per arrival (`open-model-agents-per-arrival`) | `` 248 arrivals across this file reached the server over 63 connection(s) `` — against 4 on the shipped build, read off `server.on('connection')` |
+| `C45` | the `wallMs < 300` floor removed (`saturation-ignores-the-min-window`) | `` a 150ms run reads 125% of a core — over the 90 that trips the CPU arm — and still reports `saturated: false` (true) `` — and `inconclusive=true, ok=false` beside it, the run losing its verdict to startup cost |
 
 The first four rows are one run of `tflw-acceptance/conformance/singletons.tflw` against the arrival
 server — eight tests, five written to fail, each red graded on the *sentence* it carries, because

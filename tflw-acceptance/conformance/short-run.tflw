@@ -1,0 +1,33 @@
+# `M198` S7 / `C45` — `M32`'s floor, and the only one of the four saturation mutations a plant can
+# reach (`M189-04`).
+#
+# `isSaturated` refuses to call any run shorter than `MIN_SATURATION_WINDOW_MS` saturated, whatever
+# the numbers say. The reason is on the record in `selfDiagnosis.ts`: `cpuPercent` is `cpuMs /
+# wallMs`, and one-time startup cost — V8 JIT warm-up, first-call module and regex compilation — is
+# real CPU time that does not shrink because the run is brief, so a very short window inflates the
+# *rate* even when nothing is sustained. `M32` found it on a genuinely tiny 150 ms two-scenario run
+# reading 140% CPU from pure startup cost.
+#
+# **This file is that run.** Measured on `fedora-box`: 150 ms of held load reads `cpuPercent` **112**
+# — comfortably over the 90 that would otherwise trip the CPU arm — and the report still says
+# `saturated: false`, `inconclusive: false`, `ok: true`. Remove the floor and the identical run says
+# `saturated: true`, `inconclusive: true`, `ok: false`.
+#
+# So the known answer is a **pair of facts that disagree**: the numbers say saturated and the
+# verdict says not. Neither alone is the claim — a run whose CPU sat under 90 would satisfy
+# `saturated === false` for the wrong reason and be green under the mutant too, which is why the
+# grader asserts the rate is over the threshold as well.
+#
+# It is a file of its own because `selfDiagnosis` is stamped **once per run**, not per scenario:
+# put this 150 ms workload beside `self-report.tflw`'s two-second one and the window is no longer
+# short, and the plant silently stops testing the floor.
+#
+# The other three saturation mutations have no plant here and cannot have one — see
+# `CONSTRUCTS.md`'s drawdown table for the reason, which is tflw's own.
+
+@constructs @selfreport
+test "a run too short to mean anything does not call itself saturated, however its rate reads"
+  hold 1 users for 150ms
+  api GET /selfreport-closed
+  expect status equals 200
+  threshold error rate is less than 1%

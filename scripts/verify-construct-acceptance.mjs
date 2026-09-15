@@ -3927,6 +3927,92 @@ if (wanted('C49')) {
   }
 }
 
+// =============================================================================
+// `M198` S7 — the engine's report about itself, for `C45` (`M189-04`)
+// =============================================================================
+
+// Eight perf plants run the workload engine and every one of them grades the **arrival curve the
+// server recorded**. That is the right thing to grade for a shape — `C44`-`C47` are about whether a
+// `hold` is flat and a `ramp` rises — and it is exactly why three fields tflw writes about its own
+// behaviour have never been read: the arrival count is identical whether or not the generator
+// reused a socket, whether or not a closed-model target slowed down, and whichever client the
+// arrivals went out over.
+//
+// Both legs are read off something the file cannot reach. The back-off ratio is a field in the
+// scenario report that no `.tflw` assertion addresses; the connection count is the arrival server's
+// own `server.on('connection')` tally, which no arrival curve can move.
+if (wanted('C45')) {
+  console.log('\nM198 S7 — the generator\'s self-report\n  target: `arrival-server.mjs` — `self-report.tflw`, graded on a report field and a socket count; no stack');
+  const srCorpus = path.join(ROOT, 'tflw-acceptance', 'conformance');
+  let srServer = null;
+  try {
+    srServer = await startArrivalServer(srCorpus);
+    await arrivals('__reset');
+    const { report: srReport, output: srOutput } = runCorpus(srCorpus, ['self-report.tflw']);
+    if (!srReport) {
+      fail(`C45 (M198 S7) — no report from self-report.tflw\n${srOutput.trim().split('\n').slice(-10).join('\n')}`);
+    } else {
+      const held = (srReport.tests ?? []).find((t) => (t.name ?? '').includes('a closed-model hold reports its own back-off ratio'));
+      const open = (srReport.tests ?? []).find((t) => (t.name ?? '').includes('open-model arrivals share one connection pool'));
+      const seen = await arrivals('__arrivals');
+
+      // `computeBackOff` answers only for a closed-users workload holding one concurrency level
+      // (`M107-01`/`D-M107-1`: under a rising target the halves differ by Little's law, not by
+      // degradation). `hold N users` is that shape, and the mutation drops exactly that kind — so
+      // the field is simply *absent*, which is not the same as a field with a wrong value and is
+      // why no existing plant could see it.
+      recall('C45', held?.backOff != null && typeof held.backOff.ratio === 'number',
+        `the closed-model \`hold N users\` scenario reported its own back-off ratio (${JSON.stringify(held?.backOff ?? null)}) — \`C45\` otherwise grades this shape on its arrival curve, and an optional field that is gone entirely is not a field with a wrong value (\`backoff-hold-kind\`)`);
+      precision('C45', held?.backOff?.warning === false,
+        `and it says the target did not degrade (warning=${held?.backOff?.warning}) — the arrival server answers from memory with nothing behind it, so this is the negative control the mutation's own registry note says would have nothing left to check`);
+      precision('C45', (held?.metrics?.iterations ?? 0) >= 20,
+        `over ${held?.metrics?.iterations ?? '—'} iterations, which clears the ten-per-half floor the ratio needs — written as \`hold N users\` and paced, because \`run N iterations across M users\` is not one of the four closed kinds and reports no ratio at all`);
+
+      // `D206`/`D207`: an `rps` arrival goes out over a pool that is shared across the scenario, not
+      // built per arrival. A structural test asking "did an arrival use a keep-alive agent" stays
+      // green under the per-arrival mutant, so the claim has to be reuse observed at the socket.
+      const conns = seen.connections ?? null;
+      const total = seen.total ?? 0;
+      recall('C45', typeof conns === 'number' && conns > 0 && conns <= 12,
+        `${total} arrivals across this file reached the server over ${conns} connection(s) — one pool per arrival is the over-correction \`D207\` rejects and is *worse* than the \`fetch\` path it replaced, because every sample then pays for a fresh handshake (\`open-model-agents-per-arrival\`)`);
+      // `open-model-back-to-fetch` is NOT visible in the socket count — measured: undici pools per
+      // origin too, and the connection tally is unchanged. Its defect is the one `M118-02` records
+      // as a number: back on `sendRequest`'s unpinned `fetch`, a sub-millisecond endpoint reports a
+      // p50 tens of milliseconds high, because the client's own queueing lands inside the measured
+      // window. So this clause is a latency bound, and it is the only one in this milestone — the
+      // effect is ~30x, not a margin, which is `M157g`'s rule met rather than dodged.
+      const openP50 = open?.metrics?.durations?.p50 ?? null;
+      recall('C45', typeof openP50 === 'number' && openP50 < 12,
+        `and the latency it reported for them is the target's, not the client's (p50 ${openP50}ms) — off the pinned pool a 0.5ms path reads ~1ms; back on \`fetch\` the same path reported p50 36ms under \`hold 10 rps\` while \`hold 1 users\` read 0ms in the same process (\`open-model-back-to-fetch\`, \`M118-02\`)`);
+      precision('C45', open?.ok === true && (open?.metrics?.iterations ?? 0) === 60,
+        `and the open-model scenario itself landed its full ${open?.metrics?.iterations ?? '—'} arrivals (ok=${open?.ok}) — the curve is unchanged by any of this, which is the whole reason the socket is where the claim had to go`);
+    }
+
+    // `M32`'s floor, in its own file because `selfDiagnosis` is stamped once per RUN and not per
+    // scenario — put a 150 ms workload beside a two-second one and the window is no longer short.
+    console.log('\nM198 S7 — the saturation floor\n  target: `short-run.tflw` — 150ms of held load, graded on two facts that disagree; no stack');
+    const { report: shortReport, output: shortOutput } = runCorpus(srCorpus, ['short-run.tflw']);
+    if (!shortReport) {
+      fail(`C45 (M198 S7) — no report from short-run.tflw\n${shortOutput.trim().split('\n').slice(-10).join('\n')}`);
+    } else {
+      const sd = shortReport.selfDiagnosis ?? null;
+      // The claim is the PAIR. `saturated === false` alone would be satisfied by a run whose rate
+      // sat under the threshold, and such a run is green under the mutant too — so the rate being
+      // over 90 is what makes the verdict mean "the floor refused it" rather than "there was
+      // nothing to refuse". Startup cost is larger on a loaded machine, not smaller, so this is a
+      // lower bound that a busy box strengthens.
+      recall('C45', sd != null && sd.saturated === false && sd.cpuPercent > 90,
+        `a 150ms run reads ${sd?.cpuPercent?.toFixed?.(0) ?? '—'}% of a core — over the 90 that trips the CPU arm — and still reports \`saturated: false\` (${sd?.saturated}) — \`cpuPercent\` is \`cpuMs / wallMs\` and V8 warm-up is real CPU time that does not shrink because the run is brief, which is \`M32\`'s finding on a 150ms run reading 140% (\`saturation-ignores-the-min-window\`)`);
+      recall('C45', shortReport.inconclusive === false && shortReport.ok === true,
+        `so the run reaches a verdict (inconclusive=${shortReport.inconclusive}, ok=${shortReport.ok}) — without the floor this identical run calls tflw its own bottleneck and hands back no verdict at all`);
+    }
+  } catch (e) {
+    fail(`C45 (M198 S7) could not run: ${e.message}`);
+  } finally {
+    srServer?.kill();
+  }
+}
+
 console.log('\nper-plant precision and recall:\n');
 // `M154f-03`. Iterate the plants THIS gate grades, not every plant on the roster. Seven rows are
 // graded by reference under `D751` — `security`, `diagnostics`, `redaction` — and this driver never
