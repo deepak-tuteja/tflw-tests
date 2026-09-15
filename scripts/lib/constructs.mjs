@@ -2125,7 +2125,10 @@ export const PLANTS = [
       + '**`/second/gamma`** — a different base, chosen by the name on the step. Ground truth is the '
       + 'server\'s own path counter, never tflw\'s report of where it sent things: a run that '
       + 'resolved `/alpha` against the wrong service, or concatenated the base and dropped its path, '
-      + 'produces an identical green summary and a different set of paths on the wire. The grid has a third column for the case where the key must do NOTHING: an absolute target is the address itself, so no base is joined onto it and the same step arrives at the same path under two different `api` bases — `/absolute` under `…/base` and `/absolute` again under `…/other`. Widened at `M164-03`, after the mutation that states it had already existed since `M125b1` and this plant had never been red: the boundary of a key is part of what the key means, and leaving it unstated was an omission rather than a decision.',
+      + 'produces an identical green summary and a different set of paths on the wire. The grid has a third column for the case where the key must do NOTHING: an absolute target is the address itself, so no base is joined onto it and the same step arrives at the same path under two different `api` bases — `/absolute` under `…/base` and `/absolute` again under `…/other`. Widened at `M164-03`, after the mutation that states it had already existed since `M125b1` and this plant had never been red: the boundary of a key is part of what the key means, and leaving it unstated was an omission rather than a decision. `M197` (tflw D1024) adds the override leg: `api env TFLW_C97_BASE default "http://127.0.0.1:1/base"` — '
+      + 'with the variable set the same three paths arrive and the report carries the overridden URL verbatim (a plain '
+      + 'value, not `•••(NAME)`: the construct is deliberately not `env()`); with it unset the run names `127.0.0.1:1`, '
+      + 'so the literal is the default and not decoration.',
     catches: 'a base URL whose own path is discarded when a step\'s path is appended, a named service resolved to the default base, and a base URL prepended to an absolute target — which composes an address the arrival server answers `200` to, so the run stays green and only the wire says where it went.',
     blockedOn: null,
   },
@@ -2368,7 +2371,7 @@ export const PLANTS = [
     tier: 'ui',
     title: 'two files, two `web` bases, and each is at home under exactly one of them',
     target: 'webV2\'s SPA storefront (`:8090`) and its SSR admin console (`:8091`) — `open "/"` under each',
-    evidence: { file: 'tests/.constructs/config-keys/web-admin.config', pattern: '^\\s*web "http://localhost:8091"\\s*$', min: 1 },
+    evidence: { file: 'tests/.constructs/config-keys/web-admin.config', pattern: '^\\s*web (env TFLW_WEB_ADMIN_BASE default )?"http://localhost:8091"\\s*$', min: 1 },
     run: 'open-admin.tflw',
     graders: ['acceptance', 'coverage'],
     knownAnswer:

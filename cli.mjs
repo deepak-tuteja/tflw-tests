@@ -5,28 +5,36 @@
 import { execSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ports, stackEnv } from './scripts/lib/stack-ports.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 
+// `M197` (tflw `D1025`): the ports come from `scripts/lib/stack-ports.mjs` — offset by
+// `TFLW_STACK_OFFSET`, exported as `TFLW_PORT_*` for `docker-compose.yml`'s `${…:-default}`
+// bindings — so four stacks can run on one machine under `COMPOSE_PROJECT_NAME`s of their own.
+const STACK = stackEnv();
+const P = ports();
+
 function run(cmd) {
-  execSync(cmd, { cwd: ROOT, stdio: 'inherit' });
+  execSync(cmd, { cwd: ROOT, stdio: 'inherit', env: { ...process.env, ...STACK } });
 }
 
 function start() {
   run('docker compose up -d --build --wait');
-  console.log('\napi v2: http://localhost:4001 (health /v1/health, docs /docs, spec /openapi.json)');
+  const project = process.env.COMPOSE_PROJECT_NAME ? ` [${process.env.COMPOSE_PROJECT_NAME}, offset ${STACK.TFLW_STACK_OFFSET}]` : '';
+  console.log(`\napi v2: http://localhost:${P.API}${project} (health /v1/health, docs /docs, spec /openapi.json)`);
   console.log(
-    'tls sidecar: https://localhost:8443 (self-signed) · https://localhost:8444 (mTLS — client ' +
+    `tls sidecar: https://localhost:${P.TLS} (self-signed) · https://localhost:${P.MTLS} (mTLS — client ` +
       'cert required, see nginx/certs/ after start)',
   );
   // M137g's plant listener, announced only when it is actually there. Printing it unconditionally
   // would tell somebody running a clean stack that a broken-cipher host is up when 8445 is refusing
   // connections, and a banner nobody can trust is worse than one line shorter.
   if (process.env.VULN_MODE === '1') {
-    console.log('tls sidecar (VULN_MODE): https://localhost:8445 — V18, offers NULL-SHA256 alongside a modern suite');
+    console.log(`tls sidecar (VULN_MODE): https://localhost:${P.VULN_TLS} — V18, offers NULL-SHA256 alongside a modern suite`);
   }
-  console.log('webV2 storefront: http://localhost:8090 (browser-arc dogfood target)');
-  console.log('webV2 admin console: http://localhost:8091 (SSR, full-page-nav dogfood target)');
+  console.log(`webV2 storefront: http://localhost:${P.WEB} (browser-arc dogfood target)`);
+  console.log(`webV2 admin console: http://localhost:${P.WEB_ADMIN} (SSR, full-page-nav dogfood target)`);
 }
 
 function stop() {

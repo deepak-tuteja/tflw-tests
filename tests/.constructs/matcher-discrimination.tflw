@@ -86,13 +86,13 @@ test "matches schema validates against the API's own document, and rejects a doc
   api GET /soft-check/known-answer
   expect status equals 200
 
-  expect body matches schema "SoftCheckAnswerDto" from "http://localhost:4001/openapi.json"
+  expect body matches schema "SoftCheckAnswerDto" from root "/openapi.json"
   # The negative half, and it is the half that means something: a schema matcher that resolved the
   # `$ref` to nothing, or that treated "no errors reported" as "valid", passes the line above
   # against literally any body. `ProductResponseDto` is a different shape in the same document —
   # and it is the one `matchers-explained.tflw` asserts *positively* against a product, so the pair
   # of files together shows the matcher discriminating in both directions on one schema.
-  expect body not matches schema "ProductResponseDto" from "http://localhost:4001/openapi.json"
+  expect body not matches schema "ProductResponseDto" from root "/openapi.json"
 
 @constructs @matchers
 test "greater than and less than are strict at the boundary"

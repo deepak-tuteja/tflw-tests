@@ -5,7 +5,9 @@
 // quantity for this product is exactly `baseQuantity + n * perRequestQuantity` — proving
 // CartService.addItem's atomic increment (fixed from a read-modify-write race) holds under real
 // concurrency, the same lost-update class M15 already fixed for stock.
-const BASE_URL = 'http://localhost:4001/v1';
+// `M197`: the stack's port comes from the environment the run was started under (the same
+// `TFLW_API_BASE` `tflw.config` reads, offset per regression worker); the literal is the default.
+const BASE_URL = process.env.TFLW_API_BASE || 'http://localhost:4001/v1';
 
 export async function assertConcurrentCartAdd(
   _ctx: { env: NodeJS.ProcessEnv },

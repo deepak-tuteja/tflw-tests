@@ -59,6 +59,7 @@
 const VULN_ROUTES = { pathPrefix: '/v1/vuln/' };
 
 import { gradersFor } from './graders.mjs';
+import { urls } from './stack-ports.mjs';
 
 /** The four scripts that grade this ledger, selected from the one table in `lib/graders.mjs`.
  *
@@ -236,7 +237,7 @@ export const PLANTS = [
     // have a real document to judge rather than `vuln.controller.ts`'s fabricated `text/html`.
     kind: 'positive',
     subject: 'page',
-    origin: 'http://localhost:8091',
+    origin: urls().TFLW_WEB_ADMIN_BASE,
     rules: {
       'sec/csp-missing': 'serious',
       'sec/x-frame-options': 'moderate',
@@ -260,7 +261,7 @@ export const PLANTS = [
     kind: 'negative',
     subject: 'page',
     page: '/hardened',
-    origin: 'http://localhost:8091',
+    origin: urls().TFLW_WEB_ADMIN_BASE,
     surface: { via: 'spider' },
     graders: ['security'],
   },

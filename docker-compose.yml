@@ -54,7 +54,7 @@ services:
       API_BASE_URL: http://api:4001/v1
       PORT: 4002
     ports:
-      - "4002:4002"
+      - "${TFLW_PORT_INVENTORY:-4002}:4002"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:4002/v1/health"]
       interval: 2s
@@ -117,8 +117,11 @@ services:
       # `VULN_MODE=1 node cli.mjs start` adds five deliberately-flawed-or-hardened responses.
       VULN_MODE: ${VULN_MODE:-}
       PORT: 4001
+      # `M197`: the port the HOST reaches this container on — the one an absolute self-redirect
+      # must name, since the container's own 4001 is not published under an offset stack.
+      PUBLIC_PORT: ${TFLW_PORT_API:-4001}
     ports:
-      - "4001:4001"
+      - "${TFLW_PORT_API:-4001}:4001"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:4001/v1/health"]
       interval: 2s
@@ -148,9 +151,9 @@ services:
     environment:
       VULN_MODE: ${VULN_MODE:-}
     ports:
-      - "8443:8443"
-      - "8444:8444"
-      - "8445:8445"
+      - "${TFLW_PORT_TLS:-8443}:8443"
+      - "${TFLW_PORT_MTLS:-8444}:8444"
+      - "${TFLW_PORT_VULN_TLS:-8445}:8445"
     volumes:
       - ./nginx/certs:/certs
     healthcheck:
@@ -176,7 +179,7 @@ services:
       api:
         condition: service_healthy
     ports:
-      - "8090:80"
+      - "${TFLW_PORT_WEB:-8090}:80"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
       interval: 2s
@@ -196,7 +199,7 @@ services:
       api:
         condition: service_healthy
     ports:
-      - "8091:3000"
+      - "${TFLW_PORT_WEB_ADMIN:-8091}:3000"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/login"]
       interval: 2s

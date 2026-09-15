@@ -42,11 +42,12 @@ import { connect as tlsConnect } from 'node:tls';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PLANTS, assertClaims, plantsFor } from './lib/plants.mjs';
+import { urls } from './lib/stack-ports.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
-const API_BASE = 'http://localhost:4001/v1';
-const DOC_URL = 'http://localhost:4001/openapi.json';
+const API_BASE = urls().TFLW_API_BASE; // `M197`: offset per worker
+const DOC_URL = `${urls().TFLW_API_ORIGIN}/openapi.json`;
 
 let failures = 0;
 let checks = 0;

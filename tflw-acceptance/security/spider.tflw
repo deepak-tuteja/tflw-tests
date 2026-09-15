@@ -79,7 +79,7 @@ crawl "the admin console, walked as an admin" as console
   # — so that **depth** is the binding bound. That matters for stability, not tidiness: a page cap
   # binding mid-level would truncate at whatever the frontier order happened to be that run, and this
   # file's numbers are read by a grader.
-  seed spider "http://localhost:8091/"
+  seed spider adminConsole "/"
     max pages 60
     max depth 2
 
@@ -118,7 +118,7 @@ crawl "the storefront shell, which a fetching spider cannot read" as console
   #
   # The origin is authorized for exactly this reason — an unauthorized one would be refused by `TF060`
   # before it could demonstrate anything, and a blind spot has to be reached to be reported.
-  seed spider "http://localhost:8090/"
+  seed spider storefront "/"
     max pages 5
     max depth 2
 

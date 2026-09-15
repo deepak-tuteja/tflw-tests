@@ -3,7 +3,9 @@
 // parking-lot P#3, "OpenAPI/contract") but no declarative primitive for it. Deliberately minimal
 // (no ajv/json-schema dependency): just enough to check `type`/`required`/`nullable` for this
 // suite's own generated schemas, not a general-purpose validator.
-const BASE_URL = 'http://localhost:4001';
+// `M197`: the stack's port comes from the environment the run was started under (the same
+// `TFLW_API_ORIGIN` `tflw.config` reads, offset per regression worker); the literal is the default.
+const BASE_URL = process.env.TFLW_API_ORIGIN || 'http://localhost:4001';
 
 interface JsonSchema {
   type?: string;

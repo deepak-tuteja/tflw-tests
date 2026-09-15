@@ -28,6 +28,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { urls } from './lib/stack-ports.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -40,8 +41,8 @@ try {
   // Already-exported variables are equally fine — CI does it that way.
 }
 
-const HTTP_BASE = 'http://localhost:4001/v1';
-const HTTPS_BASE = 'https://localhost:8443/v1';
+const HTTP_BASE = urls().TFLW_API_BASE; // `M197`: the stack's ports come from the lib, offset per worker
+const HTTPS_BASE = urls().TFLW_TLS_BASE;
 
 // The sidecar's server cert is regenerated per container start from a throwaway CA, so there is no
 // stable trust root to point at — the same reasoning `tflw.config`'s `insecure true` records for
@@ -776,7 +777,7 @@ section('V15 — the document fact: the route is enumerable under VULN_MODE=1');
 {
   // Unversioned, like every other consumer of this document in the repo (`env local`'s `api root`
   // service — see `tflw.config`'s comment, and `contract-and-retry.tflw`'s absolute source).
-  const doc = await probe('http://localhost:4001', '/openapi.json');
+  const doc = await probe(urls().TFLW_API_ORIGIN, '/openapi.json');
   ok('/openapi.json is served', doc.status === 200, `status ${doc.status}`);
   let paths = {};
   try {

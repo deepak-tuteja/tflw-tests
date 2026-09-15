@@ -53,6 +53,7 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveTflw } from './lib/tflw-bin.mjs';
+import { urls } from './lib/stack-ports.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const SWEEP = path.join(ROOT, '.sweep-input');
@@ -94,7 +95,7 @@ for (const sibling of ['shared']) {
 const config = readFileSync(path.join(ROOT, 'tflw.config'), 'utf8');
 const lines = config.split('\n');
 const targetLine = lines.findIndex((l) =>
-  /^\s*authorized target "http:\/\/localhost:4001"/.test(l),
+  /^\s*authorized target (env TFLW_API_ORIGIN default )?"http:\/\/localhost:4001"/.test(l), // `M197`: the line carries its override
 );
 if (targetLine === -1) {
   console.error(

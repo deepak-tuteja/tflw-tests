@@ -18,7 +18,7 @@ test "a real product response matches its documented OpenAPI schema" as admin
 
   api GET /products/{productId}
   expect status equals 200
-  expect body matches schema "ProductResponseDto" from "http://localhost:4001/openapi.json"
+  expect body matches schema "ProductResponseDto" from root "/openapi.json"
 
 @contract @catalogOps @api
 test "an obviously wrong schema name correctly does not match" as admin
@@ -28,7 +28,7 @@ test "an obviously wrong schema name correctly does not match" as admin
 
   api GET /products/{productId}
   expect status equals 200
-  expect body not matches schema "DriftedWidgetResponseDto" from "http://localhost:4001/openapi.json"
+  expect body not matches schema "DriftedWidgetResponseDto" from root "/openapi.json"
 
 @retryafter @api
 test "a rate-limited request honors a seconds-format Retry-After and succeeds"

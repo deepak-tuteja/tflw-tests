@@ -3,7 +3,9 @@
 // pre-check and its INSERT is actually closed. The call itself is the assertion: throws unless
 // exactly one request succeeded (201) and the rest were rejected with a clean conflict (409) —
 // previously the losers surfaced as raw 500s (an uncaught unique-violation QueryFailedError).
-const BASE_URL = 'http://localhost:4001/v1';
+// `M197`: the stack's port comes from the environment the run was started under (the same
+// `TFLW_API_BASE` `tflw.config` reads, offset per regression worker); the literal is the default.
+const BASE_URL = process.env.TFLW_API_BASE || 'http://localhost:4001/v1';
 
 export async function assertConcurrentRegister(
   _ctx: { env: NodeJS.ProcessEnv },

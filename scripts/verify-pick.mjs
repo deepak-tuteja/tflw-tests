@@ -14,10 +14,11 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveTflw } from './lib/tflw-bin.mjs';
+import { urls } from './lib/stack-ports.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const CLI_ENTRY = resolveTflw('released', { label: 'verify-pick' }).entry;
-const TARGET_URL = 'http://localhost:8090/';
+const TARGET_URL = `${urls().TFLW_WEB_BASE}/`; // `M197`: offset per worker
 
 let violations = 0;
 function ok(label, condition, detail = '') {

@@ -59,7 +59,7 @@ test "matches schema \"Name\" from \"src\" — validate a response against the r
 
   api GET /products/{productId}
   expect status equals 200
-  expect body matches schema "ProductResponseDto" from "http://localhost:4001/openapi.json"
+  expect body matches schema "ProductResponseDto" from root "/openapi.json"
 
 # M29: `expect request connects`/`fails` (SPEC §6.2.2, decision 18) assert on the connection
 # itself, not the response — and can't be combined with a response-based assertion on the same

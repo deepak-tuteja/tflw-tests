@@ -8,8 +8,9 @@
 
 import { chromium } from 'playwright';
 
-export const WEB_BASE = process.env.WEB_BASE ?? 'http://localhost:8090';
-export const API_BASE = process.env.API_BASE ?? 'http://localhost:4001/v1';
+// `M197`: the stack's own variables first (offset per regression worker), then this corpus's, then the literal.
+export const WEB_BASE = process.env.TFLW_WEB_BASE ?? process.env.WEB_BASE ?? 'http://localhost:8090';
+export const API_BASE = process.env.TFLW_API_BASE ?? process.env.API_BASE ?? 'http://localhost:4001/v1';
 
 export async function withPage(fn) {
   const browser = await chromium.launch();

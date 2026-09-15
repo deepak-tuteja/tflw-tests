@@ -35,6 +35,7 @@
 // be deleted at any route. A phase's result is only trustworthy in isolation, for reasons this
 // milestone did not remove.
 import { rmSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { tflwCommand } from './lib/tflw-bin.mjs';
 
 /** **`released`, and this is the loudest declaration of it in the repo.** The sweep is
@@ -525,6 +526,15 @@ if (process.argv.includes('--list-phases')) {
     groups: PHASE_GROUPS,
   }, null, 2));
   process.exit(0);
+}
+
+// `M197` (tflw `D1026`): every group at once, one stack and one tree each — the box's mode, the
+// one tflw's CONTRIBUTING gate line names. The serial run below is unchanged and stays the
+// default; CI never passes this (its matrix already runs the groups apart).
+if (process.argv.includes('--parallel-groups')) {
+  const { runParallelGroups } = await import('./lib/parallel-groups.mjs');
+  const code = await runParallelGroups({ groups: PHASE_GROUPS, phaseOrder: PHASES.map((p) => p.name), script: fileURLToPath(import.meta.url) });
+  process.exit(code);
 }
 
 const groupFlagIndex = process.argv.indexOf('--group');

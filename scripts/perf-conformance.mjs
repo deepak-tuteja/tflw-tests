@@ -63,6 +63,7 @@ import { RUNGS, FIXTURES, FIXTURE_SOURCE, TARGETS } from './lib/perf-ladder.mjs'
 import { resolveTflw, resolveArtifactContract } from './lib/tflw-bin.mjs';
 import { compare } from './verify-perf-baseline.mjs';
 import { parseArgv, BOOLEAN, VALUE } from './lib/argv.mjs';
+import { urls } from './lib/stack-ports.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const HOME = os.homedir();
@@ -519,7 +520,7 @@ function adminCredentials(root) {
 function resetLoadTarget(root) {
   const { email, password } = adminCredentials(root);
   const r = run('curl', ['-s', '-o', '/dev/null', '-w', '%{http_code}', '--max-time', '60',
-                         '-X', 'POST', 'http://localhost:4001/v1/admin/load/reset',
+                         '-X', 'POST', `${urls().TFLW_API_BASE}/admin/load/reset`,
                          '-u', `${email}:${password}`]);
   const http = (r.stdout ?? '').trim();
   const ok = /^2\d\d$/.test(http);
