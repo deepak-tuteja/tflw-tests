@@ -1,0 +1,66 @@
+# `M198` S6 / `C49` — the two threshold facts a workload whose requests all succeed cannot state
+# (`M189-05`, `M169-05`).
+#
+# Every workload plant in this repository measures a target that answers. That one property makes
+# two registry mutations invisible at once, and they are invisible for opposite reasons.
+#
+# ## An ungradable threshold is not a satisfied one
+#
+# `evaluateThresholds` reads `actual === null` — no successful iteration, so there is no latency
+# distribution to take a percentile of — and calls the threshold **not met**. Eight workload plants
+# evaluate thresholds through that line and every one of them has successful iterations, so
+# `actual === null` has never once been the case here.
+#
+# `ungradable-threshold-passes` flips the null arm to `true`, which makes *every single request
+# failing* the cheapest way in the language to satisfy a latency threshold — `B3-02`'s trap
+# reintroduced at exactly the boundary `D-M89-1` was written to hold. `/always-500` is the input
+# nothing here had: a path that fails on purpose and without exception.
+#
+# **The test cannot carry this claim, and finding out why is worth a line.** The first draft wrote
+# the duration threshold alone, so that the test would be red unmutated and green mutated. `TF033`
+# refuses it: *"thresholds duration but not error rate, so a fast failure passes it"* — the checker
+# already forbids the shape in which a latency bound is a workload's only verdict, which is the same
+# defect one level up. So the error-rate clause is here because the language insists, it is breached
+# at a 100% error rate, and the test is red under **both** builds.
+#
+# The grader therefore reads the duration threshold's **own** `ok` and `actual` out of
+# `results.json`, never the test's — the same discipline as `S3`. `actual` is `null` and `ok` is
+# false; the mutant reports `ok` true beside the identical `null`, which is the whole defect
+# visible in one row.
+#
+# ## A scoped threshold reads its own bucket
+#
+# `threshold p95 duration for "fast"` resolves an endpoint by the identity of the `api` step that
+# carries it, and `threshold-scope-falls-back-to-the-whole-histogram` drops the lookup so the clause
+# silently becomes a second copy of the unscoped threshold. `M169-05` recorded one red and two green
+# on byte-identical code, because a plant whose steps all have the same latency cannot tell a
+# resolved bucket from the whole histogram — the two hold identical samples.
+#
+# So the test below mixes two latencies on purpose. `/slow` delays 50 ms and `/hold` does not delay
+# at all, one iteration touching each, so the scenario-wide p95 sits in the slow half at ~50 ms
+# while the `"fast"` bucket holds only sub-millisecond samples. `is less than 25ms` is comfortably
+# satisfied by the bucket and comfortably breached by the whole — and 25 ms is not near either
+# population, so no scheduling jitter reaches it.
+
+@constructs @verdict
+test "a threshold with no successful iteration to read is not met"
+  # **Meant to fail**, and to fail on the threshold's null arm rather than on an assertion. Every
+  # request to `/always-500` fails, so the successful-iteration histogram is empty.
+  run 8 iterations across 2 users
+  api GET /always-500
+  expect status equals 200
+  threshold error rate is less than 1%
+  threshold p95 duration is less than 5000ms
+
+@constructs @verdict
+test "a scoped threshold reads its own endpoint's bucket, not the scenario's"
+  # **Meant to pass.** The `"fast"` bucket is sub-millisecond; the scenario as a whole is ~50 ms at
+  # p95 because half its samples are `/slow`'s. A clause that stopped resolving its scope would be
+  # reading the second number against the first number's bound.
+  run 16 iterations across 2 users
+  api GET /slow as "slow"
+  expect status equals 200
+  api GET /hold as "fast"
+  expect status equals 200
+  threshold error rate is less than 1%
+  threshold p95 duration for "fast" is less than 25ms

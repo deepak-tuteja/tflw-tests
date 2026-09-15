@@ -1688,6 +1688,18 @@ invocation — `tflw` reads `tflw.config` from its own cwd and has no `--config`
 the cwd on every path in and the mutation is equivalent as shipped; `out-of-reach-by-design`,
 with that reason, and the fact that its registry entry guards a flag tflw does not have.
 
+`M198` S6 adds a second of that kind, and this one was **measured before it was argued**.
+`verdict-not-restamped-after-splice` removes `finalizeVerdict` from
+`spliceLoadReportIntoRunReport`, so a `--workers N` run whose abort arrives at the splice should
+keep the stale `ok: true` stamped before it. Applied on the box with the whole S6 plant in place —
+including an interrupted `--workers 4` run that flushes exactly that report — the grader stayed
+green, **zero red lines**. The reason is one function further on: `cli.ts` splices and then calls
+`mergeReports` unconditionally, and `mergeReports` ends in `finalizeVerdict` too, so on every path
+the CLI takes the splice's derivation is immediately redone. The mutation is reached, its effect is
+overwritten, and no plant driving `tflw run` can ever see it — only a consumer calling the splice
+directly, which is tflw's own unit tests. That is defence in depth working, not a defect, so no
+row is filed against tflw; `out-of-reach-by-design`, with the measurement and the mechanism.
+
 | plant | mutation of tflw (registry id) | the red line |
 |---|---|---|
 | `C67` | `JSON.stringify(evalValue(...))` → `JSON.stringify({ ...evalValue(...) })` (`array-body-flattened-to-an-object`) | `` the bytes that left are the array itself — `[{"name":"Widget"},{"name":"Sprocket"}]` — where a body spread into an object leaves as `{"0":{…},"1":{…}}` `` — and the index reads beside it, three clauses red |
@@ -1710,6 +1722,9 @@ with that reason, and the fact that its registry entry guards a flag tflw does n
 | `C72` | the same drop on the locator poll loop (`ui-wait-ignores-its-own-budget`) | `` the locator form refused `for 3s` against this step's own 2 s budget ("") `` — the refusal is **gone**: against the config's 5 s the hold is satisfiable, so the test passes instead of failing |
 | `C72` | `deadline = startedAt + Math.min(timeoutMs, SPECULATIVE_DIAGNOSIS_MS)` (`speculative-line-replaces-the-final-diagnosis`) | `` a locator that arrives at 5000 ms still resolved (ok=false) `` — and `waited past the mark to do it (3216 ms)` beside it, the mutant's deadline read off its own failure |
 | `C72` | the network ref consulted only for a bare `NetworkRequestSubject` (`wait-reader-picks-the-subject-over-the-ref`) | `` the network-ref form of `wait until` polled observed traffic (ok=false) `` — `status of request to` falls through to the response-scope throw, at 116 ms against the page's 1200 ms probe |
+| `C49` | the threshold's null arm answers `true` (`ungradable-threshold-passes`) | `` a duration threshold over a scenario whose every iteration failed is NOT met (actual=null, ok=true) `` — the threshold's own row, because `TF033` keeps the test red under both builds |
+| `C49` | the scope lookup dropped (`threshold-scope-falls-back-to-the-whole-histogram`) | `` a scoped threshold read its own endpoint's bucket (actual=55ms against a 25ms bound, ok=false) `` — 55 ms is the scenario's p95, 1 ms is the `"fast"` bucket's |
+| `C49` | `ok` back to "nothing that ran failed" (`ok-ignores-no-verdict`) | `` and it is `ok: false` (true) `` — on **both** legs, single-process and `--workers 4`, because `finalizeVerdict` is the one derivation |
 
 The first four rows are one run of `tflw-acceptance/conformance/singletons.tflw` against the arrival
 server — eight tests, five written to fail, each red graded on the *sentence* it carries, because

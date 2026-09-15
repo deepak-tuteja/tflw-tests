@@ -129,9 +129,13 @@
   "was": "C80 reaches the `if (decl.oauth2)` test and no plant declares an `oauth2` session, so the arm is never entered; whether apiV2 can serve one is the first question a plant here would have to answer"
  },
  "ok-ignores-no-verdict": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "run:verdict",
-  "why": "102 plants run through the report verdict and every run they read completed; `noVerdictReason` is non-null only for an aborted or inconclusive run, which no plant produces"
+  "why": "102 plants run through the report verdict and every run they read completed; `noVerdictReason` is non-null only for an aborted or inconclusive run, which no plant produces",
+  "was": "not-asserted",
+  "plant": "C49",
+  "redLine": "and it is `ok: false` (true) — on both the single-process and the `--workers 4` leg",
+  "at": "2026-09-15"
  },
  "open-model-agents-per-arrival": {
   "verdict": "not-asserted",
@@ -237,9 +241,13 @@
   "was": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
  },
  "threshold-scope-falls-back-to-the-whole-histogram": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "run:verdict",
-  "why": "the endpoint lookup behind `threshold … for \"label\"`: all eight workload plants (C3, C44–C50) evaluate thresholds through this line and none of them states a scoped one — C49's `verdict.tflw` grades an unscoped p95 and an unscoped error rate, so `scope === undefined` on every evaluation and the fallback to the whole histogram is the path the plant already takes; the only scoped threshold in either corpus is `perf/tflw/checkout-burst.tflw`, which the acceptance roster does not run. Not a candidate in the previous census — the `m172a` entry postdates it — so `M190`'s is its first measurement and this its first verdict. A plant would need a two-endpoint workload whose scoped p95 differs from the whole's"
+  "why": "the endpoint lookup behind `threshold … for \"label\"`: all eight workload plants (C3, C44–C50) evaluate thresholds through this line and none of them states a scoped one — C49's `verdict.tflw` grades an unscoped p95 and an unscoped error rate, so `scope === undefined` on every evaluation and the fallback to the whole histogram is the path the plant already takes; the only scoped threshold in either corpus is `perf/tflw/checkout-burst.tflw`, which the acceptance roster does not run. Not a candidate in the previous census — the `m172a` entry postdates it — so `M190`'s is its first measurement and this its first verdict. A plant would need a two-endpoint workload whose scoped p95 differs from the whole's",
+  "was": "not-asserted",
+  "plant": "C49",
+  "redLine": "a scoped threshold read its own endpoint's bucket (actual=55ms against a 25ms bound, ok=false)",
+  "at": "2026-09-15"
  },
  "tls-facts-absent-counts-as-applicable": {
   "verdict": "out-of-reach-by-design",
@@ -256,9 +264,13 @@
   "at": "2026-09-15"
  },
  "ungradable-threshold-passes": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "run:verdict",
-  "why": "eight workload plants evaluate thresholds through this line and every one of them has successful iterations, so `actual === null` is never the case; C49 grades a red and a green threshold on a path that answers — a workload whose every request fails is the plant"
+  "why": "eight workload plants evaluate thresholds through this line and every one of them has successful iterations, so `actual === null` is never the case; C49 grades a red and a green threshold on a path that answers — a workload whose every request fails is the plant",
+  "was": "not-asserted",
+  "plant": "C49",
+  "redLine": "a duration threshold over a scenario whose every iteration failed is NOT met (actual=null, ok=true)",
+  "at": "2026-09-15"
  },
  "unnamed-arm-dropped-for-every-kind": {
   "verdict": "asserted",
@@ -270,9 +282,11 @@
   "was": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
  },
  "verdict-not-restamped-after-splice": {
-  "verdict": "not-asserted",
+  "verdict": "out-of-reach-by-design",
   "family": "run:verdict",
-  "why": "reached only by C3 (`--workers 4` splices a merged report); the stale verdict needs an abort arriving at the splice, and no plant aborts a run — a plant that induces `inconclusive` under `--workers` is the missing fixture"
+  "why": "MEASURED 2026-09-15 on fedora-box with the whole `M198` S6 plant in place, including an interrupted `--workers 4` run that flushes exactly the report this mutation is about: the grader stayed green, 0 red lines. `cli.ts` calls `spliceLoadReportIntoRunReport` and then `mergeReports` unconditionally, and `mergeReports` ends in `finalizeVerdict` too, so the splice's own derivation is redone one function later on every path the CLI takes. Reached, overwritten, and unobservable through `tflw run` — only a consumer calling the splice directly (tflw's own unit tests) can see it. Defence in depth working, not a defect.",
+  "was": "not-asserted",
+  "at": "2026-09-15"
  },
  "wait-reader-picks-the-subject-over-the-ref": {
   "verdict": "asserted",

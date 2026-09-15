@@ -114,6 +114,35 @@ function runCorpus(cwd, args) {
 // advisory note `tflw check` grew in tflw's `M156c` is the only thing in the check path that reads
 // the environment at all. Same shape as `runRun` above, and merged rather than added beside it so
 // there is one way to run each command.
+/**
+ * `M198` S6 — run a corpus and **interrupt it**, then read the partial report it flushed.
+ *
+ * `aborted` is not reachable from inside the language. It comes from `opts.abortSignal`, which is
+ * the CLI's own SIGINT handler and nothing else, so a plant for `M189-05`'s no-verdict family is
+ * the file plus the signal — the same shape as `S2`'s csrf leg, where the claim lives off the
+ * socket because there is no position in a `.tflw` file where it could be written.
+ *
+ * `afterMs` is chosen against the plant's own planned duration, not against a machine: the workload
+ * holds for 8 s and the signal lands at 2.5 s, so there is no timing to get wrong in either
+ * direction. What matters is only that some iterations completed and the run had not finished.
+ */
+function runCorpusInterrupted(cwd, args, afterMs) {
+  const reportFile = path.join(cwd, 'report', 'results.json');
+  rmSync(reportFile, { force: true });
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [TFLW_BIN, 'run', '--no-color', ...args], { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    let output = '';
+    child.stdout.on('data', (d) => { output += d; });
+    child.stderr.on('data', (d) => { output += d; });
+    const timer = setTimeout(() => child.kill('SIGINT'), afterMs);
+    child.on('exit', (code) => {
+      clearTimeout(timer);
+      const report = existsSync(reportFile) ? JSON.parse(readFileSync(reportFile, 'utf8')) : null;
+      resolve({ report, output, code });
+    });
+  });
+}
+
 function runCheck(args, { cwd = ROOT, env = {} } = {}) {
   const r = spawnSync(process.execPath, [TFLW_BIN, 'check', '--no-color', ...args], {
     cwd,
@@ -3808,6 +3837,93 @@ if (wanted('C72')) {
       `the network-ref form of \`wait until\` polled observed traffic (ok=${ref?.ok}) — written here for the first time in this repository; the mutant consults the ref only for a bare \`NetworkRequestSubject\`, so a \`status of\` falls through to the response-scope throw (\`wait-reader-picks-the-subject-over-the-ref\`)`);
     precision('C72', (ref?.durationMs ?? 0) > 1000,
       `and polled for it rather than finding it already made (${ref?.durationMs ?? '—'} ms against the page's 1200 ms probe) — a request that had already arrived would satisfy the wait on poll one and exercise no ordering`);
+  }
+}
+
+// =============================================================================
+// `M198` S6 — the run that reaches no verdict, for `C49` (`M189-05`, `M169-05`)
+// =============================================================================
+
+// `C49` says a workload-bearing test's verdict comes from its thresholds and from nothing else.
+// This widens it by one level, to the *run's* verdict, and to two threshold facts a workload whose
+// requests all succeed cannot state.
+//
+// Five registry mutations, and the property that hid all five is the same: **every workload in this
+// repository measures a target that answers, and every run it produces completes.** So
+// `actual === null` has never been the case, two endpoint buckets have never held different
+// samples, and `noVerdictReason` has never once been non-null — `ok` and `tests.every(ok)` have
+// agreed on every run this repository has ever made.
+//
+// Nothing here is graded by a test's own `ok`. The threshold legs read the threshold's own row out
+// of `results.json`, and the no-verdict legs read the *run's* fields, because a run whose every
+// completed test passed is precisely the case in which the test verdicts carry no information.
+if (wanted('C49')) {
+  const verdictCorpus = path.join(ROOT, 'tflw-acceptance', 'conformance');
+  let verdictServer = null;
+  try {
+    verdictServer = await startArrivalServer(verdictCorpus);
+    await arrivals('__reset');
+
+    console.log('\nM198 S6 — the thresholds\n  target: `arrival-server.mjs` — `/always-500` and a two-latency scenario under `no-verdict.tflw`; no stack');
+    const { report: thReport, output: thOutput } = runCorpus(verdictCorpus, ['no-verdict.tflw']);
+    if (!thReport) {
+      fail(`C49 (M198 S6) — no report from no-verdict.tflw\n${thOutput.trim().split('\n').slice(-10).join('\n')}`);
+    } else {
+      // `named()` filters to `kind === 'functional'` and both of these are `kind === 'workload'`,
+      // which is how the first draft of this leg read `undefined` out of a report that was right in
+      // front of it. A workload-bearing test is looked up by name here, for the same reason
+      // `named()` gives: `tflw run` may order a report by completion rather than by declaration.
+      const workloadNamed = (report, fragment) => (report?.tests ?? []).find((t) => (t.name ?? '').includes(fragment));
+      const ungradable = workloadNamed(thReport, 'a threshold with no successful iteration to read is not met');
+      const scoped = workloadNamed(thReport, 'a scoped threshold reads its own endpoint\'s bucket, not the scenario\'s');
+      const thresholdOf = (test, label) => (test?.thresholds ?? []).find((t) => (t.label ?? '').startsWith(label));
+
+      // Read the threshold's OWN row, never the test's: `TF033` requires an `error rate` clause
+      // beside a duration one — "so a fast failure passes it" — so this test is red under both
+      // builds, and its verdict cannot tell them apart. The checker forbidding that shape is the
+      // same defect one level up, which is why the leg is written this way rather than complained
+      // about.
+      const dur = thresholdOf(ungradable, 'p95 duration');
+      recall('C49', dur?.actual === null && dur?.ok === false,
+        `a duration threshold over a scenario whose every iteration failed is NOT met (actual=${JSON.stringify(dur?.actual)}, ok=${dur?.ok}) — \`LatencyHistogram.percentile\` returns 0 on an empty histogram, so a null arm that answered \`true\` would make "every request failed" the cheapest way in the language to satisfy a latency bound (\`ungradable-threshold-passes\`, \`B3-02\` at the boundary \`D-M89-1\` holds)`);
+      precision('C49', (ungradable?.metrics?.failures ?? 0) > 0 && (ungradable?.metrics?.iterations ?? 0) === (ungradable?.metrics?.failures ?? -1),
+        `and every one of its ${ungradable?.metrics?.iterations ?? '—'} iteration(s) really did fail (${ungradable?.metrics?.failures ?? '—'}) — the input nothing in this corpus had, because every other path here answers`);
+
+      // The scope leg needs two populations, or it grades nothing: `M169-05` recorded one red and
+      // two green on byte-identical code because a plant whose steps share a latency cannot tell a
+      // resolved bucket from the whole histogram — the two hold identical samples.
+      const fast = thresholdOf(scoped, 'p95 duration for');
+      const wholeP95 = scoped?.metrics?.durations?.p95 ?? null;
+      recall('C49', fast?.ok === true && typeof fast?.actual === 'number' && fast.actual < 25,
+        `a scoped threshold read its own endpoint's bucket (actual=${fast?.actual}ms against a 25ms bound, ok=${fast?.ok}) — the \`"fast"\` samples alone`);
+      recall('C49', typeof wholeP95 === 'number' && wholeP95 > 25,
+        `and the scenario it sits in is ${wholeP95}ms at p95 — over the same bound, so a clause that stopped resolving its scope reads the second number against the first number's target (\`threshold-scope-falls-back-to-the-whole-histogram\`)`);
+    }
+
+    // The no-verdict pair. Two runs of one file: `runProgram` stamps the verdict itself in the
+    // first, and in the second the abort arrives at `spliceLoadReportIntoRunReport` *after* `ok`
+    // was already stamped, which is the only place a stale verdict can survive.
+    for (const [how, args, mutation] of [
+      ['single-process', [], 'ok-ignores-no-verdict'],
+      ['--workers 4', ['--workers', '4'], 'verdict-not-restamped-after-splice'],
+    ]) {
+      console.log(`\nM198 S6 — a run with no verdict (${how})\n  target: \`aborted.tflw\` interrupted by SIGINT at 2.5s of its 8s plan; no stack`);
+      const { report: ab, output: abOut } = await runCorpusInterrupted(verdictCorpus, [...args, 'aborted.tflw'], 2500);
+      if (!ab) {
+        fail(`C49 (M198 S6) — no partial report from the interrupted ${how} run\n${abOut.trim().split('\n').slice(-10).join('\n')}`);
+        continue;
+      }
+      recall('C49', ab.aborted === true && ab.tests.length > 0 && ab.tests.every((t) => t.ok) && ab.failed === 0,
+        `the interrupted ${how} run flushed a partial report in which nothing failed (aborted=${ab.aborted}, passed=${ab.passed}, failed=${ab.failed}) — the only state in which \`ok\` and \`failed === 0\` can disagree, and the state 102 plants here have never produced`);
+      recall('C49', ab.ok === false,
+        `and it is \`ok: false\` (${ab.ok}) — \`M114\`'s decision that \`ok\` means "this run passed", not "nothing that ran failed"; before it, this exact report read \`{"ok": true, "failed": 0, "aborted": true}\` and handed CI a clean pass off a run cut short (\`${mutation}\`)`);
+      precision('C49', typeof ab.abortedMessage === 'string' && /aborted at \d+s of \d+s planned/.test(ab.abortedMessage),
+        `stamped with what it did and did not run (${JSON.stringify(ab.abortedMessage ?? null)}) — the reader's half of the same fact`);
+    }
+  } catch (e) {
+    fail(`C49 (M198 S6) could not run: ${e.message}`);
+  } finally {
+    verdictServer?.kill();
   }
 }
 
