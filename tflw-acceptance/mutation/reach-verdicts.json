@@ -16,9 +16,13 @@
   "was": "the per-candidate discriminator in the ambiguity list — same ten plants, same unambiguous pages; no known answer here has ever been a sentence about several matches"
  },
  "api-wait-ignores-its-own-budget": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "wait:poll-budget",
-  "why": "C67, C70, C71 and C72 run through the api-side budget line; C72 (`step:wait`) asserts the wait re-issues until its condition holds and stops — never that a `timeout wait` clause is the number that bounded it"
+  "why": "C67, C70, C71 and C72 run through the api-side budget line; C72 (`step:wait`) asserts the wait re-issues until its condition holds and stops — never that a `timeout wait` clause is the number that bounded it",
+  "was": "not-asserted",
+  "plant": "C72",
+  "redLine": "the unsatisfiable wait named the step's own budget (\"timed out after 30000ms (100 attempts): expected status to equal 200, but got 503\")",
+  "at": "2026-09-15"
  },
  "applicability-collapses-to-pass": {
   "verdict": "out-of-reach-by-design",
@@ -197,9 +201,13 @@
   "was": "C80 establishes a session and grades 200-with versus 401-without; the report `source` lines of the session steps — which document they were rendered from — are read by nothing"
  },
  "speculative-line-replaces-the-final-diagnosis": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "wait:poll-budget",
-  "why": "32 browser plants poll through this deadline and every one resolves inside ~3 s against a fast app, so a poll that gave up at the speculative mark is indistinguishable from one that kept going; a fixture with an element that appears at 5 s would tell them apart"
+  "why": "32 browser plants poll through this deadline and every one resolves inside ~3 s against a fast app, so a poll that gave up at the speculative mark is indistinguishable from one that kept going; a fixture with an element that appears at 5 s would tell them apart",
+  "was": "not-asserted",
+  "plant": "C72",
+  "redLine": "a locator that arrives at 5000 ms still resolved (ok=false) — and waited past the mark to do it (3216 ms)",
+  "at": "2026-09-15"
  },
  "spelled-out-duration-not-a-number": {
   "verdict": "asserted",
@@ -239,9 +247,13 @@
   "why": "reached by C80's security assertion over plaintext; the TLS rules' applicability is graded by the security reference gates (D751), and C80 asserts nothing about the scan"
  },
  "ui-wait-ignores-its-own-budget": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "wait:poll-budget",
-  "why": "fifteen plants run the locator form of `wait until` and all of them are satisfied well inside both the step budget and the env budget, so which budget bounded the poll is never observed; the known answers are about what the wait waited FOR"
+  "why": "fifteen plants run the locator form of `wait until` and all of them are satisfied well inside both the step budget and the env budget, so which budget bounded the poll is never observed; the known answers are about what the wait waited FOR",
+  "was": "not-asserted",
+  "plant": "C72",
+  "redLine": "the locator form refused `for 3s` against this step's own 2 s budget (\"\") — the refusal is gone and the test passes",
+  "at": "2026-09-15"
  },
  "ungradable-threshold-passes": {
   "verdict": "not-asserted",
@@ -263,9 +275,13 @@
   "why": "reached only by C3 (`--workers 4` splices a merged report); the stale verdict needs an abort arriving at the splice, and no plant aborts a run — a plant that induces `inconclusive` under `--workers` is the missing fixture"
  },
  "wait-reader-picks-the-subject-over-the-ref": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "step:wait",
-  "why": "the `wait until status of request to \"…\"` form: fifteen plants reach the reader and none of their fixtures writes the network-ref form, so the ordering of the two reads is never exercised; a browser fixture with `wait until … of request to` is the plant"
+  "why": "the `wait until status of request to \"…\"` form: fifteen plants reach the reader and none of their fixtures writes the network-ref form, so the ordering of the two reads is never exercised; a browser fixture with `wait until … of request to` is the plant",
+  "was": "not-asserted",
+  "plant": "C72",
+  "redLine": "the network-ref form of `wait until` polled observed traffic (ok=false) — at 116 ms against the page's 1200 ms probe",
+  "at": "2026-09-15"
  },
  "wait-until-diagnosis-dropped": {
   "verdict": "asserted",

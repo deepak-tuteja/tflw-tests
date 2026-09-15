@@ -3716,6 +3716,101 @@ if (wanted('C13') || wanted('C14')) {
   }
 }
 
+// =============================================================================
+// `M198` S5 — the poll budgets, for `C72` (`M189-03`)
+// =============================================================================
+
+// Four registry mutations of the wait machinery, reached by between fifteen and thirty-two plants
+// and asserted by none of them, for one reason wearing three faces: **every browser and api
+// condition in this suite is already true when it is first asked.** A wait satisfied on poll one
+// never reaches a deadline, never reports which budget bounded it, and never polls long enough for
+// a progress mark to matter. `C72` already grades that a wait re-issues and stops, which is a claim
+// about a wait that SUCCEEDS — and a successful wait is exactly the case in which none of these
+// four lines can be observed.
+//
+// So the legs below are the other half of `C72`: a wait that cannot succeed, one that succeeds only
+// late, and one written in a form no fixture in this repository had ever used. Not one of them is
+// graded on elapsed time against the constants they turn on — 3000 ms in `browser.ts` and this
+// config's 5 s `timeout wait` — because a timing assertion at those margins measures the machine
+// (`M157g`). Two are graded on the *text* of a failure and two on a pass the mutant turns red.
+if (wanted('C72')) {
+  console.log('\nM198 S5 — the api form\'s own budget\n  target: `arrival-server.mjs` — `/after/600000` under `waits.tflw`, graded on the number the failure names; no stack');
+  const waitsCorpus = path.join(ROOT, 'tflw-acceptance', 'conformance');
+  let waitServer = null;
+  try {
+    waitServer = await startArrivalServer(waitsCorpus);
+    await arrivals('__reset');
+    const { report: waitReport, output: waitOutput } = runCorpus(waitsCorpus, ['waits.tflw']);
+    if (!waitReport) {
+      fail(`C72 (M198 S5) — no report from waits.tflw\n${waitOutput.trim().split('\n').slice(-10).join('\n')}`);
+    } else {
+      const unsatisfiable = named(waitReport, 'an api wait that can never be satisfied reports the budget the step wrote, not the env\'s');
+      const later = named(waitReport, 'the same route, asked for a deadline inside the budget, is satisfied by a later poll');
+      const said = unsatisfiable?.error ?? '';
+
+      // The discriminator is a number in a sentence, not a duration. The step wrote `timeout wait
+      // 1500ms`; this corpus's env writes none, so the fallback is the runtime's 30 s default. Three
+      // orders of magnitude apart, so no clock is consulted to tell the two builds apart.
+      recall('C72', said.includes('timed out after 1500ms'),
+        `the unsatisfiable wait named the step's own budget (${JSON.stringify(said.slice(0, 90))}) — \`D640\` says the step's \`timeout wait\` is "used for the deadline, the backstop and every message", and a build that read the env's would print this corpus's fallback instead (\`api-wait-ignores-its-own-budget\`)`);
+      recall('C72', said.length > 0 && !said.includes('30000'),
+        `and named nothing else (\`30000\` absent) — the half a "did it fail?" assertion can never reach, because an unsatisfiable condition fails under every build`);
+      precision('C72', /\(\d+ attempts?\)/.test(said) && !/\(1 attempts?\)/.test(said),
+        `it re-issued before giving up (${(said.match(/\((\d+) attempts?\)/) ?? [])[0] ?? 'no attempt count'}) — a single request behind a long timeout would time out too, and would say so with one attempt`);
+      precision('C72', later?.ok === true,
+        `and the same route with its deadline inside the budget passed (ok=${later?.ok}) — the control that separates "the budget was honoured" from "\`/after/\` never answers 200"`);
+    }
+  } catch (e) {
+    fail(`C72 (M198 S5) api leg could not run: ${e.message}`);
+  } finally {
+    waitServer?.kill();
+  }
+
+  console.log('\nM198 S5 — the locator form\n  target: `tests/.constructs/wait-budgets.tflw` against `/wait-fixture`, graded on a refusal, a late resolution and a network ref');
+  const { report: uiReport, output: uiOutput } = runCorpus(ROOT, ['tests/.constructs/wait-budgets.tflw']);
+  if (!uiReport) {
+    fail(`C72 (M198 S5) produced no report. Needs the stack and a browser.\n${uiOutput.trim().split('\n').slice(-12).join('\n')}`);
+  } else {
+    const backstop = named(uiReport, 'the locator form measures `for` against the step\'s own `timeout wait`, not the env\'s');
+    const late = named(uiReport, 'an action on a locator that arrives after the speculative mark still finds it');
+    const ref = named(uiReport, '`status of request to` polls observed traffic rather than the response scope');
+    const refusal = backstop?.error ?? '';
+
+    // Graded on the backstop rather than on elapsed time because the locator form's timeout message
+    // carries no budget at all — it reports the matcher's own outcome. The refusal does carry one,
+    // and under the mutant it does not fire: `for 3s` is satisfiable against this config's 5 s, so
+    // the step polls a banner true at first paint and passes. A difference of kind, not of timing.
+    recall('C72', refusal.includes('can never be satisfied') && refusal.includes('(2000ms)'),
+      `the locator form refused \`for 3s\` against this step's own 2 s budget (${JSON.stringify(refusal.slice(0, 80))}) — against the config's 5 s the same hold is satisfiable, so a build reading the env's budget here does not refuse at all: it passes (\`ui-wait-ignores-its-own-budget\`)`);
+    precision('C72', refusal.length > 0 && !refusal.includes('5000'),
+      `and quoted no other number (\`5000\` absent) — the env's \`timeout wait 5s\` is what the mutant substitutes, so its absence is the claim`);
+
+    // `speculative-line-replaces-the-final-diagnosis` makes the ~3 s progress mark a deadline. The
+    // duration clause is a *lower bound with a 2 s margin on an element that cannot exist before
+    // 5000 ms*, not a timing threshold: it proves the leg is not vacuous — that something really
+    // did resolve on the far side of the mark — and it cannot fail on a slow machine, only on a
+    // page that stopped being late.
+    //
+    // It is an **action**, and the first draft was an `expect` that this mutation did not touch:
+    // `resolveLocator`'s deadline bounds one resolution and `resolveForStep` is its only caller, so
+    // a UI `expect`'s own retry budget re-reads the DOM and absorbs a shortened deadline entirely.
+    // Measured on the box — the mutant left the `expect` form green with zero red lines.
+    recall('C72', late?.ok === true,
+      `a locator that arrives at 5000 ms still resolved (ok=${late?.ok}) — \`FU-14\`/\`D248\` made the ~3 s mark a progress point rather than a deadline, and the mutant is the fast-fail option that decision rejected (\`speculative-line-replaces-the-final-diagnosis\`)`);
+    precision('C72', (late?.durationMs ?? 0) > 3500,
+      `and waited past the mark to do it (${late?.durationMs ?? '—'} ms) — a leg that resolved instantly would be green under both builds and would look like coverage`);
+
+    // The ordering inside `waitUntilReader`: the ref is consulted BEFORE the subject's type is
+    // branched on, and `status of request to "…"` is a `StatusSubject` that carries one. Written as
+    // `status of` rather than the bare `request to "…" was made` on purpose — the bare form is the
+    // one kind the mutant still answers for.
+    recall('C72', ref?.ok === true,
+      `the network-ref form of \`wait until\` polled observed traffic (ok=${ref?.ok}) — written here for the first time in this repository; the mutant consults the ref only for a bare \`NetworkRequestSubject\`, so a \`status of\` falls through to the response-scope throw (\`wait-reader-picks-the-subject-over-the-ref\`)`);
+    precision('C72', (ref?.durationMs ?? 0) > 1000,
+      `and polled for it rather than finding it already made (${ref?.durationMs ?? '—'} ms against the page's 1200 ms probe) — a request that had already arrived would satisfy the wait on poll one and exercise no ordering`);
+  }
+}
+
 console.log('\nper-plant precision and recall:\n');
 // `M154f-03`. Iterate the plants THIS gate grades, not every plant on the roster. Seven rows are
 // graded by reference under `D751` — `security`, `diagnostics`, `redaction` — and this driver never

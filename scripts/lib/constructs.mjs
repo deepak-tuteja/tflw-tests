@@ -1530,7 +1530,7 @@ export const PLANTS = [
     family: 'step',
     tier: 'api',
     title: '`wait until api` re-issues until its condition holds, and stops when it does',
-    target: 'tests/.constructs/step-workhorses.tflw against `POST /v1/lifecycle/attempt`, whose `c72settles` key answers 503 on attempts 1 and 2 and 200 on attempt 3',
+    target: 'tests/.constructs/step-workhorses.tflw against `POST /v1/lifecycle/attempt`, whose `c72settles` key answers 503 on attempts 1 and 2 and 200 on attempt 3; plus `M198` S5\'s two plants — `tflw-acceptance/conformance/waits.tflw` against `/after/<ms>` on the arrival server, and `tests/.constructs/wait-budgets.tflw` against `/wait-fixture`',
     evidence: { file: 'tests/.constructs/step-workhorses.tflw', pattern: '^\\s*wait until api POST /lifecycle/attempt', min: 1 },
     graders: ['acceptance'],
     knownAnswer:
@@ -1539,8 +1539,24 @@ export const PLANTS = [
       'after 3 attempts`; and the grader reads `attempts.c72settles == 3` back off the server. The ' +
       'first two prove it **re-issued** — a single request with a generous timeout sees `settled: ' +
       'false` and dies — and the third proves it **stopped**, which the first two cannot: a wait ' +
-      'that kept polling its budget out after the condition held is green on both of them.',
-    catches: 'a `wait` that issues one request behind a long timeout, and one that does not stop polling once its condition is met.',
+      'that kept polling its budget out after the condition held is green on both of them.' +
+      '\n\n**`M198` S5** — the other half, and the half this row could not reach: everything above is a ' +
+      'claim about a wait that **succeeds**, and a wait satisfied on poll one never reaches a deadline, ' +
+      'never reports which budget bounded it, and never polls past a progress mark. Four legs. (1) `wait ' +
+      'until api GET /after/600000 timeout wait 1500ms` cannot be satisfied, so it is guaranteed to run ' +
+      'out, and the only question left is which number it ran out at: the failure reads `timed out after ' +
+      '1500ms`, with the corpus\'s 30 s fallback absent. (2) The locator form is graded on the `for ' +
+      '<duration>` **backstop**, because its timeout message names no budget at all — `for 3s timeout ' +
+      'wait 2000ms` is refused and the refusal quotes `(2000ms)`, while against this config\'s 5 s the ' +
+      'same hold is satisfiable and a build reading the env\'s budget passes instead of refusing. A ' +
+      'difference of kind, not of timing. (3) A button that arrives at 5000 ms still resolves, against a ' +
+      'mutant that turns the ~3 s speculative mark into a deadline. (4) `wait until status of request to ' +
+      '"/v1/health" equals 200` — the network-ref form, written here for the first time in this ' +
+      'repository — polls observed traffic rather than throwing about response scope. Not one leg is ' +
+      'graded on elapsed time against the constants it turns on; the two duration clauses are lower ' +
+      'bounds with seconds of margin, and they assert that a leg is not vacuous rather than that a ' +
+      'machine is fast.',
+    catches: 'a `wait` that issues one request behind a long timeout, and one that does not stop polling once its condition is met; a poll loop that reports the env\'s budget where the step wrote its own, on either the api or the locator side; a speculative progress mark turned into a deadline; and a reader that consults a network ref only for the bare subject form.',
     blockedOn: null,
   },
   // --- `M154g` step 2c: the four declarations that decide which tests exist ------------------
