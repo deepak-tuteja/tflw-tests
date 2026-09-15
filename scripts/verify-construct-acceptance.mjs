@@ -3476,6 +3476,81 @@ if (wanted('C115') || wanted('C116') || wanted('C117')) {
   }
 }
 
+// =============================================================================
+// `M198` S1 — the singletons: four inputs no fixture ever gave `C65`, `C67` and `C97` (`M189-07`)
+// =============================================================================
+
+// `M189a` measured these four registry mutations as *reached and not asserted*: dozens of plants
+// execute the line and every one hands it the one input that cannot trip it (every comparison
+// operand a number, every body an object, every duration written `2000ms`, every base `http://`).
+// One stack-free run of `singletons.tflw` gives each construct the input it never had, and the
+// written-to-fail tests are graded on the sentence their failure carries — the mutation each is
+// written against turns that red green, so the verdict alone would not do. The fifth singleton of
+// `M189-07`, `config-files-resolve-against-cwd`, has no leg here on purpose: `tflw` reads
+// `tflw.config` from its own cwd (`cli.ts`), so `configDir` IS the cwd on every path in and no
+// plant can separate the two — `out-of-reach-by-design` in `reach-verdicts.json`, with that reason.
+if (wanted('C65') || wanted('C67') || wanted('C97')) {
+  const singletonsCorpus = path.join(ROOT, 'tflw-acceptance', 'conformance');
+  console.log('\nM198 S1 — the singletons\n  target: `arrival-server.mjs` — `singletons.tflw`, one run, eight tests, five written to fail; no stack');
+  let server = null;
+  try {
+    server = await startArrivalServer(singletonsCorpus);
+    await arrivals('__reset');
+    const { report, output } = runCorpus(singletonsCorpus, ['singletons.tflw']);
+    if (!report) {
+      for (const id of ['C65', 'C67', 'C97']) if (wanted(id)) { fail(`${id} — no report from singletons.tflw\n${output.trim().split('\n').slice(-10).join('\n')}`); scores.get(id).skipped = 'no report'; }
+    } else {
+      const named = (needle) => report.tests.find((t) => (t.name ?? '').includes(needle));
+      const stepsOf = (t) => t?.steps ?? [];
+      const step = (t, needle) => stepsOf(t).find((s) => s.source.includes(needle));
+      // A runtime refusal ends the test with `error`; the same sentence is the failing step's
+      // `detail`. Read the test-level one, so a refusal that lands on the wrong step still grades.
+      const errorOf = (t) => t?.error ?? stepsOf(t).find((s) => s.ok === false)?.detail ?? '';
+
+      if (wanted('C67')) {
+        const t = named('array body leaves as an array');
+        recall('C67', t?.ok === true, `an inline array body posts and reads back (got ok=${t?.ok})`);
+        recall('C67', step(t, 'body text equals')?.ok === true, 'the bytes that left are the array itself — `[{"name":"Widget"},{"name":"Sprocket"}]` — where a body spread into an object leaves as `{"0":{…},"1":{…}}` (`array-body-flattened-to-an-object`)');
+        precision('C67', step(t, 'body[1].name')?.ok === true && step(t, 'body[0].name')?.ok === true, 'and both elements read back by index from the echoed response, so the read side agrees with the bytes');
+      }
+      if (wanted('C65')) {
+        const refused = [
+          ['boolean', 'refuses a boolean', 'got boolean'],
+          ['null', 'refuses null', 'got null'],
+          ['a numeric string', 'refuses a numeric string', 'got a string'],
+          ['a one-element array', 'refuses a one-element array', 'got an array'],
+        ];
+        for (const [what, needle, tail] of refused) {
+          const t = named(needle);
+          const sentence = errorOf(t);
+          recall('C65', t?.ok === false && sentence.includes('`is less than` expects a number') && sentence.includes(tail),
+            `\`is less than\` refuses ${what} by name (got ok=${t?.ok}: ${sentence.slice(0, 80) || 'no error'}) — coerced with \`Number()\` it would compare as ${what === 'null' ? '0' : what === 'boolean' ? '1' : what === 'a numeric string' ? '3' : '5'} and pass (\`comparison-coerces-operands\`)`);
+        }
+        const spelled = named('spelled-out duration');
+        const two = step(spelled, 'is less than 2 seconds');
+        recall('C65', spelled?.ok === true && two?.ok === true && /less than 2000\b/.test(two?.detail ?? ''),
+          `\`expect duration is less than 2 seconds\` compares as 2000 milliseconds (got ok=${two?.ok}: ${two?.detail ?? 'no detail'}) — a duration left unconverted errors with \`got object\` (\`spelled-out-duration-not-a-number\`)`);
+        const num = named('accepts a number');
+        precision('C65', num?.ok === true && stepsOf(num).filter((s) => s.kind === 'expect').every((s) => s.ok),
+          'and a number is accepted in both directions on the same response, so the refusals are about the operand and not the route');
+      }
+      if (wanted('C97')) {
+        const t = named('reserved scheme is refused by name');
+        const sentence = errorOf(t);
+        recall('C97', t?.ok === false && sentence.includes('is not a real base URL') && sentence.includes('`tflw://demo` is the only address'),
+          `\`api GET tflw://demoo/health\` is refused by the sentence that names the only legal spelling (got ok=${t?.ok}: ${sentence.slice(0, 90) || 'no error'}) — passed through, it dies as \`fetch failed\` on an unknown protocol (\`reserved-scheme-passes-through\`)`);
+        const seen = await arrivals('__arrivals');
+        precision('C97', !Object.keys(seen.byPath ?? {}).some((p) => p.includes('health')),
+          `and nothing under that name ever left the process — the arrival server saw no \`/health\` (saw: ${Object.keys(seen.byPath ?? {}).join(', ') || 'nothing'})`);
+      }
+    }
+  } catch (e) {
+    for (const id of ['C65', 'C67', 'C97']) if (wanted(id)) { fail(`${id} could not run: ${e.message}`); scores.get(id).skipped = e.message; }
+  } finally {
+    server?.kill();
+  }
+}
+
 console.log('\nper-plant precision and recall:\n');
 // `M154f-03`. Iterate the plants THIS gate grades, not every plant on the roster. Seven rows are
 // graded by reference under `D751` — `security`, `diagnostics`, `redaction` — and this driver never

@@ -1378,8 +1378,12 @@ export const PLANTS = [
       '`body.price` is `42`, and all four assertions sit on the boundary: `> 41` and `not > 42`, `< ' +
       '43` and `not < 42`. `>=` masquerading as `>` passes the two positives and is red on the two ' +
       'negatives. No other use of this matcher in the repository sits within one of its bound — `is ' +
-      'greater than 0`, `is less than 5000ms` — so none of them could ever notice.',
-    catches: 'a comparison that is inclusive where the language says it is strict, in either direction.',
+      'greater than 0`, `is less than 5000ms` — so none of them could ever notice. Since `M198` ' +
+      '(`singletons.tflw`, no stack): a boolean, `null`, a numeric string and a one-element array ' +
+      'are each refused by name — `expects a number, got …` — where `Number()` would coerce all ' +
+      'four to something below 5 and pass; and `is less than 2 seconds` compares as 2000, so the ' +
+      'spelled-out duration is converted before the comparison rather than handed to it as an object.',
+    catches: 'a comparison that is inclusive where the language says it is strict, in either direction; one that coerces a non-number operand; a spelled-out duration left unconverted.',
     blockedOn: null,
   },
   {
@@ -2130,8 +2134,11 @@ export const PLANTS = [
       + 'produces an identical green summary and a different set of paths on the wire. The grid has a third column for the case where the key must do NOTHING: an absolute target is the address itself, so no base is joined onto it and the same step arrives at the same path under two different `api` bases — `/absolute` under `…/base` and `/absolute` again under `…/other`. Widened at `M164-03`, after the mutation that states it had already existed since `M125b1` and this plant had never been red: the boundary of a key is part of what the key means, and leaving it unstated was an omission rather than a decision. `M197` (tflw D1024) adds the override leg: `api env TFLW_C97_BASE default "http://127.0.0.1:1/base"` — '
       + 'with the variable set the same three paths arrive and the report carries the overridden URL verbatim (a plain '
       + 'value, not `•••(NAME)`: the construct is deliberately not `env()`); with it unset the run names `127.0.0.1:1`, '
-      + 'so the literal is the default and not decoration.',
-    catches: 'a base URL whose own path is discarded when a step\'s path is appended, a named service resolved to the default base, and a base URL prepended to an absolute target — which composes an address the arrival server answers `200` to, so the run stays green and only the wire says where it went.',
+      + 'so the literal is the default and not decoration. Since `M198` (`singletons.tflw`): a step\'s own '
+      + 'absolute `tflw://demoo/health` is refused by the one sentence naming `tflw://demo` as the only address '
+      + 'under the reserved scheme, before any I/O — `TF071` reads the config literal alone, so the runtime '
+      + 'guard is the only refusal on this path, and the arrival server saw no `/health`.',
+    catches: 'a reserved-scheme typo passed through to `fetch`; a base URL whose own path is discarded when a step\'s path is appended, a named service resolved to the default base, and a base URL prepended to an absolute target — which composes an address the arrival server answers `200` to, so the run stays green and only the wire says where it went.',
     blockedOn: null,
   },
   {

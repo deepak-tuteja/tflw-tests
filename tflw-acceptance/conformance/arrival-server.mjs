@@ -317,6 +317,27 @@ const server = createServer((req, res) => {
     res.end('healthy \u2713 42');
     return;
   }
+  // `M198` S1 — the two routes the singleton plants need (`D1035`: the instrument grows a route
+  // rather than apiV2). `/subjects/echo` returns the request body's exact bytes under the request's
+  // own content-type, so what tflw *sent* is what the assertion reads — the only way to see an
+  // array body leave as an array rather than as `{"0":…}`. `/subjects/values` is one object whose
+  // fields are each a value a numeric comparison must refuse, plus one it must accept.
+  if (path === '/subjects/echo') {
+    count(path, req);
+    const chunks = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => {
+      res.writeHead(200, { 'content-type': req.headers['content-type'] ?? 'application/octet-stream' });
+      res.end(Buffer.concat(chunks));
+    });
+    return;
+  }
+  if (path === '/subjects/values') {
+    count(path, req);
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end('{"n":3,"s":"3","t":true,"nil":null,"arr":[5]}');
+    return;
+  }
   if (path === '/subjects/json-spaced') {
     count(path, req);
     // Valid JSON with whitespace no serialiser would emit: `body.spaced` reads it as JSON and

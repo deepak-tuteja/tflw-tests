@@ -21,9 +21,13 @@
   "why": "reached by C80's security assertion; rule applicability and the counts line are the security reference gates' subject (C57, verify:security-acceptance, D751)"
  },
  "array-body-flattened-to-an-object": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "step:api",
-  "why": "48 plants serialise an inline body here and none of them writes an array body, so the spread into an object never has an array to flatten; the wire is where it shows and the arrival server can echo a body"
+  "why": "`singletons.tflw` posts `[{…},{…}]` to `/subjects/echo`, which returns the bytes it received, and `body text` reads them back as the array; spread into an object the same body leaves as `{\"0\":…}` and both clauses go red",
+  "plant": "C67",
+  "redLine": "✗ C67 recall — the bytes that left are the array itself — `[{\"name\":\"Widget\"},{\"name\":\"Sprocket\"}]` — where a body spread into an object leaves as `{\"0\":{…},\"1\":{…}}` (`array-body-flattened-to-an-object`)",
+  "at": "2026-09-15",
+  "was": "48 plants serialise an inline body here and none of them writes an array body, so the spread into an object never has an array to flatten; the wire is where it shows and the arrival server can echo a body"
  },
  "assertion-diagnosis-never-fires": {
   "verdict": "not-asserted",
@@ -46,14 +50,19 @@
   "why": "35 plants close a browser through these two lines and every launch succeeded; the mutant differs only after a launch failure, and its difference is the process exit status — neither is something an acceptance plant provokes or reads"
  },
  "comparison-coerces-operands": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "matcher:comparison",
-  "why": "37 plants compare with `is less than`/`is greater than` and every operand is a number, so the guard against `null`/`false`/`[]` is executed and never tripped; C60-C66 grade the seven matchers on values that fit them"
+  "why": "four tests written to fail hand `is less than` a boolean, `null`, a numeric string and a one-element array, each graded on the sentence naming what it got; coerced, all four pass (four clauses red)",
+  "plant": "C65",
+  "redLine": "✗ C65 recall — `is less than` refuses boolean by name (got ok=true: no error) — coerced with `Number()` it would compare as 1 and pass (`comparison-coerces-operands`)",
+  "at": "2026-09-15",
+  "was": "37 plants compare with `is less than`/`is greater than` and every operand is a number, so the guard against `null`/`false`/`[]` is executed and never tripped; C60-C66 grade the seven matchers on values that fit them"
  },
  "config-files-resolve-against-cwd": {
-  "verdict": "not-asserted",
+  "verdict": "out-of-reach-by-design",
   "family": "config:key:cert",
-  "why": "79 plants resolve config file references and every grader runs `tflw` with its cwd at the config directory, where cwd-relative and config-relative are the same path; C106/C107 (`cert`/`key`) would need one run from elsewhere"
+  "why": "M198 S1: no invocation can separate the two directories — `checkConfigFiles` has one call site (`cli.ts`, `configDir: cwd`) and the CLI reads `tflw.config` from `join(cwd, 'tflw.config')` with no `--config`/`--cwd` flag, so `resolve(configDir, …)` and `resolve(process.cwd(), …)` are the same path on every path in; the entry is killed by a unit test that injects a `configDir`, and it guards a flag tflw does not have. A plant would need the flag first",
+  "was": "79 plants resolve config file references and every grader runs `tflw` with its cwd at the config directory, where cwd-relative and config-relative are the same path; C106/C107 (`cert`/`key`) would need one run from elsewhere"
  },
  "csrf-attached-to-safe-methods": {
   "verdict": "not-asserted",
@@ -121,9 +130,13 @@
   "why": "reached by C80's security assertion; the rule that reads the lowercased header (`authenticated-response-cacheable`) is graded by the security reference gates (D751), and C80's own known answer is 200-with versus 401-without"
  },
  "reserved-scheme-passes-through": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "config:key:api",
-  "why": "82 plants pass their base URL through the reserved-scheme guard and every one is `http://`; a fixture whose `api` is a misspelt `tflw://` scheme, graded on the one-sentence refusal, is the plant"
+  "why": "an absolute `api GET tflw://demoo/health` step — `TF071` reads only the config literal, so the runtime guard is the only refusal on this path — graded on the sentence naming the one legal spelling and on the arrival server having seen no `/health`; passed through it dies as `fetch failed`",
+  "plant": "C97",
+  "redLine": "✗ C97 recall — `api GET tflw://demoo/health` is refused by the sentence that names the only legal spelling (got ok=false: request failed: GET tflw://demoo/health — fetch failed) — passed through, it dies as `fetch failed` on an unknown protocol (`reserved-scheme-passes-through`)",
+  "at": "2026-09-15",
+  "was": "82 plants pass their base URL through the reserved-scheme guard and every one is `http://`; a fixture whose `api` is a misspelt `tflw://` scheme, graded on the one-sentence refusal, is the plant"
  },
  "saturation-cpu-arm-never-fires": {
   "verdict": "not-asserted",
@@ -156,9 +169,13 @@
   "why": "32 browser plants poll through this deadline and every one resolves inside ~3 s against a fast app, so a poll that gave up at the speculative mark is indistinguishable from one that kept going; a fixture with an element that appears at 5 s would tell them apart"
  },
  "spelled-out-duration-not-a-number": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "matcher:comparison",
-  "why": "same 37 plants, same numeric operands; `expect duration is less than 2 seconds` — the spelled-out form the unwrap exists for — appears in no fixture"
+  "why": "`expect duration is less than 2 seconds` on `/slow`, graded on the step passing and its detail reading `less than 2000`; with the conversion skipped the test errors with `got object`",
+  "plant": "C65",
+  "redLine": "✗ C65 recall — `expect duration is less than 2 seconds` compares as 2000 milliseconds (got ok=false: `is less than` expects a number, got object) — a duration left unconverted errors with `got object` (`spelled-out-duration-not-a-number`)",
+  "at": "2026-09-15",
+  "was": "same 37 plants, same numeric operands; `expect duration is less than 2 seconds` — the spelled-out form the unwrap exists for — appears in no fixture"
  },
  "suggestion-offered-without-its-ambiguity-caveat": {
   "verdict": "not-asserted",

@@ -6,6 +6,7 @@
 // Reads three committed files and runs nothing, so it is a contributor gate: milliseconds, no
 // stack, no sibling checkout. It refuses when there is no complete measurement to hold the table
 // to — a gate green about nothing is `D722`.
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readMatrix, binsOf, checkVerdicts, loadReach, loadVerdicts, PRODUCED } from './lib/reach-verdicts.mjs';
@@ -16,7 +17,10 @@ const DIR = path.join(ROOT, 'tflw-acceptance', 'mutation');
 const reach = loadReach(DIR);
 const matrix = readMatrix(path.join(DIR, 'kill-matrix.jsonl'));
 const table = loadVerdicts(DIR);
-const problems = checkVerdicts(reach, matrix, table);
+// `M198`: an `asserted` verdict is a hand kill, and `CONSTRUCTS.md` carries the same kill in its
+// table — the gate holds the two records to each other, so neither can name a kill alone.
+const ledger = readFileSync(path.join(ROOT, 'CONSTRUCTS.md'), 'utf8');
+const problems = checkVerdicts(reach, matrix, table, ledger);
 if (problems.length > 0) {
   console.log(`✗ reach verdicts: ${problems.length} problem(s)`);
   for (const p of problems) console.log(`  · ${p}`);

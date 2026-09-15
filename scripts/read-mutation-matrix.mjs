@@ -203,9 +203,9 @@ for (const [name, ids] of Object.entries(buckets)) if (name !== 'refusal-only' &
     for (const id of bins.reached) {
       const x = reach.mutations[id];
       const v = verdicts[id];
-      console.log(`    ${v ? (v.verdict === 'not-asserted' ? '·' : '~') : '?'} ${id.padEnd(52)} ${x.file.replace('packages/', '').replace('/src/', ':')}:${x.lines.join(',')}  ${x.plants.length} plant(s)${v ? `  ${v.verdict}` : '  (no verdict yet)'}`);
+      console.log(`    ${v ? (v.verdict === 'not-asserted' ? '·' : v.verdict === 'asserted' ? '✓' : '~') : '?'} ${id.padEnd(52)} ${x.file.replace('packages/', '').replace('/src/', ':')}:${x.lines.join(',')}  ${x.plants.length} plant(s)${v ? `  ${v.verdict}` : '  (no verdict yet)'}`);
     }
-    if (bins.reached.length > 0) console.log('    · not-asserted   ~ out-of-reach-by-design   ? no verdict in reach-verdicts.json');
+    if (bins.reached.length > 0) console.log('    · not-asserted   ✓ asserted (a hand kill since, `M198` — the census row above it is older)   ~ out-of-reach-by-design   ? no verdict in reach-verdicts.json');
     console.log(`  measured ${st.at?.slice(0, 10) ?? '?'} on the ${st.machine ?? '?'} over ${st.plants?.length ?? '?'} of ${GRADED.length} plant(s), tflw ${st.tflw?.ref ?? '?'}@${st.tflw?.sha ?? '?'}, bundle ${st.bundle ?? '?'}`
       + `${st.bundle && meta.baselineBundle ? (st.bundle === meta.baselineBundle ? ' — the census\'s own baseline build' : ` — NOT the census\'s baseline build (${meta.baselineBundle}); the two saw different tflws`) : ''}`);
     if (st.partial) console.log(`  PARTIAL — \`unreached\` above means unreached by the ${st.plants.length} plant(s) that ran, and \`verify:reach-verdicts\` refuses it`);
