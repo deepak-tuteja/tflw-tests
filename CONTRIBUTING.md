@@ -391,11 +391,15 @@ xvfb-run -a npm run regression -- --group security-ui
   **Reached is necessary, never sufficient** — a region is usually a whole `if` and its guard line
   running says nothing about its body — so the reached survivors are the ones a person reads, in
   `reach-verdicts.json`: `not-asserted` (the dogfood is shallow there; a row is filed per construct
-  family) or `out-of-reach-by-design` (the result is visible only in the report, an exit code, the
-  LSP or a log line). The two self-tests drive the fold and the reading against the inputs they
-  exist for; the gate holds the table and the reached set to each other in both directions
-  (`mutation-covers.mjs`'s arrangement, `D842`) and refuses a missing or partial measurement
-  outright, because a gate green about nothing is `D722`. `read:mutation-matrix` prints the same
+  family), `out-of-reach-by-design` (the result is visible only in the report, an exit code, the
+  LSP or a log line), or — since `M198` (tflw `D1033`) — `asserted`: a plant has been written that
+  depends on the result, and the entry carries the hand kill that proves it (`plant`, `redLine`,
+  `at`), the same four facts as the row in `CONSTRUCTS.md`'s hand-kill table, which the gate
+  cross-checks. The census row underneath stays `survived`, truthfully — it is the record of the
+  sweep that ran, and no sweep re-runs to move it (`M194`). The two self-tests drive the fold and
+  the reading against the inputs they exist for; the gate holds the table and the reached set to
+  each other in both directions (`mutation-covers.mjs`'s arrangement, `D842`) and refuses a
+  missing or partial measurement outright, because a gate green about nothing is `D722`. `read:mutation-matrix` prints the same
   bins without gating, naming the reached survivors and whether each has a verdict yet.
 - **`npm run verify:argv-contract`** — **two scripts' flags are validated and read from one table,
   and the cases proving it are held against the implementation each of them replaced.**

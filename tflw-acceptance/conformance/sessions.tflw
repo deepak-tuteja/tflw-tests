@@ -1,0 +1,30 @@
+# `M198` S2 / `C80` — the known-answer plant for what a session *sends*, graded off the socket.
+#
+# `csrf from … send as header "X-CSRF-Token"` attaches the token to every mutating request the
+# credential later makes and **not** to a safe one (`GET`/`HEAD`/`OPTIONS`), because a browser does
+# not send one there and an application may reject it if it arrives (SPEC §3.3). That "and not" is
+# the whole clause: it is why the token travels in its own channel instead of joining the headers a
+# `header` step declares, which go on every request unconditionally.
+#
+# **Nothing written inside this file can see it.** Both requests below answer 200 either way — an
+# application that receives a token it did not ask for almost always ignores it, which is exactly
+# `csrf-attached-to-safe-methods`'s note: "no existing test would have noticed, because sending a
+# token where none is needed usually still succeeds". So the assertion is not here. The grader reads
+# `/__headers?name=x-csrf-token` off `arrival-server.mjs` and asks which arrival carried it —
+# `/session/mutating` must, `/session/safe` must not, and `/session/issue` (the establishment POST
+# itself, made before the token existed) must not either.
+#
+# The two tests below assert only that the requests happened and reached the right places. That is
+# deliberate and is the reason `D745` put a socket-level instrument in this corpus at all: a config
+# key is a claim about the request tflw is about to make, and a claim that reached the report and
+# not the wire would pass any assertion written in a `.tflw` file.
+
+test "a safe method under a csrf session" as carrier
+  api GET /session/safe
+  expect status equals 200
+  expect body.method equals "GET"
+
+test "a mutating method under the same csrf session" as carrier
+  api POST /session/mutating
+  expect status equals 200
+  expect body.method equals "POST"

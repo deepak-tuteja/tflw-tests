@@ -1,0 +1,37 @@
+# `M198` S6 / `C49` — the one run shape this repository has never produced: a run that **reaches no
+# verdict** (`M189-05`, `M111-01`).
+#
+# `ok` means "this run passed", not "nothing that ran failed" — `M114`'s decision, taken because an
+# aborted run's `results.json` and its `run:end` event both read
+# `{"ok": true, "passed": 1, "failed": 0, "aborted": true}`, handing CI a clean pass off a run cut
+# short at 0 s of a 4 s plan. `finalizeVerdict` is the single derivation that fixed it, and
+# `noVerdictReason` is what it consults.
+#
+# 102 plants run through that line and **every run they read completed**, so `noVerdictReason` has
+# never once been non-null here: `ok` and `report.tests.every(ok)` have agreed on every run this
+# repository has ever produced, which is exactly the state in which `ok-ignores-no-verdict` is
+# invisible.
+#
+# Nothing written in a `.tflw` file can abort a run. `aborted` comes from `opts.abortSignal`, which
+# is the CLI's own SIGINT handler and nothing else, so **the plant is the file plus the signal**:
+# `verify-construct-acceptance.mjs` starts this run, waits, sends `SIGINT`, and reads the flushed
+# partial report. That is the same shape as `S2`'s csrf leg — the claim lives off the socket there
+# and off the process here, because in neither case is there a position in the language where it
+# could be written.
+#
+# The workload is deliberately long and deliberately dull: eight seconds of a rate a local counter
+# answers instantly, so that at the moment the signal arrives every iteration that completed has
+# **passed**. That is the whole discriminator. A run with a failing test is `ok: false` under every
+# build; only a run where nothing failed and no verdict was reached can tell `ok` from
+# `failed === 0`.
+#
+# The grader runs this file twice — once single-process, where `runProgram` stamps the verdict
+# itself, and once under `--workers 4`, where the abort arrives at `spliceLoadReportIntoRunReport`
+# *after* `ok` was already stamped and has to be re-derived. Two mutations, two runs, one file.
+
+@constructs @verdict
+test "a run long enough to be interrupted while everything in it is still passing"
+  hold 5 rps for 8s
+  api GET /hold
+  expect status equals 200
+  threshold error rate is less than 1%

@@ -336,7 +336,7 @@ export const PLANTS = [
     family: 'locator',
     tier: 'ui',
     title: 'the button, and not the three decoys wearing its text',
-    target: 'webV2 `/locator-fixture` — one `<button>` and three same-text decoys with different roles',
+    target: 'webV2 `/locator-fixture` — one `<button>` and three same-text decoys with different roles; plus `M198` S3\'s `/diagnose-fixture` and `tests/.constructs/locator-diagnosis.tflw`, six tests written to fail',
     evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: '^\\s*click button "Archive', min: 1 },
     graders: ['acceptance', 'coverage'],
     knownAnswer:
@@ -344,8 +344,25 @@ export const PLANTS = [
       'shipment", and each writes its own token. The answer is `button/true`. A `button` locator ' +
       'that had degenerated into a text search reports a decoy’s token or hard-errors on ' +
       'ambiguity — and would still pass all ninety-three existing uses, which name things that ' +
-      'are unique on their page.',
-    catches: 'a `button` locator that stopped resolving by role.',
+      'are unique on their page.\n\n' +
+      '**`M198` S3 (`M189-02`) added the other half: what a `button` locator says when it resolves ' +
+      'to nothing.** A miss has no token to write, so its whole answer is a sentence in ' +
+      '`results.json`, and eight registry mutations move that sentence without moving any verdict. ' +
+      'On `/diagnose-fixture` a near miss must name the real button (`assertion-diagnosis-never-fires`), ' +
+      'name it exactly **once** for the two elements that render it ' +
+      '(`nearest-matches-not-deduped`), say on that line that two elements do ' +
+      '(`suggestion-offered-without-its-ambiguity-caveat`, because pasting it produces the ' +
+      '*ambiguity* error — a different failure from the one being diagnosed), and still have a slot ' +
+      'for the icon-only button no name can reach (`unnamed-arm-dropped-for-every-kind`). Twelve ' +
+      'identical `Retire` rows are listed with per-candidate discriminators, all distinct ' +
+      '(`ambiguity-list-without-discriminators`). `wait until` carries the same diagnosis when it ' +
+      'gives up (`wait-until-diagnosis-dropped`). And twice the claim is what the text must **not** ' +
+      'contain: a button that *resolved* and failed on its state is answered about the state ' +
+      '(`diagnosis-ignores-the-resolved-element`), and an `is hidden` that passes on absence is not ' +
+      'annotated at all (`passing-assertion-gets-annotated`). A seventh test is the control — ' +
+      'every clause is about a sentence, so a page that failed to render would produce six ' +
+      'plausible failures and no signal.',
+    catches: 'a `button` locator that stopped resolving by role; and a failure sentence that stops naming what the author probably meant — silently, on a run where every other assertion is green.',
     blockedOn: null,
   },
   {
@@ -354,7 +371,7 @@ export const PLANTS = [
     family: 'locator',
     tier: 'ui',
     title: 'rendered content, not the four attributes that spell the same phrase',
-    target: 'webV2 `/locator-fixture` — the phrase repeated in a `value`, an `alt`, a `title` and an `aria-label`',
+    target: 'webV2 `/locator-fixture` — the phrase repeated in a `value`, an `alt`, a `title` and an `aria-label`; plus `M198` S3\'s `/diagnose-fixture` miss, graded on what the diagnosis does not offer',
     evidence: { file: 'tests/.constructs/locator-near-miss.tflw', pattern: '^\\s*click text "', min: 1 },
     graders: ['acceptance', 'coverage'],
     knownAnswer:
@@ -362,8 +379,15 @@ export const PLANTS = [
       'match must not look. The answer is `text/true`, and any attribute starting to match makes ' +
       'the step ambiguous rather than merely wrong. The decoy input is deliberately `type="text"`: ' +
       'Playwright’s text engine matches `input[type=button|submit]` by `value` **by design**, so ' +
-      'making it a submit would turn a correct engine red.',
-    catches: 'a `text` locator that widened past rendered text content.',
+      'making it a submit would turn a correct engine red.\n\n' +
+      '**`M198` S3 added the miss.** `text`\'s diagnosis scan is `*` and a name is computed only ' +
+      'for leaves, so *every* element with children lands in the unnamed arm — which is why that ' +
+      'arm is opt-in per kind and `text` is deliberately not in it (`M119-01`). A miss on ' +
+      '`text "Inventroy reconciled"` must be answered with `text` suggestions only; with the arm ' +
+      'firing it answers `css "html"`, `css "html > head"` and `css "html > body"`, structural ' +
+      'containers in document order, one of which can never be visible, all offered as ' +
+      'ready-to-paste (`text-diagnosis-offers-structural-css-paths`).',
+    catches: 'a `text` locator that widened past rendered text content; and a diagnosis offering the page\'s structure as though it were a candidate.',
     blockedOn: null,
   },
   {
@@ -979,11 +1003,12 @@ export const PLANTS = [
     family: 'step',
     tier: 'workload',
     title: 'a flat target is at full rate from the start, with no ramp-in',
-    target: 'tflw-acceptance/conformance/arrival-server.mjs — the recorded arrival curve',
+    target: 'tflw-acceptance/conformance/arrival-server.mjs — the recorded arrival curve; plus `M198` S7\'s two plants, `self-report.tflw` (a report field and the socket counter) and `short-run.tflw` (150ms of held load)',
     evidence: { file: 'tflw-acceptance/conformance/shapes.tflw', pattern: '^\\s*hold\\s+\\d+\\s+rps\\s+for\\b', min: 1 },
     graders: ['acceptance', 'coverage'],
-    knownAnswer: '`hold 50 rps for 4s` lands ~200 requests AND is already at ~25 per 500ms bin in its second bin. `tflw spec` says "a flat target for the whole duration, **with no ramp-in**", and the only way to be wrong about that while landing the right total is to ramp — so the opening rate is asserted against the target, not merely against zero.',
-    catches: 'a hold that ramps in, and a hold whose steady rate drifts.',
+    knownAnswer: '`hold 50 rps for 4s` lands ~200 requests AND is already at ~25 per 500ms bin in its second bin. `tflw spec` says "a flat target for the whole duration, **with no ramp-in**", and the only way to be wrong about that while landing the right total is to ramp — so the opening rate is asserted against the target, not merely against zero.'
+      + '\n\n**`M198` S7** reads what the engine says about **itself**, which the arrival curve cannot move. Three legs. (1) A closed-model `hold N users` reports its own `backOff` ratio, and says the target did not degrade — the arrival server answers from memory, so `warning: false` is the negative control the mutation\'s registry note says would otherwise have nothing left to check. Written as `hold N users` and paced: `run N iterations across M users` is not one of the four closed kinds and reports no ratio at all, which the first draft did. (2) 248 arrivals across one file reach the server over **4** connections; one keep-alive pool per arrival makes it **63**, measured — a structural test asking "did an arrival use a keep-alive agent" stays green under that, which is why the claim is reuse observed at the socket. (3) 150 ms of held load reads ~112% of a core, over the 90 that trips the CPU arm, and still reports `saturated: false` — the claim is the *pair*, because a run whose rate sat under the threshold would satisfy the verdict for the wrong reason and be green under the mutant too. Its own file, since `selfDiagnosis` is stamped once per run and not per scenario.',
+    catches: 'a hold that ramps in, and a hold whose steady rate drifts; a back-off diagnostic that stops applying to the shape it was written for; an open model that builds a connection pool per arrival; and a saturation floor removed, so a run too short to mean anything calls tflw its own bottleneck.',
     blockedOn: null,
   },
   {
@@ -1037,11 +1062,12 @@ export const PLANTS = [
     family: 'step',
     tier: 'workload',
     title: "a workload's verdict comes from its thresholds and from nothing else",
-    target: 'tflw-acceptance/conformance/verdict.tflw — a 50ms path, one threshold that breaches and one that does not',
+    target: 'tflw-acceptance/conformance/verdict.tflw — a 50ms path, one threshold that breaches and one that does not; plus `M198` S6\'s two plants, `no-verdict.tflw` (an always-failing path and a two-latency scenario) and `aborted.tflw` (interrupted by the grader)',
     evidence: { file: 'tflw-acceptance/conformance/verdict.tflw', pattern: '^\\s*threshold\\s+p95\\s+duration\\b', min: 2 },
     graders: ['acceptance', 'coverage'],
-    knownAnswer: 'Two tests issue the same request against the same 50ms path, and every `expect status equals 200` in both succeeds. The one bounded at 5000ms passes; the one bounded at 10ms **fails with every assertion in it green**. That is the claim `tflw spec` makes — "decided once, after the run, against the run\'s aggregate metrics" — and the reason it matters is on the record: on 2026-08-05 a rung that declared no threshold ran at a 100% error rate and reported PASS.',
-    catches: 'a verdict computed from the steps rather than the metrics, and a threshold that cannot breach.',
+    knownAnswer: 'Two tests issue the same request against the same 50ms path, and every `expect status equals 200` in both succeeds. The one bounded at 5000ms passes; the one bounded at 10ms **fails with every assertion in it green**. That is the claim `tflw spec` makes — "decided once, after the run, against the run\'s aggregate metrics" — and the reason it matters is on the record: on 2026-08-05 a rung that declared no threshold ran at a 100% error rate and reported PASS.'
+      + '\n\n**`M198` S6** widens the row from a test\'s verdict to a **run\'s**, and adds the two threshold facts a workload whose requests all succeed cannot state. Every workload in this repository measures a target that answers and every run it makes completes, which is what hid all of it. (1) A duration threshold over a scenario whose every iteration failed reports `actual: null` and **is not met** — `LatencyHistogram.percentile` returns 0 on an empty histogram, so a null arm answering `true` would make "every request failed" the cheapest way in the language to satisfy a latency bound. The threshold\'s own row is read, never the test\'s: `TF033` refuses a duration bound without an error-rate clause beside it, so the test is red under both builds — the checker forbidding that shape is the same defect one level up. (2) `threshold p95 duration for "fast"` reads 1 ms while the scenario it sits in reads 55 ms at p95, because the plant mixes a 50 ms path and a 0 ms one; `M169-05` recorded one red and two green on byte-identical code precisely because a single-latency plant cannot tell a resolved bucket from the whole histogram. (3) A run interrupted by SIGINT at 2.5 s of an 8 s plan flushes a partial report in which **nothing failed** and which is still `ok: false` — the only state in which `ok` and `failed === 0` can disagree, and the state 102 plants here had never produced. Nothing in the language can abort a run, so that plant is the file plus the signal, the same shape as `C80`\'s csrf leg.',
+    catches: 'a verdict computed from the steps rather than the metrics, and a threshold that cannot breach; an ungradable threshold reported as satisfied; a scoped threshold that silently reads the whole scenario; and an `ok` that means "nothing that ran failed" rather than "this run passed".',
     blockedOn: null,
   },
   {
@@ -1378,8 +1404,12 @@ export const PLANTS = [
       '`body.price` is `42`, and all four assertions sit on the boundary: `> 41` and `not > 42`, `< ' +
       '43` and `not < 42`. `>=` masquerading as `>` passes the two positives and is red on the two ' +
       'negatives. No other use of this matcher in the repository sits within one of its bound — `is ' +
-      'greater than 0`, `is less than 5000ms` — so none of them could ever notice.',
-    catches: 'a comparison that is inclusive where the language says it is strict, in either direction.',
+      'greater than 0`, `is less than 5000ms` — so none of them could ever notice. Since `M198` ' +
+      '(`singletons.tflw`, no stack): a boolean, `null`, a numeric string and a one-element array ' +
+      'are each refused by name — `expects a number, got …` — where `Number()` would coerce all ' +
+      'four to something below 5 and pass; and `is less than 2 seconds` compares as 2000, so the ' +
+      'spelled-out duration is converted before the comparison rather than handed to it as an object.',
+    catches: 'a comparison that is inclusive where the language says it is strict, in either direction; one that coerces a non-number operand; a spelled-out duration left unconverted.',
     blockedOn: null,
   },
   {
@@ -1502,7 +1532,7 @@ export const PLANTS = [
     family: 'step',
     tier: 'api',
     title: '`wait until api` re-issues until its condition holds, and stops when it does',
-    target: 'tests/.constructs/step-workhorses.tflw against `POST /v1/lifecycle/attempt`, whose `c72settles` key answers 503 on attempts 1 and 2 and 200 on attempt 3',
+    target: 'tests/.constructs/step-workhorses.tflw against `POST /v1/lifecycle/attempt`, whose `c72settles` key answers 503 on attempts 1 and 2 and 200 on attempt 3; plus `M198` S5\'s two plants — `tflw-acceptance/conformance/waits.tflw` against `/after/<ms>` on the arrival server, and `tests/.constructs/wait-budgets.tflw` against `/wait-fixture`',
     evidence: { file: 'tests/.constructs/step-workhorses.tflw', pattern: '^\\s*wait until api POST /lifecycle/attempt', min: 1 },
     graders: ['acceptance'],
     knownAnswer:
@@ -1511,8 +1541,24 @@ export const PLANTS = [
       'after 3 attempts`; and the grader reads `attempts.c72settles == 3` back off the server. The ' +
       'first two prove it **re-issued** — a single request with a generous timeout sees `settled: ' +
       'false` and dies — and the third proves it **stopped**, which the first two cannot: a wait ' +
-      'that kept polling its budget out after the condition held is green on both of them.',
-    catches: 'a `wait` that issues one request behind a long timeout, and one that does not stop polling once its condition is met.',
+      'that kept polling its budget out after the condition held is green on both of them.' +
+      '\n\n**`M198` S5** — the other half, and the half this row could not reach: everything above is a ' +
+      'claim about a wait that **succeeds**, and a wait satisfied on poll one never reaches a deadline, ' +
+      'never reports which budget bounded it, and never polls past a progress mark. Four legs. (1) `wait ' +
+      'until api GET /after/600000 timeout wait 1500ms` cannot be satisfied, so it is guaranteed to run ' +
+      'out, and the only question left is which number it ran out at: the failure reads `timed out after ' +
+      '1500ms`, with the corpus\'s 30 s fallback absent. (2) The locator form is graded on the `for ' +
+      '<duration>` **backstop**, because its timeout message names no budget at all — `for 3s timeout ' +
+      'wait 2000ms` is refused and the refusal quotes `(2000ms)`, while against this config\'s 5 s the ' +
+      'same hold is satisfiable and a build reading the env\'s budget passes instead of refusing. A ' +
+      'difference of kind, not of timing. (3) A button that arrives at 5000 ms still resolves, against a ' +
+      'mutant that turns the ~3 s speculative mark into a deadline. (4) `wait until status of request to ' +
+      '"/v1/health" equals 200` — the network-ref form, written here for the first time in this ' +
+      'repository — polls observed traffic rather than throwing about response scope. Not one leg is ' +
+      'graded on elapsed time against the constants it turns on; the two duration clauses are lower ' +
+      'bounds with seconds of margin, and they assert that a leg is not vacuous rather than that a ' +
+      'machine is fast.',
+    catches: 'a `wait` that issues one request behind a long timeout, and one that does not stop polling once its condition is met; a poll loop that reports the env\'s budget where the step wrote its own, on either the api or the locator side; a speculative progress mark turned into a deadline; and a reader that consults a network ref only for the bare subject form.',
     blockedOn: null,
   },
   // --- `M154g` step 2c: the four declarations that decide which tests exist ------------------
@@ -1681,7 +1727,7 @@ export const PLANTS = [
     family: 'declaration',
     tier: 'api',
     title: '`as <session>` is what makes the request authorized — the same GET is 200 with it and 401 without',
-    target: 'tests/examples/sessions-explained.tflw, graded out of report/results.json — an existing file, no new fixture',
+    target: 'tests/examples/sessions-explained.tflw, graded out of report/results.json — an existing file, no new fixture; plus `M198` S2\'s two plants, `tests/.constructs/session-context.tflw` against apiV2 and `tflw-acceptance/conformance/sessions.tflw` against the arrival server',
     evidence: { file: 'tests/examples/sessions-explained.tflw', pattern: '^test ".*" as admin$', min: 1 },
     graders: ['acceptance'],
     knownAnswer:
@@ -1694,8 +1740,23 @@ export const PLANTS = [
       'not a pair. A third test, `as admin, shopper`, covers the manifest\'s "one or more": both ' +
       'sessions\' contributions land, later-listed winning a conflict. What this row adds over the ' +
       'file is the *statement* — `M154a` counted this file as evidence of `as` and never asked ' +
-      'what it proved (`D722`).',
-    catches: 'an `as` clause that applies no credential, and one that authorizes every test in the file whether it opted in or not.',
+      'what it proved (`D722`).\n\n' +
+      '**`M198` S2 (`M189-06`) added what the pair cannot see.** A session is declared in ' +
+      '`tflw.config` and not in a `.tflw` file, so its context is rebased onto the config before ' +
+      'its body runs; a step\'s reported `source` is `lines[line - 1]`, which makes that rebase ' +
+      'observable with nothing failing. `session-context.tflw` is 36 lines and the declarations it ' +
+      'names sit at 195 and 249, so a session step rendered from the caller\'s document prints the ' +
+      'empty string — for the hand-written arm (`session-source-lines`) and for the `oauth2` arm, ' +
+      'which had the rebase applied *inside* one branch instead of above it (`oauth2-session-ctx`). ' +
+      'The rule graded is the general one: a step\'s source is the text at its own line, in the ' +
+      'document it was declared in — the plant\'s own steps are checked against the plant. ' +
+      'The third is what a session *sends*: `csrf from … send as header` attaches its token to ' +
+      'mutating requests and not to safe ones, so `sessions.tflw` issues one `GET` and one `POST` ' +
+      'under one credential and the grader asks `arrival-server.mjs` which arrival carried the ' +
+      'header. Both answer 200 either way — an application ignores a token it did not ask for — so ' +
+      'this one is graded off the socket and could not have been asserted in the file at all ' +
+      '(`csrf-attached-to-safe-methods`).',
+    catches: 'an `as` clause that applies no credential, and one that authorizes every test in the file whether it opted in or not; a session whose steps are reported out of the wrong document, in either arm of the `oauth2` branch; and a CSRF token attached to every request rather than to the mutating ones.',
     blockedOn: null,
   },
 
@@ -2130,8 +2191,11 @@ export const PLANTS = [
       + 'produces an identical green summary and a different set of paths on the wire. The grid has a third column for the case where the key must do NOTHING: an absolute target is the address itself, so no base is joined onto it and the same step arrives at the same path under two different `api` bases — `/absolute` under `…/base` and `/absolute` again under `…/other`. Widened at `M164-03`, after the mutation that states it had already existed since `M125b1` and this plant had never been red: the boundary of a key is part of what the key means, and leaving it unstated was an omission rather than a decision. `M197` (tflw D1024) adds the override leg: `api env TFLW_C97_BASE default "http://127.0.0.1:1/base"` — '
       + 'with the variable set the same three paths arrive and the report carries the overridden URL verbatim (a plain '
       + 'value, not `•••(NAME)`: the construct is deliberately not `env()`); with it unset the run names `127.0.0.1:1`, '
-      + 'so the literal is the default and not decoration.',
-    catches: 'a base URL whose own path is discarded when a step\'s path is appended, a named service resolved to the default base, and a base URL prepended to an absolute target — which composes an address the arrival server answers `200` to, so the run stays green and only the wire says where it went.',
+      + 'so the literal is the default and not decoration. Since `M198` (`singletons.tflw`): a step\'s own '
+      + 'absolute `tflw://demoo/health` is refused by the one sentence naming `tflw://demo` as the only address '
+      + 'under the reserved scheme, before any I/O — `TF071` reads the config literal alone, so the runtime '
+      + 'guard is the only refusal on this path, and the arrival server saw no `/health`.',
+    catches: 'a reserved-scheme typo passed through to `fetch`; a base URL whose own path is discarded when a step\'s path is appended, a named service resolved to the default base, and a base URL prepended to an absolute target — which composes an address the arrival server answers `200` to, so the run stays green and only the wire says where it went.',
     blockedOn: null,
   },
   {

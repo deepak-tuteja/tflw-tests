@@ -1,0 +1,65 @@
+# `M198` S7 / `C45`, `C3` — the engine's report **about itself** (`M189-04`).
+#
+# Eight perf plants run the workload engine and every one of them grades the *arrival curve the
+# server recorded*. That is the right thing to grade for a shape — `C44`–`C47` are about whether a
+# `hold` is flat and a `ramp` rises — and it is precisely why three fields tflw writes about its own
+# behaviour have never been read by anything: the arrival count is identical whether or not the
+# generator reused a socket, whether or not a closed-model target slowed down, and whichever client
+# the arrivals went out over.
+#
+# ## The back-off diagnostic (`backoff-hold-kind`)
+#
+# `computeBackOff` compares the first half's mean iteration duration to the second half's and
+# reports a ratio, but only for a **closed-users** workload holding one concurrency level — under a
+# rising target the halves differ by Little's law rather than by degradation, which is
+# `M107-01`/`D-M107-1`'s measured finding. `hold N users` is the canonical constant-concurrency
+# shape, and `backoff-hold-kind` drops exactly that kind from the set.
+#
+# Nothing here would notice: `C45` grades `hold N users` on its arrival curve, and a scenario report
+# missing an optional field entirely is not a field with a wrong value. So this test asserts the
+# field is **there**, and that on a target which does not degrade it says so — the negative control
+# the mutation's own registry note says has nothing left to check.
+#
+# It has to be written as `hold N users`, and the first draft was `run N iterations across M users`
+# and reported no `backOff` at all: an iteration-bounded workload is not one of the four kinds in
+# `CLOSED_USERS_KINDS`, so the field was legitimately absent and the plant would have asserted the
+# mutant's own behaviour as its known answer. `pause 20ms` paces it to a few hundred iterations
+# against a target that answers in half a millisecond — without it two users spend two seconds
+# issuing tens of thousands of requests for a field that needs ten per half
+# (`MIN_ITERATIONS_PER_HALF_FOR_BACK_OFF`).
+#
+# ## The open model's client (`open-model-back-to-fetch`, `open-model-agents-per-arrival`)
+#
+# `D206`/`D207`: an `rps` arrival goes out over a **shared** pinned keep-alive pool — shared across
+# the scenario, not built per arrival. Both halves matter and they fail in opposite directions. Back
+# on `fetch`, a 0.2 ms endpoint reported p50 36 ms under `hold 10 rps` while `hold 1 users` reported
+# 0 ms in the same process (`M118-02`). One pool per arrival is the over-correction `D207` rejects,
+# and it is *worse* than the `fetch` path it replaced, because every sample then pays for a fresh
+# TCP handshake.
+#
+# A structural test that only asked "did an arrival use a keep-alive agent" stays green under the
+# second, which is why the claim has to be **connection reuse observed at the socket**.
+# `arrival-server.mjs` counts `server.on('connection')` and the grader resets that counter before
+# this file runs, so `arrivals ÷ connections` is a number no assertion in a `.tflw` file can reach
+# and no arrival curve can move.
+
+@constructs @selfreport
+test "a closed-model hold reports its own back-off ratio, and reports no degradation on a target that has none"
+  # The arrival server answers from memory with no database behind it, so the second half cannot be
+  # slower than the first for any reason but the generator. `warning` must therefore be false, which
+  # is the half that turns "the field exists" into "the field is right".
+  hold 2 users for 2s
+  api GET /selfreport-closed
+  expect status equals 200
+  pause 20ms
+  threshold error rate is less than 1%
+
+@constructs @selfreport
+test "open-model arrivals share one connection pool for the whole scenario"
+  # 60 arrivals over three seconds. Sharing one pinned pool, the socket count stays in single
+  # figures; one pool per arrival makes it 60, and `fetch` puts them on a pool this counter sees
+  # differently again. The grader reads `/__arrivals`, not this file.
+  hold 20 rps for 3s
+  api GET /selfreport-open
+  expect status equals 200
+  threshold error rate is less than 1%

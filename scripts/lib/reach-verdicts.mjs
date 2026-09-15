@@ -13,6 +13,13 @@
 //   out-of-reach-by-design  the result is visible only somewhere the roster does not look — the
 //                           HTML report, an exit code, the LSP, a log line — and a plant that
 //                           looked there would be a different kind of plant
+//   asserted                `M198` (tflw `D1033`): a plant now depends on the result, and the entry
+//                           carries the four facts that prove it — `plant`, the mutation applied by
+//                           hand on the box (`D976`), the `redLine` the grader printed, and `at`.
+//                           The census's `survived` row stands untouched: it is the record of the
+//                           sweep that ran on 09-13, and no sweep re-runs (`M194`); this entry is
+//                           the newer fact, and `CONSTRUCTS.md`'s hand-kill table carries the same
+//                           four, which `verify:reach-verdicts` cross-checks.
 //
 // `mutation-covers.mjs`'s arrangement (`D842`, `D767`): the hand table and the measured set must
 // name exactly the same mutations, in both directions, or the gate refuses. A verdict about a
@@ -26,7 +33,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const VERDICTS = ['not-asserted', 'out-of-reach-by-design'];
+export const VERDICTS = ['not-asserted', 'out-of-reach-by-design', 'asserted'];
 export const PRODUCED = '$produced';
 
 /** The committed matrix, folded the way `read-mutation-matrix.mjs` folds it (`D848`). */
@@ -60,7 +67,7 @@ export function binsOf(reach, matrix) {
  * Every way the hand table can disagree with the measurement, as messages. Empty means the gate
  * passes. `table` is the parsed `reach-verdicts.json` with its `$comment` allowed.
  */
-export function checkVerdicts(reach, matrix, table) {
+export function checkVerdicts(reach, matrix, table, ledger = null) {
   const problems = [];
   if (!reach) return ['no `reach.json` — nothing measured, so there is nothing to hold the table to. Run `npm run measure:mutation-reach` on the box and commit the artefact.'];
   if (!reach[PRODUCED] || !Array.isArray(reach[PRODUCED].plants)) return ['`reach.json` carries no `$produced` stamp — not an artefact this reader knows'];
@@ -75,10 +82,24 @@ export function checkVerdicts(reach, matrix, table) {
     if (!v || typeof v !== 'object') { problems.push(`${id}: the entry is not an object`); continue; }
     if (!VERDICTS.includes(v.verdict)) problems.push(`${id}: verdict \`${v.verdict}\` is not one of ${VERDICTS.join(' | ')}`);
     if (typeof v.family !== 'string' || !v.family.trim()) problems.push(`${id}: no \`family\` — a not-asserted verdict is filed per construct family, and this names which`);
+    if (v.verdict === 'asserted') {
+      // The four facts of a hand kill, each one a thing the reader can go and check.
+      if (!/^C\d+$/.test(v.plant ?? '')) problems.push(`${id}: \`asserted\` names no \`plant\` (a roster id such as \`C65\`) — which plant depends on the result?`);
+      if (typeof v.redLine !== 'string' || v.redLine.trim().length < 20) problems.push(`${id}: \`asserted\` carries no \`redLine\` — the grader's own sentence under the mutation, quoted, is the proof`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(v.at ?? '')) problems.push(`${id}: \`asserted\` carries no \`at\` date (YYYY-MM-DD) — when was the kill taken?`);
+      if (ledger && !ledgerNames(ledger, v.plant, id)) problems.push(`${id}: \`asserted\` by \`${v.plant}\` and CONSTRUCTS.md's hand-kill table has no row naming both — the two records must carry the same kill`);
+    }
     if (typeof v.why !== 'string' || v.why.trim().length < 20) problems.push(`${id}: \`why\` is missing or shorter than a sentence — one line of reasoning per verdict (\`D842\`)`);
   }
   if (bins['not-located'].length > 0) problems.push(`${bins['not-located'].length} survivor(s) could not be located in the current source (${bins['not-located'].join(', ')}) — the registry moved since the reach was measured; re-measure`);
   return problems;
+}
+
+/** Does `CONSTRUCTS.md` carry a hand-kill table row naming this plant and this mutation? A row is
+ *  `| \`C65\` | … (\`comparison-coerces-operands\`) | … |`; the check asks only that one table line
+ *  carries both names in backticks, which is the shape every hand-kill row since `M189c` has. */
+export function ledgerNames(ledger, plant, mutation) {
+  return ledger.split('\n').some((l) => l.startsWith('| `') && l.includes(`\`${plant}\``) && l.includes(`\`${mutation}\``));
 }
 
 export function loadReach(dir) {
@@ -118,6 +139,14 @@ function selfTest() {
   t('a verdict outside the vocabulary is refused', checkVerdicts(clean, matrix, { a: { ...good.a, verdict: 'meh' } }).some((p) => /not one of/.test(p)));
   t('a verdict with no family is refused', checkVerdicts(clean, matrix, { a: { ...good.a, family: '' } }).some((p) => /no `family`/.test(p)));
   t('a verdict with a one-word why is refused', checkVerdicts(clean, matrix, { a: { ...good.a, why: 'shallow' } }).some((p) => /shorter than a sentence/.test(p)));
+  const kill = { verdict: 'asserted', family: 'expect:comparison', why: 'the plant now reads the refusal sentence, which the mutation turns green', plant: 'C65', redLine: '✗ C65 recall — `is less than` refuses boolean by name (got ok=true: no error)', at: '2026-09-15' };
+  const ledger = '| `C65` | `Number()` restored (`a`) | `✗ C65 recall — …` |\n';
+  t('an asserted verdict with its four facts and a ledger row passes', checkVerdicts(clean, matrix, { $comment: 'x', a: kill }, ledger).length === 0);
+  t('an asserted verdict with no plant is refused', checkVerdicts(clean, matrix, { a: { ...kill, plant: '' } }, ledger).some((p) => /names no `plant`/.test(p)));
+  t('an asserted verdict with no red line is refused', checkVerdicts(clean, matrix, { a: { ...kill, redLine: 'red' } }, ledger).some((p) => /no `redLine`/.test(p)));
+  t('an asserted verdict with no date is refused', checkVerdicts(clean, matrix, { a: { ...kill, at: 'today' } }, ledger).some((p) => /no `at` date/.test(p)));
+  t('an asserted verdict the ledger does not carry is refused', checkVerdicts(clean, matrix, { a: kill }, '| `C65` | some other kill (`b`) | … |\n').some((p) => /hand-kill table has no row/.test(p)));
+  t('an asserted verdict is not checked against a ledger nobody passed', checkVerdicts(clean, matrix, { a: kill }).length === 0);
   t('a survivor the registry moved out from under is refused', checkVerdicts(reach, matrix, good).some((p) => /could not be located/.test(p)));
   t('no measurement refuses, and says what to run', /measure:mutation-reach/.test(checkVerdicts(null, matrix, good)[0]));
   t('a partial measurement refuses', /PARTIAL/.test(checkVerdicts({ ...clean, [PRODUCED]: { plants: ['C1'], partial: true } }, matrix, good)[0]));

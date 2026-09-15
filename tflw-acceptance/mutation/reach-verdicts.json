@@ -1,19 +1,28 @@
 {
  "$comment": "M189a (D974): one verdict per reached survivor of the census's runtime mutants, held to tflw-acceptance/mutation/reach.json by `npm run verify:reach-verdicts` in both directions. `not-asserted` = a plant runs through it and its known answer does not depend on the result (the dogfood is shallow there; a row is filed per family in testFlow/REVIEW_FINDINGS.md). `out-of-reach-by-design` = the result is visible only where the acceptance roster does not look, or is graded by a reference gate the census does not run (D751, D846). Read 2026-09-13 against the reach measured the same day over 106 plants at tflw main@29dfa0a. Re-read 2026-09-14 against `M190`'s re-census (the same 106 plants, tflw main@46750a0): 42 reached survivors again, 41 verdicts carried unchanged and one added (`threshold-scope-falls-back-to-the-whole-histogram`, added to the registry after the previous census and reached in this one).",
  "ambiguity-count-from-a-second-query": {
-  "verdict": "not-asserted",
+  "verdict": "out-of-reach-by-design",
   "family": "locator:diagnosis",
-  "why": "the ambiguity message when a locator matches several elements: ten plants run through the formatter on a page where the locator was unambiguous, so the count and the list are never read; a plant would need a deliberately ambiguous locator and read the sentence back"
+  "why": "the unmutated message reports the length of the list it is about to print and the mutant reports the count the step observed; the two differ only on a DOM that changed between the step's `.count()` and the single describing query — microseconds apart inside one failure path, with no gesture in between, so a fixture staging it would make its own known answer a race, and the unmutated code already has a named branch for that race. Measured rather than argued: applied to tflw on `fedora-box` 2026-09-15 with `M198` S3's whole plant in place — twelve matches, five shown, discriminators and all — the grader stayed green, 0 red lines. `M198` S3's ten legs kill the other nine.",
+  "was": "the ambiguity message when a locator matches several elements: ten plants run through the formatter on a page where the locator was unambiguous, so the count and the list are never read; a plant would need a deliberately ambiguous locator and read the sentence back"
  },
  "ambiguity-list-without-discriminators": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "locator:diagnosis",
-  "why": "the per-candidate discriminator in the ambiguity list — same ten plants, same unambiguous pages; no known answer here has ever been a sentence about several matches"
+  "why": "twelve `Retire` buttons with one distinct label between them: the grader requires every shown candidate to carry a discriminator and all of them to differ; computed and then not printed, the list is N identical quoted strings carrying zero bits for the choice it demands the reader make",
+  "plant": "C13",
+  "redLine": "✗ C13 recall — twelve identical `Retire` buttons are listed with what tells them apart (0/5 candidate(s), 0 distinct discriminator(s)) — computed and then not printed, the list is N identical quoted strings carrying zero bits for the choice it demands (`ambiguity-list-without-discriminators`)",
+  "at": "2026-09-15",
+  "was": "the per-candidate discriminator in the ambiguity list — same ten plants, same unambiguous pages; no known answer here has ever been a sentence about several matches"
  },
  "api-wait-ignores-its-own-budget": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "wait:poll-budget",
-  "why": "C67, C70, C71 and C72 run through the api-side budget line; C72 (`step:wait`) asserts the wait re-issues until its condition holds and stops — never that a `timeout wait` clause is the number that bounded it"
+  "why": "C67, C70, C71 and C72 run through the api-side budget line; C72 (`step:wait`) asserts the wait re-issues until its condition holds and stops — never that a `timeout wait` clause is the number that bounded it",
+  "was": "not-asserted",
+  "plant": "C72",
+  "redLine": "the unsatisfiable wait named the step's own budget (\"timed out after 30000ms (100 attempts): expected status to equal 200, but got 503\")",
+  "at": "2026-09-15"
  },
  "applicability-collapses-to-pass": {
   "verdict": "out-of-reach-by-design",
@@ -21,19 +30,31 @@
   "why": "reached by C80's security assertion; rule applicability and the counts line are the security reference gates' subject (C57, verify:security-acceptance, D751)"
  },
  "array-body-flattened-to-an-object": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "step:api",
-  "why": "48 plants serialise an inline body here and none of them writes an array body, so the spread into an object never has an array to flatten; the wire is where it shows and the arrival server can echo a body"
+  "why": "`singletons.tflw` posts `[{…},{…}]` to `/subjects/echo`, which returns the bytes it received, and `body text` reads them back as the array; spread into an object the same body leaves as `{\"0\":…}` and both clauses go red",
+  "plant": "C67",
+  "redLine": "✗ C67 recall — the bytes that left are the array itself — `[{\"name\":\"Widget\"},{\"name\":\"Sprocket\"}]` — where a body spread into an object leaves as `{\"0\":{…},\"1\":{…}}` (`array-body-flattened-to-an-object`)",
+  "at": "2026-09-15",
+  "was": "48 plants serialise an inline body here and none of them writes an array body, so the spread into an object never has an array to flatten; the wire is where it shows and the arrival server can echo a body"
  },
  "assertion-diagnosis-never-fires": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "locator:diagnosis",
-  "why": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
+  "why": "`locator-diagnosis.tflw`'s first test misses on `button \"Save drarft\"` through `expect`, not through an action, and the grader reads the nearest-matches list out of the failure text; fired on actions only, the `expect` says nothing but \"no matching element\" while the identical `click` names the real button",
+  "plant": "C13",
+  "redLine": "✗ C13 recall — a miss on `button \"Save drarft\"` names the real button (NO LIST) — fired on actions only, the identical `click` names it and the `expect` says nothing but \"no matching element\" (`assertion-diagnosis-never-fires`)",
+  "at": "2026-09-15",
+  "was": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
  },
  "backoff-hold-kind": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "workload:closed-model",
-  "why": "a module-level constant every plant loads; the D17 back-off diagnostic it names lands in the report as `backOff`, and C45 (`step:hold`) grades the arrival curve, not whether the run reported backing off — a `hold N users` against a path slow enough to back off is the fixture"
+  "why": "a module-level constant every plant loads; the D17 back-off diagnostic it names lands in the report as `backOff`, and C45 (`step:hold`) grades the arrival curve, not whether the run reported backing off — a `hold N users` against a path slow enough to back off is the fixture",
+  "was": "not-asserted",
+  "plant": "C45",
+  "redLine": "the closed-model `hold N users` scenario reported its own back-off ratio (null)",
+  "at": "2026-09-15"
  },
  "blocked-port-hint-reads-undicis-prose": {
   "verdict": "out-of-reach-by-design",
@@ -46,24 +67,37 @@
   "why": "35 plants close a browser through these two lines and every launch succeeded; the mutant differs only after a launch failure, and its difference is the process exit status — neither is something an acceptance plant provokes or reads"
  },
  "comparison-coerces-operands": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "matcher:comparison",
-  "why": "37 plants compare with `is less than`/`is greater than` and every operand is a number, so the guard against `null`/`false`/`[]` is executed and never tripped; C60-C66 grade the seven matchers on values that fit them"
+  "why": "four tests written to fail hand `is less than` a boolean, `null`, a numeric string and a one-element array, each graded on the sentence naming what it got; coerced, all four pass (four clauses red)",
+  "plant": "C65",
+  "redLine": "✗ C65 recall — `is less than` refuses boolean by name (got ok=true: no error) — coerced with `Number()` it would compare as 1 and pass (`comparison-coerces-operands`)",
+  "at": "2026-09-15",
+  "was": "37 plants compare with `is less than`/`is greater than` and every operand is a number, so the guard against `null`/`false`/`[]` is executed and never tripped; C60-C66 grade the seven matchers on values that fit them"
  },
  "config-files-resolve-against-cwd": {
-  "verdict": "not-asserted",
+  "verdict": "out-of-reach-by-design",
   "family": "config:key:cert",
-  "why": "79 plants resolve config file references and every grader runs `tflw` with its cwd at the config directory, where cwd-relative and config-relative are the same path; C106/C107 (`cert`/`key`) would need one run from elsewhere"
+  "why": "M198 S1: no invocation can separate the two directories — `checkConfigFiles` has one call site (`cli.ts`, `configDir: cwd`) and the CLI reads `tflw.config` from `join(cwd, 'tflw.config')` with no `--config`/`--cwd` flag, so `resolve(configDir, …)` and `resolve(process.cwd(), …)` are the same path on every path in; the entry is killed by a unit test that injects a `configDir`, and it guards a flag tflw does not have. A plant would need the flag first",
+  "was": "79 plants resolve config file references and every grader runs `tflw` with its cwd at the config directory, where cwd-relative and config-relative are the same path; C106/C107 (`cert`/`key`) would need one run from elsewhere"
  },
  "csrf-attached-to-safe-methods": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "declaration:session",
-  "why": "82 plants run through the CSRF attachment and none declares a session with a CSRF header, so the verb condition never has a token to withhold; the arrival server records request headers, so a session fixture against it can read the wire"
+  "why": "`session carrier` declares `csrf from body.csrfToken send as header`, and `sessions.tflw` issues one `GET` and one `POST` under it; `/__headers?name=x-csrf-token` on the arrival server says which arrival carried the token. Dropped, the verb condition sends it on the `GET` too — which no assertion inside the file can see, because both requests answer 200 either way",
+  "plant": "C80",
+  "redLine": "✗ C80 recall — and the `GET` carried none (saw [\"csrf-6f1e\"]) — a browser does not send one to a safe method and an application may reject it if it arrives, which is why the token has its own channel instead of joining a `header` step's (`csrf-attached-to-safe-methods`)",
+  "at": "2026-09-15",
+  "was": "82 plants run through the CSRF attachment and none declares a session with a CSRF header, so the verb condition never has a token to withhold; the arrival server records request headers, so a session fixture against it can read the wire"
  },
  "diagnosis-ignores-the-resolved-element": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "locator:diagnosis",
-  "why": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
+  "why": "`expect button \"Publish release\" is disabled` resolves the element and fails on its *state*, and the grader asserts the failure text carries no list at all; without the zero-match guard it is answered with the other buttons on the page — a diagnosis pointing away from the cause",
+  "plant": "C13",
+  "redLine": "✗ C13 recall — a button that RESOLVED and failed on its state is answered about the state, not with a list of other buttons (\"expected `button \\\"Publish release\\\"` to be disabled, but got (see above)\\n  nearest matches \") — without the zero-match guard the diagnosis points away from the cause (`diagnosis-ignores-the-resolved-element`)",
+  "at": "2026-09-15",
+  "was": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
  },
  "floor-filters-findings-not-rules": {
   "verdict": "out-of-reach-by-design",
@@ -81,39 +115,63 @@
   "why": "a module-level pattern every plant loads; it fires on an input-probe finding, and input probing is graded by the security reference gates (C51-C58, verify:security-acceptance, D751), not by the acceptance roster"
  },
  "nearest-matches-not-deduped": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "locator:diagnosis",
-  "why": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
+  "why": "`/diagnose-fixture` renders two buttons named `Save draft`, so the grader counts the lines that offer that suggestion and requires exactly one; offered again byte-identically, one string takes two of five candidate slots and the unnamed control is crowded out of the list entirely",
+  "plant": "C13",
+  "redLine": "✗ C13 recall — and names it exactly once for the two elements that render it (2 line(s)) — offered again byte-identically, one string takes two of five candidate slots and a genuinely different candidate cannot be shown at all (`nearest-matches-not-deduped`)",
+  "at": "2026-09-15",
+  "was": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
  },
  "oauth2-session-ctx": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "declaration:session",
-  "why": "C80 reaches the `if (decl.oauth2)` test and no plant declares an `oauth2` session, so the arm is never entered; whether apiV2 can serve one is the first question a plant here would have to answer"
+  "why": "the same plant declares `as oauthLong`, so the `oauth2` arm is entered for the first time by any plant: its one reported step must carry `tflw.config`'s line 249. Handed the caller's raw context it prints nothing. This is the narrower of the pair — `session-source-lines` reddens both arms because the rebase is applied above the branch, and this one reddens only the `oauth2` clause, which is that structure stated as a measurement",
+  "plant": "C80",
+  "redLine": "✗ C80 recall — every one of the oauth2 session's 1 reported step(s) carries the text of its own line in `tflw.config` (0/1; first: line 249 reads \"\") — rendered from the caller's document instead, a line number past this 36-line file's end prints nothing at all (`oauth2-session-ctx`)",
+  "at": "2026-09-15",
+  "was": "C80 reaches the `if (decl.oauth2)` test and no plant declares an `oauth2` session, so the arm is never entered; whether apiV2 can serve one is the first question a plant here would have to answer"
  },
  "ok-ignores-no-verdict": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "run:verdict",
-  "why": "102 plants run through the report verdict and every run they read completed; `noVerdictReason` is non-null only for an aborted or inconclusive run, which no plant produces"
+  "why": "102 plants run through the report verdict and every run they read completed; `noVerdictReason` is non-null only for an aborted or inconclusive run, which no plant produces",
+  "was": "not-asserted",
+  "plant": "C49",
+  "redLine": "and it is `ok: false` (true) — on both the single-process and the `--workers 4` leg",
+  "at": "2026-09-15"
  },
  "open-model-agents-per-arrival": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "workload:open-model",
-  "why": "same eight plants, same curve-only grading — a fresh TCP handshake per arrival moves the reported latency and not the arrival count"
+  "why": "same eight plants, same curve-only grading — a fresh TCP handshake per arrival moves the reported latency and not the arrival count",
+  "was": "not-asserted",
+  "plant": "C45",
+  "redLine": "248 arrivals across this file reached the server over 63 connection(s) — against 4 on the shipped build",
+  "at": "2026-09-15"
  },
  "open-model-back-to-fetch": {
-  "verdict": "not-asserted",
+  "verdict": "out-of-reach-by-design",
   "family": "workload:open-model",
-  "why": "eight perf plants run open-model arrivals through this line and grade the arrival curve the server recorded; none grades the reported latency, which is where the unpinned fetch path shows (p50 36 ms against 0 ms in the same process)"
+  "why": "MEASURED 2026-09-15 on fedora-box, twice. The entry's stated consequence (M118-02: a 0.2ms endpoint reporting p50 36ms under `hold 10 rps`) no longer reproduces: at 20 rps the mutant reports p50 1.2ms against the shipped build's 1.0ms, and at 200 rps 1.1ms against 0.91ms. Only `max` separates them (27-30ms vs 1.6-9.7ms), which is one sample. The `fetch` this falls back to is undici, which keeps connections alive by default now, so the handshake-per-request cost the original measurement was made of is gone — and the connection counter that catches `open-model-agents-per-arrival` sees nothing here for the same reason. Filed as `M198-02`.",
+  "was": "not-asserted",
+  "at": "2026-09-15"
  },
  "open-model-maxsockets-bounded": {
-  "verdict": "not-asserted",
+  "verdict": "out-of-reach-by-design",
   "family": "workload:open-model",
-  "why": "a module-level constant every plant loads; its effect — arrivals queuing inside the generator past 50 concurrent sockets and reporting the wait as service time — needs a workload that holds more than 50 connections open at once, and the perf plants are deliberately small (25 rps against a 50 ms path)"
+  "why": "Refused by its own registry entry, which says the cap is \"a decision, not tuning\" and that reaching 50 concurrent sockets \"needs a slow endpoint driven hard enough to make the test both expensive and flaky\". A plant would be the flake that sentence refuses. The entry credits a decision number tflw mentions in `httpPinned.ts` but never published in DECISIONS.md, so it is deliberately not quoted here — a citation this repository's reader cannot follow is worse than the sentence without it.",
+  "was": "not-asserted",
+  "at": "2026-09-15"
  },
  "passing-assertion-gets-annotated": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "locator:diagnosis",
-  "why": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
+  "why": "`expect button \"Sprocket calibration\" is hidden` *passes* — absence is the asserted state — and the grader reads that green step's own `detail`; appended regardless of outcome, a success reports \"nearest matches on the page\" stapled to it",
+  "plant": "C13",
+  "redLine": "✗ C13 recall — an `is hidden` that passes on absence carries no diagnosis (ok=true, detail \"`button \\\"Sprocket calibration\\\"` to be hidden\\n  nearest matches on the \") — appended regardless of outcome, a green step reports success with \"nearest matches\" stapled to it (`passing-assertion-gets-annotated`)",
+  "at": "2026-09-15",
+  "was": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
  },
  "request-headers-not-lowercased": {
   "verdict": "out-of-reach-by-design",
@@ -121,59 +179,97 @@
   "why": "reached by C80's security assertion; the rule that reads the lowercased header (`authenticated-response-cacheable`) is graded by the security reference gates (D751), and C80's own known answer is 200-with versus 401-without"
  },
  "reserved-scheme-passes-through": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "config:key:api",
-  "why": "82 plants pass their base URL through the reserved-scheme guard and every one is `http://`; a fixture whose `api` is a misspelt `tflw://` scheme, graded on the one-sentence refusal, is the plant"
+  "why": "an absolute `api GET tflw://demoo/health` step — `TF071` reads only the config literal, so the runtime guard is the only refusal on this path — graded on the sentence naming the one legal spelling and on the arrival server having seen no `/health`; passed through it dies as `fetch failed`",
+  "plant": "C97",
+  "redLine": "✗ C97 recall — `api GET tflw://demoo/health` is refused by the sentence that names the only legal spelling (got ok=false: request failed: GET tflw://demoo/health — fetch failed) — passed through, it dies as `fetch failed` on an unknown protocol (`reserved-scheme-passes-through`)",
+  "at": "2026-09-15",
+  "was": "82 plants pass their base URL through the reserved-scheme guard and every one is `http://`; a fixture whose `api` is a misspelt `tflw://` scheme, graded on the one-sentence refusal, is the plant"
  },
  "saturation-cpu-arm-never-fires": {
-  "verdict": "not-asserted",
+  "verdict": "out-of-reach-by-design",
   "family": "workload:self-diagnosis",
-  "why": "the generator self-diagnosis (`saturated`) is computed on every load run and lands in results.json; seven or eight perf plants read the arrival curve and never the diagnosis, and none of them drives its own generator hard enough to trip either arm — a deliberately saturating fixture is possible and expensive on a shared box"
+  "why": "Same as `saturation-lag-arm-never-fires`, and worse: `M119-02` records the busy-block test reading 46.2% against sixteen competing busy loops on a sixteen-core box, which is this box under `--parallel-groups`. Measured for scale: at 20 rps the generator reports 3-4% CPU against a 90% threshold.",
+  "was": "not-asserted",
+  "at": "2026-09-15"
  },
  "saturation-flips-a-gradable-threshold": {
-  "verdict": "not-asserted",
+  "verdict": "out-of-reach-by-design",
   "family": "run:verdict",
-  "why": "reached by C3; the verdict-collapse it inverts needs a saturated generator, which no plant produces, so the merged `ok` is only ever computed over scenarios that all measured cleanly"
+  "why": "Needs `selfDiagnosis.saturated` true on the shipped build with every scenario otherwise green, so it inherits the whole saturation problem above — see `saturation-lag-arm-never-fires`. `saturation-ignores-the-min-window` is the one of the four that needs no saturation at all, only a run too short to be judged, which is why it has a plant and this does not.",
+  "was": "not-asserted",
+  "at": "2026-09-15"
  },
  "saturation-ignores-the-min-window": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "workload:self-diagnosis",
-  "why": "the generator self-diagnosis (`saturated`) is computed on every load run and lands in results.json; seven or eight perf plants read the arrival curve and never the diagnosis, and none of them drives its own generator hard enough to trip either arm — a deliberately saturating fixture is possible and expensive on a shared box"
+  "why": "the generator self-diagnosis (`saturated`) is computed on every load run and lands in results.json; seven or eight perf plants read the arrival curve and never the diagnosis, and none of them drives its own generator hard enough to trip either arm — a deliberately saturating fixture is possible and expensive on a shared box",
+  "was": "not-asserted",
+  "plant": "C45",
+  "redLine": "a 150ms run reads 125% of a core and still reports `saturated: false` (true) — and inconclusive=true, ok=false beside it",
+  "at": "2026-09-15"
  },
  "saturation-lag-arm-never-fires": {
-  "verdict": "not-asserted",
+  "verdict": "out-of-reach-by-design",
   "family": "workload:self-diagnosis",
-  "why": "the generator self-diagnosis (`saturated`) is computed on every load run and lands in results.json; seven or eight perf plants read the arrival curve and never the diagnosis, and none of them drives its own generator hard enough to trip either arm — a deliberately saturating fixture is possible and expensive on a shared box"
+  "why": "Needs a genuinely saturated generator, which `M119-02` already settled inside tflw: the arms' only driven coverage was a busy-block test racing the OS scheduler, and the repair was to extract `isSaturated` as a pure function and pin the thresholds where no scheduler gets a vote. Driving it from the dogfood re-introduces the flake tflw removed, on a box that runs this sweep as four contending groups. Measured for scale: at 20 rps the generator reports 0.3ms of average event-loop lag against a 100ms threshold.",
+  "was": "not-asserted",
+  "at": "2026-09-15"
  },
  "session-source-lines": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "declaration:session",
-  "why": "C80 establishes a session and grades 200-with versus 401-without; the report `source` lines of the session steps — which document they were rendered from — are read by nothing"
+  "why": "`session-context.tflw` is 36 lines and names two sessions declared at `tflw.config` 195 and 249; the grader asserts every session step's reported `source` is the text at its own line in the config, and the plant's own steps against the plant. Without the rebase both arms render a config line number out of the caller's document and print the empty string",
+  "plant": "C80",
+  "redLine": "✗ C80 recall — every one of the hand-written session's 4 reported step(s) carries the text of its own line in `tflw.config` (0/4; first: line 195 reads \"\") — rendered from the caller's document instead, a line number past this 36-line file's end prints nothing at all (`session-source-lines`)",
+  "at": "2026-09-15",
+  "was": "C80 establishes a session and grades 200-with versus 401-without; the report `source` lines of the session steps — which document they were rendered from — are read by nothing"
  },
  "speculative-line-replaces-the-final-diagnosis": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "wait:poll-budget",
-  "why": "32 browser plants poll through this deadline and every one resolves inside ~3 s against a fast app, so a poll that gave up at the speculative mark is indistinguishable from one that kept going; a fixture with an element that appears at 5 s would tell them apart"
+  "why": "32 browser plants poll through this deadline and every one resolves inside ~3 s against a fast app, so a poll that gave up at the speculative mark is indistinguishable from one that kept going; a fixture with an element that appears at 5 s would tell them apart",
+  "was": "not-asserted",
+  "plant": "C72",
+  "redLine": "a locator that arrives at 5000 ms still resolved (ok=false) — and waited past the mark to do it (3216 ms)",
+  "at": "2026-09-15"
  },
  "spelled-out-duration-not-a-number": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "matcher:comparison",
-  "why": "same 37 plants, same numeric operands; `expect duration is less than 2 seconds` — the spelled-out form the unwrap exists for — appears in no fixture"
+  "why": "`expect duration is less than 2 seconds` on `/slow`, graded on the step passing and its detail reading `less than 2000`; with the conversion skipped the test errors with `got object`",
+  "plant": "C65",
+  "redLine": "✗ C65 recall — `expect duration is less than 2 seconds` compares as 2000 milliseconds (got ok=false: `is less than` expects a number, got object) — a duration left unconverted errors with `got object` (`spelled-out-duration-not-a-number`)",
+  "at": "2026-09-15",
+  "was": "same 37 plants, same numeric operands; `expect duration is less than 2 seconds` — the spelled-out form the unwrap exists for — appears in no fixture"
  },
  "suggestion-offered-without-its-ambiguity-caveat": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "locator:diagnosis",
-  "why": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
+  "why": "the deduped `button \"Save draft\"` line must say that two elements render it; printed bare it looks like a clean, unique, ready-to-paste suggestion, and pasting it produces the *ambiguity* error — a different failure from the one being diagnosed",
+  "plant": "C13",
+  "redLine": "✗ C13 recall — and the deduped line carries its own ambiguity (\"- `button \\\"Save draft\\\"`\") — SPEC §9.3 calls these ready-to-paste, and pasting this one produces the *ambiguity* error, a different failure from the one being diagnosed (`suggestion-offered-without-its-ambiguity-caveat`)",
+  "at": "2026-09-15",
+  "was": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
  },
  "text-diagnosis-offers-structural-css-paths": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "locator:diagnosis",
-  "why": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
+  "why": "a miss on `text \"Inventroy reconciled\"` must be answered with `text` suggestions only — `text`'s scan is `*` and a name is computed only for leaves, so the unnamed arm fired here answers with `css \"html\"`, `css \"html > head\"` and `css \"html > body\"`: structural containers in document order, one of which can never be visible",
+  "plant": "C14",
+  "redLine": "✗ C14 recall — and offers no structural container among its 5 suggestion(s) (2 `css \"html…\"`) — `text`'s scan is `*` and a name is computed only for leaves, so the unnamed arm fired here answers with `css \"html\"`, `css \"html > head\"` and `css \"html > body\"`: document order, one of which can never be visible (`text-diagnosis-offers-structural-css-paths`)",
+  "at": "2026-09-15",
+  "was": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
  },
  "threshold-scope-falls-back-to-the-whole-histogram": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "run:verdict",
-  "why": "the endpoint lookup behind `threshold … for \"label\"`: all eight workload plants (C3, C44–C50) evaluate thresholds through this line and none of them states a scoped one — C49's `verdict.tflw` grades an unscoped p95 and an unscoped error rate, so `scope === undefined` on every evaluation and the fallback to the whole histogram is the path the plant already takes; the only scoped threshold in either corpus is `perf/tflw/checkout-burst.tflw`, which the acceptance roster does not run. Not a candidate in the previous census — the `m172a` entry postdates it — so `M190`'s is its first measurement and this its first verdict. A plant would need a two-endpoint workload whose scoped p95 differs from the whole's"
+  "why": "the endpoint lookup behind `threshold … for \"label\"`: all eight workload plants (C3, C44–C50) evaluate thresholds through this line and none of them states a scoped one — C49's `verdict.tflw` grades an unscoped p95 and an unscoped error rate, so `scope === undefined` on every evaluation and the fallback to the whole histogram is the path the plant already takes; the only scoped threshold in either corpus is `perf/tflw/checkout-burst.tflw`, which the acceptance roster does not run. Not a candidate in the previous census — the `m172a` entry postdates it — so `M190`'s is its first measurement and this its first verdict. A plant would need a two-endpoint workload whose scoped p95 differs from the whole's",
+  "was": "not-asserted",
+  "plant": "C49",
+  "redLine": "a scoped threshold read its own endpoint's bucket (actual=55ms against a 25ms bound, ok=false)",
+  "at": "2026-09-15"
  },
  "tls-facts-absent-counts-as-applicable": {
   "verdict": "out-of-reach-by-design",
@@ -181,33 +277,55 @@
   "why": "reached by C80's security assertion over plaintext; the TLS rules' applicability is graded by the security reference gates (D751), and C80 asserts nothing about the scan"
  },
  "ui-wait-ignores-its-own-budget": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "wait:poll-budget",
-  "why": "fifteen plants run the locator form of `wait until` and all of them are satisfied well inside both the step budget and the env budget, so which budget bounded the poll is never observed; the known answers are about what the wait waited FOR"
+  "why": "fifteen plants run the locator form of `wait until` and all of them are satisfied well inside both the step budget and the env budget, so which budget bounded the poll is never observed; the known answers are about what the wait waited FOR",
+  "was": "not-asserted",
+  "plant": "C72",
+  "redLine": "the locator form refused `for 3s` against this step's own 2 s budget (\"\") — the refusal is gone and the test passes",
+  "at": "2026-09-15"
  },
  "ungradable-threshold-passes": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "run:verdict",
-  "why": "eight workload plants evaluate thresholds through this line and every one of them has successful iterations, so `actual === null` is never the case; C49 grades a red and a green threshold on a path that answers — a workload whose every request fails is the plant"
+  "why": "eight workload plants evaluate thresholds through this line and every one of them has successful iterations, so `actual === null` is never the case; C49 grades a red and a green threshold on a path that answers — a workload whose every request fails is the plant",
+  "was": "not-asserted",
+  "plant": "C49",
+  "redLine": "a duration threshold over a scenario whose every iteration failed is NOT met (actual=null, ok=true)",
+  "at": "2026-09-15"
  },
  "unnamed-arm-dropped-for-every-kind": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "locator:diagnosis",
-  "why": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
+  "why": "the fixture carries an icon-only button with no accessible name, and the grader requires a generated `css` path among the `button` miss's suggestions — it is a real candidate no name can reach, and dropping the arm removes it from the one list that could have named it",
+  "plant": "C13",
+  "redLine": "✗ C13 recall — and the icon-only button with no accessible name is surfaced as a generated CSS path — a real candidate no name can reach, dropped for every kind and it disappears from the one list that could have named it (`unnamed-arm-dropped-for-every-kind`)",
+  "at": "2026-09-15",
+  "was": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
  },
  "verdict-not-restamped-after-splice": {
-  "verdict": "not-asserted",
+  "verdict": "out-of-reach-by-design",
   "family": "run:verdict",
-  "why": "reached only by C3 (`--workers 4` splices a merged report); the stale verdict needs an abort arriving at the splice, and no plant aborts a run — a plant that induces `inconclusive` under `--workers` is the missing fixture"
+  "why": "MEASURED 2026-09-15 on fedora-box with the whole `M198` S6 plant in place, including an interrupted `--workers 4` run that flushes exactly the report this mutation is about: the grader stayed green, 0 red lines. `cli.ts` calls `spliceLoadReportIntoRunReport` and then `mergeReports` unconditionally, and `mergeReports` ends in `finalizeVerdict` too, so the splice's own derivation is redone one function later on every path the CLI takes. Reached, overwritten, and unobservable through `tflw run` — only a consumer calling the splice directly (tflw's own unit tests) can see it. Defence in depth working, not a defect.",
+  "was": "not-asserted",
+  "at": "2026-09-15"
  },
  "wait-reader-picks-the-subject-over-the-ref": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "step:wait",
-  "why": "the `wait until status of request to \"…\"` form: fifteen plants reach the reader and none of their fixtures writes the network-ref form, so the ordering of the two reads is never exercised; a browser fixture with `wait until … of request to` is the plant"
+  "why": "the `wait until status of request to \"…\"` form: fifteen plants reach the reader and none of their fixtures writes the network-ref form, so the ordering of the two reads is never exercised; a browser fixture with `wait until … of request to` is the plant",
+  "was": "not-asserted",
+  "plant": "C72",
+  "redLine": "the network-ref form of `wait until` polled observed traffic (ok=false) — at 116 ms against the page's 1200 ms probe",
+  "at": "2026-09-15"
  },
  "wait-until-diagnosis-dropped": {
-  "verdict": "not-asserted",
+  "verdict": "asserted",
   "family": "locator:diagnosis",
-  "why": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
+  "why": "the plant writes the same miss a second time as `wait until button \"Save drarft\" is visible` and the grader requires the timeout's text to carry the list too — the half of the fix a suite covering only `expect`/`check` would never notice was missing",
+  "plant": "C13",
+  "redLine": "✗ C13 recall — `wait until` carries the same diagnosis when it gives up (NO LIST) — the half of the fix a suite covering only `expect`/`check` would never notice was missing (`wait-until-diagnosis-dropped`)",
+  "at": "2026-09-15",
+  "was": "the nearest-matches diagnosis on a locator that resolved to nothing: every browser plant runs through it and reads the element that answered, never the sentence a miss produces; C13-C22 grade which element answered, C108 grades which web base a file is at home under"
  }
 }

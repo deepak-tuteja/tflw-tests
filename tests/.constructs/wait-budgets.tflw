@@ -1,0 +1,79 @@
+# `M198` S5 / `C126` — the browser half of the poll budgets (`M189-03`).
+#
+# Three mutations of the wait machinery are reached by between fifteen and thirty-two plants in this
+# repository and asserted by none of them, for one reason with three faces: **every browser
+# condition in this suite is already true when it is first asked.** A wait satisfied on poll one
+# never reaches a deadline, never has to say which budget bounded it, and never polls long enough
+# for a progress mark to become a deadline. `/wait-fixture` is the only page here that is late on
+# purpose, and its own header says why each of its numbers is the number it is.
+#
+# Each test below is graded on a different *kind* of answer, and none of them is graded on elapsed
+# time. A timing assertion against 3 s and 5 s constants would be the `M157g` trap in its purest
+# form — green on this Mac, red on the box under a forge render, and measuring the machine either
+# way.
+
+@constructs @waits @ui
+test "the locator form measures `for` against the step's own `timeout wait`, not the env's"
+  # **Meant to fail**, and to fail with a *refusal* rather than a timeout. A hold window at least as
+  # long as the poll budget can never be satisfied — the condition would have to stay true past the
+  # deadline that ends the step — so the runtime refuses it up front and quotes the budget it
+  # measured against (`M124`/`TF055`'s backstop, `interpreter.ts`).
+  #
+  # `for 3s` against this step's `timeout wait 2000ms` is unsatisfiable. Against this repository's
+  # config, which sets `timeout wait 5s`, it is perfectly satisfiable — so a build that reads the
+  # env's budget here does not refuse at all: it polls a banner that is true at first paint, holds
+  # for three seconds, and **passes**. That is the whole discriminator, and it is a difference of
+  # kind, not of timing: `ui-wait-ignores-its-own-budget` turns this red into a green.
+  #
+  # The grader reads the refusal out of `results.json` and requires it to name `2000ms`, with the
+  # config's `5000` absent.
+  open "/wait-fixture"
+  wait until text "Inventory sync is running." is visible for 3s timeout wait 2000ms
+
+@constructs @waits @ui
+test "an action on a locator that arrives after the speculative mark still finds it"
+  # **Meant to pass**, and it is the only test in this milestone whose known answer is an ordinary
+  # green. `FU-14`/`D248` decided that the ~3 s mark is a *progress point* — the step speaks and
+  # keeps waiting — and `speculative-line-replaces-the-final-diagnosis` is the fast-fail option that
+  # decision rejected, written as `deadline = startedAt + Math.min(timeoutMs, 3000)`.
+  #
+  # Under it a slow-rendering app that legitimately resolves at 5 s fails at 3 s. Thirty-two browser
+  # plants poll through this line and every one of them resolves in well under a second, so the
+  # mutation is invisible to all of them at once: it can only be seen by an element that arrives in
+  # the two-second window the mark opens. `Ready to publish` arrives at 5000 ms against the 30 s
+  # `timeout browser` nothing in this config narrows.
+  #
+  # **It has to be an action, and the first draft of this test was an `expect` that found nothing.**
+  # `resolveLocator`'s deadline bounds one resolution, and `resolveForStep` — whose docblock says
+  # "resolves a locator for an *action* (click/fill/…)" — is its only caller. A UI `expect` reaches
+  # the DOM by a different route and re-reads it on its own retry budget (`timeout expect`, `M3a`),
+  # so shortening the resolve deadline underneath it changes nothing at all: the outer loop simply
+  # asks again and succeeds at 5 s. Measured, not reasoned — the mutation was applied on the box
+  # against the `expect` form and the grader stayed green with zero red lines.
+  #
+  # `click` is the cheapest action that needs exactly one match; the button carries no handler, so
+  # the click itself observes nothing and the resolution is the whole claim.
+  open "/wait-fixture"
+  click button "Ready to publish"
+
+@constructs @waits @ui
+test "`status of request to` polls observed traffic rather than the response scope"
+  # **Meant to pass.** This is the first time the network-ref form of `wait until` is written
+  # anywhere in this repository — `M189a`'s note on `wait-reader-picks-the-subject-over-the-ref` is
+  # that fifteen plants reach the reader and none of their fixtures writes it, so the ordering
+  # inside the reader has never been exercised.
+  #
+  # The ordering is the claim. `waitUntilReader` asks `subjectNetworkRef(subject)` **before** it
+  # branches on the subject's type, and that function answers for four subject kinds: a bare
+  # `NetworkRequestSubject` and the three that wrap one — `status of`, `header of`, `body of`. The
+  # mutant consults the ref only for the bare kind, so this line, whose subject is a `StatusSubject`
+  # carrying a ref, falls through to the response-scope throw instead of polling the page's traffic.
+  #
+  # Written as `status of` rather than as the bare `request to "…" was made` on purpose: the bare
+  # form is the one kind the mutant still answers for, so a plant using it would be green under both
+  # builds and would look like coverage.
+  #
+  # The page fires `/v1/health` 1200 ms after mount, which is late enough that the wait below is
+  # genuinely polling when it arrives and early enough to sit inside the 5 s the config allows.
+  open "/wait-fixture"
+  wait until status of request to "/v1/health" equals 200

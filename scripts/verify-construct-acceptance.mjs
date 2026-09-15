@@ -114,6 +114,35 @@ function runCorpus(cwd, args) {
 // advisory note `tflw check` grew in tflw's `M156c` is the only thing in the check path that reads
 // the environment at all. Same shape as `runRun` above, and merged rather than added beside it so
 // there is one way to run each command.
+/**
+ * `M198` S6 — run a corpus and **interrupt it**, then read the partial report it flushed.
+ *
+ * `aborted` is not reachable from inside the language. It comes from `opts.abortSignal`, which is
+ * the CLI's own SIGINT handler and nothing else, so a plant for `M189-05`'s no-verdict family is
+ * the file plus the signal — the same shape as `S2`'s csrf leg, where the claim lives off the
+ * socket because there is no position in a `.tflw` file where it could be written.
+ *
+ * `afterMs` is chosen against the plant's own planned duration, not against a machine: the workload
+ * holds for 8 s and the signal lands at 2.5 s, so there is no timing to get wrong in either
+ * direction. What matters is only that some iterations completed and the run had not finished.
+ */
+function runCorpusInterrupted(cwd, args, afterMs) {
+  const reportFile = path.join(cwd, 'report', 'results.json');
+  rmSync(reportFile, { force: true });
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [TFLW_BIN, 'run', '--no-color', ...args], { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    let output = '';
+    child.stdout.on('data', (d) => { output += d; });
+    child.stderr.on('data', (d) => { output += d; });
+    const timer = setTimeout(() => child.kill('SIGINT'), afterMs);
+    child.on('exit', (code) => {
+      clearTimeout(timer);
+      const report = existsSync(reportFile) ? JSON.parse(readFileSync(reportFile, 'utf8')) : null;
+      resolve({ report, output, code });
+    });
+  });
+}
+
 function runCheck(args, { cwd = ROOT, env = {} } = {}) {
   const r = spawnSync(process.execPath, [TFLW_BIN, 'check', '--no-color', ...args], {
     cwd,
@@ -3473,6 +3502,514 @@ if (wanted('C115') || wanted('C116') || wanted('C117')) {
     for (const id of ['C115', 'C116', 'C117']) if (wanted(id)) { fail(`${id} could not run: ${e.message}`); scores.get(id).skipped = e.message; }
   } finally {
     server?.kill();
+  }
+}
+
+// =============================================================================
+// `M198` S1 — the singletons: four inputs no fixture ever gave `C65`, `C67` and `C97` (`M189-07`)
+// =============================================================================
+
+// `M189a` measured these four registry mutations as *reached and not asserted*: dozens of plants
+// execute the line and every one hands it the one input that cannot trip it (every comparison
+// operand a number, every body an object, every duration written `2000ms`, every base `http://`).
+// One stack-free run of `singletons.tflw` gives each construct the input it never had, and the
+// written-to-fail tests are graded on the sentence their failure carries — the mutation each is
+// written against turns that red green, so the verdict alone would not do. The fifth singleton of
+// `M189-07`, `config-files-resolve-against-cwd`, has no leg here on purpose: `tflw` reads
+// `tflw.config` from its own cwd (`cli.ts`), so `configDir` IS the cwd on every path in and no
+// plant can separate the two — `out-of-reach-by-design` in `reach-verdicts.json`, with that reason.
+if (wanted('C65') || wanted('C67') || wanted('C97')) {
+  const singletonsCorpus = path.join(ROOT, 'tflw-acceptance', 'conformance');
+  console.log('\nM198 S1 — the singletons\n  target: `arrival-server.mjs` — `singletons.tflw`, one run, eight tests, five written to fail; no stack');
+  let server = null;
+  try {
+    server = await startArrivalServer(singletonsCorpus);
+    await arrivals('__reset');
+    const { report, output } = runCorpus(singletonsCorpus, ['singletons.tflw']);
+    if (!report) {
+      for (const id of ['C65', 'C67', 'C97']) if (wanted(id)) { fail(`${id} — no report from singletons.tflw\n${output.trim().split('\n').slice(-10).join('\n')}`); scores.get(id).skipped = 'no report'; }
+    } else {
+      const named = (needle) => report.tests.find((t) => (t.name ?? '').includes(needle));
+      const stepsOf = (t) => t?.steps ?? [];
+      const step = (t, needle) => stepsOf(t).find((s) => s.source.includes(needle));
+      // A runtime refusal ends the test with `error`; the same sentence is the failing step's
+      // `detail`. Read the test-level one, so a refusal that lands on the wrong step still grades.
+      const errorOf = (t) => t?.error ?? stepsOf(t).find((s) => s.ok === false)?.detail ?? '';
+
+      if (wanted('C67')) {
+        const t = named('array body leaves as an array');
+        recall('C67', t?.ok === true, `an inline array body posts and reads back (got ok=${t?.ok})`);
+        recall('C67', step(t, 'body text equals')?.ok === true, 'the bytes that left are the array itself — `[{"name":"Widget"},{"name":"Sprocket"}]` — where a body spread into an object leaves as `{"0":{…},"1":{…}}` (`array-body-flattened-to-an-object`)');
+        precision('C67', step(t, 'body[1].name')?.ok === true && step(t, 'body[0].name')?.ok === true, 'and both elements read back by index from the echoed response, so the read side agrees with the bytes');
+      }
+      if (wanted('C65')) {
+        const refused = [
+          ['boolean', 'refuses a boolean', 'got boolean'],
+          ['null', 'refuses null', 'got null'],
+          ['a numeric string', 'refuses a numeric string', 'got a string'],
+          ['a one-element array', 'refuses a one-element array', 'got an array'],
+        ];
+        for (const [what, needle, tail] of refused) {
+          const t = named(needle);
+          const sentence = errorOf(t);
+          recall('C65', t?.ok === false && sentence.includes('`is less than` expects a number') && sentence.includes(tail),
+            `\`is less than\` refuses ${what} by name (got ok=${t?.ok}: ${sentence.slice(0, 80) || 'no error'}) — coerced with \`Number()\` it would compare as ${what === 'null' ? '0' : what === 'boolean' ? '1' : what === 'a numeric string' ? '3' : '5'} and pass (\`comparison-coerces-operands\`)`);
+        }
+        const spelled = named('spelled-out duration');
+        const two = step(spelled, 'is less than 2 seconds');
+        recall('C65', spelled?.ok === true && two?.ok === true && /less than 2000\b/.test(two?.detail ?? ''),
+          `\`expect duration is less than 2 seconds\` compares as 2000 milliseconds (got ok=${two?.ok}: ${two?.detail ?? 'no detail'}) — a duration left unconverted errors with \`got object\` (\`spelled-out-duration-not-a-number\`)`);
+        const num = named('accepts a number');
+        precision('C65', num?.ok === true && stepsOf(num).filter((s) => s.kind === 'expect').every((s) => s.ok),
+          'and a number is accepted in both directions on the same response, so the refusals are about the operand and not the route');
+      }
+      if (wanted('C97')) {
+        const t = named('reserved scheme is refused by name');
+        const sentence = errorOf(t);
+        recall('C97', t?.ok === false && sentence.includes('is not a real base URL') && sentence.includes('`tflw://demo` is the only address'),
+          `\`api GET tflw://demoo/health\` is refused by the sentence that names the only legal spelling (got ok=${t?.ok}: ${sentence.slice(0, 90) || 'no error'}) — passed through, it dies as \`fetch failed\` on an unknown protocol (\`reserved-scheme-passes-through\`)`);
+        const seen = await arrivals('__arrivals');
+        precision('C97', !Object.keys(seen.byPath ?? {}).some((p) => p.includes('health')),
+          `and nothing under that name ever left the process — the arrival server saw no \`/health\` (saw: ${Object.keys(seen.byPath ?? {}).join(', ') || 'nothing'})`);
+      }
+    }
+  } catch (e) {
+    for (const id of ['C65', 'C67', 'C97']) if (wanted(id)) { fail(`${id} could not run: ${e.message}`); scores.get(id).skipped = e.message; }
+  } finally {
+    server?.kill();
+  }
+}
+
+// =============================================================================
+// `M198` S2 — the sessions: what a session's steps SAY, and what a session's requests SEND
+// (`M189-06`)
+// =============================================================================
+
+// Three registry mutations, all three `reached and not asserted` by `M189a`, and all three
+// invisible to every assertion that can be written inside a `.tflw` file — which is the family's
+// whole shape. A session that reports its steps from the wrong document still authorizes; a CSRF
+// token that rides a `GET` as well as a `POST` is still accepted. Nothing goes red. So both halves
+// below are graded off something the fixture cannot fake: the first off the *coordinates* in
+// `results.json`, the second off the socket.
+if (wanted('C80')) {
+  const configPath = path.join(ROOT, 'tflw.config');
+  const configLines = readFileSync(configPath, 'utf8').split('\n');
+  const plantPath = path.join(ROOT, 'tests', '.constructs', 'session-context.tflw');
+  const plantLines = readFileSync(plantPath, 'utf8').split('\n');
+  const lineOf = (lines, n) => (lines[n - 1] ?? '').trim();
+
+  console.log('\nM198 S2 — the session context\n  target: `tests/.constructs/session-context.tflw` against apiV2, graded on the `source` of its session steps');
+  const { report, output } = runCorpus(ROOT, ['tests/.constructs/session-context.tflw']);
+  const alive = await lifecycleCounts();
+  if (!report || !alive) {
+    fail(`C80 (M198 S2) produced no ${report ? lifecycleSkipReason() : 'report'}. Is the stack up (\`node cli.mjs start\`)?\n${output.trim().split('\n').slice(-12).join('\n')}`);
+  } else {
+    const oauth = named(report, 'an oauth2 credential authorizes');
+    const hand = named(report, 'a hand-written credential authorizes');
+    const anon = named(report, 'no credential is refused');
+
+    recall('C80', oauth?.ok === true, `the \`oauth2\` sugar authorized the request (ok=${oauth?.ok}) — the client-credentials grant was made, spent and accepted`);
+    recall('C80', hand?.ok === true && anon?.ok === true, `and the hand-written credential's 200 (ok=${hand?.ok}) stands against the same path's 401 with no clause (ok=${anon?.ok})`);
+
+    // A step reported at a line beyond this file's own length cannot be one of this file's
+    // statements: it is a session step, declared in `tflw.config` and merged into the report of
+    // whichever test established it. The plant is 36 lines and the declarations sit at 195 and 249
+    // precisely so this discriminator is a fact about the numbers rather than a guess.
+    const sessionSteps = (t) => stepsOf(t).filter((s) => s.line > plantLines.length);
+    const ownSteps = (t) => stepsOf(t).filter((s) => s.line <= plantLines.length);
+    const fromConfig = (t) => sessionSteps(t).filter((s) => (s.source ?? '').trim() === lineOf(configLines, s.line));
+
+    for (const [who, test, mutation] of [['oauth2', oauth, 'oauth2-session-ctx'], ['hand-written', hand, 'session-source-lines']]) {
+      const steps = sessionSteps(test);
+      const good = fromConfig(test);
+      const sample = steps[0];
+      recall('C80', steps.length > 0 && good.length === steps.length,
+        `every one of the ${who} session's ${steps.length} reported step(s) carries the text of its own line in \`tflw.config\` (${good.length}/${steps.length}; first: line ${sample?.line ?? '—'} reads ${JSON.stringify(sample?.source ?? '')}) — rendered from the caller's document instead, a line number past this 36-line file's end prints nothing at all (\`${mutation}\`)`);
+    }
+    const own = [...ownSteps(oauth), ...ownSteps(hand), ...ownSteps(anon)];
+    const ownRight = own.filter((s) => (s.source ?? '').trim() === lineOf(plantLines, s.line));
+    precision('C80', own.length > 0 && ownRight.length === own.length,
+      `and the plant's own ${own.length} step(s) read out of the plant (${ownRight.length}/${own.length}) — so the rule is "a step's source is the text at its own line, in the document it was declared in", not "session steps are special"`);
+  }
+
+  console.log('\nM198 S2 — the csrf channel\n  target: `arrival-server.mjs` — `sessions.tflw` under `session carrier`, graded on which arrival carried the token; no stack');
+  const corpus = path.join(ROOT, 'tflw-acceptance', 'conformance');
+  let server = null;
+  try {
+    server = await startArrivalServer(corpus);
+    await arrivals('__reset');
+    const { report: csrfReport, output: csrfOutput } = runCorpus(corpus, ['sessions.tflw']);
+    if (!csrfReport) {
+      fail(`C80 (M198 S2) — no report from sessions.tflw\n${csrfOutput.trim().split('\n').slice(-10).join('\n')}`);
+    } else {
+      const safe = named(csrfReport, 'a safe method under a csrf session');
+      const mutating = named(csrfReport, 'a mutating method under the same csrf session');
+      const seen = await arrivals('__headers?name=x-csrf-token');
+      const at = (p) => seen.byPath?.[p] ?? [];
+      const TOKEN = 'csrf-6f1e';
+
+      recall('C80', at('/session/mutating').length > 0 && at('/session/mutating').every((v) => v === TOKEN),
+        `the \`POST\` carried \`X-CSRF-Token: ${TOKEN}\` (saw ${JSON.stringify(at('/session/mutating'))}) — the token the establishment response issued, off the socket rather than out of the report`);
+      recall('C80', at('/session/safe').length > 0 && at('/session/safe').every((v) => v === null),
+        `and the \`GET\` carried none (saw ${JSON.stringify(at('/session/safe'))}) — a browser does not send one to a safe method and an application may reject it if it arrives, which is why the token has its own channel instead of joining a \`header\` step's (\`csrf-attached-to-safe-methods\`)`);
+      precision('C80', at('/session/issue').length > 0 && at('/session/issue').every((v) => v === null),
+        `the establishment \`POST\` itself carried none (saw ${JSON.stringify(at('/session/issue'))}) — it is mutating too, and the token did not exist yet when it was made`);
+      precision('C80', safe?.ok === true && mutating?.ok === true,
+        `and both requests answered 200 (safe ok=${safe?.ok}, mutating ok=${mutating?.ok}) — the target ignores a token it did not ask for, which is exactly why no assertion in the file can see any of this`);
+    }
+  } catch (e) {
+    fail(`C80 (M198 S2) csrf leg could not run: ${e.message}`);
+  } finally {
+    server?.kill();
+  }
+}
+
+// =============================================================================
+// `M198` S3 — the diagnosis: what a locator failure SAYS, for `C13` and `C14` (`M189-02`)
+// =============================================================================
+
+// Nine registry mutations of one formatter, every one of them `reached and not asserted`: every
+// browser plant in this repository runs through it and reads the element that answered. A locator
+// that resolves has a token to write and `locator-near-miss.tflw` reads it; a locator that resolves
+// to *nothing* has only a sentence. Six of the plant's seven tests are written to fail, and none of
+// them is graded by its own `ok` — the grader reads the failure text and asks what it contains,
+// and twice what it must not contain, which is the half no assertion in a `.tflw` file can reach.
+//
+// The tenth, `ambiguity-count-from-a-second-query`, has no leg here and cannot have one: it only
+// diverges when the DOM changes *between* the step's count and the describing query, microseconds
+// apart inside one failure path with no gesture in between. A fixture that staged it would make its
+// own known answer a race. `out-of-reach-by-design` in `reach-verdicts.json`, with that reason.
+if (wanted('C13') || wanted('C14')) {
+  console.log('\nM198 S3 — the locator diagnosis\n  target: `tests/.constructs/locator-diagnosis.tflw` against `/diagnose-fixture`, graded on the sentences in report/results.json');
+  const { report, output } = runCorpus(ROOT, ['tests/.constructs/locator-diagnosis.tflw']);
+  const alive = await lifecycleCounts();
+  if (!report || !alive) {
+    for (const id of ['C13', 'C14']) if (wanted(id)) { fail(`${id} (M198 S3) produced no ${report ? lifecycleSkipReason() : 'report'}. Needs the stack and a browser.\n${output.trim().split('\n').slice(-12).join('\n')}`); }
+  } else {
+    const say = (needle) => named(report, needle)?.error ?? '';
+    const control = named(report, 'the page is the one the other six ran against');
+    const nearMiss = say('a near miss on a button names the real buttons');
+    const resolved = say('resolved and failed on its state');
+    const textMiss = say('a near miss on text is not answered');
+    const waited = say('wait until carries the same diagnosis');
+    const ambiguous = say('an ambiguous locator lists what tells');
+    const passing = named(report, 'an assertion that passes carries no diagnosis');
+    const LIST = 'nearest matches on the page';
+
+    if (wanted('C13')) {
+      // The control first: every assertion below is about a sentence, so a page that failed to
+      // render would produce six plausible failures and no signal at all.
+      recall('C13', control?.ok === true, `the fixture page rendered (ok=${control?.ok}) — without this the six sentences below are a stack-down message wearing a diagnosis's clothes`);
+
+      recall('C13', nearMiss.includes(LIST) && nearMiss.includes('`button "Save draft"`'),
+        `a miss on \`button "Save drarft"\` names the real button (${nearMiss.includes(LIST) ? 'listed' : 'NO LIST'}) — fired on actions only, the identical \`click\` names it and the \`expect\` says nothing but "no matching element" (\`assertion-diagnosis-never-fires\`)`);
+
+      const saveLines = nearMiss.split('\n').filter((l) => l.includes('`button "Save draft"`'));
+      recall('C13', saveLines.length === 1,
+        `and names it exactly once for the two elements that render it (${saveLines.length} line(s)) — offered again byte-identically, one string takes two of five candidate slots and a genuinely different candidate cannot be shown at all (\`nearest-matches-not-deduped\`)`);
+      recall('C13', saveLines.some((l) => /2 elements render this same locator/.test(l)),
+        `and the deduped line carries its own ambiguity (${JSON.stringify((saveLines[0] ?? '').trim().slice(0, 110))}) — SPEC §9.3 calls these ready-to-paste, and pasting this one produces the *ambiguity* error, a different failure from the one being diagnosed (\`suggestion-offered-without-its-ambiguity-caveat\`)`);
+      recall('C13', /\n\s*-\s*css "/.test(nearMiss),
+        `and the icon-only button with no accessible name is surfaced as a generated CSS path — a real candidate no name can reach, dropped for every kind and it disappears from the one list that could have named it (\`unnamed-arm-dropped-for-every-kind\`)`);
+
+      recall('C13', resolved.length > 0 && !resolved.includes(LIST),
+        `a button that RESOLVED and failed on its state is answered about the state, not with a list of other buttons (${JSON.stringify(resolved.slice(0, 90))}) — without the zero-match guard the diagnosis points away from the cause (\`diagnosis-ignores-the-resolved-element\`)`);
+
+      const passStep = stepsOf(passing).find((s) => s.kind === 'expect');
+      recall('C13', passing?.ok === true && !(passStep?.detail ?? '').includes(LIST) && !(passing?.error ?? '').includes(LIST),
+        `an \`is hidden\` that passes on absence carries no diagnosis (ok=${passing?.ok}, detail ${JSON.stringify((passStep?.detail ?? '').slice(0, 70))}) — appended regardless of outcome, a green step reports success with "nearest matches" stapled to it (\`passing-assertion-gets-annotated\`)`);
+
+      recall('C13', waited.includes(LIST) && waited.includes('`button "Save draft"`'),
+        `\`wait until\` carries the same diagnosis when it gives up (${waited.includes(LIST) ? 'listed' : 'NO LIST'}) — the half of the fix a suite covering only \`expect\`/\`check\` would never notice was missing (\`wait-until-diagnosis-dropped\`)`);
+
+      const ambLines = ambiguous.split('\n').filter((l) => /^\s+\d+\.\s/.test(l));
+      const discriminated = ambLines.filter((l) => / — \S/.test(l));
+      const distinct = new Set(discriminated.map((l) => l.split(' — ')[1]?.trim()));
+      recall('C13', ambiguous.includes('matched 12 elements') && ambLines.length > 1 && discriminated.length === ambLines.length && distinct.size === ambLines.length,
+        `twelve identical \`Retire\` buttons are listed with what tells them apart (${discriminated.length}/${ambLines.length} candidate(s), ${distinct.size} distinct discriminator(s)) — computed and then not printed, the list is N identical quoted strings carrying zero bits for the choice it demands (\`ambiguity-list-without-discriminators\`)`);
+
+      precision('C13', !nearMiss.includes('css "html"') && !/- `button "Retire"`/.test(nearMiss),
+        `and the miss's own list offers neither the page's structure nor a candidate that is ambiguous twelve ways — the suggestions are a shortlist, not the scan`);
+    }
+
+    if (wanted('C14')) {
+      const bullets = textMiss.split('\n').filter((l) => /^\s*-\s/.test(l));
+      const structural = bullets.filter((l) => /css "html/.test(l));
+      recall('C14', textMiss.includes(LIST) && textMiss.includes('`text "Inventory reconciled across every warehouse."`'),
+        `a miss on \`text "Inventroy reconciled"\` names the real sentence on the page (${textMiss.includes(LIST) ? 'listed' : 'NO LIST'})`);
+      recall('C14', bullets.length > 0 && structural.length === 0,
+        `and offers no structural container among its ${bullets.length} suggestion(s) (${structural.length} \`css "html…"\`) — \`text\`'s scan is \`*\` and a name is computed only for leaves, so the unnamed arm fired here answers with \`css "html"\`, \`css "html > head"\` and \`css "html > body"\`: document order, one of which can never be visible (\`text-diagnosis-offers-structural-css-paths\`)`);
+      precision('C14', bullets.every((l) => /`text "/.test(l)),
+        `every suggestion offered for a \`text\` miss is itself a \`text\` locator (${bullets.length}/${bullets.length}) — the arm is opt-in per kind, not a \`!== 'text'\` exclusion`);
+    }
+  }
+}
+
+// =============================================================================
+// `M198` S5 — the poll budgets, for `C72` (`M189-03`)
+// =============================================================================
+
+// Four registry mutations of the wait machinery, reached by between fifteen and thirty-two plants
+// and asserted by none of them, for one reason wearing three faces: **every browser and api
+// condition in this suite is already true when it is first asked.** A wait satisfied on poll one
+// never reaches a deadline, never reports which budget bounded it, and never polls long enough for
+// a progress mark to matter. `C72` already grades that a wait re-issues and stops, which is a claim
+// about a wait that SUCCEEDS — and a successful wait is exactly the case in which none of these
+// four lines can be observed.
+//
+// So the legs below are the other half of `C72`: a wait that cannot succeed, one that succeeds only
+// late, and one written in a form no fixture in this repository had ever used. Not one of them is
+// graded on elapsed time against the constants they turn on — 3000 ms in `browser.ts` and this
+// config's 5 s `timeout wait` — because a timing assertion at those margins measures the machine
+// (`M157g`). Two are graded on the *text* of a failure and two on a pass the mutant turns red.
+if (wanted('C72')) {
+  console.log('\nM198 S5 — the api form\'s own budget\n  target: `arrival-server.mjs` — `/after/600000` under `waits.tflw`, graded on the number the failure names; no stack');
+  const waitsCorpus = path.join(ROOT, 'tflw-acceptance', 'conformance');
+  let waitServer = null;
+  try {
+    waitServer = await startArrivalServer(waitsCorpus);
+    await arrivals('__reset');
+    const { report: waitReport, output: waitOutput } = runCorpus(waitsCorpus, ['waits.tflw']);
+    if (!waitReport) {
+      fail(`C72 (M198 S5) — no report from waits.tflw\n${waitOutput.trim().split('\n').slice(-10).join('\n')}`);
+    } else {
+      const unsatisfiable = named(waitReport, 'an api wait that can never be satisfied reports the budget the step wrote, not the env\'s');
+      const later = named(waitReport, 'the same route, asked for a deadline inside the budget, is satisfied by a later poll');
+      const said = unsatisfiable?.error ?? '';
+
+      // The discriminator is a number in a sentence, not a duration. The step wrote `timeout wait
+      // 1500ms`; this corpus's env writes none, so the fallback is the runtime's 30 s default. Three
+      // orders of magnitude apart, so no clock is consulted to tell the two builds apart.
+      recall('C72', said.includes('timed out after 1500ms'),
+        `the unsatisfiable wait named the step's own budget (${JSON.stringify(said.slice(0, 90))}) — \`D640\` says the step's \`timeout wait\` is "used for the deadline, the backstop and every message", and a build that read the env's would print this corpus's fallback instead (\`api-wait-ignores-its-own-budget\`)`);
+      recall('C72', said.length > 0 && !said.includes('30000'),
+        `and named nothing else (\`30000\` absent) — the half a "did it fail?" assertion can never reach, because an unsatisfiable condition fails under every build`);
+      precision('C72', /\(\d+ attempts?\)/.test(said) && !/\(1 attempts?\)/.test(said),
+        `it re-issued before giving up (${(said.match(/\((\d+) attempts?\)/) ?? [])[0] ?? 'no attempt count'}) — a single request behind a long timeout would time out too, and would say so with one attempt`);
+      precision('C72', later?.ok === true,
+        `and the same route with its deadline inside the budget passed (ok=${later?.ok}) — the control that separates "the budget was honoured" from "\`/after/\` never answers 200"`);
+    }
+  } catch (e) {
+    fail(`C72 (M198 S5) api leg could not run: ${e.message}`);
+  } finally {
+    waitServer?.kill();
+  }
+
+  console.log('\nM198 S5 — the locator form\n  target: `tests/.constructs/wait-budgets.tflw` against `/wait-fixture`, graded on a refusal, a late resolution and a network ref');
+  const { report: uiReport, output: uiOutput } = runCorpus(ROOT, ['tests/.constructs/wait-budgets.tflw']);
+  if (!uiReport) {
+    fail(`C72 (M198 S5) produced no report. Needs the stack and a browser.\n${uiOutput.trim().split('\n').slice(-12).join('\n')}`);
+  } else {
+    const backstop = named(uiReport, 'the locator form measures `for` against the step\'s own `timeout wait`, not the env\'s');
+    const late = named(uiReport, 'an action on a locator that arrives after the speculative mark still finds it');
+    const ref = named(uiReport, '`status of request to` polls observed traffic rather than the response scope');
+    const refusal = backstop?.error ?? '';
+
+    // Graded on the backstop rather than on elapsed time because the locator form's timeout message
+    // carries no budget at all — it reports the matcher's own outcome. The refusal does carry one,
+    // and under the mutant it does not fire: `for 3s` is satisfiable against this config's 5 s, so
+    // the step polls a banner true at first paint and passes. A difference of kind, not of timing.
+    recall('C72', refusal.includes('can never be satisfied') && refusal.includes('(2000ms)'),
+      `the locator form refused \`for 3s\` against this step's own 2 s budget (${JSON.stringify(refusal.slice(0, 80))}) — against the config's 5 s the same hold is satisfiable, so a build reading the env's budget here does not refuse at all: it passes (\`ui-wait-ignores-its-own-budget\`)`);
+    precision('C72', refusal.length > 0 && !refusal.includes('5000'),
+      `and quoted no other number (\`5000\` absent) — the env's \`timeout wait 5s\` is what the mutant substitutes, so its absence is the claim`);
+
+    // `speculative-line-replaces-the-final-diagnosis` makes the ~3 s progress mark a deadline. The
+    // duration clause is a *lower bound with a 2 s margin on an element that cannot exist before
+    // 5000 ms*, not a timing threshold: it proves the leg is not vacuous — that something really
+    // did resolve on the far side of the mark — and it cannot fail on a slow machine, only on a
+    // page that stopped being late.
+    //
+    // It is an **action**, and the first draft was an `expect` that this mutation did not touch:
+    // `resolveLocator`'s deadline bounds one resolution and `resolveForStep` is its only caller, so
+    // a UI `expect`'s own retry budget re-reads the DOM and absorbs a shortened deadline entirely.
+    // Measured on the box — the mutant left the `expect` form green with zero red lines.
+    recall('C72', late?.ok === true,
+      `a locator that arrives at 5000 ms still resolved (ok=${late?.ok}) — \`FU-14\`/\`D248\` made the ~3 s mark a progress point rather than a deadline, and the mutant is the fast-fail option that decision rejected (\`speculative-line-replaces-the-final-diagnosis\`)`);
+    precision('C72', (late?.durationMs ?? 0) > 3500,
+      `and waited past the mark to do it (${late?.durationMs ?? '—'} ms) — a leg that resolved instantly would be green under both builds and would look like coverage`);
+
+    // The ordering inside `waitUntilReader`: the ref is consulted BEFORE the subject's type is
+    // branched on, and `status of request to "…"` is a `StatusSubject` that carries one. Written as
+    // `status of` rather than the bare `request to "…" was made` on purpose — the bare form is the
+    // one kind the mutant still answers for.
+    recall('C72', ref?.ok === true,
+      `the network-ref form of \`wait until\` polled observed traffic (ok=${ref?.ok}) — written here for the first time in this repository; the mutant consults the ref only for a bare \`NetworkRequestSubject\`, so a \`status of\` falls through to the response-scope throw (\`wait-reader-picks-the-subject-over-the-ref\`)`);
+    precision('C72', (ref?.durationMs ?? 0) > 1000,
+      `and polled for it rather than finding it already made (${ref?.durationMs ?? '—'} ms against the page's 1200 ms probe) — a request that had already arrived would satisfy the wait on poll one and exercise no ordering`);
+  }
+}
+
+// =============================================================================
+// `M198` S6 — the run that reaches no verdict, for `C49` (`M189-05`, `M169-05`)
+// =============================================================================
+
+// `C49` says a workload-bearing test's verdict comes from its thresholds and from nothing else.
+// This widens it by one level, to the *run's* verdict, and to two threshold facts a workload whose
+// requests all succeed cannot state.
+//
+// Five registry mutations, and the property that hid all five is the same: **every workload in this
+// repository measures a target that answers, and every run it produces completes.** So
+// `actual === null` has never been the case, two endpoint buckets have never held different
+// samples, and `noVerdictReason` has never once been non-null — `ok` and `tests.every(ok)` have
+// agreed on every run this repository has ever made.
+//
+// Nothing here is graded by a test's own `ok`. The threshold legs read the threshold's own row out
+// of `results.json`, and the no-verdict legs read the *run's* fields, because a run whose every
+// completed test passed is precisely the case in which the test verdicts carry no information.
+if (wanted('C49')) {
+  const verdictCorpus = path.join(ROOT, 'tflw-acceptance', 'conformance');
+  let verdictServer = null;
+  try {
+    verdictServer = await startArrivalServer(verdictCorpus);
+    await arrivals('__reset');
+
+    console.log('\nM198 S6 — the thresholds\n  target: `arrival-server.mjs` — `/always-500` and a two-latency scenario under `no-verdict.tflw`; no stack');
+    const { report: thReport, output: thOutput } = runCorpus(verdictCorpus, ['no-verdict.tflw']);
+    if (!thReport) {
+      fail(`C49 (M198 S6) — no report from no-verdict.tflw\n${thOutput.trim().split('\n').slice(-10).join('\n')}`);
+    } else {
+      // `named()` filters to `kind === 'functional'` and both of these are `kind === 'workload'`,
+      // which is how the first draft of this leg read `undefined` out of a report that was right in
+      // front of it. A workload-bearing test is looked up by name here, for the same reason
+      // `named()` gives: `tflw run` may order a report by completion rather than by declaration.
+      const workloadNamed = (report, fragment) => (report?.tests ?? []).find((t) => (t.name ?? '').includes(fragment));
+      const ungradable = workloadNamed(thReport, 'a threshold with no successful iteration to read is not met');
+      const scoped = workloadNamed(thReport, 'a scoped threshold reads its own endpoint\'s bucket, not the scenario\'s');
+      const thresholdOf = (test, label) => (test?.thresholds ?? []).find((t) => (t.label ?? '').startsWith(label));
+
+      // Read the threshold's OWN row, never the test's: `TF033` requires an `error rate` clause
+      // beside a duration one — "so a fast failure passes it" — so this test is red under both
+      // builds, and its verdict cannot tell them apart. The checker forbidding that shape is the
+      // same defect one level up, which is why the leg is written this way rather than complained
+      // about.
+      const dur = thresholdOf(ungradable, 'p95 duration');
+      recall('C49', dur?.actual === null && dur?.ok === false,
+        `a duration threshold over a scenario whose every iteration failed is NOT met (actual=${JSON.stringify(dur?.actual)}, ok=${dur?.ok}) — \`LatencyHistogram.percentile\` returns 0 on an empty histogram, so a null arm that answered \`true\` would make "every request failed" the cheapest way in the language to satisfy a latency bound (\`ungradable-threshold-passes\`, \`B3-02\` at the boundary \`D-M89-1\` holds)`);
+      precision('C49', (ungradable?.metrics?.failures ?? 0) > 0 && (ungradable?.metrics?.iterations ?? 0) === (ungradable?.metrics?.failures ?? -1),
+        `and every one of its ${ungradable?.metrics?.iterations ?? '—'} iteration(s) really did fail (${ungradable?.metrics?.failures ?? '—'}) — the input nothing in this corpus had, because every other path here answers`);
+
+      // The scope leg needs two populations, or it grades nothing: `M169-05` recorded one red and
+      // two green on byte-identical code because a plant whose steps share a latency cannot tell a
+      // resolved bucket from the whole histogram — the two hold identical samples.
+      const fast = thresholdOf(scoped, 'p95 duration for');
+      const wholeP95 = scoped?.metrics?.durations?.p95 ?? null;
+      recall('C49', fast?.ok === true && typeof fast?.actual === 'number' && fast.actual < 25,
+        `a scoped threshold read its own endpoint's bucket (actual=${fast?.actual}ms against a 25ms bound, ok=${fast?.ok}) — the \`"fast"\` samples alone`);
+      recall('C49', typeof wholeP95 === 'number' && wholeP95 > 25,
+        `and the scenario it sits in is ${wholeP95}ms at p95 — over the same bound, so a clause that stopped resolving its scope reads the second number against the first number's target (\`threshold-scope-falls-back-to-the-whole-histogram\`)`);
+    }
+
+    // The no-verdict pair. Two runs of one file: `runProgram` stamps the verdict itself in the
+    // first, and in the second the abort arrives at `spliceLoadReportIntoRunReport` *after* `ok`
+    // was already stamped, which is the only place a stale verdict can survive.
+    for (const [how, args, mutation] of [
+      ['single-process', [], 'ok-ignores-no-verdict'],
+      ['--workers 4', ['--workers', '4'], 'verdict-not-restamped-after-splice'],
+    ]) {
+      console.log(`\nM198 S6 — a run with no verdict (${how})\n  target: \`aborted.tflw\` interrupted by SIGINT at 2.5s of its 8s plan; no stack`);
+      const { report: ab, output: abOut } = await runCorpusInterrupted(verdictCorpus, [...args, 'aborted.tflw'], 2500);
+      if (!ab) {
+        fail(`C49 (M198 S6) — no partial report from the interrupted ${how} run\n${abOut.trim().split('\n').slice(-10).join('\n')}`);
+        continue;
+      }
+      recall('C49', ab.aborted === true && ab.tests.length > 0 && ab.tests.every((t) => t.ok) && ab.failed === 0,
+        `the interrupted ${how} run flushed a partial report in which nothing failed (aborted=${ab.aborted}, passed=${ab.passed}, failed=${ab.failed}) — the only state in which \`ok\` and \`failed === 0\` can disagree, and the state 102 plants here have never produced`);
+      recall('C49', ab.ok === false,
+        `and it is \`ok: false\` (${ab.ok}) — \`M114\`'s decision that \`ok\` means "this run passed", not "nothing that ran failed"; before it, this exact report read \`{"ok": true, "failed": 0, "aborted": true}\` and handed CI a clean pass off a run cut short (\`${mutation}\`)`);
+      precision('C49', typeof ab.abortedMessage === 'string' && /aborted at \d+s of \d+s planned/.test(ab.abortedMessage),
+        `stamped with what it did and did not run (${JSON.stringify(ab.abortedMessage ?? null)}) — the reader's half of the same fact`);
+    }
+  } catch (e) {
+    fail(`C49 (M198 S6) could not run: ${e.message}`);
+  } finally {
+    verdictServer?.kill();
+  }
+}
+
+// =============================================================================
+// `M198` S7 — the engine's report about itself, for `C45` (`M189-04`)
+// =============================================================================
+
+// Eight perf plants run the workload engine and every one of them grades the **arrival curve the
+// server recorded**. That is the right thing to grade for a shape — `C44`-`C47` are about whether a
+// `hold` is flat and a `ramp` rises — and it is exactly why three fields tflw writes about its own
+// behaviour have never been read: the arrival count is identical whether or not the generator
+// reused a socket, whether or not a closed-model target slowed down, and whichever client the
+// arrivals went out over.
+//
+// Both legs are read off something the file cannot reach. The back-off ratio is a field in the
+// scenario report that no `.tflw` assertion addresses; the connection count is the arrival server's
+// own `server.on('connection')` tally, which no arrival curve can move.
+if (wanted('C45')) {
+  console.log('\nM198 S7 — the generator\'s self-report\n  target: `arrival-server.mjs` — `self-report.tflw`, graded on a report field and a socket count; no stack');
+  const srCorpus = path.join(ROOT, 'tflw-acceptance', 'conformance');
+  let srServer = null;
+  try {
+    srServer = await startArrivalServer(srCorpus);
+    await arrivals('__reset');
+    const { report: srReport, output: srOutput } = runCorpus(srCorpus, ['self-report.tflw']);
+    if (!srReport) {
+      fail(`C45 (M198 S7) — no report from self-report.tflw\n${srOutput.trim().split('\n').slice(-10).join('\n')}`);
+    } else {
+      const held = (srReport.tests ?? []).find((t) => (t.name ?? '').includes('a closed-model hold reports its own back-off ratio'));
+      const open = (srReport.tests ?? []).find((t) => (t.name ?? '').includes('open-model arrivals share one connection pool'));
+      const seen = await arrivals('__arrivals');
+
+      // `computeBackOff` answers only for a closed-users workload holding one concurrency level
+      // (`M107-01`/`D-M107-1`: under a rising target the halves differ by Little's law, not by
+      // degradation). `hold N users` is that shape, and the mutation drops exactly that kind — so
+      // the field is simply *absent*, which is not the same as a field with a wrong value and is
+      // why no existing plant could see it.
+      recall('C45', held?.backOff != null && typeof held.backOff.ratio === 'number',
+        `the closed-model \`hold N users\` scenario reported its own back-off ratio (${JSON.stringify(held?.backOff ?? null)}) — \`C45\` otherwise grades this shape on its arrival curve, and an optional field that is gone entirely is not a field with a wrong value (\`backoff-hold-kind\`)`);
+      precision('C45', held?.backOff?.warning === false,
+        `and it says the target did not degrade (warning=${held?.backOff?.warning}) — the arrival server answers from memory with nothing behind it, so this is the negative control the mutation's own registry note says would have nothing left to check`);
+      precision('C45', (held?.metrics?.iterations ?? 0) >= 20,
+        `over ${held?.metrics?.iterations ?? '—'} iterations, which clears the ten-per-half floor the ratio needs — written as \`hold N users\` and paced, because \`run N iterations across M users\` is not one of the four closed kinds and reports no ratio at all`);
+
+      // `D206`/`D207`: an `rps` arrival goes out over a pool that is shared across the scenario, not
+      // built per arrival. A structural test asking "did an arrival use a keep-alive agent" stays
+      // green under the per-arrival mutant, so the claim has to be reuse observed at the socket.
+      const conns = seen.connections ?? null;
+      const total = seen.total ?? 0;
+      recall('C45', typeof conns === 'number' && conns > 0 && conns <= 12,
+        `${total} arrivals across this file reached the server over ${conns} connection(s) — one pool per arrival is the over-correction \`D207\` rejects and is *worse* than the \`fetch\` path it replaced, because every sample then pays for a fresh handshake (\`open-model-agents-per-arrival\`)`);
+      // `open-model-back-to-fetch` is NOT visible in the socket count — measured: undici pools per
+      // origin too, and the connection tally is unchanged. Its defect is the one `M118-02` records
+      // as a number: back on `sendRequest`'s unpinned `fetch`, a sub-millisecond endpoint reports a
+      // p50 tens of milliseconds high, because the client's own queueing lands inside the measured
+      // window. So this clause is a latency bound, and it is the only one in this milestone — the
+      // effect is ~30x, not a margin, which is `M157g`'s rule met rather than dodged.
+      const openP50 = open?.metrics?.durations?.p50 ?? null;
+      recall('C45', typeof openP50 === 'number' && openP50 < 12,
+        `and the latency it reported for them is the target's, not the client's (p50 ${openP50}ms) — off the pinned pool a 0.5ms path reads ~1ms; back on \`fetch\` the same path reported p50 36ms under \`hold 10 rps\` while \`hold 1 users\` read 0ms in the same process (\`open-model-back-to-fetch\`, \`M118-02\`)`);
+      precision('C45', open?.ok === true && (open?.metrics?.iterations ?? 0) === 60,
+        `and the open-model scenario itself landed its full ${open?.metrics?.iterations ?? '—'} arrivals (ok=${open?.ok}) — the curve is unchanged by any of this, which is the whole reason the socket is where the claim had to go`);
+    }
+
+    // `M32`'s floor, in its own file because `selfDiagnosis` is stamped once per RUN and not per
+    // scenario — put a 150 ms workload beside a two-second one and the window is no longer short.
+    console.log('\nM198 S7 — the saturation floor\n  target: `short-run.tflw` — 150ms of held load, graded on two facts that disagree; no stack');
+    const { report: shortReport, output: shortOutput } = runCorpus(srCorpus, ['short-run.tflw']);
+    if (!shortReport) {
+      fail(`C45 (M198 S7) — no report from short-run.tflw\n${shortOutput.trim().split('\n').slice(-10).join('\n')}`);
+    } else {
+      const sd = shortReport.selfDiagnosis ?? null;
+      // The claim is the PAIR. `saturated === false` alone would be satisfied by a run whose rate
+      // sat under the threshold, and such a run is green under the mutant too — so the rate being
+      // over 90 is what makes the verdict mean "the floor refused it" rather than "there was
+      // nothing to refuse". Startup cost is larger on a loaded machine, not smaller, so this is a
+      // lower bound that a busy box strengthens.
+      recall('C45', sd != null && sd.saturated === false && sd.cpuPercent > 90,
+        `a 150ms run reads ${sd?.cpuPercent?.toFixed?.(0) ?? '—'}% of a core — over the 90 that trips the CPU arm — and still reports \`saturated: false\` (${sd?.saturated}) — \`cpuPercent\` is \`cpuMs / wallMs\` and V8 warm-up is real CPU time that does not shrink because the run is brief, which is \`M32\`'s finding on a 150ms run reading 140% (\`saturation-ignores-the-min-window\`)`);
+      recall('C45', shortReport.inconclusive === false && shortReport.ok === true,
+        `so the run reaches a verdict (inconclusive=${shortReport.inconclusive}, ok=${shortReport.ok}) — without the floor this identical run calls tflw its own bottleneck and hands back no verdict at all`);
+    }
+  } catch (e) {
+    fail(`C45 (M198 S7) could not run: ${e.message}`);
+  } finally {
+    srServer?.kill();
   }
 }
 

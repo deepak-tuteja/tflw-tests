@@ -1,0 +1,43 @@
+# `M198` S5 / `C126` — the known-answer plant for the **api form's own poll budget**, and the one
+# claim in this corpus that is graded off the *number a failure names*.
+#
+# `wait until api` has two budgets on one line (SPEC §5.5, `M147d`/`D640`): the bare `timeout`
+# bounds one poll's HTTP request, and `timeout wait` bounds the whole step. `D640`'s comment in
+# `interpreter.ts` says it plainly — the step's own `timeout wait` when it wrote one, otherwise the
+# env's, "resolved once and used for the deadline, the backstop below and every message, so there is
+# no path on which the number a failure reports is not the number that bounded it."
+#
+# `api-wait-ignores-its-own-budget` drops the step's half. Nothing in this repository could see it:
+# `C72` (`step:wait`) proves the poll loop re-issues until its condition holds and then stops, which
+# is a claim about a wait that **succeeds**. A successful wait never reaches a deadline, so which
+# budget bounded it is unobservable — and the whole corpus is written to succeed.
+#
+# So this plant does the one thing the rest of the corpus does not: it writes a wait that **cannot**
+# be satisfied, and reads the sentence it fails with.
+#
+# `/after/600000` answers 503 until ten minutes have passed since it was first asked for. No budget
+# any sane test writes reaches that, so the step is guaranteed to run out — and the only question
+# left is which number it ran out at. The step writes `timeout wait 1500ms`; this env writes none,
+# so the fallback is the runtime's own 30 s default. The two numbers are three orders of magnitude
+# apart on purpose: the failure sentence names one of them, and no timing measurement is involved
+# in telling them apart.
+#
+# **The grader reads the sentence, not the verdict.** Both builds fail this test — that is what an
+# unsatisfiable condition means — so a `.tflw` file cannot carry the claim, exactly as in `S2` and
+# `S3`. `scripts/verify-construct-acceptance.mjs` reads the step's error out of `results.json` and
+# requires `timed out after 1500ms`, with `30000` absent.
+
+@constructs @waits
+test "an api wait that can never be satisfied reports the budget the step wrote, not the env's"
+  # Expected RED. Ten minutes is not reachable; 1500ms is what bounds the attempt.
+  wait until api GET /after/600000 timeout wait 1500ms
+    expect status equals 200
+
+@constructs @waits
+test "the same route, asked for a deadline inside the budget, is satisfied by a later poll"
+  # The control, and it is not decoration: without it a red above could mean "the poll loop is
+  # broken" or "`/after/` never answers 200" just as easily as it means "the budget was honoured".
+  # Two seconds is comfortably inside the 20 s this step allows and comfortably outside one poll.
+  wait until api GET /after/2000 timeout wait 20s
+    expect status equals 200
+  expect body.ready equals true

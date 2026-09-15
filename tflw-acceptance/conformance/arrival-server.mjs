@@ -127,6 +127,15 @@ let peakWaiting = 0;
 let gatePaired = 0;
 let gateAlone = 0;
 
+// `M198` S5 (`D1035`) — when each `/after/<ms>` path was FIRST asked for. Everything else in this
+// file answers the same way however often it is called, which is exactly what a poll budget cannot
+// be graded against: a `wait until` whose condition is already true on poll one never reaches its
+// budget, and one whose condition can never be true cannot distinguish "gave up at the step's
+// number" from "gave up at the config's". This map is the only state here that makes an answer a
+// function of *time*, and it is keyed by the full path so two plants asking for two deadlines do
+// not share one clock.
+const afterFirstSeen = new Map();
+
 /** Release everyone currently held. `paired` is recorded per release rather than per request: what
  *  the plant asks is whether anybody was *ever* in there at the same time as somebody else. */
 function releaseWaiting(paired) {
@@ -179,6 +188,7 @@ const server = createServer((req, res) => {
     arrivals.clear();
     offsets.clear();
     headerLog.clear();
+    afterFirstSeen.clear();
     epoch = performance.now();
     dropped = 0;
     connections = 0;
@@ -315,6 +325,107 @@ const server = createServer((req, res) => {
     // way in — and a non-ASCII character, so a decoder that is not UTF-8 changes the string.
     res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
     res.end('healthy \u2713 42');
+    return;
+  }
+  // `M198` S1 — the two routes the singleton plants need (`D1035`: the instrument grows a route
+  // rather than apiV2). `/subjects/echo` returns the request body's exact bytes under the request's
+  // own content-type, so what tflw *sent* is what the assertion reads — the only way to see an
+  // array body leave as an array rather than as `{"0":…}`. `/subjects/values` is one object whose
+  // fields are each a value a numeric comparison must refuse, plus one it must accept.
+  if (path === '/subjects/echo') {
+    count(path, req);
+    const chunks = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => {
+      res.writeHead(200, { 'content-type': req.headers['content-type'] ?? 'application/octet-stream' });
+      res.end(Buffer.concat(chunks));
+    });
+    return;
+  }
+  if (path === '/subjects/values') {
+    count(path, req);
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end('{"n":3,"s":"3","t":true,"nil":null,"arr":[5]}');
+    return;
+  }
+  // `M198` S2 — the three routes the csrf plant needs, and they are an instrument for a claim no
+  // counter can make. `csrf from … send as header` attaches the token to mutating methods **and not
+  // to safe ones** (SPEC §3.3), so the observation is per-arrival and per-verb: which request
+  // carried the header, not how many did. `/session/issue` is the establishment response the clause
+  // reads its token out of; `/session/safe` and `/session/mutating` are two ordinary counted paths
+  // whose only job is to be reached by a `GET` and a `POST` under the same credential, so
+  // `/__headers?name=x-csrf-token` answers the question directly.
+  //
+  // The token is a constant rather than a random value on purpose: the grader asserts the *exact*
+  // string arrived, so a mutant that attached something else — the literal `"undefined"` of
+  // `csrf-token-miss-binds-undefined`, say — is a different red from one that attached nothing.
+  if (path === '/session/issue') {
+    count(path, req);
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end('{"csrfToken":"csrf-6f1e","note":"the establishment response a `csrf from` clause reads"}');
+    return;
+  }
+  if (path === '/session/safe' || path === '/session/mutating') {
+    count(path, req);
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ path, method: req.method }));
+    return;
+  }
+  // `M198` S5 / `C126` (`D1035`) — the only path here whose answer changes with time, and the
+  // instrument the poll budgets need. `/after/<ms>` answers 503 until `<ms>` have passed since it
+  // was first asked for, then 200 forever. Two shapes are graded off it and they are different
+  // claims:
+  //
+  //   * `/after/600000` can never be satisfied inside any budget a test may sanely write, so a
+  //     `wait until api` over it is guaranteed to run to its budget and the only question left is
+  //     WHICH number bounded it. That is `api-wait-ignores-its-own-budget` exactly: the step's
+  //     `timeout wait` and the config's `timeouts.wait` are set to two different values, and the
+  //     failure names one of them.
+  //   * a deadline inside the budget (`/after/5000` under a 20 s clause) is satisfied on a later
+  //     poll, so the step passes — and passes only if the poll loop outlived the speculative
+  //     diagnosis mark. `speculative-line-replaces-the-final-diagnosis` turns that mark into a
+  //     deadline, and this is the api-side witness for it.
+  //
+  // First-seen rather than process start: the epoch has to begin when the plant begins, or a
+  // suite that runs this file's plants in any other order changes what the deadline means.
+  if (path.startsWith('/after/')) {
+    count(path, req);
+    const afterMs = Number(path.slice('/after/'.length));
+    if (!Number.isFinite(afterMs) || afterMs < 0) {
+      res.writeHead(400, { 'content-type': 'application/json' });
+      res.end('{"error":"/after/<ms> takes a non-negative number of milliseconds"}');
+      return;
+    }
+    if (!afterFirstSeen.has(path)) afterFirstSeen.set(path, performance.now());
+    const elapsedMs = performance.now() - afterFirstSeen.get(path);
+    const ready = elapsedMs >= afterMs;
+    // The body carries the elapsed figure as well as the flag so a failure diagnosis quotes
+    // something a reader can check against the clause, rather than a bare `false`.
+    res.writeHead(ready ? 200 : 503, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ ready, afterMs, elapsedMs: Math.round(elapsedMs) }));
+    return;
+  }
+  // `M198` S6 / `C127` (`D1035`) — every request fails, on purpose and without exception. A
+  // workload over this path has zero successful iterations, which is the one input that makes a
+  // duration threshold UNGRADABLE rather than breached: there is no latency distribution to take a
+  // percentile of, so `actual` is null and the run has to say the threshold could not be judged
+  // instead of reporting it as met. `/gate` and `/slow` above are slow; nothing here was ever
+  // *broken*, and a threshold's null arm was unreachable for that reason alone.
+  // `M198` S7 / `C45` (`D1035`) — two ordinary counted paths whose only job is to be reached by one
+  // workload each, so the generator's own report about itself can be read without the samples of
+  // any other plant mixed into it. They answer exactly like the default branch; what makes them
+  // worth naming is the *isolation*, because `/__arrivals`' connection counter is global to the
+  // process and `arrivals ÷ connections` is only a number if one file's scenarios made them.
+  if (path === '/selfreport-closed' || path === '/selfreport-open') {
+    count(path, req);
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end('{"ok":true}');
+    return;
+  }
+  if (path === '/always-500') {
+    count(path, req);
+    res.writeHead(500, { 'content-type': 'application/json' });
+    res.end('{"ok":false,"always":500,"note":"every request to this path fails, by design"}');
     return;
   }
   if (path === '/subjects/json-spaced') {

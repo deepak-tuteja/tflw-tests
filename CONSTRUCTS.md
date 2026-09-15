@@ -102,10 +102,12 @@ body; a guard line that runs says nothing about the body, and a module-level con
 by every plant the moment the bundle loads. So an *unreached* survivor is the strong verdict — no
 assertion anywhere could have depended on it — and a *reached* survivor is a question a person has
 to answer, in `tflw-acceptance/mutation/reach-verdicts.json`: `not-asserted`, the dogfood is
-shallow there and a row is filed per construct family; or `out-of-reach-by-design`, the result is
-visible only where the roster does not look (the HTML report, an exit code, the LSP, a log line).
+shallow there and a row is filed per construct family; `out-of-reach-by-design`, the result is
+visible only where the roster does not look (the HTML report, an exit code, the LSP, a log line);
+or, since `M198`, `asserted` — a plant now depends on it, proven by a hand kill whose four facts
+the entry carries and the table under *Reddened by hand — the drawdown of `M198`* repeats.
 `npm run verify:reach-verdicts` holds that table and the measured reached set to each other in
-both directions. `npm run read:mutation-matrix` prints the bins and names the reached survivors.
+both directions, and an `asserted` entry to its row here. `npm run read:mutation-matrix` prints the bins and names the reached survivors.
 
 This is written down because "the census found 99 survivors" reads as a statement about the
 plants' depth, and for most of the 99 it is a statement about the roster's reach — which is a
@@ -235,9 +237,9 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C62` | `matches "<regex>"` (`matcher:matches-regex`) | api | every one of the 31 existing uses is a literal, so `String.includes` passes them all — `matches "EUR|USD"` is the one assertion that separates a regex engine from a substring search; `not matches "^eur$"` adds case, `^known-[a-z]+$` adds anchoring | a `matches` implemented as a substring search |
 | `C63` | `matches subset {…}` (`matcher:matches-subset`) | api | two keys of seven, so deep equality is red on the positive; the same two keys with `price` off by one, so presence-only or stop-at-first-match is red on the negative | a subset that is really equality, and one that checks presence rather than value |
 | `C64` | `matches schema "…" from "…"` (`matcher:matches-schema`) | api | the frozen payload validates against `SoftCheckAnswerDto` out of apiV2's live `/openapi.json`, and is **rejected** by `ProductResponseDto` in the same document — the half that a matcher validating nothing cannot fake | a schema matcher that reports success without validating |
-| `C65` | `is greater than` / `is less than` (`matcher:greater-less-than`) | api | all four assertions sit on the boundary of `body.price` = 42 — `> 41`, `not > 42`, `< 43`, `not < 42` — so `>=` masquerading as `>` is red in both directions; no existing use sits within one of its bound | a comparison that is inclusive where the language says strict |
+| `C65` | `is greater than` / `is less than` (`matcher:greater-less-than`) | api | all four assertions sit on the boundary of `body.price` = 42 — `> 41`, `not > 42`, `< 43`, `not < 42` — so `>=` masquerading as `>` is red in both directions; no existing use sits within one of its bound. Since `M198`: a boolean, `null`, a numeric string and a one-element array are each **refused by name** (`expects a number, got …`), where a `Number()` coercion would pass all four; and `is less than 2 seconds` compares as `2000` | a comparison that is inclusive where the language says strict; one that coerces its operand; a spelled-out duration left as an object |
 | `C66` | `has count <n>` (`matcher:has-count`) | api | `body.tags` has two elements and the negatives are one either side: `not has count 1` catches `length >= N`, `not has count 3` catches `length <= N` | a `has count` that is a lower bound, an upper bound, or not a count |
-| `C67` | `api` (`step:api`) | api | the server counts arrivals per label, so *one step, one request* is a number: `c67once` at exactly 2 for two steps, and the corpus at exactly the 5 marks it declares — all 1139 existing uses assert on the last response, which a duplicate request leaves identical | a step that fires twice, retries silently, or sends a preflight nobody asked for |
+| `C67` | `api` (`step:api`) | api | the server counts arrivals per label, so *one step, one request* is a number: `c67once` at exactly 2 for two steps, and the corpus at exactly the 5 marks it declares — all 1139 existing uses assert on the last response, which a duplicate request leaves identical. Since `M198`: an inline **array** body leaves as the array — `/subjects/echo` returns the bytes it received and `body text` reads `[{"name":"Widget"},{"name":"Sprocket"}]`, where a body spread into an object leaves as `{"0":…}` | a step that fires twice, retries silently, or sends a preflight nobody asked for; an array body flattened |
 | `C68` | `expect` (`step:expect`) | api | a file **meant to fail**: the test marks `c68before`, fails one `expect`, then marks `c68after`, and the known answer is that `c68after` never arrives. Re-run with that one assertion softened to `check`, it **does** arrive — so the absence is caused by `expect` and not by the assertion being false | `expect` degrading into `check`: recording its failure and carrying on |
 | `C69` | `capture` (`step:capture`) | api | two halves — the stated contract (a capture of a missing path fails the *step*, and the step after it never runs) and one the manifest does not state: a capture binds at capture time, proven by issuing another request between the capture and its use | a capture that binds `undefined` silently, and one that re-reads the response at use time |
 | `C70` | `let` (`step:let`) | api | `let tag = random string 8` used as a label twice: bound-once leaves the server holding **one** label marked twice, re-evaluated-at-use leaves **two** marked once, and every assertion about status is green either way. With a literal on the right-hand side the two implementations are indistinguishable | a `let` that is a macro over its source expression rather than a binding of its value |
@@ -267,7 +269,7 @@ ratchet matches, and the gate goes green on exactly the day it was built to go r
 | `C94` | `session` (`config:directive:session`) | check | `session scoped for env one` and `session everywhere` are identical but for the clause: under `--env two` the first is a `TF028` quoting its own clause back, the second is clean. `C80` already grades `as`; this is the half `as` cannot see | a `for env` clause parsed and ignored, and a session table built from the wrong env |
 | `C95` | `require` (`config:directive:require`) | check | refused naming both variables with neither set; refused naming **`C95_UNUSED` alone** — which the config references nowhere — with the other set; past the gate and dead at port 9 with both. And `tflw check` over the identical config prints an advisory note naming both unset variables beside *no problems found* and an exit 0, which **vanishes** once they are set — `D779`, reversing this row's own `M154g-11` | a `require env` guarding only interpolated variables, a refusal arriving after the first request, the note regressing to silence or hardening into a refusal that breaks `check` in a secretless CI job, and a note printed unconditionally instead of for the variables actually unset |
 | `C96` | `exclude` (`config:directive:exclude`) | check | **1 file checked** with the line and **2** without, over an unchanged two-file corpus — and naming the excluded file explicitly checks it under **both** configs, which is the manifest's own *"names a folder rather than a file"* clause asserted rather than paraphrased | an `exclude` that stops filtering discovery, and one that hardens into a refusal so a named file can no longer be checked |
-| `C97` | `api` (`config:key:api`) | api | `api GET /alpha` under a base whose own URL carries `/base` arrives at **`/base/alpha`** — a bare-origin base could not tell *joined* from *replaced* — and `api second GET /gamma` arrives at `/second/gamma`. Exactly three requests, and nowhere else. A third column for the case where the key must do **nothing**: an absolute target is the address itself, so `http://127.0.0.1:4507/absolute` arrives at `/absolute` under two different `api` bases | a base URL whose path is discarded, a named service resolved to the default base, a step fanned out to every declared service, and a base URL prepended to an absolute target |
+| `C97` | `api` (`config:key:api`) | api | `api GET /alpha` under a base whose own URL carries `/base` arrives at **`/base/alpha`** — a bare-origin base could not tell *joined* from *replaced* — and `api second GET /gamma` arrives at `/second/gamma`. Exactly three requests, and nowhere else. A third column for the case where the key must do **nothing**: an absolute target is the address itself, so `http://127.0.0.1:4507/absolute` arrives at `/absolute` under two different `api` bases. Since `M198`: a step's own absolute `tflw://demoo/health` is refused by the one sentence naming `tflw://demo` as the only address under the reserved scheme, before any I/O — `TF071` reads the config literal alone, so the runtime guard is the only refusal on this path | a base URL whose path is discarded, a named service resolved to the default base, a step fanned out to every declared service, and a base URL prepended to an absolute target; a reserved-scheme typo that dies as `fetch failed` |
 | `C98` | `header` (`config:key:header`) | api | the manifest says *"on every `api` step"*, and **every** is what a total cannot check: the server records each arrival's headers separately, so one `defaults` line is seen on all three. `header … for second` arrives on that service and is **absent** from the other two | a header attached to the first request of a run rather than to each, and per-service scoping that decorates instead of narrowing |
 | `C99` | `timeout` (`config:key:timeout`) | api | `timeout step 10ms` against a 50 ms path fails and the detail quotes **`10ms`** back; `5s` passes; and a step carrying its own `timeout 5s` passes under the tight config, so it is a default rather than a refusal to wait. Plus the narrowing (`M155`/`D768`), as a swapped pair: `timeout step 5s, api 10ms` fails the request that `timeout step 10ms, api 5s` passes, so the narrow key is read **and** the broad key stopped reaching HTTP — either config alone is satisfied by a resolver that reads only one of them. Replaces the old `M154g-10` leg, which asserted `timeout api 5s` was a `TF010` and was written to go red the day tflw implemented the spelling; it did | a `timeout` key parsed and never applied, a per-step override that stopped winning, and a `timeout api`/`timeout browser` that resolves but reaches nothing — or that reaches the other transport |
 | `C100` | `allow hosts` (`config:key:allow`) | api | `localhost` and `127.0.0.1` are one machine and two entries, so the two configs differ by one word: **zero** arrivals at `/blocked` under the narrow list, **one** under the wide one, and the socket counter moves only in the second. An absence proven against something that would have recorded a presence | an allowlist enforced by discarding the response rather than never sending the request, and a host matched by address instead of by name |
@@ -1671,6 +1673,137 @@ window another session's ComfyUI was swap-thrashing beside the sweep; `C31` — 
 red once in a baseline roster with nothing mutated the same evening. The reach control caught the
 first; the window's baseline re-roster caught the second; neither cost a verdict. A census that
 runs beside a co-tenant needs both, and had them.
+
+### Reddened by hand — the drawdown of `M198` (tflw `D1033`)
+
+`M189a` left 34 reached survivors as `not-asserted`: a plant runs through the line and its known
+answer does not depend on what the line did. `M198` writes the plants, and each one enters this
+ledger the way `M189c`'s eleven did — the registry mutation it was written against applied on
+`fedora-box`, the packages rebuilt, the plant run alone under `--only`, the red line quoted, the
+source restored. **No census re-runs**: the kill-matrix keeps its 09-13 `survived` row for each of
+these, truthfully, and `reach-verdicts.json` carries the same four facts as this table under the
+verdict `asserted`, which `verify:reach-verdicts` holds to the row here. One of `M189-07`'s five
+is not in the table and not `asserted`: `config-files-resolve-against-cwd` cannot be reached by any
+invocation — `tflw` reads `tflw.config` from its own cwd and has no `--config`, so `configDir` is
+the cwd on every path in and the mutation is equivalent as shipped; `out-of-reach-by-design`,
+with that reason, and the fact that its registry entry guards a flag tflw does not have.
+
+`M198` S6 adds a second of that kind, and this one was **measured before it was argued**.
+`verdict-not-restamped-after-splice` removes `finalizeVerdict` from
+`spliceLoadReportIntoRunReport`, so a `--workers N` run whose abort arrives at the splice should
+keep the stale `ok: true` stamped before it. Applied on the box with the whole S6 plant in place —
+including an interrupted `--workers 4` run that flushes exactly that report — the grader stayed
+green, **zero red lines**. The reason is one function further on: `cli.ts` splices and then calls
+`mergeReports` unconditionally, and `mergeReports` ends in `finalizeVerdict` too, so on every path
+the CLI takes the splice's derivation is immediately redone. The mutation is reached, its effect is
+overwritten, and no plant driving `tflw run` can ever see it — only a consumer calling the splice
+directly, which is tflw's own unit tests. That is defence in depth working, not a defect, so no
+row is filed against tflw; `out-of-reach-by-design`, with the measurement and the mechanism.
+
+`M198` S7 leaves **five** out of reach, which is the largest group in the drawdown and the one the
+plan predicted. Two are declared by tflw's own records and three were measured here.
+
+`open-model-maxsockets-bounded` is refused by its own registry entry, which says the cap is *"a
+decision, not tuning"* and that reaching 50 concurrent sockets *"needs a slow endpoint driven hard
+enough to make the test both expensive and flaky"*. A plant would be the flake that sentence
+refuses. (The entry credits a decision number tflw mentions in `httpPinned.ts` but never published
+in `DECISIONS.md`, so it is deliberately not quoted here — a citation this repository's reader
+cannot follow is worse than the sentence without it.)
+
+`saturation-lag-arm-never-fires`, `saturation-cpu-arm-never-fires` and
+`saturation-flips-a-gradable-threshold` all need a generator that is **genuinely saturated**, and
+`M119-02` already settled that question inside tflw: the CPU arm's only coverage used to be a
+busy-block test racing the OS scheduler, it read **46.2%** against sixteen competing busy loops on a
+sixteen-core box, and the repair was to extract `isSaturated` as a pure function and pin the
+thresholds where no scheduler gets a vote. Driving real saturation from the dogfood would
+re-introduce exactly the flake tflw removed — and it would do it on a box that runs this sweep as
+four contending groups, which is the condition that produced the 46.2%. Measured here for scale: at
+20 rps the generator reports 3–4% CPU and 0.3 ms of average event-loop lag, against thresholds of
+90% and 100 ms. `saturation-ignores-the-min-window` is the one of the four that needs no saturation
+at all — only a run too short to be judged — which is why it has a plant and the others do not.
+
+`open-model-back-to-fetch` is the interesting one, because its registry entry states a consequence
+that **no longer reproduces**. The entry records `M118-02`: a 0.2 ms endpoint reporting p50 36 ms
+under `hold 10 rps` while `hold 1 users` read 0 ms in the same process. Applied on the box against
+this plant, twice: at 20 rps the mutant reports **p50 1.2 ms against the shipped build's 1.0 ms**,
+and at 200 rps **1.1 ms against 0.91 ms**. Only `max` separates them — 27–30 ms against 1.6–9.7 ms
+— and that is one sample, which is a coin-flip to assert on. The reason is not tflw's: the `fetch`
+this mutation falls back to is `undici`, and `undici` keeps connections alive by default now, so the
+handshake-per-request cost the original measurement was made of is gone. The connection counter that
+catches `open-model-agents-per-arrival` sees nothing here for the same reason. Recorded as
+`out-of-reach-by-design` with both measurements, and filed as `M198-02`: **a mutation whose kill
+criterion is a third-party runtime's behaviour stops being killable when that runtime improves, and
+nothing says so.**
+
+| plant | mutation of tflw (registry id) | the red line |
+|---|---|---|
+| `C67` | `JSON.stringify(evalValue(...))` → `JSON.stringify({ ...evalValue(...) })` (`array-body-flattened-to-an-object`) | `` the bytes that left are the array itself — `[{"name":"Widget"},{"name":"Sprocket"}]` — where a body spread into an object leaves as `{"0":{…},"1":{…}}` `` — and the index reads beside it, three clauses red |
+| `C65` | the non-number refusal replaced by `Number(value)` (`comparison-coerces-operands`) | `` `is less than` refuses boolean by name (got ok=true: no error) `` — and the same for `null`, a numeric string and a one-element array: four written-to-fail tests all green |
+| `C65` | `dateOffsetMs(value)` no longer consulted (`spelled-out-duration-not-a-number`) | `` `expect duration is less than 2 seconds` compares as 2000 milliseconds (got ok=false: `is less than` expects a number, got object) `` |
+| `C97` | `guardDemoUrl` returns the URL unexamined (`reserved-scheme-passes-through`) | `` `api GET tflw://demoo/health` is refused by the sentence that names the only legal spelling (got ok=false: request failed: GET tflw://demoo/health — fetch failed) `` |
+| `C80` | `sessionCtx` no longer rebases `lines` onto the config (`session-source-lines`) | `` every one of the hand-written session's 4 reported step(s) carries the text of its own line in `tflw.config` (0/4; first: line 195 reads "") `` — and the `oauth2` clause with it, 0/1 |
+| `C80` | the `oauth2` arm handed the caller's raw `tc` (`oauth2-session-ctx`) | `` every one of the oauth2 session's 1 reported step(s) carries the text of its own line in `tflw.config` (0/1; first: line 249 reads "") `` — and that clause alone |
+| `C80` | the `isSafeMethod` condition dropped (`csrf-attached-to-safe-methods`) | `` and the `GET` carried none (saw ["csrf-6f1e"]) `` — read off the socket, not the report |
+| `C13` | the nearest-candidate diagnosis fires on actions only (`assertion-diagnosis-never-fires`) | `` a miss on `button "Save drarft"` names the real button (NO LIST) `` — and six more clauses with it, the whole list gone from `expect` and `wait until` |
+| `C13` | the zero-match guard dropped (`diagnosis-ignores-the-resolved-element`) | `` a button that RESOLVED and failed on its state is answered about the state, not with a list of other buttons `` — the state failure grew a `nearest matches` list |
+| `C13` | the diagnosis appended regardless of outcome (`passing-assertion-gets-annotated`) | `` an `is hidden` that passes on absence carries no diagnosis (ok=true, detail … `nearest matches on the` …) `` |
+| `C13` | the locator arm of `waitUntilReader` unwired (`wait-until-diagnosis-dropped`) | `` `wait until` carries the same diagnosis when it gives up (NO LIST) `` — and that clause alone |
+| `C13` | byte-identical suggestions offered again (`nearest-matches-not-deduped`) | `` and names it exactly once for the two elements that render it (2 line(s)) `` |
+| `C13` | the deduped suggestion printed bare (`suggestion-offered-without-its-ambiguity-caveat`) | `` and the deduped line carries its own ambiguity ("- `button \"Save draft\"`") `` |
+| `C13` | the unnamed arm dropped for every kind (`unnamed-arm-dropped-for-every-kind`) | `` and the icon-only button with no accessible name is surfaced as a generated CSS path `` |
+| `C13` | the per-candidate discriminator computed and not printed (`ambiguity-list-without-discriminators`) | `` twelve identical `Retire` buttons are listed with what tells them apart (0/5 candidate(s), 0 distinct discriminator(s)) `` |
+| `C14` | the unnamed arm fires for `text` too (`text-diagnosis-offers-structural-css-paths`) | `` and offers no structural container among its 5 suggestion(s) (2 `css "html…"`) `` — and the precision clause with it |
+| `C72` | the step's own `timeout wait` dropped on the api poll loop (`api-wait-ignores-its-own-budget`) | `` the unsatisfiable wait named the step's own budget ("timed out after 30000ms (100 attempts): expected status to equal 200, but got 503") `` — against the step's `timeout wait 1500ms`, and the corpus's 30 s fallback is what arrived |
+| `C72` | the same drop on the locator poll loop (`ui-wait-ignores-its-own-budget`) | `` the locator form refused `for 3s` against this step's own 2 s budget ("") `` — the refusal is **gone**: against the config's 5 s the hold is satisfiable, so the test passes instead of failing |
+| `C72` | `deadline = startedAt + Math.min(timeoutMs, SPECULATIVE_DIAGNOSIS_MS)` (`speculative-line-replaces-the-final-diagnosis`) | `` a locator that arrives at 5000 ms still resolved (ok=false) `` — and `waited past the mark to do it (3216 ms)` beside it, the mutant's deadline read off its own failure |
+| `C72` | the network ref consulted only for a bare `NetworkRequestSubject` (`wait-reader-picks-the-subject-over-the-ref`) | `` the network-ref form of `wait until` polled observed traffic (ok=false) `` — `status of request to` falls through to the response-scope throw, at 116 ms against the page's 1200 ms probe |
+| `C49` | the threshold's null arm answers `true` (`ungradable-threshold-passes`) | `` a duration threshold over a scenario whose every iteration failed is NOT met (actual=null, ok=true) `` — the threshold's own row, because `TF033` keeps the test red under both builds |
+| `C49` | the scope lookup dropped (`threshold-scope-falls-back-to-the-whole-histogram`) | `` a scoped threshold read its own endpoint's bucket (actual=55ms against a 25ms bound, ok=false) `` — 55 ms is the scenario's p95, 1 ms is the `"fast"` bucket's |
+| `C49` | `ok` back to "nothing that ran failed" (`ok-ignores-no-verdict`) | `` and it is `ok: false` (true) `` — on **both** legs, single-process and `--workers 4`, because `finalizeVerdict` is the one derivation |
+| `C45` | `HoldUsersWorkload` dropped from `CLOSED_USERS_KINDS` (`backoff-hold-kind`) | `` the closed-model `hold N users` scenario reported its own back-off ratio (null) `` — the field is gone entirely, which is not the same as a field with a wrong value |
+| `C45` | a keep-alive pool built per arrival (`open-model-agents-per-arrival`) | `` 248 arrivals across this file reached the server over 63 connection(s) `` — against 4 on the shipped build, read off `server.on('connection')` |
+| `C45` | the `wallMs < 300` floor removed (`saturation-ignores-the-min-window`) | `` a 150ms run reads 125% of a core — over the 90 that trips the CPU arm — and still reports `saturated: false` (true) `` — and `inconclusive=true, ok=false` beside it, the run losing its verdict to startup cost |
+
+The first four rows are one run of `tflw-acceptance/conformance/singletons.tflw` against the arrival
+server — eight tests, five written to fail, each red graded on the *sentence* it carries, because
+the mutation it is written against turns the red green (`Number(true)` is `1`, and `1 < 5`). Two
+routes were added to the arrival server for it: `/subjects/echo`, which returns the request's
+bytes under its own content-type, and `/subjects/values`, one object of operands a comparison must
+refuse. Nothing in tflw changed; the four were sentences about the dogfood and they were
+true.
+
+The three `C80` rows are `M189-06`, and they are graded off two things a `.tflw` file cannot
+assert. The first is the *coordinates* in `results.json`: a session is declared in `tflw.config`,
+so its context is rebased onto that document before its body runs, and a step's reported `source`
+is `lines[line - 1]` — `tests/.constructs/session-context.tflw` is 36 lines and names declarations
+at 195 and 249, so an unrebased session step prints the empty string while every request still
+authorizes and every status is still 200. The pair of mutations is asymmetric on purpose and the
+asymmetry is the evidence: `session-source-lines` reddens **both** arms because `sessionCtx` is
+applied above the `oauth2` branch, and `oauth2-session-ctx` reddens only the `oauth2` clause,
+which is that structure measured rather than asserted. The second is the **socket**:
+`csrf from … send as header` attaches its token to mutating requests and not to safe ones, both
+answer 200 either way — an application ignores a token it did not ask for — so the grader asks
+`arrival-server.mjs` which arrival carried the header. Three routes were added for it
+(`/session/issue`, `/session/safe`, `/session/mutating`) and the corpus declares its first session.
+Nothing in tflw changed here either.
+
+The nine `C13`/`C14` rows are `M189-02`, and they are one page and one plant. A locator that
+resolves has a token to write and `locator-near-miss.tflw` reads it; a locator that resolves to
+**nothing** has only a sentence, and that sentence is what every browser plant here runs through
+and none reads. So six of `tests/.constructs/locator-diagnosis.tflw`'s seven tests are written to
+fail, none is graded by its own `ok`, and two of the nine clauses assert what the text must **not**
+contain — the half a "does it fail?" assertion can never reach. `/diagnose-fixture`
+(`webV2/src/pages/DiagnoseFixturePage.tsx`) is the fourth fixture page in this suite and exists for
+`D729`'s reason plus a sharper one: its markup is *collisions* — two buttons under one name, an
+icon-only control under none, twelve identical rows — and `/locator-fixture`'s known answers are
+resolutions, which collisions would change.
+
+The tenth mutation of that family, `ambiguity-count-from-a-second-query`, is
+`out-of-reach-by-design` and was **measured rather than argued**: applied on the box with this
+whole plant in place, the grader stayed green with zero red lines. It diverges only on a DOM that
+changed between the step's own `.count()` and the single describing query — microseconds apart
+inside one failure path, with no gesture in between — so a fixture staging it would make its own
+known answer a race, and the unmutated formatter already carries a named branch for that race.
 
 ## Blocked plants (`D734`)
 

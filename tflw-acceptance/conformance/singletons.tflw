@@ -1,0 +1,59 @@
+# `M198` S1 — four of `M189-07`'s five singletons: one input each that no fixture in this repository
+# ever gave the construct, so the line that handles it ran under dozens of plants and none could
+# tell it from its opposite (`reach-verdicts.json`, `not-asserted`). The fifth,
+# `config-files-resolve-against-cwd`, is not here: `tflw` reads `tflw.config` from its own cwd and
+# nothing else (`cli.ts`), so no invocation can separate the two directories — recorded as
+# `out-of-reach-by-design` with that reason.
+#
+# **Five of the eight tests are written to fail**, and each red is the known answer — graded on the
+# *sentence* the failure carries, as `subjects.tflw` does, because the mutation each one is written
+# against turns the red green (a coerced `true` is `1`, and `1 < 5`).
+#
+#   array body        `[{…},{…}]` leaves as an array. `/subjects/echo` returns the bytes it received,
+#                     so `body text` is tflw's own serialisation and `body[1].name` is the second
+#                     element. Spread into an object, the same body leaves as `{"0":{…},"1":{…}}`.
+#   spelled-out       `2 seconds` is a duration, converted to milliseconds before the comparison
+#   duration          (`40ms` beside it: a unit touches its number, `TF023`). Skip the conversion and
+#                     the test errors with `got object`.
+#   comparison        `is less than` refuses a boolean, `null`, a numeric string and a one-element
+#   operands          array — each names what it got. Coerced with `Number()`, all four pass.
+#   reserved scheme   an absolute `tflw://` target that is not `tflw://demo` is refused by the one
+#                     sentence that names the only legal spelling — not by whatever `fetch` says
+#                     about an unknown protocol. `TF071` cannot see this one: it reads the config's
+#                     `api` literal, and this is a step's own absolute URL.
+
+test "an inline array body leaves as an array"
+  api POST /subjects/echo body [{ name: "Widget" }, { name: "Sprocket" }]
+  expect status equals 200
+  expect body text equals "[{\"name\":\"Widget\"},{\"name\":\"Sprocket\"}]"
+  expect body[0].name equals "Widget"
+  expect body[1].name equals "Sprocket"
+
+test "a spelled-out duration compares as milliseconds"
+  api GET /slow
+  expect duration is greater than 40ms
+  expect duration is less than 2 seconds
+
+test "a comparison refuses a boolean, written to fail"
+  api GET /subjects/values
+  expect body.t is less than 5
+
+test "a comparison refuses null, written to fail"
+  api GET /subjects/values
+  expect body.nil is less than 5
+
+test "a comparison refuses a numeric string, written to fail"
+  api GET /subjects/values
+  expect body.s is less than 5
+
+test "a comparison refuses a one-element array, written to fail"
+  api GET /subjects/values
+  expect body.arr is less than 6
+
+test "a comparison accepts a number"
+  api GET /subjects/values
+  expect body.n is less than 5
+  expect body.n is greater than 2
+
+test "a typo under the reserved scheme is refused by name, written to fail"
+  api GET tflw://demoo/health
