@@ -10,7 +10,7 @@
 // make — that `--forbid-insecure`/`--evidence` already had durable coverage elsewhere — was false;
 // neither was actually invoked/proven anywhere. Real coverage now lives in
 // `scripts/verify-safety-flags.mjs`, its own file since both are safety/policy knobs.)
-import { execFileSync, execSync } from 'node:child_process';
+import { execFileSync, execSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -222,9 +222,52 @@ else:
   ok('--no-timestamps omits the prefix', !TIMESTAMP_RE.test(withoutTimestamps));
 }
 
+// --- `tflw docs` and `tflw spec` (`M195` S4) ------------------------------------------------------
+//
+// Two read-only verbs no phase had ever run as a process. `docs` prints SPEC.md cheatsheet sections
+// cut at build time (`gen-docs.mjs`); `spec` prints the construct manifest, whose `--json` form
+// `check-diagnostics` already reads through `readSpec` — so what is graded here is the half nobody
+// read: the index lists topics that each open, an unknown topic is refused with a suggestion, and
+// the human `spec` rendering names the same count of constructs the JSON carries.
+{
+  const index = run(`${TFLW} docs`);
+  ok('`tflw docs` with no topic exits 0 and prints the index', index.status === 0 && /^tflw docs <topic>/.test(index.stdout), index.stdout.slice(0, 120));
+  ok('the index says where the full SPEC lives (`FU-17`)', /the full SPEC lives at https?:\/\//.test(index.stdout));
+  // A topic line is an indented slug, optionally followed by its title; group headings are flush left.
+  const topics = index.stdout.split('\n').map((l) => /^  ([a-z0-9-]+)(?:\s|$)/.exec(l)?.[1]).filter(Boolean);
+  ok(`the index lists topics — ${topics.length}, \`matchers\` among them`, topics.length >= 20 && topics.includes('matchers'), topics.slice(0, 8).join(', '));
+  const failing = [];
+  for (const t of topics) {
+    const r = run(`${TFLW} docs ${t}`);
+    const [title, rule] = r.stdout.split('\n');
+    if (r.status !== 0 || !title || rule !== '='.repeat(title.length) || r.stdout.trim().split('\n').length < 3) failing.push(`${t} (exit ${r.status})`);
+  }
+  ok('every listed topic prints its section — a title, its underline, and a body', failing.length === 0, failing.slice(0, 5).join(', '));
+  // `run()` returns stdout only; the refusal goes to stderr, so this one is spawned directly.
+  const unknown = spawnSync(TFLW_ARGV[0], [...TFLW_ARGV.slice(1), 'docs', 'matcher'], { cwd: ROOT, encoding: 'utf8' });
+  ok('an unknown topic is refused (exit 2) with a suggestion and a pointer to the index', unknown.status === 2 && /Did you mean `matchers`/.test(unknown.stderr) && /Run `tflw docs` to list every topic/.test(unknown.stderr), `exit ${unknown.status}: ${(unknown.stderr ?? '').slice(0, 160)}`);
+
+  const spec = run(`${TFLW} spec`);
+  const head = /^tflw (\S+) — (\d+) constructs, manifest v(\d+)/.exec(spec.stdout);
+  ok('`tflw spec` exits 0 and opens with the version, the construct count and the manifest version', spec.status === 0 && head !== null, spec.stdout.slice(0, 120));
+  const json = run(`${TFLW} spec --json`);
+  let manifest = null;
+  try {
+    manifest = JSON.parse(json.stdout);
+  } catch {
+    // graded below
+  }
+  ok('`tflw spec --json` is one JSON document with a `build` and a `constructs` array', json.status === 0 && manifest !== null && Array.isArray(manifest.constructs) && typeof manifest.build?.version === 'string', json.stdout.slice(0, 120));
+  ok(`the two renderings name the same build and the same count — ${head?.[2]} constructs, manifest v${head?.[3]}`, head !== null && manifest !== null && Number(head[2]) === manifest.constructs.length && head[1] === manifest.build.version && Number(head[3]) === manifest.manifest);
+  const families = new Set((manifest?.constructs ?? []).map((c) => c.family));
+  ok('the manifest carries the families the sweep reads — step, matcher, generator, diagnostic', ['step', 'matcher', 'generator', 'diagnostic'].every((f) => families.has(f)), [...families].join(', '));
+  const missing = (manifest?.constructs ?? []).filter((c) => !spec.stdout.includes(c.name)).map((c) => c.name);
+  ok('every construct in the JSON is named in the human rendering', manifest !== null && missing.length === 0, missing.slice(0, 6).join(', '));
+}
+
 if (violations > 0) {
   console.error(`\n${violations} CLI-flag proof violation(s).`);
   process.exit(1);
 }
 
-console.log('\nAll 6 previously-unproven CLI flags behave as documented.');
+console.log('\nAll 6 previously-unproven CLI flags behave as documented, and `docs`/`spec` print what they promise.');
