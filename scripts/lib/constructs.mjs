@@ -1136,7 +1136,9 @@ export const PLANTS = [
     tier: 'security',
     title: 'the affirmation is refused three ways before a single request is sent',
     target: '`tflw check` over `tflw-acceptance/security/` and the `publicTarget` env — an RFC 2606 `.invalid` host, so the control grades offline',
-    evidence: { file: 'tflw-acceptance/security/tflw.config', pattern: '^\\s*authorized target\\s+"', min: 4 },
+    // Both spellings: a literal, and `M197`'s `env NAME default "…"` (tflw `D1024`) — the corpus
+    // took the override form for every stack-bound target and kept the literal for `publicTarget`.
+    evidence: { file: 'tflw-acceptance/security/tflw.config', pattern: '^\\s*authorized target\\s+("|env\\s)', min: 4 },
     graders: ['diagnostics', 'coverage'],
     knownAnswer:
       'Three refusals and their three silences, all before anything is reached. `TF060` fires when a ' +
