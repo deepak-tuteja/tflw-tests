@@ -315,6 +315,19 @@ const CONFIG_FIXTURES = {
   // code one step earlier: `TF060` compares origins, and a bare hostname has none.)
   TF061:
     'defaults\n  authorized target "https://*.example.com" reason "staging sweep"\n\nenv local default\n  api "http://localhost:4001"\n',
+  // tflw `M200` `A2-4` (`M200-01`, D21/D291): the OTHER half of the same declaration, which nothing
+  // was reading. `reason` has been required by the grammar since `M128b` and by nothing else, so
+  // `reason ""` checked green and every scan behind it went green with it — putting an empty claim
+  // into the run summary and the report, which is worse than an absent one: an absent declaration is
+  // refused by `TF060`, and an empty one is indistinguishable in the artifact from a considered
+  // affirmation. `D291` argues the case in as many words — *a declaration with no reason would be a
+  // checkbox, and a checkbox is what `D21` exists instead of*.
+  //
+  // The target here is deliberately WELL-FORMED, so this fixture reports `TF082` alone. A fixture
+  // wrong in both halves reports `TF061` first and would have tested the ordering rather than the
+  // rule.
+  TF082:
+    'defaults\n  authorized target "https://staging.example.com" reason ""\n\nenv local default\n  api "http://localhost:4001"\n',
   // tflw `M147c` (review `A2-09`, D631): a setting whose value cannot configure anything. `workers 0`
   // is a worker pool that can run no test, and it parsed cleanly until this milestone — as did
   // `viewport 0 0` and the fractional `retry 2.5`.
