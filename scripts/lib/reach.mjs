@@ -48,6 +48,10 @@
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
+// `export … from` re-exports without binding the name in this module, and the self-test below
+// calls it — so it is imported and then exported, not forwarded.
+import { bundleIdentity } from './bundle-identity.mjs';
+
 // ── source maps (v3), decoded ─────────────────────────────────────────────────────────────────
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 const B64V = new Map([...B64].map((c, i) => [c, i]));
@@ -242,18 +246,17 @@ export function alignmentControl(positions, functions, readSource, limit = 2000)
 }
 
 /**
- * `D847`'s bundle identity — the sha of the bundle with the three build-stamp fields normalised
- * out. The census computes the same thing over the same file; a stamp carrying this lets a reader
- * put a reach measurement and a census beside each other and know whether they saw one build.
+ * `D847`'s bundle identity — the sha of the bundle with the build-stamp fields normalised out. The
+ * census computes the same thing over the same file; a stamp carrying this lets a reader put a
+ * reach measurement and a census beside each other and know whether they saw one build.
+ *
+ * **Moved to `bundle-identity.mjs` by `M211` `S3` and re-exported here**, because the rule lived in
+ * two copies that had drifted: this one stripped the trailing `//# sourceMappingURL=` comment and
+ * `discover-mutation-kills.mjs`'s did not. They agreed on the real bundle only because it carries
+ * no such comment. Re-exported rather than replaced at the call sites so nothing that imports it
+ * from here has to move.
  */
-export function bundleIdentity(text) {
-  const src = text
-    .replace(/builtAt: *"[^"]*"/g, 'builtAt:"X"')
-    .replace(/commit: *"[^"]*"/g, 'commit:"X"')
-    .replace(/dirty: *(true|false)/g, 'dirty:X')
-    .replace(/\n\/\/# sourceMappingURL=.*$/m, '');
-  return createHash('sha256').update(src).digest('hex').slice(0, 16);
-}
+export { bundleIdentity };
 
 // ── self-test ─────────────────────────────────────────────────────────────────────────────────
 // A VLQ encoder exists here only so the fold can be driven over a map built in the test; the

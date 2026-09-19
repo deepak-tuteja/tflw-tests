@@ -293,6 +293,19 @@ jobs:
         run: npm run verify:build-provenance:self-test
         working-directory: testFlow-tests
 
+      # `M211` `S3` (`M203-01`). `D847`'s bundle identity — the sha with the build-stamp fields
+      # normalised out — had TWO copies when this was written, in `reach.mjs` and in
+      # `discover-mutation-kills.mjs`, differing by one clause: only the first stripped a trailing
+      # `//# sourceMappingURL=` comment. They agreed on the real bundle because it carries no such
+      # comment, so the divergence was latent and would have arrived the day the bundler emitted
+      # one — with the census's writer and reader keyed on different digests, which is exactly what
+      # `census-shape.mjs` exists to prevent and what its own comment already claimed was fixed.
+      # One home now, and this is the gate on it; the map-comment clause has a control of its own,
+      # and so does its width.
+      - name: The bundle identity is one rule, and each of its clauses fires
+        run: npm run verify:bundle-identity:self-test
+        working-directory: testFlow-tests
+
       # M154b (`D723`, `D727`, `D730`, `D741`). Static — it reads one JSON document out of the
       # binary and compares some sets — and in THIS job for the load-bearing reason the three steps
       # above share: it is the only job that checks out both repositories, and this gate's ground

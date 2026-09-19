@@ -173,6 +173,15 @@ const CLASSIFIED = [
   {
     wf: 'ci.yml',
     job: 'acceptance-check',
+    cmd: 'npm run verify:bundle-identity:self-test',
+    name: 'The bundle identity is one rule, and each of its clauses fires',
+    class: 'gate',
+    local: 'npm run verify:bundle-identity:self-test',
+    why: '`M211` `S3` / `M203-01` — `D847`\'s bundle identity is what lets a recorded `sha=` be checked against a rebuild, which `M196-01`/`D1023` made every milestone close-out print as evidence and which the raw sha could never support: `builtAt` is baked in, so two builds of one tree differ (measured `03c152c7` against `46eb062f`, both 2,529,854 B). It had TWO copies when this was written — `reach.mjs` and `discover-mutation-kills.mjs` — differing by one clause, and they agreed only because the real bundle carries no trailing source-map comment, so the divergence was latent and would have surfaced as the census\'s writer and reader keyed on different digests. That is the failure `census-shape.mjs` exists to prevent and its own comment already claimed was fixed. A contributor gate rather than ci-only because it is pure string work over literals — no build, no network, no sibling checkout, milliseconds — and because the person who edits the normalisation is the person who needs it to fire',
+  },
+  {
+    wf: 'ci.yml',
+    job: 'acceptance-check',
     cmd: 'npm run verify:construct-coverage',
     name: 'Every construct tflw ships is rostered or explicitly unrostered',
     class: 'gate',

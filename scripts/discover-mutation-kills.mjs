@@ -70,6 +70,7 @@
 //   node scripts/discover-mutation-kills.mjs --status
 //   node scripts/discover-mutation-kills.mjs --out /tmp/sweep   (default: ~/.tflw-mutation)
 import { createHash } from 'node:crypto';
+import { bundleIdentity as sharedBundleIdentity } from './lib/bundle-identity.mjs';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -231,14 +232,13 @@ if (CONTROL && !['break', 'noop'].includes(CONTROL)) {
 }
 
 // ── identity of the vendored build, with the build stamp normalised out (`D847`) ─────────────
+// `M211` `S3`: this had its own copy of the normalisation, missing the map-comment clause that
+// `reach.mjs`'s had. One home now (`bundle-identity.mjs`), which is what `census-shape.mjs`'s
+// comment already claimed.
 const sha = (b) => createHash('sha256').update(b).digest('hex').slice(0, 16);
 function bundleIdentity() {
   if (!existsSync(CLI)) return '<missing>';
-  const src = readFileSync(CLI, 'utf8')
-    .replace(/builtAt: *"[^"]*"/g, 'builtAt:"X"')
-    .replace(/commit: *"[^"]*"/g, 'commit:"X"')
-    .replace(/dirty: *(true|false)/g, 'dirty:X');
-  return sha(src);
+  return sharedBundleIdentity(readFileSync(CLI, 'utf8'));
 }
 
 // ── the roster, and reading its per-plant verdicts ────────────────────────────────────────────

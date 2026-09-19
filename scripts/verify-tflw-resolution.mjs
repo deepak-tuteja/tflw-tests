@@ -123,13 +123,27 @@ console.log('resolver behaviour\n');
   const missing = [
     ['the question', line.includes('[released]')],
     ['the absolute path', line.includes(resolved.entry)],
-    ['the sha prefix', line.includes(resolved.sha.slice(0, 8))],
+    // `M211` `S3` (`M203-01`) — the announced `sha=` is the **identity**, not the raw hash, and
+    // this line is where that is pinned. It read `resolved.sha` until then, and was right to: it
+    // caught this change the moment it landed. Re-made rather than relaxed, because the two are
+    // different claims and both are wanted — `resolved.sha` still exists and the vendor check still
+    // uses it, so asserting the identity here would say nothing about which one got printed.
+    ['the identity prefix', line.includes(resolved.identity.sha.slice(0, 8))],
+    ['the raw sha is NOT what is printed', !line.includes(`sha=${resolved.sha.slice(0, 8)}`)],
     ['the caller label', line.includes('verify-tflw-resolution')],
   ]
     .filter(([, ok]) => !ok)
     .map(([what]) => what);
   if (missing.length > 0) fail(`the announcement omits ${missing.join(', ')} — it printed: ${JSON.stringify(line)}`);
-  else pass('every resolution announces its question, path and sha to stderr');
+  else pass('every resolution announces its question, path and identity to stderr');
+
+  // The property the identity exists for, asserted here rather than only in the module's own
+  // self-test: the same file resolved twice answers the same identity, and it is normalised.
+  // `M203-01`'s defect was that a recorded `sha=` could not be checked against a rebuild.
+  const again = withEnv(CLEAN_ENV, () => resolveTflw('released', { quiet: true }));
+  if (again.identity.sha !== resolved.identity.sha) fail(`the identity is not stable across two resolutions: ${resolved.identity.sha} then ${again.identity.sha}`);
+  else if (!resolved.identity.normalised) fail(`the resolved build carries ${resolved.identity.stamps} build stamp(s), so its identity was not normalised — a \`sha=\` nobody can reproduce is what M203-01 is about`);
+  else pass('the announced identity is normalised and stable, so a recorded `sha=` can be checked against a rebuild');
 }
 
 // 4. `M128-04`'s refusal. The row asked for "the driver refusing to run npx-based phases without
