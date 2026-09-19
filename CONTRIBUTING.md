@@ -78,6 +78,7 @@ npm run verify:grader-reachability
 npm run verify:grader-reachability:self-test
 npm run verify:sibling-pin-landed:self-test
 npm run verify:build-provenance:self-test
+npm run verify:bundle-identity:self-test
 npm run verify:notation-parity
 npm run verify:notation-parity:self-test
 npm run verify:construct-coverage
@@ -285,6 +286,18 @@ xvfb-run -a npm run regression -- --group security-ui
   manifest still matches them. Run it after adding or renaming a milestone or decision in a
   `PLAN_*.md` or `PROGRESS.md`. Omitting an identifier is not a red — it is a wrong answer nobody
   is told about, which is why this is a discipline rather than a convenience.
+
+- **`npm run verify:bundle-identity:self-test`** — **`D847`'s bundle identity had two copies and
+  they differed.** The rule — the sha of `cli.cjs` with `builtAt`, `commit` and `dirty` normalised
+  out — lived in `scripts/lib/reach.mjs` and in `scripts/discover-mutation-kills.mjs`, and only the
+  first stripped a trailing `//# sourceMappingURL=` comment. Measured 2026-09-19 they agreed
+  (`414767c67fecbabd` both), because the real bundle carries no such comment — so the divergence was
+  latent and would have arrived the day the bundler emitted one, with the census's writer and its
+  reader keyed on different digests. That is exactly what `scripts/lib/census-shape.mjs` exists to
+  prevent, and its own comment already claimed this rule *"is computed in one place"*. It is now
+  (`scripts/lib/bundle-identity.mjs`), and this gate holds each clause of it — including a control
+  on the map-comment clause's **width**, so it cannot grow to eat real code. `M211` `S3`,
+  `M203-01`.
 
 - **`npm run verify:build-provenance:self-test`** — **`verify:construct-coverage` below refuses to
   grade unless the vendored build's provenance is `current`, and CI cannot check which state a

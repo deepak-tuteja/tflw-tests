@@ -20,11 +20,14 @@
 // baked from `package.json`), so the CLI cannot discriminate them from the inside. Path + content
 // hash is the only discriminator available, and it is the consumer's business (`D534`).
 
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gunzipSync } from 'node:zlib';
+
+import { identityOf } from './bundle-identity.mjs';
 
 const ROOT = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 
@@ -67,6 +70,44 @@ function envOverride() {
 
 function sha256(file) {
   return createHash('sha256').update(readFileSync(file)).digest('hex');
+}
+
+/**
+ * The identity of the build being resolved (`M203-01`) — `D847`'s, from its one home.
+ *
+ * **Not a second normalisation.** `M211` `S3`'s first draft wrote one here and that was the wrong
+ * move twice over: the rule already existed as `D847`, and it already existed *twice* — in
+ * `reach.mjs` and in `discover-mutation-kills.mjs`, differing by one clause. Adding a third would
+ * have been the same defect a third time. It lives in `bundle-identity.mjs` now and every caller
+ * reads it there.
+ *
+ * **Why the printed `sha=` needed it and `vendorProvenance` must not have it** is set out in that
+ * module and, for the vendor half, in the docblock below this one — two questions, two instruments.
+ */
+/**
+ * What a build says about itself — version, commit, dirty, build time — read from the build.
+ *
+ * **This is the provenance an override has, and `packedFrom()` is not it.** `packedFrom()` reads
+ * `vendor/packed-from.json`, a record beside the *vendored tarball*: measured, it says `main` at
+ * `d4618f1`. Printing that next to a binary built from a feature branch would be a claim about one
+ * artifact rendered beside a different one — exactly what `M184b`/`D956` killed for the vendored
+ * branch, and exactly what `M203-01` proposed as its own repair. The stamp is **inside** the
+ * artifact, so it cannot be about another one.
+ *
+ * **Not `tflw-provenance.mjs`'s `readSpec`, for a structural reason**: that module imports from this
+ * one, so this one cannot import it back. The two also want different things — `readSpec` wants the
+ * whole manifest and throws when it cannot have it, this wants four fields and tolerates absence,
+ * because a resolver that cannot print a line must still resolve.
+ */
+export function buildStampOf(entry) {
+  const r = spawnSync(process.execPath, [entry, 'spec', '--json'], { encoding: 'utf8', timeout: 30_000, maxBuffer: 64 * 1024 * 1024 });
+  if (r.status !== 0 || !r.stdout) return null;
+  try {
+    const build = JSON.parse(r.stdout).build;
+    return build && typeof build === 'object' ? build : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Where `refresh-tflw` packs to, and the only artifact a `released` install may come from. */
@@ -278,6 +319,9 @@ export function resolveTflw(question, opts = {}) {
     );
   }
 
+  // `M203-01` — the printed identity is recomputable from a rebuild; the vendor check below keeps
+  // asking the byte question, because "is this install the tarball it claims" is a different claim.
+  const identity = identityOf(entry);
   const sha = sha256(entry);
 
   // `M128-04`'s refusal, relocated. The row asked for "the driver refusing to run `npx`-based
@@ -319,6 +363,12 @@ export function resolveTflw(question, opts = {}) {
   const fromProblem = packedFromProblem(packedRec);
   if (fromProblem) throw new Error(fromProblem);
 
+  // `M203-01` — the override branch used to print nothing here, and `M203-01` proposed calling
+  // `packedFrom()` on it. That would have been wrong: `packedFrom()` reads the record beside the
+  // *vendored tarball*, so the line would have named `main@d4618f1` next to a binary built from a
+  // feature branch. The provenance an override has is the stamp inside itself.
+  const stamp = vendor ? null : buildStampOf(entry);
+
   if (!opts.quiet) {
     const who = opts.label ? `${opts.label}: ` : '';
     const provenance = vendor
@@ -334,10 +384,20 @@ export function resolveTflw(question, opts = {}) {
           ? `, packed from ${packedRec.ref ?? 'an unknown ref'}${packedRec.sha ? `@${packedRec.sha}` : ''}${packedRec.dirty ? ' (dirty)' : ''}${packedRec.verified ? '' : ' [unverified]'}`
           : ', packed from an unrecorded ref [unknowable]')
       : '';
-    process.stderr.write(`${who}tflw[${question}] ${entry} sha=${sha.slice(0, 8)} <- ${from}${provenance}${packed}\n`);
+    // The stamp the artifact makes about itself, for the path that has no tarball to be from. It
+    // announces `unknown commit` rather than omitting the field, for `M184-01`'s reason one line
+    // above: a line that prints a category and stops hides the state it could not establish.
+    const built = stamp
+      ? `, built from ${stamp.commit ? `${stamp.commit}${stamp.dirty ? ' (dirty)' : ''}` : 'an unknown commit'}${stamp.builtAt ? ` at ${stamp.builtAt}` : ''}`
+      : '';
+    // `sha=` is the recomputable identity (`M203-01`). When the build stamp could not be found
+    // exactly once the raw hash is printed instead, and the line says so rather than presenting a
+    // number that cannot be reproduced under a label promising it can.
+    const idSuffix = identity.normalised ? '' : ` [raw — ${identity.stamps} build stamp(s) found, identity not normalised]`;
+    process.stderr.write(`${who}tflw[${question}] ${entry} sha=${identity.sha.slice(0, 8)}${idSuffix} <- ${from}${provenance}${packed}${built}\n`);
   }
 
-  return { question, entry, sha, from, vendor, packedFrom: packedRec };
+  return { question, entry, sha, identity, from, vendor, packedFrom: packedRec, build: stamp };
 }
 
 /**
