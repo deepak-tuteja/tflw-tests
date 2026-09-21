@@ -1,0 +1,23 @@
+# The control, and the only file here that is NOT about LOAD.
+#
+# `D1044` — a panel is earned by the construct, never granted by the door. A workload-bearing test
+# shows its workload clause in every door that can hold one; what changes between doors is only
+# where you land and what `+ new test` scaffolds. The one exception is here: `+ add to this test`
+# offers no `workload` on BROWSER, because a workload may not sit beside a browser step
+# (`D1205`) — so the absence you see on this test is the grammar refusing, not the door deciding.
+#
+# Open it on the BROWSER door and the menu is one item shorter. Open the same page's LOAD door and
+# this file's row is dimmed with a `0`, because nothing in it carries a workload or a threshold.
+#
+# **Needs the storefront up as well as the api** — `node cli.mjs start` brings both; the page is
+# webV2's nginx on :8090. Everything else in this directory is api-only.
+
+@ui
+test "the storefront's catalogue renders"
+  open "/"
+  expect text "Browse all products (windowed list)" is visible
+
+@catalogue
+test "a plain api test, for contrast"
+  api GET /products
+  expect status equals 200

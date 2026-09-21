@@ -1,0 +1,26 @@
+# The two workload shapes that are bounded by WORK rather than by time — and the reason the plan
+# panel's seconds field goes away for both of them (`workloadSeconds` returns `null`): an iteration
+# count states how much work there is, never how long it will take. How long it takes is the
+# measurement.
+#
+# **A count is the right shape whenever the work does not wait on anything.** A rate against a body
+# that does no I/O runs until it saturates the generator, and a saturated run marks every threshold
+# `skipped` and reports numbers about tflw rather than about the target. Both tests below do real
+# HTTP, so either shape would work — they are here because the pane must be able to read and write
+# both, and because `run … per user across …` is the one shape whose sentence names two numbers
+# that mean different things.
+
+@catalogue @workload
+test "forty catalogue reads, shared out across four readers"
+  run 40 iterations across 4 users
+  api GET /products
+  expect status equals 200
+  threshold p95 duration is less than 2s
+  threshold error rate is less than 5%
+
+@catalogue @workload
+test "ten category reads each, across four readers"
+  run 10 iterations per user across 4 users
+  api GET /categories
+  expect status equals 200
+  threshold error rate is less than 5%

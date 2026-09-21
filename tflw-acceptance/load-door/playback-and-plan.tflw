@@ -1,0 +1,35 @@
+# The file where `M227` `D` (`D1235`) is visible by hand — the footer yielding to a live playback.
+#
+# **It has to be ONE file, and that is not a convenience.** `ComposeDoor` clears the played test on
+# a change of PATH, not of line (`useEffect(() => setPlayed(null), [path])`), so pressing ▶ in one
+# file and then opening the workload test in another resets the stage to `empty` and the footer
+# comes straight back — you would see the before state twice and never the after. Every other file
+# in this directory is workload-only, and `browser-contrast.tflw` is browser-only, so before this
+# one there was nowhere in the corpus the two facts could be true at once.
+#
+# **The two tests cannot be one test** (`D1205`): a workload may not sit beside a browser step, so
+# what the file carries is a playable browser test and a workload-bearing api test, the way
+# `browser-contrast.tflw` already carries a browser test and an api one.
+#
+# By hand, on the BROWSER door:
+#
+#   1. select `the catalogue holds up as readers arrive` — region 2 is the page's full width,
+#      spanning the sequence column, with the plan in it (`D1225`).
+#   2. press ▶ on `a page to play, so the stage has something in it`, and wait for the trace.
+#   3. select the workload test again — region 2 is back in the editor column, and the playback
+#      region is the only full-width band on the page (`D1235`).
+#
+# **Needs the storefront up as well as the api** — `node cli.mjs start` brings both; the page is
+# webV2's nginx on :8090, and `traceViewer` has to be true for step 2 to produce anything.
+
+@ui
+test "a page to play, so the stage has something in it"
+  open "/"
+  expect text "Browse all products (windowed list)" is visible
+
+@catalogue @workload
+test "the catalogue holds up as readers arrive"
+  ramp to 5 users over 2s
+  api GET /products
+  expect status equals 200
+  threshold error rate is less than 5%

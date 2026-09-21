@@ -1,0 +1,51 @@
+# The four workload shapes that are a BLOCK — `step` and `spike`, each in both units.
+#
+# These are the ones `M224` `A` had to fix the splice for. A `step`/`spike` block's span runs into
+# the next line's indentation, so an edit that read its end off the span swallowed the line below
+# it; `replaceWorkload` reads the end off the node's own offsets instead. Change a stage's target
+# here, or press `+ stage` / `✕`, and the block is rewritten whole — the rest of the test does not
+# move.
+#
+# The spelling of a stage belongs to its block, not to the stage: a `step` stage is always
+# `to N for <dur>`, and a `spike` stage is `hold N for <dur>` when it jumps and `to N over <dur>`
+# when it ramps. That is why the band's stage row offers `jump`/`ramp` on a spike and not on a
+# step — the grid is the grammar, not a decoration on it.
+
+@catalogue @workload
+test "readers arrive in two steps"
+  step users
+    to 2 for 1s
+    to 4 for 1s
+  api GET /products
+  expect status equals 200
+  threshold error rate is less than 5%
+
+@catalogue @workload
+test "the arrival rate climbs a staircase"
+  step rps
+    to 10 for 1s
+    to 20 for 1s
+  api GET /categories
+  expect status equals 200
+  threshold error rate is less than 5%
+
+# The shape a real traffic spike has: sit flat, jump, ramp back down. A `spike` block is the only
+# one whose stages mix the two modes, which is the case the band's stage editor exists for.
+@health @workload
+test "a burst of readers, then a climb away from it"
+  spike users
+    hold 2 for 1s
+    to 6 over 1s
+  api GET /health
+  expect status equals 200
+  threshold p95 duration is less than 2s
+  threshold error rate is less than 5%
+
+@health @workload
+test "a burst of arrivals a second, then a climb away from it"
+  spike rps
+    hold 8 for 1s
+    to 20 over 1s
+  api GET /health
+  expect status equals 200
+  threshold error rate is less than 5%
