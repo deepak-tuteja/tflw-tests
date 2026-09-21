@@ -1,0 +1,28 @@
+# **The segment follows the construct, never the door** — `M228` `A` (`D1239`), which is `D1044`.
+#
+# 25 of the two corpora's 96 scan assertions sit in files nobody would call a scan file. Every one
+# of them earns the `scan` segment wherever it is opened, and every one of them is judged by
+# `TF060` in the pane's own Source preview now that `diagnose` carries the env's declarations.
+#
+# **Open this file on the API door** and the segment is there. That is where `M228` `A`'s gate is
+# taken, on purpose: a segment asserted only on SCANS would be green under every mutation that made
+# it door-granted, because there the door and the construct agree.
+
+@checkout @security
+test "an ordinary API test that happens to make a security claim"
+  api GET /
+  expect status equals 200
+  capture header "set-cookie" as cookie
+  expect header "content-type" contains "text/html"
+  # One line, and it puts this whole test behind SCANS as well as API — nothing labels it, the
+  # matcher does. The `@security` tag above is decoration; the runtime has never read it.
+  expect response has no critical security violations
+  expect body text contains "Coffee"
+
+@checkout @ui
+test "…and one that is behind BROWSER and SCANS at once"
+  api GET /
+  expect status equals 200
+  expect response has no serious security violations
+  open "/"
+  expect text "The Coffee Shelf" is visible

@@ -1,0 +1,63 @@
+# `crawl` — the only construct that reaches SCANS without also reaching API, and the one this pane
+# **draws and does not build** (`M228` `C`, `D1238`).
+#
+# Until this round a crawl was invisible in the whole UI: `outline.ts` said in as many words that
+# *`crawl` declarations are the SCANS door's own root and are not here*, while the sidebar badge
+# counted them. So this file's row used to read **2** and list **1**, and only on this door — the
+# door the crawl is the entire point of.
+#
+# Select either declaration below and the pane draws its name, its principals, its seeds and its
+# excludes, read-only, **saying why**: there is no `buildCrawl` and `insertIntoSource` splices a
+# `test` and nothing else, so a crawl is edited in the file. ▶ and `✕` are absent rather than
+# drawn held, because a crawl has no index for `--only` or `replaceInSource` to name.
+
+# **`seed traffic` reads the traffic of THIS FILE**, which is why the test is here and not
+# elsewhere: traffic accumulates across the whole file and is collected only when a crawl in that
+# file declares the seed, and the crawl runs after every test in its file rather than where it is
+# typed. Put the crawl beside the requests you want walked.
+@catalogue
+test "the pages the crawl below will re-issue as a stranger"
+  api GET /
+  expect status equals 200
+  api GET /signin
+  expect status equals 200
+
+@catalogue
+crawl "everything this file touched, walked again as a stranger"
+  seed traffic
+  exclude "/signin"
+  expect response has no serious security violations
+
+# A second crawl, with **two** seeds and two expects, so the band's seed list is not a list of one
+# and the read-only rows are not a row of one.
+#
+# **It said `seed openapi "/openapi.json"` until 2026-09-22 and could never have run**: the
+# storefront serves `/`, `/signin`, `/items`, `/baskets`, `/orders`, `/orders/checkout`,
+# `/login` and `/health`, and answers **404** to that path. The header's own excuse — *"it is here
+# to be authored against"* — was the wrong call for a playground: a corpus that cannot run teaches
+# the door's picture and nothing about its verdict.
+#
+# `seed spider` takes the service ident **optionally** (`parser.ts:3037`), so `seed spider "/"`
+# needs no `web` target and no extra config; the caps are indented sub-clauses. The note that used
+# to sit here claiming otherwise was wrong about the grammar, which is how the unreachable seed got
+# chosen in the first place.
+@discovery
+crawl "the documented surface, and whatever this file touched"
+  seed spider "/"
+    max pages 5
+    max depth 2
+  seed traffic
+  exclude "/logout"
+  # **The floors are measured, not chosen.** Against this storefront `critical` is *vacuous* on a
+  # crawled response — 3 rules, 0 applicable, and the runtime refuses it by name: *"this assertion
+  # had no power to fail"* (SPEC §9.10, `D285`). `serious` has applicable rules and passes;
+  # `moderate` is where the storefront's two real gaps live. So the hard assertion is set where it
+  # can fail and does not, and the soft one is set where it finds something.
+  #
+  # **The `check` line is RED on purpose and is the only red in this corpus that is a finding.**
+  # The spider walks 5 URLs and the crawl reports 3 `moderate` violations — `sec/x-frame-options`
+  # and `sec/nosniff-missing` on the storefront's own pages. That is the door doing its job, and a
+  # playground whose scan finds nothing would teach the picture and not the verdict. `check` is the
+  # continue-on-failure form: the crawl keeps walking and the test still ends red.
+  expect response has no serious security violations
+  check response has no moderate security violations

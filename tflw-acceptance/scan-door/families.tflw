@@ -1,0 +1,41 @@
+# The three scan families, one test each — and what each one needs before it can say anything.
+#
+# A scan assertion grades **the last response**, which is why every test here fetches something
+# first. That is also why the SCANS door's `constructs` is the API door's set: the body of a
+# scan-bearing test is `api` steps and the neutral vocabulary, and there is nothing else it could
+# be.
+
+@security
+test "the shelf page's own headers and cookie"
+  api GET /
+  expect status equals 200
+  # `critical` is a FLOOR, so this also counts nothing below it. The severity control is the
+  # second row of the assertion — it appears only on a scan matcher, and takes the place of the
+  # operand input those matchers do not have.
+  expect response has no critical security violations
+
+@security
+test "the sign-in page, judged harder"
+  api GET /signin
+  expect status equals 200
+  # Same matcher, a lower floor: `serious` counts `serious` and `critical`. Open the severity
+  # select on this row and the one above to see the same control holding two different words.
+  expect response has no serious security violations
+
+@inputHandling
+test "what the shop page does with a hostile query"
+  api GET /?q=coffee
+  expect status equals 200
+  # **This one is why the config grants `probe oversized` and `probe traversal`.** Without those
+  # opt-ins on the covering `authorized target`, this matcher sends nothing and reports *not
+  # probed* — a passing line that tested nothing. The `scan` segment in region 2 lists the opt-ins
+  # that are in force, which is the only place in the product that says so.
+  expect response has no critical input handling violations
+
+@accessibility
+test "a11y is NOT a fourth scan family, and this test proves where it lives"
+  open "/"
+  # `has no a11y violations` takes the `page` subject, a crawl body cannot hold it, and
+  # `MATCHER_LENS` files it under BROWSER. So this test is behind BROWSER, **not** SCANS — check
+  # the sidebar badge — and it earns no `scan` segment.
+  expect page has no serious a11y violations

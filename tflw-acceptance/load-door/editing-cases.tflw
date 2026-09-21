@@ -1,0 +1,85 @@
+# The cases the Compose pane has to EDIT, rather than merely draw. Each one is here because
+# something in `M224` was wrong about it before the round, and the file is arranged so the four sit
+# next to each other where a person clicking through will meet all of them.
+
+# ── 1. A LOAD test with no workload at all ──────────────────────────────────────────────────────
+#
+# `lenses.ts` is explicit that LOAD is carried by no statement: the lens comes from
+# `test.workload !== null || test.thresholds.length > 0`, both properties of the declaration. So
+# this test is on the LOAD door on the strength of its thresholds alone, and it is the one to open
+# when you want to press `+ add to this test → workload` and watch bytes appear.
+@catalogue @workload
+test "a threshold-only test, waiting for a workload"
+  api GET /products
+  expect status equals 200
+  threshold p95 duration is less than 2s
+  threshold error rate is less than 5%
+
+# ── 2. A test with neither clause — the bare target ─────────────────────────────────────────────
+#
+# `+ add to this test → workload` lands here and writes the default `ramp to 5 users over 2s`. The
+# pane does NOT refuse it, and that is worth knowing rather than assuming: `TF033` is a checker
+# rule, so the file it leaves behind is one `tflw check` reports on. **The refusal is in the other
+# direction**, and the test above carries it — see case 4.
+@catalogue
+test "a plain functional test, with neither clause"
+  api GET /categories
+  expect status equals 200
+
+# ── 3. A workload test whose next neighbour is introduced by a comment ──────────────────────────
+#
+# This is the shape that broke `+ threshold` on 8 of 13 tests in the tflw repository's own example
+# project, and it broke it everywhere, not only on LOAD. The anchor walked back over *whitespace*
+# from the declaration's end, so on a test followed by a comment block belonging to the NEXT test
+# it landed below that comment — inside the next declaration — and the splice came back
+# `TF010 at line …`. `lastLineOfDecl` now walks back over the comment too, but only when a blank
+# line separates it from this test's own last statement, which is what tells the two apart.
+#
+# Keep the comment block below this test where it is. It is the fixture.
+@health @workload
+test "the test above a comment block"
+  hold 3 users for 1s
+  api GET /health
+  expect status equals 200
+  threshold error rate is less than 5%
+
+# This comment introduces the test below it, not the one above it — that is the whole distinction,
+# and a blank line above it is how the splice knows. Editing either neighbour must leave it here,
+# attached to the same test, in the same place.
+@health @workload
+test "the test below a comment block"
+  hold 3 users for 1s
+  api GET /health
+  expect status equals 200
+  threshold error rate is less than 5%
+
+# ── 4. A scoped threshold, a note of its own, and where `TF033` actually refuses ────────────────
+#
+# A `p95 duration` threshold reads only the iterations that SUCCEEDED, so it cannot observe failure
+# on its own and `TF033` requires an unscoped `error rate` one beside it. Scoping the duration to a
+# tagged request narrows what it measures without narrowing what judges failure — here the catalogue
+# read is timed and the second request beside it is not, so a slow neighbour cannot quietly pass as
+# a slow catalogue.
+#
+# **This is the test to try `✕ thresholds` on.** The menu refuses, and the sentence points at the
+# row that has to go first:
+#
+#     TF033 — a test that carries a `workload` must carry a threshold, so this one cannot be the
+#     last thing removed. Take the workload off first — the row above.
+#
+# Take the workload off and press it again: the refusal becomes the ordinary *"empty it first — 2
+# thresholds still here"*, because the rule that was speaking is no longer the one that applies.
+# The check is *does this test carry a workload*, not *is this the last threshold* — a
+# workload-bearing test with no thresholds is the state the rule forbids however it is arrived at.
+@catalogue @workload
+test "only the catalogue read is timed"
+  ramp to 4 users over 2s
+  api GET /products as "catalogue-read"
+  expect status equals 200
+  api GET /health
+  expect status equals 200
+  threshold p95 duration for "catalogue-read" is less than 2s
+  threshold error rate is less than 5%
+  # A note that belongs to THIS test and sits at the end of its own body — the other direction of
+  # the same walk. Nothing follows it in this file, so there is no next declaration to mistake it
+  # for, and an edit to the test above must not push it into one.

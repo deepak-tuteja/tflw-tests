@@ -1,0 +1,41 @@
+# The four workload shapes that are ONE line — `ramp` and `hold`, each in both units.
+#
+# `M224` `B` made a workload an ordinary clause (`D1205`), so each of these is editable in place:
+# select the declaration, and the band's workload row carries the profile grid, the unit pair and
+# the target/duration fields. Switching `ramp` to `hold` here rewrites one line; switching either
+# to `step` rewrites one line into three, which is what `staged-shapes.tflw` is for.
+#
+# **The unit is the difference worth seeing on the plot.** `users` is closed — five virtual users
+# each looping, so arrivals depend on how fast the server answers. `rps` is open — arrivals happen
+# at the stated rate whatever has finished. The plan panel under the editor draws both, and they
+# are not the same picture.
+
+@catalogue @workload
+test "the catalogue holds up as readers arrive"
+  ramp to 5 users over 2s
+  api GET /products
+  expect status equals 200
+  threshold p95 duration is less than 2s
+  threshold error rate is less than 5%
+
+@catalogue @workload
+test "the catalogue holds up at a fixed arrival rate"
+  ramp to 20 rps over 2s
+  api GET /products
+  expect status equals 200
+  threshold error rate is less than 5%
+
+@health @workload
+test "health answers under a steady four readers"
+  hold 4 users for 2s
+  api GET /health
+  expect status equals 200
+  threshold p95 duration is less than 1s
+  threshold error rate is less than 5%
+
+@health @workload
+test "health answers at a steady fifteen a second"
+  hold 15 rps for 2s
+  api GET /health
+  expect status equals 200
+  threshold error rate is less than 5%

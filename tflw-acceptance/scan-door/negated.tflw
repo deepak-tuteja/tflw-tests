@@ -1,0 +1,23 @@
+# `not`, on a scan assertion — the shape the dogfood suite uses to prove the scanner FINDS things.
+#
+# 21 of the corpus's 96 scan assertions are negated, every one of them in `tflw-acceptance/
+# security/`, where the deliberately-vulnerable targets live. The old SCANS form could not write
+# this at all: its `expectSpec()` had no `negated` field.
+#
+# In the pane, `not` lives behind the row's `⋯` — and a row that already uses it draws it **open**,
+# with no gesture required. Compare the two tests below: one is open on arrival, one is not.
+
+@security
+test "a page that should be clean, asserted the ordinary way"
+  api GET /
+  expect status equals 200
+  expect response has no critical security violations
+
+@security @inverted
+test "…and the same page asserted the other way, which is how you test the scanner"
+  api GET /
+  expect status equals 200
+  # `not has no …` reads badly out loud and is exactly right: *it is not the case that this has no
+  # critical violations*, i.e. **find me one**. Against a healthy storefront this FAILS, which is
+  # the point — press ▶ and read the verdict.
+  expect response not has no critical security violations

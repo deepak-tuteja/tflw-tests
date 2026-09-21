@@ -31,3 +31,16 @@ HELPERS.md
 # D380's sweep builds a disposable annotated copy of tests/ here (scripts/sweep-input-volume.mjs).
 .sweep-input/
 .regression-workers/
+
+# The UI's own scratch files. `.play.tflw` is what the pane writes when you press ▶ on an
+# unsaved edit, and `.scratch.tflw` is where `+ new test` lands before it is named — both are
+# copies of whatever was on screen, so `tests/ui/storefront/.play.tflw` is a real E2 test with a
+# recorded session appended to it. Ignored at any level, which is what keeps `M224`'s and
+# `M228`'s acceptance corpora committable without their scratch going with them.
+.play.tflw
+.scratch.tflw
+
+# The vendored tarball's provenance (M184c/D955) — written by the packer beside the `.tgz` that
+# is already ignored a few lines up, regenerated on every pack. It records what the packer was
+# TOLD it was building from, which is a local fact about a local pack.
+vendor/packed-from.json
