@@ -285,8 +285,22 @@ try {
   writeFileSync(stale.asset, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
   writeFileSync(stale.events, `${JSON.stringify({ type: 'run:start', total: 999, env: 'stale', stale: 'verify-ui' })}\n`);
   const before = await getJson(port, '/api/reports');
-  const current = before.find((e) => e.id === 'current');
-  ok('the plant is visible to the page before the run: `/api/reports` lists `findings.sarif` under `current`', current?.files.includes('findings.sarif') === true, JSON.stringify(current?.files));
+  // **`current` is a PROPERTY of a run, not an id** — tflw `M229` `E` (`D1254`), 2026-09-22. The
+  // page's run list used to draw the newest run twice, because `keepReport` copies `report/` into
+  // `report/runs/<id>` entry by entry and both were rows; it now carries `current: true` on the run
+  // that holds it, and `id === 'current'` survives only when `report/` matches **no** kept run —
+  // a `tflw run` in a terminal, or exactly the state the plant below creates.
+  //
+  // **This phase is what found the first version of that fold, and the row is worth keeping.** It
+  // folded on `results.json` alone, which is the same *run* but not the same *evidence*: the plant
+  // makes `report/` hold a `findings.sarif` its copy does not, and the fold closed the only window
+  // `M192-03`'s grader has onto `report/`'s own members. tflw now folds only when the member lists
+  // agree too — so the row marked `current` always describes the bytes in `report/`, folded or not,
+  // and these two assertions are exactly as strong as when they named an id.
+  const currentRow = (list) => list.find((e) => e.current === true);
+  const current = currentRow(before);
+  ok('the plant is visible to the page before the run: `/api/reports` lists `findings.sarif` on the run `report/` holds', current?.files.includes('findings.sarif') === true, JSON.stringify(current?.files));
+  ok('…and the plant makes it a row of its own, because a stale member is not the same evidence as its copy', current?.id === 'current', JSON.stringify(before.map((e) => e.id)));
 
   const two = await postJson(port, '/api/run', { files: HOOK_FILES });
   ok('`POST /api/run { files }` puts the files last in the argv', JSON.stringify(two.argv.slice(-2)) === JSON.stringify(HOOK_FILES), JSON.stringify(two.argv));
@@ -316,8 +330,11 @@ try {
   ok("[two files] `report/events.ndjson` is this run's — its first line is a `run:start` without the plant's mark", firstEvent?.type === 'run:start' && firstEvent.stale === undefined, firstEventLine.slice(0, 120));
   ok('[two files] the kept copy has no `findings.sarif` either', twoKept !== null && !existsSync(path.join(twoKept, 'findings.sarif')), `kept ${twoStream.end.kept}`);
   const after = await getJson(port, '/api/reports');
-  const currentAfter = after.find((e) => e.id === 'current');
-  ok('[two files] `/api/reports` no longer lists `findings.sarif` under `current`', currentAfter !== undefined && !currentAfter.files.includes('findings.sarif'), JSON.stringify(currentAfter?.files));
+  const currentAfter = currentRow(after);
+  ok('[two files] `/api/reports` no longer lists `findings.sarif` on the run `report/` holds', currentAfter !== undefined && !currentAfter.files.includes('findings.sarif'), JSON.stringify(currentAfter?.files));
+  // …and with the plant gone the two directories hold the same evidence again, so the list stops
+  // drawing one run as two. The id it keeps is the kept run's, which is the addressable one.
+  ok('[two files] the run and its copy have folded back into one row', currentAfter?.id !== 'current' && after.filter((e) => e.current === true).length === 1, JSON.stringify(after.map((e) => [e.id, e.current === true])));
   if (twoKept) {
     const r = readResults(twoKept);
     ok(`[two files] the kept \`results.json\` agrees with the stream: ${r.total} tests, ok`, r.total === twoTally.announced && r.ok === true, `results total ${r.total} ok ${r.ok}; stream announced ${twoTally.announced}`);
