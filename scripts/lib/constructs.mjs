@@ -2834,6 +2834,34 @@ export const RATCHET = [
   'subject:dialog-message',
   'subject:dialog-type',
   'subject:value',
+  // --- config (1) ---
+  //
+  // **`M234-04`. `config:key:baseline` arrived from one repository over and turned this gate red,
+  // which is the anti-regression property doing its job for the third time** — `M154c`'s
+  // `declaration` family, `M176c`'s `subject` family, and now a single key. tflw's `M208 S1`
+  // ("the baseline becomes a project fact, not a flag", `2286c82`, 2026-09-18) promoted
+  // `--baseline` to `CONFIG_KEYS`, so it appeared in `tflw spec --json` on the first
+  // `refresh-tflw` after that merge with no change on this side at all.
+  //
+  // **Read `D739` before reading this entry, and then read what makes it unusual.** The ordinary
+  // ratchet entry says *no row states this construct's known answer* about something this suite
+  // already exercises heavily. This one says something narrower and worse: **this repository does
+  // not use tflw's baseline feature at all.** `tflw-acceptance/security/security-baseline.json`
+  // exists, is committed, holds `D445`'s 8 accepted fingerprints — and is read by
+  // `scripts/verify-security-acceptance.mjs` **in JavaScript**, which re-implements the
+  // `baseline ∪ plants` comparison itself and never hands tflw `--baseline` or this key. So there
+  // is no run here whose verdict moves when tflw's baseline key works or breaks. This is `D739`'s
+  // *"a plant that does not exist yet"*, not its *"the claim is missing and the evidence is here"*.
+  //
+  // **And the exit is not "add the key to the security config."** That config's findings are the
+  // grader's input: `security-baseline.json`'s 8 entries must each still be *produced* by a run
+  // (`verify-security-acceptance.mjs`'s stale-acceptance clause). Declaring the key there would
+  // suppress exactly the findings the gate asserts it saw, turning a rostered claim red to make an
+  // unrostered one green. The plant this owes is its own corpus, where a baselined finding is
+  // suppressed, a finding outside it fails, and a stale entry is named — three directions, a
+  // security surface, and a grader tier. That is a scoped round, and it is filed as `M234-04`
+  // rather than improvised inside a bundle-identity PR.
+  'config:key:baseline',
   // --- declaration (0) ---
   // The family `M154a` missed and `M154c`/`D742` added: twelve constructs, of which `after` and
   // `retry` were rostered above, `crawl` left at `M154f` (`C56`), the four that decide **which
@@ -3109,8 +3137,25 @@ export const RATCHET = [
  * (`C115`-`C117`), each reddened by a hand mutation of the subject's own read on the box before
  * the row was written. Groups (a) and (c) are untouched, and the twelve entries above are still
  * argued by exit, not by count.
+ *
+ * **`12` → `13` (`M234-04`): one key, and the first entry on this list that is not a `subject`.**
+ * tflw's `M208 S1` made `baseline` a config key on 2026-09-18 and `config:key:baseline` arrived in
+ * `tflw spec --json` on the next `refresh-tflw`. The arithmetic is the dullest this note has
+ * carried — `12 + 1 - 0` — and two things about it are worth more than the integer.
+ *
+ * First, **the rise is not what this one should be read for; the delay is.** The gate is built to
+ * go red *on the day a construct ships*, and it did not: this repository's `main` last ran CI on
+ * 2026-09-16, two days before the key landed, so `main` was latently red for five days and the
+ * first run to look at it was a pull request that had nothing to do with the change. A gate that
+ * fires on the day something ships only fires on the day something runs, and nothing here runs on
+ * a schedule. Filed as `M234-05` — the ratchet entry is the cheap half of this finding.
+ *
+ * Second, the exit is genuinely more expensive than any of the twelve above it, and the entry says
+ * why rather than leaving it to be re-derived: those twelve are constructs this suite exercises
+ * without stating a known answer, and this one is a construct this suite **does not use at all**.
+ * Lowering the number back to 12 is a corpus, not a row.
  */
-export const RATCHET_CEILING = 12;
+export const RATCHET_CEILING = 13;
 
 /**
  * `CONSTRUCTS.md` carries one row per plant and prose a human reads; this asserts their id sets
