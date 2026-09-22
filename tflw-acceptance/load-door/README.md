@@ -1,5 +1,10 @@
 # The LOAD door, with something behind it
 
+<sub>**Notation.** `D<n>` and `M<n>` name blocks in design records neither repository publishes;
+each resolves in tflw's [DECISIONS.md](https://github.com/deepak-tuteja/tflw/blob/main/DECISIONS.md), which lifts the block verbatim.
+**Both repositories number their milestones from 1**, so an unqualified `M<n>` here is tflw's —
+this repository's own are written `testFlow-tests M22`, and are published nowhere.</sub>
+
 `M224` rebuilt the LOAD door's Compose pane. Until that round it was not a variant of the standard
 pane at all — it was `D1088`'s retired staging form, the one `M213` removed from BROWSER and
 `M213-08` removed from API, still shipping on the last door. This directory is what you open to see
