@@ -1,5 +1,10 @@
 # `scan-door` — the SCANS door's own corpus
 
+<sub>**Notation.** `D<n>` and `M<n>` name blocks in design records neither repository publishes;
+each resolves in tflw's [DECISIONS.md](https://github.com/deepak-tuteja/tflw/blob/main/DECISIONS.md), which lifts the block verbatim.
+**Both repositories number their milestones from 1**, so an unqualified `M<n>` here is tflw's —
+this repository's own are written `testFlow-tests M22`, and are published nowhere.</sub>
+
 Written for `M228`, the round that retired `ScanForm` and made the SCANS door draw the standard
 Compose pane like the other three.
 
