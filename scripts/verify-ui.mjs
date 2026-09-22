@@ -299,7 +299,12 @@ try {
   // and these two assertions are exactly as strong as when they named an id.
   const currentRow = (list) => list.find((e) => e.current === true);
   const current = currentRow(before);
-  ok('the plant is visible to the page before the run: `/api/reports` lists `findings.sarif` on the run `report/` holds', current?.files.includes('findings.sarif') === true, JSON.stringify(current?.files));
+  /* **`artefacts`, and it was `files` until tflw's `M232` (`D1271`)** — the rename crossed the
+     repository boundary and this is the only thing on either side that reads that wire. `files`
+     was true of two different lists (the artefacts in a report directory, and the `.tflw` files a
+     run executed) and wrong about one of them, which is what `M213-19` was filed for; the sweep is
+     what noticed, because nothing inside tflw consumes `/api/reports` from outside its own tree. */
+  ok('the plant is visible to the page before the run: `/api/reports` lists `findings.sarif` on the run `report/` holds', current?.artefacts?.includes('findings.sarif') === true, JSON.stringify(current?.artefacts));
   ok('…and the plant makes it a row of its own, because a stale member is not the same evidence as its copy', current?.id === 'current', JSON.stringify(before.map((e) => e.id)));
 
   const two = await postJson(port, '/api/run', { files: HOOK_FILES });
@@ -331,7 +336,7 @@ try {
   ok('[two files] the kept copy has no `findings.sarif` either', twoKept !== null && !existsSync(path.join(twoKept, 'findings.sarif')), `kept ${twoStream.end.kept}`);
   const after = await getJson(port, '/api/reports');
   const currentAfter = currentRow(after);
-  ok('[two files] `/api/reports` no longer lists `findings.sarif` on the run `report/` holds', currentAfter !== undefined && !currentAfter.files.includes('findings.sarif'), JSON.stringify(currentAfter?.files));
+  ok('[two files] `/api/reports` no longer lists `findings.sarif` on the run `report/` holds', currentAfter !== undefined && !currentAfter.artefacts.includes('findings.sarif'), JSON.stringify(currentAfter?.artefacts));
   // …and with the plant gone the two directories hold the same evidence again, so the list stops
   // drawing one run as two. The id it keeps is the kept run's, which is the addressable one.
   ok('[two files] the run and its copy have folded back into one row', currentAfter?.id !== 'current' && after.filter((e) => e.current === true).length === 1, JSON.stringify(after.map((e) => [e.id, e.current === true])));
