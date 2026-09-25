@@ -545,7 +545,16 @@ export const MAX_PENDING_DAYS = 14;
  *
  * @type {Map<string, {pr: string, since: string, why: string}>}
  */
-export const DECLARED_PENDING = new Map([]);
+export const DECLARED_PENDING = new Map([
+  // tflw `M239` (deepak-tuteja/tflw#238): the page's boundary, the `helpers` fence, the security
+  // policy. This branch (#108) is `S-1` against it — `verify-ui.mjs`, `verify-cli-refusals.mjs`,
+  // `C119` and `CONSTRUCTS.md` cite the four. tflw's pin is already at this branch's head; the
+  // index that publishes them is on tflw's PR and lands on `main` when it merges (`D511`).
+  ['D1276', { pr: 'deepak-tuteja/tflw#238', since: '2026-09-25', why: 'the page\'s boundary — the token, `Host`, `Origin`, JSON-only bodies' }],
+  ['D1279', { pr: 'deepak-tuteja/tflw#238', since: '2026-09-25', why: 'the `helpers` directive, `TF083` and `--no-helpers`' }],
+  ['D1280', { pr: 'deepak-tuteja/tflw#238', since: '2026-09-25', why: 'SECURITY.md, the supply-chain job, Dependabot' }],
+  ['M239', { pr: 'deepak-tuteja/tflw#238', since: '2026-09-25', why: 'the milestone the four decisions belong to' }],
+]);
 
 /**
  * The pending declarations' own problems, as a pure function so `--self-test` can reach every
