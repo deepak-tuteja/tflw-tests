@@ -2693,6 +2693,32 @@ export const PLANTS = [
     catches: 'a body-text read under the wrong charset, or one that is the parsed body re-serialised rather than the bytes.',
     blockedOn: null,
   },
+  {
+    id: 'C118',
+    construct: 'config:key:baseline',
+    family: 'config',
+    tier: 'api',
+    title: 'a baselined finding is withheld, one outside it fails, and an entry for a fixed weakness is named and never gates',
+    target: '`arrival-server.mjs`\'s `/leak/a` and `/leak/b`, which disclose a stack frame until `/__fix` says the weakness is fixed — two configs differing by one line',
+    evidence: { file: 'tests/.constructs/config-keys/baseline-accepted.config', pattern: '^\\s*baseline "', min: 1 },
+    run: 'baseline-leak.tflw',
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      '**`M212`, discharging tflw\'s `M234-04`: the first run in this repository whose verdict moves '
+      + 'when tflw\'s baseline key works or breaks.** The accepted set is minted by tflw itself — a '
+      + 'narrowed `--baseline-write` against the leaking server — so no fingerprint here was ever '
+      + 'typed. The control, with no key: **`FAIL 0/2`**, both routes producing '
+      + '`sec/error-detail-disclosure`. With the key: `a` passes and its finding is still in the '
+      + 'report, `withheld: \'baseline\'`; `b` fails and names `/leak/b` only — **`FAIL 1/2`**, one '
+      + 'entry matched, none stale. Then both weaknesses are fixed at the same address: **`PASS '
+      + '2/2`**, and `results.json`\'s `baseline.stale` holds exactly `a`\'s fingerprint, also named '
+      + 'on the console. A stale entry never gates (tflw `D-M238-3`), and a whole-suite run carries '
+      + 'no `narrowedBy`. Measured before the grader existed: the fingerprint is byte-stable across '
+      + 'runs and a server restart, and `/__fix` removes the finding rather than changing it — so '
+      + 'the stale leg cannot pass because the hash moved.',
+    catches: 'a `baseline` key parsed and never reaching the gate, a baseline that suppresses by rule instead of by fingerprint, and a stale entry that fails the build or is never named.',
+    blockedOn: null,
+  },
 ];
 
 /**
@@ -2836,32 +2862,6 @@ export const RATCHET = [
   'subject:value',
   // --- config (1) ---
   //
-  // **`M234-04`. `config:key:baseline` arrived from one repository over and turned this gate red,
-  // which is the anti-regression property doing its job for the third time** — `M154c`'s
-  // `declaration` family, `M176c`'s `subject` family, and now a single key. tflw's `M208 S1`
-  // ("the baseline becomes a project fact, not a flag", `2286c82`, 2026-09-18) promoted
-  // `--baseline` to `CONFIG_KEYS`, so it appeared in `tflw spec --json` on the first
-  // `refresh-tflw` after that merge with no change on this side at all.
-  //
-  // **Read `D739` before reading this entry, and then read what makes it unusual.** The ordinary
-  // ratchet entry says *no row states this construct's known answer* about something this suite
-  // already exercises heavily. This one says something narrower and worse: **this repository does
-  // not use tflw's baseline feature at all.** `tflw-acceptance/security/security-baseline.json`
-  // exists, is committed, holds `D445`'s 8 accepted fingerprints — and is read by
-  // `scripts/verify-security-acceptance.mjs` **in JavaScript**, which re-implements the
-  // `baseline ∪ plants` comparison itself and never hands tflw `--baseline` or this key. So there
-  // is no run here whose verdict moves when tflw's baseline key works or breaks. This is `D739`'s
-  // *"a plant that does not exist yet"*, not its *"the claim is missing and the evidence is here"*.
-  //
-  // **And the exit is not "add the key to the security config."** That config's findings are the
-  // grader's input: `security-baseline.json`'s 8 entries must each still be *produced* by a run
-  // (`verify-security-acceptance.mjs`'s stale-acceptance clause). Declaring the key there would
-  // suppress exactly the findings the gate asserts it saw, turning a rostered claim red to make an
-  // unrostered one green. The plant this owes is its own corpus, where a baselined finding is
-  // suppressed, a finding outside it fails, and a stale entry is named — three directions, a
-  // security surface, and a grader tier. That is a scoped round, and it is filed as `M234-04`
-  // rather than improvised inside a bundle-identity PR.
-  'config:key:baseline',
   // --- declaration (0) ---
   // The family `M154a` missed and `M154c`/`D742` added: twelve constructs, of which `after` and
   // `retry` were rostered above, `crawl` left at `M154f` (`C56`), the four that decide **which
@@ -3154,8 +3154,17 @@ export const RATCHET = [
  * why rather than leaving it to be re-derived: those twelve are constructs this suite exercises
  * without stating a known answer, and this one is a construct this suite **does not use at all**.
  * Lowering the number back to 12 is a corpus, not a row.
+ *
+ * **`13` → `12` (`M212`): the corpus.** `C118` rosters `config:key:baseline` against two leaking
+ * routes on `arrival-server.mjs` and a server-side switch that fixes them in place, in the
+ * `C97`–`C104` block of `verify-construct-acceptance.mjs` — not the `tflw-acceptance/` directory
+ * and `VULN_MODE` corpus tflw's `D-M238-1` first chose, which that plan amends in place. It needed
+ * one repository over to ship first: the stale leg reads `results.json`'s `baseline` block, which
+ * no tflw build had until `M238` (tflw#235), and the function behind it had been imported and
+ * never called since `M134b` (`M238-01`). The arithmetic is `13 - 1`, and it is the first time
+ * this ceiling has come down since `M189c`.
  */
-export const RATCHET_CEILING = 13;
+export const RATCHET_CEILING = 12;
 
 /**
  * `CONSTRUCTS.md` carries one row per plant and prose a human reads; this asserts their id sets
