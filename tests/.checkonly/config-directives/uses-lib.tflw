@@ -1,0 +1,7 @@
+# uses-lib.tflw — `C119`: a `use` under `./lib`, which only `helpers-lib.config` allows.
+use "./lib/sign.ts"
+
+test "signed"
+  let s = sign("x")
+  api GET /health
+  expect status equals 200

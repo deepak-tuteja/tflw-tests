@@ -76,6 +76,8 @@ npm run verify:provenance
 npm run verify:provenance:self-test
 npm run verify:grader-reachability
 npm run verify:grader-reachability:self-test
+npm audit --audit-level=high
+npm --prefix apiV2 audit --audit-level=high
 npm run verify:sibling-pin-landed:self-test
 npm run verify:build-provenance:self-test
 npm run verify:bundle-identity:self-test

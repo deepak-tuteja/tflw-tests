@@ -1,0 +1,10 @@
+# unformatted.tflw — PLANT (tflw `M239`, `PLAN_M239_DOGFOOD_EXPANSION.md` `S-1c`): a file `tflw fmt`
+# would change — four-space blocks where the formatter writes two — so `fmt --check` has something
+# to be red about. `scripts/verify-cli-refusals.mjs` asserts the exit code, the file named, and that
+# nothing was written. Excluded from `verify-fmt.mjs`'s walk by directory, like everything under
+# `tests/.checkonly/`; run explicitly:
+#   npx tflw fmt --check tests/.checkonly/fmt/unformatted.tflw
+
+test "four spaces where two belong"
+    api GET /v1/health
+    expect status equals 200

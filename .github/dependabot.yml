@@ -1,0 +1,32 @@
+# One grouped pull request a week for npm (the repository root and `apiV2` separately, because they
+# are two lockfiles), one for GitHub Actions — merged by hand, and against the regression sweep,
+# because a dependency of the application under test is part of what the corpus measures.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      npm:
+        patterns: ['*']
+    open-pull-requests-limit: 1
+  - package-ecosystem: npm
+    directory: /apiV2
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      npm:
+        patterns: ['*']
+    open-pull-requests-limit: 1
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns: ['*']
+    open-pull-requests-limit: 1
