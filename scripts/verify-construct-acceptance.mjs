@@ -2836,7 +2836,7 @@ if (DIRECTIVE_IDS.some((id) => wanted(id))) {
 // condition asked for — that condition named apiV2 as the address and `D745` had already answered
 // why the address is wrong.
 
-const KEY_IDS = ['C97', 'C98', 'C99', 'C100', 'C101', 'C102', 'C103', 'C104'];
+const KEY_IDS = ['C97', 'C98', 'C99', 'C100', 'C101', 'C102', 'C103', 'C104', 'C118'];
 
 // `C93`'s run-time leg lives in this block too (`M189c`): its four `check` legs stay in the
 // directives block above, and the one that needs the wire is here beside `C98`'s, because the
@@ -3091,6 +3091,64 @@ if (KEY_IDS.some((id) => wanted(id)) || wanted('C93')) {
         'both legs ran under `workers 1`, so the file-concurrency axis is pinned and the header modifier is the only difference');
       precision('C104', /PASS 2\/2/.test(parOut) && /PASS 2\/2/.test(seqOut),
         'both files are green, so `sequential` is serializing rather than failing');
+    }
+
+    // ---- C118: `baseline`, the three directions and the control that makes them mean anything ----
+    // `M212`, discharging tflw's `M234-04`. Until this block no run in this repository changed its
+    // verdict when tflw's baseline key worked or broke: the security corpus reads its accepted set in
+    // JavaScript and never hands tflw the key. Two routes on this server disclose a stack frame to the
+    // input-handling scan's `sort` mutations; `a` is accepted, `b` is not; `/__fix` stops a route
+    // leaking at the same address, so an entry goes stale because the weakness was fixed.
+    //
+    // `accepted.json` is **minted, never written by hand** (a hand-typed fingerprint is a second account of what tflw computes): a
+    // narrowed `--baseline-write` against the leaking server, under the config WITHOUT the key.
+    // Measured before this block was written (the plan's §7.2): the fingerprint is byte-stable across
+    // runs and a server restart, and `/__fix` removes the finding rather than changing it.
+    if (wanted('C118')) {
+      const bDir = corpus('baseline', ['baseline-leak.tflw'], 'baseline-none.config');
+      const fixLeak = async (route) => JSON.parse(await (await fetch(`http://127.0.0.1:4507/__fix?route=${route}`, { method: 'POST' })).text());
+      const findingsOn = (report, endpoint) => (report?.findings ?? []).filter((f) => f.endpoint === endpoint);
+      const testNamed = (report, name) => (report?.tests ?? []).find((t) => t.name === name);
+      await arrivals('__reset');
+
+      // The control: no key, and both leaks fail their tests. Without it, a scan that stopped finding
+      // anything would pass leg (i) identically — `D291`, and the reason tflw's own e2e test takes an
+      // ungated red run first.
+      const control = runCorpus(bDir, []);
+      recall('C118', /FAIL 0\/2/.test(control.output) && findingsOn(control.report, 'GET /leak/a').length > 0 && findingsOn(control.report, 'GET /leak/b').length > 0,
+        'the control: with no `baseline` key both routes produce findings and both tests fail');
+
+      runRun(['--only', 'a is accepted', '--baseline-write', 'accepted.json'], { cwd: bDir });
+      const minted = existsSync(path.join(bDir, 'accepted.json')) ? JSON.parse(readIn(bDir, 'accepted.json')) : { accepted: [] };
+      const aPrint = minted.accepted.length === 1 && minted.accepted[0].endpoint === 'GET /leak/a' ? minted.accepted[0].fingerprint : null;
+      precision('C118', aPrint !== null, `the baseline was minted by tflw from a real response, one entry, on \`/leak/a\` (got: ${JSON.stringify(minted.accepted)})`);
+
+      // (i) and (ii), one run: the key accepts `a`'s finding and not `b`'s.
+      useConfig(bDir, 'baseline-accepted.config');
+      const gated = runCorpus(bDir, []);
+      const aFindings = findingsOn(gated.report, 'GET /leak/a');
+      recall('C118', testNamed(gated.report, 'a is accepted')?.ok === true && aFindings.length > 0 && aFindings.every((f) => f.withheld === 'baseline'),
+        '(i) suppressed: `a` passes, and its finding is still in the report, withheld by the baseline rather than gone');
+      const bTest = testNamed(gated.report, 'b is not');
+      recall('C118', bTest?.ok === false && /\/leak\/b/.test(bTest?.error ?? '') && !/\/leak\/a/.test(bTest?.error ?? ''),
+        '(ii) outside it fails: `b` fails, and its error names `/leak/b` and not the accepted route');
+      precision('C118', /FAIL 1\/2/.test(gated.output) && gated.report?.baseline?.matched === 1 && (gated.report?.baseline?.stale ?? []).length === 0,
+        'the gated run is exactly one pass and one fail, and every accepted entry matched, so nothing is stale yet');
+
+      // (iii) stale named: both weaknesses are fixed, so the run is green and `a`'s entry matches
+      // nothing. Both, not just `a` — with `b` still leaking the run fails on `b` either way, and the
+      // leg could not show that a stale entry never gates (`D-M238-3`).
+      await fixLeak('a');
+      await fixLeak('b');
+      const fixed = runCorpus(bDir, []);
+      const stale = fixed.report?.baseline?.stale ?? [];
+      recall('C118', stale.length === 1 && stale[0].fingerprint === aPrint && fixed.report?.baseline?.matched === 0,
+        `(iii) stale named: \`results.json\` names exactly \`a\`'s fingerprint as matching nothing (got: ${JSON.stringify(fixed.report?.baseline ?? null)})`);
+      recall('C118', new RegExp(`matched no finding in this run[\\s\\S]*${aPrint}`).test(fixed.output),
+        '(iii) and the console names it after the run');
+      precision('C118', /PASS 2\/2/.test(fixed.output) && fixed.report?.baseline?.narrowedBy === undefined,
+        'a stale entry never gates: the run is green, and it was a whole-suite run, so nothing says it was narrowed');
+      await arrivals('__reset');
     }
 
     // ---- C102: four artifacts, and nothing left behind -----------------------------------------

@@ -1,0 +1,13 @@
+# `M212` / `C118` — `config:key:baseline`. Two routes on `arrival-server.mjs` that disclose a stack
+# frame to any `sort` the input-handling scan tries: `a` is the finding the baseline accepts, `b` the
+# one it does not. The grader owns the rest — see `verify-construct-acceptance.mjs`, `C118`.
+
+test "a is accepted"
+  api GET /leak/a?sort=asc
+  expect status equals 200
+  expect response has no input handling violations
+
+test "b is not"
+  api GET /leak/b?sort=asc
+  expect status equals 200
+  expect response has no input handling violations

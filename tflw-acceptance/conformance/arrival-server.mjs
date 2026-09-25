@@ -136,6 +136,14 @@ let gateAlone = 0;
 // not share one clock.
 const afterFirstSeen = new Map();
 
+/**
+ * `M212` / `C118` — which `/leak/*` routes have been "fixed". A route in this set stops disclosing
+ * and answers like any other; `/__reset` empties it. Server state rather than a different path on
+ * purpose: a baseline fingerprint hashes the endpoint, so a fixed weakness has to stay at the same
+ * address or an entry goes stale for a reason that is not *fixed* (tflw `PLAN_M238` §9.4).
+ */
+const fixedLeaks = new Set();
+
 /** Release everyone currently held. `paired` is recorded per release rather than per request: what
  *  the plant asks is whether anybody was *ever* in there at the same time as somebody else. */
 function releaseWaiting(paired) {
@@ -199,6 +207,7 @@ const server = createServer((req, res) => {
     peakWaiting = 0;
     gatePaired = 0;
     gateAlone = 0;
+    fixedLeaks.clear();
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end('{"reset":true}');
     return;
@@ -426,6 +435,39 @@ const server = createServer((req, res) => {
     count(path, req);
     res.writeHead(500, { 'content-type': 'application/json' });
     res.end('{"ok":false,"always":500,"note":"every request to this path fails, by design"}');
+    return;
+  }
+  // ---- `M212` / `C118`: the baseline's surface ------------------------------------------------
+  // `GET /leak/{a|b}?sort=…` discloses a stack frame to any `sort` it dislikes, which is the one
+  // reviewed, fingerprintable finding tflw's own baseline e2e test is built on
+  // (`sec/error-detail-disclosure`). `sort=asc` is the request a test sends and is always answered
+  // cleanly; the input-handling scan's own mutations of `sort` are what find the leak. Two routes so
+  // one run can hold an accepted finding and an unaccepted one side by side.
+  // `POST /__fix?route=a` stops `/leak/a` disclosing, so a baseline entry for it goes stale for the
+  // honest reason: the weakness was fixed.
+  if (path === '/__fix') {
+    const route = new URL(req.url, 'http://127.0.0.1').searchParams.get('route') ?? '';
+    if (!/^[ab]$/.test(route)) {
+      res.writeHead(400, { 'content-type': 'application/json' });
+      res.end('{"error":"route must be a or b"}');
+      return;
+    }
+    fixedLeaks.add(route);
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ fixed: [...fixedLeaks].sort() }));
+    return;
+  }
+  if (path === '/leak/a' || path === '/leak/b') {
+    count(path, req);
+    const route = path.slice('/leak/'.length);
+    const sort = new URL(req.url, 'http://127.0.0.1').searchParams.get('sort') ?? '';
+    if (sort !== 'asc' && !fixedLeaks.has(route)) {
+      res.writeHead(500, { 'content-type': 'application/json' });
+      res.end('{"message":"Error: bad sort\\n    at LeakService.list (/usr/src/app/leak.service.js:12:5)"}');
+      return;
+    }
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ route, items: [] }));
     return;
   }
   if (path === '/subjects/json-spaced') {
