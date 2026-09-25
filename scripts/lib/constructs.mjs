@@ -2719,6 +2719,29 @@ export const PLANTS = [
     catches: 'a `baseline` key parsed and never reaching the gate, a baseline that suppresses by rule instead of by fingerprint, and a stale entry that fails the build or is never named.',
     blockedOn: null,
   },
+  {
+    id: 'C119',
+    construct: 'config:directive:helpers',
+    family: 'config',
+    tier: 'check',
+    title: 'the same two files under two configs, and which one is refused swaps with the `helpers` line',
+    target: 'a two-file corpus, each `use`ing a real module beside it, checked under a config with no `helpers` line and under one naming `./lib`',
+    evidence: { file: 'tests/.checkonly/config-directives/helpers-lib.config', pattern: '^helpers "\\./lib"$', min: 1 },
+    run: 'uses-helpers.tflw',
+    graders: ['acceptance'],
+    knownAnswer:
+      'tflw `M239` `D` (`D1279`). `uses-helpers.tflw` loads `./helpers/stamp.ts` and `uses-lib.tflw` '
+      + 'loads `./lib/sign.ts`; the two configs differ by one line. With no `helpers` line the first '
+      + 'is clean and the second is **`TF083`** naming `lib/sign.ts` and the one-line repair, '
+      + '`helpers "./lib"`. With that line the verdicts **swap** over unchanged files, so a '
+      + 'declaration replaces the defaults (`./helpers`, `./tests/helpers`) rather than widening '
+      + 'them. `tflw run --no-helpers` refuses the clean file too, naming the flag, before any '
+      + 'request: the config points `api` at port 9, and the refusal is at check time so no socket '
+      + 'opens. And `check` prints `helper helpers/stamp.ts — `use` in uses-helpers.tflw` once, '
+      + 'before its verdict — the executable surface a run would load is stated, not silent.',
+    catches: 'a fence that widens instead of replacing, a `use` judged from where tflw was invoked rather than from where the file sits, `--no-helpers` honoured only after the first request, and a `check` that loads code without saying so.',
+    blockedOn: null,
+  },
 ];
 
 /**

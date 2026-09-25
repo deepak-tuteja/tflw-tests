@@ -1,0 +1,18 @@
+# helper-outside-dirs.tflw — CHECK-ONLY FIXTURE (tflw `M239` `D`, `D1279`): a `use` that resolves
+# outside the directories `tflw.config`'s `helpers` allows — `TF083`.
+#
+# This file sits in `tests/.checkonly/`, so `../../lib/nowhere.ts` resolves to `lib/nowhere.ts` at
+# the repository root — outside `./helpers` and `./tests/helpers`, which is what this project's
+# config allows (it declares `helpers "./tests/helpers"`, and the default would say the same).
+# The module does not exist either, so `TF043` fires beside it: the two are different rules with
+# different repairs (move the module, or widen `helpers`; create the file), and the fixture wants
+# the policy one. Every real `use` in this corpus lives under `tests/helpers/` and is unaffected.
+#
+# Run explicitly (dot-directory — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/helper-outside-dirs.tflw
+
+use "../../lib/nowhere.ts"
+
+test "a helper from outside the fence"
+  api GET /v1/health
+  expect status equals 200

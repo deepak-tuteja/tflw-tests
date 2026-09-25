@@ -608,3 +608,21 @@ jobs:
         with:
           name: regression-reports
           path: testFlow-tests/report-by-phase/
+
+  # Two lockfiles, two audits (the repository's scripts and the application under test), on every
+  # push — the same rule as tflw's own workflow, for the same reason: a runner that installs this
+  # tree should not install a known high-or-critical advisory without CI saying so.
+  supply-chain:
+    name: audit (root + apiV2)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout testFlow-tests
+        uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: No high or critical advisory in the repository's tree
+        run: npm audit --audit-level=high
+      - name: No high or critical advisory in apiV2's tree
+        run: npm --prefix apiV2 audit --audit-level=high

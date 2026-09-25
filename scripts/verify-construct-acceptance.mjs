@@ -2675,11 +2675,11 @@ if (GENERATOR_IDS.some((id) => wanted(id))) {
 // which the fetch standard blocks outright, so the "it got past the gate" leg fails identically
 // whether or not apiV2 is up.
 
-const DIRECTIVE_IDS = ['C92', 'C93', 'C94', 'C95', 'C96'];
+const DIRECTIVE_IDS = ['C92', 'C93', 'C94', 'C95', 'C96', 'C119'];
 
 if (DIRECTIVE_IDS.some((id) => wanted(id))) {
   const FIX = path.join(ROOT, 'tests', '.checkonly', 'config-directives');
-  console.log('\nC92-C96 — the five config directives\n  target: tests/.checkonly/config-directives/ — committed configs, copied in as `tflw.config`');
+  console.log('\nC92-C96, C119 — the six config directives\n  target: tests/.checkonly/config-directives/ — committed configs, copied in as `tflw.config`');
 
   const scratch = mkdtempSync(path.join(tmpdir(), 'tflw-config-directives-'));
   const useConfig = (dir, config) => copyFileSync(path.join(FIX, config), path.join(dir, 'tflw.config'));
@@ -2811,6 +2811,36 @@ if (DIRECTIVE_IDS.some((id) => wanted(id))) {
       recall('C96', counted(onNamed) === 1 && counted(offNamed) === 1,
         `naming the excluded file checks it under both configs — a discovery filter, not an access rule (got ${counted(onNamed)} / ${counted(offNamed)})`);
       precision('C96', clean(on) && clean(off), 'both corpora are otherwise clean, so the count is the only thing that moved between the two configs');
+    }
+
+    // ---- C119: `helpers` — the same two files, and which one is refused swaps with the config ----
+    //
+    // tflw `M239` `D` (`D1279`). Two real modules beside two files that `use` them; under no
+    // `helpers` line the one under `./helpers` is clean and the one under `./lib` is `TF083`,
+    // and with `helpers "./lib"` the verdicts swap — a declaration REPLACES the defaults. The
+    // `run --no-helpers` leg refuses the clean file too, before any request: the config points
+    // `api` at port 9 for `C95`'s reason, and the refusal is at check time so no socket opens.
+    if (wanted('C119')) {
+      const hDir = corpus('helpers', ['uses-helpers.tflw', 'uses-lib.tflw', path.join('helpers', 'stamp.ts'), path.join('lib', 'sign.ts')], 'helpers-default.config');
+      const hchk = (args) => runCheck(args, { cwd: hDir });
+      const defHelpers = hchk(['uses-helpers.tflw']);
+      const defLib = hchk(['uses-lib.tflw']);
+      recall('C119', clean(defHelpers), `a \`use\` under \`./helpers\` is clean with no \`helpers\` line — the default allows it (got: ${firstLine(defHelpers)})`);
+      recall('C119', /error\[TF083\]/.test(defLib) && /resolves to `lib\/sign\.ts`/.test(defLib),
+        `a \`use\` under \`./lib\` is \`TF083\` naming where it landed (got: ${firstLine(defLib)})`);
+      recall('C119', /helpers "\.\/lib"/.test(defLib), 'and the help text names the one-line repair');
+      precision('C119', /^helper helpers\/stamp\.ts — `use` in uses-helpers\.tflw$/m.test(defHelpers),
+        '`check` prints the module it would load, once, before its verdict — the executable surface is stated, not silent');
+      useConfig(hDir, 'helpers-lib.config');
+      const libHelpers = hchk(['uses-helpers.tflw']);
+      const libLib = hchk(['uses-lib.tflw']);
+      recall('C119', clean(libLib) && /error\[TF083\]/.test(libHelpers),
+        `with \`helpers "./lib"\` the verdicts swap over unchanged files — a declaration replaces the defaults (got: ${firstLine(libLib)} / ${firstLine(libHelpers)})`);
+      useConfig(hDir, 'helpers-default.config');
+      const refused = runRun(['--no-helpers', 'uses-helpers.tflw'], { cwd: hDir });
+      recall('C119', /error\[TF083\]/.test(refused) && /--no-helpers/.test(refused) && !/GET \/health/.test(refused),
+        `\`run --no-helpers\` refuses the file the config allows, naming the flag, before any request (got: ${firstLine(refused)})`);
+      precision('C119', clean(hchk(['uses-helpers.tflw'])), 'the same file checks clean again once the flag is gone, so what was refused was the flag and not the file');
     }
   } finally {
     rmSync(scratch, { recursive: true, force: true });

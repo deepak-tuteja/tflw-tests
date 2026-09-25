@@ -115,6 +115,14 @@ const PHASES = [
   // of the server, a `--tag smoke` run and a two-file run through it, a cancel, and the three
   // rows' graders. No `stackEnv`: the page runs the ordinary suite against the clean app.
   { name: 'ui-check', cmd: 'node scripts/verify-ui.mjs' },
+  // tflw `M239` `A`–`D` (`D1276`–`D1279`, this repo's `PLAN_M239_DOGFOOD_EXPANSION.md` `S-1c`): the
+  // CLI's refusals, planted. The page's boundary — the review's forged requests (a foreign
+  // `Origin`, a foreign `Host`, no token, a `text/plain` body, `files` outside the root, a
+  // symlink out of it, `?trace=` outside `report/`) and, beside each refusal, the same request
+  // accepted with the token and the right headers, so a green is a verdict and not an outage;
+  // `fmt --check` red on a planted unformatted file and naming it; `migrate` rewriting a planted
+  // deprecation and doing nothing on its second run. No stack, no browser.
+  { name: 'cli-refusals-check', cmd: 'node scripts/verify-cli-refusals.mjs' },
   // `M195` S2 (`D1017`): `tflw lsp` as a process on stdio, driven by a real client
   // (`scripts/lib/lsp-client.mjs`) about this corpus — the unit suite mocks the transport, and the
   // transport was the gap. Needs no stack; pays the restart like every phase.
@@ -466,7 +474,7 @@ const PHASES = [
 // this is the eighth placement to say so.
 const PHASE_GROUPS = {
   core: ['full suite', '--tag orderOps', '--tag smoke,catalogOps', 'demo-fail-check', '--tag orgOps', '--tag inventoryOps', 'migrate-check', 'secure-local-check', 'security-acceptance-gate', 'input-acceptance'],
-  tooling: ['--tag api', 'watch-check', 'ui-check', 'lsp-check', 'init-check', 'refactor-check', 'pick-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check', 'security-target-check', 'sarif-acceptance', 'construct-acceptance'],
+  tooling: ['--tag api', 'watch-check', 'ui-check', 'cli-refusals-check', 'lsp-check', 'init-check', 'refactor-check', 'pick-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check', 'security-target-check', 'sarif-acceptance', 'construct-acceptance'],
   safety: ['--tag identityOps', '--tag mixed', '--tag smoke,orderOps', '--tag adminOps', '--tag catalogOps', 'safety-flags-check', 'check-diagnostics', 'artifact-contract', 'safety-redaction-check', 'screenshot-step-check'],
   'security-ui': ['--tag smoke,identityOps', 'cli-flags-check', '--tag smoke,adminOps', '--tag ui', 'webv2-admin-check', '--tag smoke,inventoryOps', 'logging-check', 'mtls-rejection', 'vuln-slice-hidden-check', 'second-run-check'],
 };

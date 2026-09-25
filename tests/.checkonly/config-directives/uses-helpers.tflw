@@ -1,0 +1,7 @@
+# uses-helpers.tflw — `C119`: a `use` under `./helpers`, one of the two default directories.
+use "./helpers/stamp.ts"
+
+test "stamped"
+  let s = stamp()
+  api GET /health
+  expect status equals 200

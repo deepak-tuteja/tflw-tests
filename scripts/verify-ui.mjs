@@ -71,13 +71,21 @@ function startUi() {
   child.stderr.on('data', (d) => (out += d.toString()));
   let exitCode = null;
   const exited = new Promise((resolve) => child.on('exit', (code) => ((exitCode = code), resolve())));
+  // tflw `M239` `A` (`D1276`): the printed URL carries the session token, and every request below
+  // sends it the way the page does — `Authorization: Bearer` — read off that line and nowhere else.
+  let token = '';
   return {
     output: () => out,
+    token: () => token,
     async port(timeoutMs = 30000) {
       const start = Date.now();
       for (;;) {
-        const m = /at http:\/\/127\.0\.0\.1:(\d+)\//.exec(out);
-        if (m) return Number(m[1]);
+        const m = /at http:\/\/127\.0\.0\.1:(\d+)\/\?token=([A-Za-z0-9_-]+)/.exec(out);
+        if (m) {
+          token = m[2];
+          TOKEN = m[2];
+          return Number(m[1]);
+        }
         if (exitCode !== null) throw new Error(`tflw ui exited ${exitCode} before listening:\n${out}`);
         if (Date.now() - start > timeoutMs) throw new Error(`timed out waiting for tflw ui to listen; output so far:\n${out}`);
         await new Promise((r) => setTimeout(r, 100));
@@ -92,14 +100,18 @@ function startUi() {
   };
 }
 
+/** The token the running server printed — set by `startUi().port()`; every request carries it. */
+let TOKEN = '';
+const authed = (init = {}) => ({ ...init, headers: { ...(init.headers ?? {}), authorization: `Bearer ${TOKEN}` } });
+
 async function getJson(port, route) {
-  const res = await fetch(`http://127.0.0.1:${port}${route}`, { cache: 'no-store' });
+  const res = await fetch(`http://127.0.0.1:${port}${route}`, authed({ cache: 'no-store' }));
   if (!res.ok) throw new Error(`GET ${route}: ${res.status} ${await res.text()}`);
   return res.json();
 }
 
 async function postJson(port, route, body) {
-  const res = await fetch(`http://127.0.0.1:${port}${route}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await fetch(`http://127.0.0.1:${port}${route}`, authed({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }));
   if (!res.ok) throw new Error(`POST ${route}: ${res.status} ${await res.text()}`);
   return res.json();
 }
@@ -114,7 +126,9 @@ function readStream(port, id, onEvent) {
     const noise = [];
     let buffered = '';
     const timer = setTimeout(() => reject(new Error(`run ${id}: no \`end\` within ${RUN_TIMEOUT_MS / 1000}s (${events.length} events so far)`)), RUN_TIMEOUT_MS);
-    const req = http.get({ host: '127.0.0.1', port, path: `/api/runs/${encodeURIComponent(id)}/events` }, (res) => {
+    // `?token=`, not a header: an `EventSource` cannot set one, so the page sends the token this way
+    // on both streams (tflw `D1276`) and this reader does what the page does.
+    const req = http.get({ host: '127.0.0.1', port, path: `/api/runs/${encodeURIComponent(id)}/events?token=${encodeURIComponent(TOKEN)}` }, (res) => {
       if (res.statusCode !== 200) return reject(new Error(`events: ${res.statusCode}`));
       res.setEncoding('utf8');
       res.on('data', (chunk) => {
@@ -238,7 +252,7 @@ try {
   ok('`tflw ui --no-open --port 0` listens on a free loopback port and says which', Number.isInteger(port) && port > 0);
 
   // The page itself. A 503 is the server's own message for a package shipped without the bundle.
-  const page = await fetch(`http://127.0.0.1:${port}/`);
+  const page = await fetch(`http://127.0.0.1:${port}/?token=${TOKEN}`);
   const html = await page.text();
   ok('`/` serves the page (200, an HTML document titled tflw) — the vendored package ships `dist/ui`', page.status === 200 && /<title>tflw<\/title>/.test(html), `status ${page.status}: ${html.slice(0, 120)}`);
 

@@ -1,0 +1,9 @@
+# deprecated.tflw — PLANT (tflw `M239`, `PLAN_M239_DOGFOOD_EXPANSION.md` `S-1c`): the one
+# deprecation `tflw migrate` has had since `M50` — `scenario` for `test` — so the command's
+# mutating half has a subject. `scripts/verify-cli-refusals.mjs` copies this file into a scratch
+# project, migrates it there, and asserts the rewrite and the second run's no-op; the copy is
+# what moves, and this file stays as written. Dot-directory, so discovery never picks it up.
+
+scenario "legacy"
+  api GET /v1/health
+  expect status equals 200
