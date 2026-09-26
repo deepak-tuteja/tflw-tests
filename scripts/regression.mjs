@@ -125,7 +125,7 @@ const PHASES = [
   { name: 'cli-refusals-check', cmd: 'node scripts/verify-cli-refusals.mjs' },
   // `S-2` (tflw `M240`; `PLAN_M239_DOGFOOD_EXPANSION.md` §3): the page tested by this project — the
   // `.tflw` files in `tests/.tflw-ui/` (doors, tabs, keys, axe in two themes, the authoring round
-  // trip) and `verify-ui-budgets.mjs` (the first eight Tab stops, words at rest against tflw's
+  // trip) and `lib/ui-budgets.mjs` (the first eight Tab stops, words at rest against tflw's
   // budgets on THIS project), under one `tflw ui` serving a scratch copy. Controls: a wrong token
   // must fail the doors file, and the token must be in no kept file. Chrome-spawning: it runs in a
   // browser group, under the sweep's lease, never beside a model. The stack is up for the

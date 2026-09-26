@@ -2742,6 +2742,24 @@ export const PLANTS = [
     catches: 'a fence that widens instead of replacing, a `use` judged from where tflw was invoked rather than from where the file sits, `--no-helpers` honoured only after the first request, and a `check` that loads code without saying so.',
     blockedOn: null,
   },
+  {
+    id: 'C120',
+    construct: 'config:directive:runs',
+    family: 'config',
+    tier: 'check',
+    title: 'a count the config states, and a count of zero refused at its own line',
+    target: 'one plain file checked under `runs keep 3`, under `runs keep 0`, and under a config with no `runs` line',
+    evidence: { file: 'tests/.checkonly/config-directives/runs-keep.config', pattern: '^runs keep 3$', min: 1 },
+    run: 'kept.tflw',
+    graders: ['acceptance'],
+    knownAnswer:
+      'tflw `M241` `E` (`D1325`). `runs keep 3` checks clean; `runs keep 0` is an error at '
+      + '`tflw.config:4` naming `runs keep` — a page that keeps no run forgets every run it starts; '
+      + 'and the same file is clean again under a config with no `runs` line. What the page does '
+      + 'with the count is tflw\'s own `ui-server-boundary` gate: this sweep drives no run history.',
+    catches: 'a directive the parser drops silently, a zero that parses into a page that forgets every run, and a refusal that names nothing.',
+    blockedOn: null,
+  },
 ];
 
 /**

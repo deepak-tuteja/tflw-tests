@@ -1,6 +1,6 @@
 // `S-2b` (tflw `M240`; `PLAN_M239_DOGFOOD_EXPANSION.md` §3): the shapes of `tflw ui` that tflw's
-// own language cannot state, measured with Playwright on this project. Run by
-// `verify-ui-page.mjs` under its server; not a phase of its own.
+// own language cannot state, measured with Playwright on this project. Imported by
+// `verify-ui-page.mjs` under its server — a module in `lib/`, not a phase of its own.
 //
 // THREE MEASUREMENTS.
 //   1. **The first eight Tab stops** from a fresh load of a door (tflw `D1311`): the explorer, the
@@ -10,19 +10,18 @@
 //      Auth 200, Run 150) — counted the way tflw's appearance gate counts them, with the same
 //      exclusions (the user's own text, code, the file list, a closed fold), because two instruments
 //      for one budget would be two budgets. This is where the review's 893 came from.
-//   3. **Targets under 24 px and text under 11 px**, per view. **Measured and printed, not yet
-//      judged**: 24 px targets and the 11 px floor are tflw `M241` `E`'s to build (its gate is this
-//      census on a fixture), and on 2026-09-26 this project measured 106–201 targets per view (the
-//      tree's 22 px rows, the row `+` at 18×14) and one 10 px glyph (the folder twisty). When `M241`
-//      `E` merges, `JUDGE_SIZES` becomes `true` and this measurement is the dogfood half of its gate.
+//   3. **Targets under 24 px and text under 11 px**, per view — judged since tflw `M241` `E`
+//      (`D1325`) built the floors, with the one exception tflw's own census names: the resize grips,
+//      a 6 px seam kept narrow so it covers neither pane's scrollbar. Before `M241` this project
+//      measured 106–201 small targets per view and one 10 px glyph, printed and not judged.
 import { chromium } from 'playwright';
 
 export const BUDGET = { landing: 120, compose: 250, auth: 200, run: 150 };
-const THEIRS = 'code, pre, kbd, input, textarea, select, option, .seq-text, [data-files], [data-user-data], .tip, [data-legend], [data-test], [data-finding], [data-finding-gone]';
+const THEIRS = 'code, pre, kbd, input, textarea, select, option, .cm-editor, .seq-text, [data-files], [data-user-data], .tip, [data-legend], [data-test], [data-finding], [data-finding-gone]';
 const READY = { landing: '[data-doors]', compose: '[data-compose-pane], [data-empty-door]', run: '[data-runs]', auth: '[data-api-auth]' };
 const DOORS = ['api', 'browser', 'load', 'scan'];
-/** Flips with tflw `M241` `E` — see the header's third measurement. */
-const JUDGE_SIZES = false;
+/** Flipped with tflw `M241` `E` (`D1325`), which built the floors this measures — see the header. */
+const JUDGE_SIZES = true;
 const VIEWS = [['', 'landing'], ...DOORS.flatMap((d) => [[d, 'compose'], [d, 'auth'], [d, 'run']])];
 
 /** Words a reader meets without opening anything, and not their own. */
@@ -43,8 +42,12 @@ const wordsAtRest = (page) =>
 const smallThings = (page) =>
   page.evaluate(() => {
     const targets = [];
-    for (const el of document.querySelectorAll('button, a[href], input, select, textarea, summary, [role=button], [tabindex="0"]')) {
-      if (!el.checkVisibility()) continue;
+    for (const found of document.querySelectorAll('button, a[href], input, select, textarea, summary, [role=button], [tabindex="0"]')) {
+      if (!found.checkVisibility()) continue;
+      // tflw's census's two rules, restated so one rule has one reading: the resize grips are its
+      // named exception, and a checkbox is pressed through the label it sits in.
+      if (found.matches('[data-grip], [data-compose-split]')) continue;
+      const el = (found.type === 'checkbox' || found.type === 'radio') && found.closest('label') ? found.closest('label') : found;
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) continue;
       if (r.width < 24 || r.height < 24) {

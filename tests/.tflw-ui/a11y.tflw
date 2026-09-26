@@ -26,7 +26,7 @@ test "API: every tab, in Paper"
   expect css "[data-auth-identity]" is visible
   expect page has no a11y violations
   open "/?token={token}#/api/config"
-  expect css "textarea[data-api-config-text]" is visible
+  expect css "[data-api-config-text]" is visible
   expect page has no a11y violations
 
 test "API: every tab, in Terminal"
@@ -45,7 +45,7 @@ test "API: every tab, in Terminal"
   expect css "[data-auth-identity]" is visible
   expect page has no a11y violations
   open "/?token={token}#/api/config"
-  expect css "textarea[data-api-config-text]" is visible
+  expect css "[data-api-config-text]" is visible
   expect page has no a11y violations
 
 test "BROWSER, LOAD and SCANS land clean in both themes"

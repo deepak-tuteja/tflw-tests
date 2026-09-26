@@ -3,8 +3,8 @@
 # into an assertion, the file written, `⌘↩` to run it, and the report read on the Run tab. Needs the
 # stack: the request is the dogfood API's `/health`, sent from the scratch copy's config.
 #
-# **After tflw `M241`** this file gains an action and a crawl — the two declarations the page cannot
-# author yet.
+# Since tflw `M241` (`D1322`, `D1323`) the second test adds the two declarations the page could not
+# author before it: an action, named on its band, and a crawl, from the SCANS door.
 
 test "a file written on the API door is sent, asserted, run and read back"
   let token = env(TFLW_UI_TOKEN)
@@ -28,3 +28,19 @@ test "a file written on the API door is sent, asserted, run and read back"
   press "Control+Enter"
   click css "[data-tab=run]"
   expect text "the health check answers, in a file the page wrote" is visible
+
+test "an action and a crawl are declarations the page writes"
+  let token = env(TFLW_UI_TOKEN)
+  open "/?token={token}#/api/compose/tests/api/written-in-the-page.tflw"
+  click css "[data-compose-new-action]"
+  fill css "input[data-band-name]" with "checkHealth"
+  click css "[data-compose-write]"
+  expect css "[data-compose-dirty]" has count 0
+  open "/?token={token}#/scan/compose/tests/api/written-in-the-page.tflw"
+  click css "[data-compose-new-crawl]"
+  fill css "input[data-crawl-name]" with "walked by the page"
+  click css "[data-compose-write]"
+  expect css "[data-compose-dirty]" has count 0
+  click css "[data-tab=source]"
+  expect text "action checkHealth()" is visible
+  expect text "crawl \"walked by the page\"" is visible

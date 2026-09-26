@@ -17,7 +17,7 @@ test "Compose, Source, Run, Auth and Config each draw their shell on the API doo
   expect css "[data-auth-identity]" is visible
   click css "[data-tab=config]"
   expect css "[data-tabstrip=config]" is visible
-  expect css "textarea[data-api-config-text]" is visible
+  expect css "[data-api-config-text]" is visible
   expect css "[data-doorbar=api]" is visible
 
 test "the strip is the same five on the other three doors"
@@ -30,4 +30,4 @@ test "the strip is the same five on the other three doors"
   expect css "[data-tab]" has count 5
   open "/?token={token}#/scan/config"
   expect css "[data-tabstrip=config]" is visible
-  expect css "textarea[data-api-config-text]" is visible
+  expect css "[data-api-config-text]" is visible

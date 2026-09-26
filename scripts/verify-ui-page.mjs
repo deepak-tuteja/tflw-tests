@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // `S-2` (tflw `M240`; `PLAN_M239_DOGFOOD_EXPANSION.md` §3): `tflw ui` tested by this project — in
 // tflw's own language where tflw can say it (`S-2a`, `tests/.tflw-ui/`), and in Playwright where it
-// cannot (`S-2b`, `scripts/verify-ui-budgets.mjs`), under one server.
+// cannot (`S-2b`, `scripts/lib/ui-budgets.mjs`), under one server.
 //
 // WHAT IS SERVED. A scratch copy of this project, never the tree: the keyboard file writes a draft
 // through the page with ⌘S, and a page that can write can write here. The copy is what
@@ -26,7 +26,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveTflw } from './lib/tflw-bin.mjs';
-import { measureBudgets } from './verify-ui-budgets.mjs';
+import { measureBudgets } from './lib/ui-budgets.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const CLI_ENTRY = resolveTflw('released', { label: 'verify-ui-page' }).entry;
