@@ -1,0 +1,30 @@
+# `S-2a` — the page's round trip, written the way a newcomer would (review decision 15): a new file
+# on the API door, a request composed by the dialog, `send` to see what comes back, a value ticked
+# into an assertion, the file written, `⌘↩` to run it, and the report read on the Run tab. Needs the
+# stack: the request is the dogfood API's `/health`, sent from the scratch copy's config.
+#
+# **After tflw `M241`** this file gains an action and a crawl — the two declarations the page cannot
+# author yet.
+
+test "a file written on the API door is sent, asserted, run and read back"
+  let token = env(TFLW_UI_TOKEN)
+  open "/?token={token}#/api"
+  click css "[data-compose-new-file]"
+  fill field "file path" with "tests/api/written-in-the-page.tflw"
+  fill field "test name" with "the health check answers, in a file the page wrote"
+  fill field "request path" with "/health"
+  click css "[data-new-create]"
+  expect css "[data-new-thing]" has count 0
+  within css "[data-files]"
+    expect text "written-in-the-page.tflw" is visible
+  click css "[data-seq-row=request] [data-seq-pick]"
+  click css "[data-compose-send=this]"
+  expect css "[data-compose-response=\"200\"]" is visible
+  click css "[data-compose-response]"
+  tick css "[data-tick=db]"
+  click css "[data-compose-verify]"
+  click css "[data-compose-write]"
+  expect css "[data-compose-dirty]" has count 0
+  press "Control+Enter"
+  click css "[data-tab=run]"
+  expect text "the health check answers, in a file the page wrote" is visible

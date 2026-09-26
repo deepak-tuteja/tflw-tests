@@ -1,0 +1,33 @@
+# `S-2a` — the keys the page answers (tflw `M240` `C`, `D1311`). One table drives the listeners and
+# the legend, so what `?` lists is what the page does; `⌘S` writes a dirty draft from inside a field.
+# `Control+S` rather than `Meta+S`: the box and CI are Linux, where the page reads Control as Mod.
+
+test "? opens the legend of the keys, and Escape closes it"
+  let token = env(TFLW_UI_TOKEN)
+  open "/?token={token}#/api"
+  expect css "[data-doorbar=api]" is visible
+  press "?"
+  expect css "[data-legend]" is visible
+  expect css "[data-legend-key]" has count 6
+  press "Escape"
+  expect css "[data-legend]" has count 0
+
+test "/ reaches search from anywhere but a field"
+  let token = env(TFLW_UI_TOKEN)
+  open "/?token={token}#/api"
+  expect css "[data-doorbar=api]" is visible
+  press "/"
+  expect css "[data-search]:focus" is visible
+
+test "Control+S writes a dirty draft from inside a field"
+  let token = env(TFLW_UI_TOKEN)
+  open "/?token={token}#/browser"
+  expect css "[data-doorbar=browser]" is visible
+  click css "[data-seq-add=click]"
+  select "text" from css "[data-script=click] [data-locator-kind]"
+  fill css "[data-script=click] [data-locator-value]" with "Saved by key"
+  expect css "[data-compose-dirty]" is visible
+  press "Control+S" on css "[data-script=click] [data-locator-value]"
+  expect css "[data-compose-dirty]" has count 0
+  click css "[data-tab=source]"
+  expect text "click text \"Saved by key\"" is visible
