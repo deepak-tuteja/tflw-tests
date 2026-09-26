@@ -2918,6 +2918,56 @@ if (['C124', 'C125', 'C126'].some((id) => wanted(id))) {
 }
 
 // =============================================================================
+// S-3d — the edge module's output claims, graded as legs of C99, C67 and C60
+// =============================================================================
+//
+// `tests/api/edge/` asserts what the server does; this plant asserts what tflw *says* about it,
+// which is the half no journey can reach. Three claims, each a leg of the row whose construct it
+// exercises rather than a row of its own (a construct is rostered once): a step's own `timeout`
+// against a route that sleeps past it (`C99`), `retry honoring "Retry-After"` reporting its
+// retries on the step's own line (`C67`, the api step), and the failure-message cap against a
+// 2 MiB body (`C60`, `equals`). Two of the four tests are meant to end red.
+if (['C99', 'C67', 'C60'].some((id) => wanted(id))) {
+  const file = 'tests/.constructs/edge-output.tflw';
+  console.log(`\nS-3d — the edge module's output claims (legs of C99, C67, C60)\n  target: ${file} against apiV2 \`/v1/edge/\``);
+  const { report, output } = runCorpus(ROOT, [file]);
+  if (!report) {
+    for (const id of ['C99', 'C67', 'C60']) {
+      if (wanted(id)) fail(`${id} (S-3d) produced no report. Is the stack up (\`node cli.mjs start\`)?\n${output.trim().split('\n').slice(-12).join('\n')}`);
+    }
+  } else {
+    if (wanted('C99')) {
+      const t = named(report, 'a step whose own timeout is shorter than the answer');
+      const said = t?.error ?? '';
+      recall('C99', t?.ok === false && said.includes('request timed out after 500ms'),
+        `the step's own \`timeout 500ms\` fired against a 3 s sleep and the message names it (${JSON.stringify(said.slice(0, 90))})`);
+      precision('C99', (t?.durationMs ?? Infinity) < 2500,
+        `and it gave up before the server would have answered (${t?.durationMs ?? '—'} ms against 3000) — a runner that waited for the answer and then compared would report the same red`);
+    }
+    if (wanted('C67')) {
+      const retried = named(report, 'a retry honoring Retry-After says on its own line');
+      const line = stepsOf(retried).find((st) => st.kind === 'api')?.detail ?? '';
+      const waited = Number((line.match(/waited (\d+)ms total/) ?? [])[1] ?? -1);
+      recall('C67', retried?.ok === true && /retried 2x honoring Retry-After/.test(line),
+        `two refusals, two retries, and the step's own line says so (${JSON.stringify(line.slice(0, 120))})`);
+      precision('C67', waited >= 1900,
+        `and the wait it reports is the two one-second waits the header named (${waited} ms) — a retry that ignored the header would say it retried and wait nothing`);
+      const short = named(report, 'a retry budget one short of the refusals');
+      recall('C67', short?.ok === false && /\b503\b/.test(short?.error ?? ''),
+        `a budget of one against two refusals ends on the 503 (${JSON.stringify((short?.error ?? '').slice(0, 90))}) — an unbounded retry would pass`);
+    }
+    if (wanted('C60')) {
+      const t = named(report, 'a failing equals against a 2 MiB string');
+      const said = t?.error ?? '';
+      recall('C60', t?.ok === false && /\(truncated, showing \d+ of \d+ chars/.test(said),
+        `the equals failed and its message says it is capped (${JSON.stringify(said.slice(-110))})`);
+      precision('C60', said.length > 0 && said.length < 20_000,
+        `and it is capped in fact: ${said.length} chars of message for a 2 097 152-byte value`);
+    }
+  }
+}
+
+// =============================================================================
 // C97-C104 — the config keys, and the one declaration the same instrument freed
 // =============================================================================
 //

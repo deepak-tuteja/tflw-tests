@@ -1,0 +1,71 @@
+# `S-3d` data (decision 18): the data cases — null beside absence, text outside ASCII, a 2 MiB body,
+# both pagination styles walked to the end, and an upload of the wrong type — each against its own
+# route under `/v1/edge/` except the upload, which is the real `/uploads` route.
+
+@api @edge
+test "null, absent, empty and zero are four different answers"
+  api GET /edge/nulls
+  expect status equals 200
+  expect body.presentButNull equals null
+  expect body.nested.value equals null
+  expect body.list[1] equals null
+  expect body.emptyString is empty
+  expect body.zero equals 0
+  expect body.falseValue equals false
+  expect body.list has count 3
+
+@api @edge
+test "names outside ASCII arrive intact in a body, in an echo and in a header"
+  api GET /edge/unicode
+  expect status equals 200
+  expect body.name equals "Zoë Łukasiewicz 🚀"
+  expect body.japanese equals "東京"
+  expect header "x-greeting" equals "Grüße"
+  expect header "x-name-encoded" equals "Zo%C3%AB%20%C5%81ukasiewicz%20%F0%9F%9A%80"
+  api POST /edge/unicode/echo body { name: "Łódź 東京 🚀" }
+  expect status equals 200
+  expect body.echoed.name equals "Łódź 東京 🚀"
+  # Code points, as the server counts them: the rocket is one, not the two UTF-16 units `.length`
+  # would say.
+  expect body.nameLength equals 9
+
+@api @edge
+test "a 2 MiB body is read whole, and its far end is where the server put it"
+  api GET /edge/large?kib=2048
+  expect status equals 200
+  expect body.bytes equals 2097152
+  expect body.blob matches "^start-marker"
+  expect body.blob matches "end-mark$"
+
+@api @edge
+test "offset pagination walks the list without a gap or a repeat at a page boundary"
+  api GET /edge/items?offset=0&limit=10
+  expect body.data has count 10
+  expect body.data[9].id equals 10
+  api GET /edge/items?offset=10&limit=10
+  expect body.data[0].id equals 11
+  api GET /edge/items?offset=20&limit=10
+  expect body.data has count 5
+  expect body.data[4].id equals 25
+
+@api @edge
+test "cursor pagination walks to the end, and the last page says there is no next"
+  api GET /edge/items?cursor=&limit=10
+  expect body.data has count 10
+  capture body.nextCursor as page2
+  api GET /edge/items?cursor={page2}&limit=10
+  expect body.data[0].id equals 11
+  capture body.nextCursor as page3
+  api GET /edge/items?cursor={page3}&limit=10
+  expect body.data has count 5
+  expect body.nextCursor equals null
+
+@api @edge @identityOps
+test "an upload of a type the server does not take is refused, and says which types it does"
+  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
+  expect status equals 200
+  capture body.accessToken as token
+  api POST /uploads upload "../../payloads/avatar.png" as "file"
+    header "Authorization" is "Bearer {token}"
+  expect status equals 400
+  expect body.detail contains "unsupported content type"

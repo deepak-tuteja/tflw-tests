@@ -1,0 +1,21 @@
+# `S-3d` infrastructure (decision 18): tflw through an HTTP proxy, by SPEC §3.5's route —
+# `NODE_USE_ENV_PROXY=1` and `HTTP_PROXY`, set by the `proxy-check` phase. `env viaProxy`'s base
+# names the api by its compose service name, which this host cannot resolve, so reaching it at all
+# is the proxy's doing — and the phase reads the proxy's own log for the tunnels it opened.
+#
+# Node's proxy agent tunnels plain HTTP as well (`CONNECT api:4001`), so the proxy relays bytes and
+# writes no `Via`: the server seeing none is the known answer for a tunnel, not a proxy left out.
+
+@edge @api
+test "a request through the proxy reaches an api this host cannot resolve, as a tunnel"
+  api GET /edge/via
+  expect status equals 200
+  expect body.via equals null
+
+@edge @api
+test "a body and a redirect survive the proxy"
+  api POST /edge/unicode/echo body { name: "Łódź 東京 🚀" }
+  expect status equals 200
+  expect body.echoed.name equals "Łódź 東京 🚀"
+  api GET /edge/nulls
+  expect body.zero equals 0

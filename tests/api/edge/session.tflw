@@ -1,0 +1,49 @@
+# `S-3d` session (decision 18): a session that expires between two steps, a CSRF token that rotates
+# on every response, and cookies carrying every attribute a server sets — held to what a test
+# client's jar does, which is not what a browser does (SPEC's cookie-jar section).
+
+@api @edge
+test "a session that expires mid-test answers 200 while it lives and 401 once it has gone"
+  api POST /edge/session body { who: "ada", ttlMs: 1500 }
+  expect status equals 200
+  capture body.token as token
+  api GET /edge/session/whoami
+    header "Authorization" is "Bearer {token}"
+  expect status equals 200
+  expect body.who equals "ada"
+  wait until api GET /edge/session/whoami timeout wait 10s
+    header "Authorization" is "Bearer {token}"
+    expect status equals 401
+
+@api @edge
+test "a CSRF token is good for one request, and each answer carries the next"
+  let key = unique("csrf")
+  api GET /edge/csrf?key={key}
+  capture header "x-csrf-token" as first
+  api POST /edge/csrf/act?key={key} body {}
+    header "X-CSRF-Token" is "{first}"
+  expect status equals 200
+  capture header "x-csrf-token" as second
+  api POST /edge/csrf/act?key={key} body {}
+    header "X-CSRF-Token" is "{first}"
+  expect status equals 403
+  api POST /edge/csrf/act?key={key} body {}
+    header "X-CSRF-Token" is "{second}"
+  expect status equals 200
+
+@api @edge
+test "the jar replays what it was told to keep, drops what expired, and enforces no browser attributes"
+  api GET /edge/cookies
+  expect status equals 200
+  api GET /edge/cookies/echo
+  expect body.cookie contains "edge_plain=1"
+  expect body.cookie contains "edge_httponly=2"
+  expect body.cookie contains "edge_secure=3"
+  expect body.cookie contains "edge_domain=4"
+  expect body.cookie not contains "edge_gone"
+
+@api @edge
+test "api and api root are one origin, so they share one jar"
+  api GET /edge/cookies
+  api root GET /v1/edge/cookies/echo
+  expect body.cookie contains "edge_plain=1"

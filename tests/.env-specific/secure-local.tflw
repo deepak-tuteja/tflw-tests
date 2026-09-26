@@ -39,3 +39,15 @@ test "the session cookie carries Secure over TLS"
   expect status equals 200
   expect header "set-cookie" matches "Secure"
   expect header "set-cookie" matches "HttpOnly"
+
+# `S-3d` infrastructure (decision 18): the sidecar offers HTTP/2 by ALPN since `S-3d`. tflw's API
+# client negotiates HTTP/1.1 against it, and must get the same answers it got before h2 was on —
+# text outside ASCII included, since a framing change is where an encoding goes wrong.
+@tls @edge @api
+test "an HTTP/2-capable TLS front still answers tflw's client, which speaks HTTP/1.1"
+  api GET /edge/unicode
+  expect status equals 200
+  expect body.city equals "Łódź"
+  api GET /edge/chunked
+  expect status equals 200
+  expect body.chunks has count 3

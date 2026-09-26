@@ -1,0 +1,22 @@
+# `S-3d` infrastructure (decision 18): the api reached over IPv6 loopback — `env ipv6Loopback`'s base
+# URL is `http://[::1]:4001/v1`. What is graded is that a bracketed IPv6 literal is a working base:
+# the request goes out, a redirect's relative `Location` resolves against it, and a cookie set there
+# is replayed there.
+
+@edge @api
+test "a bracketed IPv6 base URL reaches the api"
+  api GET /edge/nulls
+  expect status equals 200
+  expect body.zero equals 0
+
+@edge @api
+test "a redirect under an IPv6 base resolves its Location against that base"
+  api POST /edge/redirect/308 body {}
+  expect status equals 200
+  expect body.method equals "POST"
+
+@edge @api
+test "a cookie set under an IPv6 base is replayed to it"
+  api GET /edge/cookies
+  api GET /edge/cookies/echo
+  expect body.cookie contains "edge_plain=1"

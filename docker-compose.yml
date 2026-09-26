@@ -206,6 +206,16 @@ services:
       timeout: 3s
       retries: 20
 
+  # `S-3d` (decision 18): the proxy tenant — tinyproxy from Alpine's package (GPL-2.0 by its COPYING
+  # file; none of its code is in this repository). Behind a profile, so only `proxy-check` starts it,
+  # and published on 127.0.0.1 alone: the box's firewall opens high ports to the LAN, and this must
+  # never be a proxy anyone there can use.
+  proxy:
+    build: ./ops/proxy
+    profiles: ["proxy"]
+    ports:
+      - "127.0.0.1:${TFLW_PORT_PROXY:-8888}:8888"
+
   # `S-4b` (tflw `M242` `F`): the OpenTelemetry Collector `tflw export otlp` is graded against —
   # contrib distribution (it carries the file exporter), Apache-2.0 by the LICENSE files of both
   # collector repositories, pinned. Behind a profile, so only `otel-export-check` starts it and no

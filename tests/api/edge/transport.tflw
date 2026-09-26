@@ -1,0 +1,101 @@
+# `S-3d` transport (decision 18): the transport cases a user of tflw lands in against a real server,
+# each against its own route under `/v1/edge/` (apiV2 `src/edge/`). Keys come from `unique(...)`, so
+# no two runs — and no two journeys — share a refusal count or a rate-limit window.
+
+@api @edge
+test "a slow answer inside the step's own timeout is just a slow answer"
+  api GET /edge/slow?ms=400 timeout 5s
+  expect status equals 200
+  expect body.sleptMs equals 400
+
+@api @edge
+test "a 503 with Retry-After in seconds is retried after the wait the header names"
+  let key = unique("retry-seconds")
+  api GET /edge/unavailable?key={key}&form=seconds
+    retry honoring "Retry-After" up to 2
+  expect status equals 200
+  expect body.refusedBefore equals 1
+
+@api @edge
+test "a 503 with Retry-After as an HTTP-date is honoured the same way"
+  let key = unique("retry-date")
+  api GET /edge/unavailable?key={key}&form=date
+    retry honoring "Retry-After" up to 2
+  expect status equals 200
+  expect body.refusedBefore equals 1
+
+@api @edge
+test "without the retry line, the 503 and its Retry-After are what the step sees"
+  let key = unique("retry-none")
+  api GET /edge/unavailable?key={key}&form=seconds
+  expect status equals 503
+  expect header "retry-after" equals "1"
+
+@api @edge
+test "every redirect status is followed by default, and 307/308 keep the method while 301/302 may not"
+  api GET /edge/redirect/301
+  expect status equals 200
+  expect body.from equals "301"
+  api POST /edge/redirect/307 body {}
+  expect status equals 200
+  expect body.method equals "POST"
+  api POST /edge/redirect/308 body {}
+  expect status equals 200
+  expect body.method equals "POST"
+  api POST /edge/redirect/302 body {}
+  expect status equals 200
+  expect body.method equals "GET"
+
+@api @edge
+test "without redirects, each redirect status and its Location are observable"
+  api GET /edge/redirect/301 without redirects
+  expect status equals 301
+  expect header "location" contains "/v1/edge/landed?from=301"
+  api GET /edge/redirect/302 without redirects
+  expect status equals 302
+  api GET /edge/redirect/307 without redirects
+  expect status equals 307
+  api GET /edge/redirect/308 without redirects
+  expect status equals 308
+
+@api @edge
+test "a 204 and an empty 200 both carry nothing, and neither is an error"
+  api GET /edge/no-content
+  expect status equals 204
+  api GET /edge/empty-ok
+  expect status equals 200
+  expect body text equals ""
+
+@api @edge
+test "gzip, brotli and chunked bodies all arrive as the document they encode"
+  api GET /edge/nulls
+  expect status equals 200
+  expect header "content-encoding" equals "gzip"
+  api GET /edge/brotli
+  expect status equals 200
+  expect header "content-encoding" equals "br"
+  expect body.greeting equals "hello from a brotli body"
+  api GET /edge/chunked
+  expect status equals 200
+  expect body.chunks equals ["one", "two", "three"]
+
+@api @edge
+test "a rate limit counts down in its headers, then refuses with 429 and Retry-After"
+  let key = unique("limit")
+  api GET /edge/limited?key={key}
+  expect status equals 200
+  expect header "x-ratelimit-limit" equals "3"
+  expect header "x-ratelimit-remaining" equals "2"
+  api GET /edge/limited?key={key}
+  expect header "x-ratelimit-remaining" equals "1"
+  api GET /edge/limited?key={key}
+  expect header "x-ratelimit-remaining" equals "0"
+  api GET /edge/limited?key={key}
+  expect status equals 429
+  expect header "retry-after" equals "60"
+
+@api @edge
+test "a request that goes direct arrives with no Via header"
+  api GET /edge/via
+  expect status equals 200
+  expect body.via equals null
