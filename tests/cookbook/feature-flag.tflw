@@ -4,11 +4,11 @@
 # that need the flag on carry a tag naming it, and the job that runs with the flag off leaves them
 # out on the command line —
 #
-#     tflw run --tag !flag-giftMessage
+#     tflw run --tag !flag_giftMessage
 #
 # — which `verify-cli-flags.mjs` proves against the same run without the exclusion. The test below
 # is the flagged half; the known-answer route stands in for the feature.
-@cookbook @flag-giftMessage
+@cookbook @flag_giftMessage
 test "the gift-message flag's test runs only where the flag is on"
   api GET /soft-check/known-answer
   expect status equals 200
