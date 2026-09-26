@@ -29,5 +29,7 @@ test "Control+S writes a dirty draft from inside a field"
   expect css "[data-compose-dirty]" is visible
   press "Control+S" on css "[data-script=click] [data-locator-value]"
   expect css "[data-compose-dirty]" has count 0
-  click css "[data-tab=source]"
-  expect text "click text \"Saved by key\"" is visible
+  # Read back on the door rather than on Source: since tflw `M241` Source is an editor that draws
+  # only the lines in view, and this project's browser file is longer than the view.
+  open "/?token={token}#/browser"
+  expect text "Saved by key" is visible
