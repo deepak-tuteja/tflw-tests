@@ -1,0 +1,39 @@
+# `S-3d` (tflw `M239` arc, decision 18) — the edge module's known-answer plant: what **tflw must
+# report** when a real server does the awkward thing. The journeys in `tests/api/edge/` assert what
+# the server does; this file asserts what the runner *says* about it, which no journey can.
+#
+# **This file is meant to fail.** Two of its four tests end red on purpose, and that red, read by
+# `verify-construct-acceptance.mjs`, is the assertion:
+#
+#   - a step whose own `timeout` is shorter than `/edge/slow`'s sleep fails, names its own budget
+#     (`500ms`) and nothing else, and gives up long before the server would have answered (`C99`);
+#   - `retry honoring "Retry-After"` that retried says so on the step's own report line — how many
+#     times and how long it waited — and a budget one short of the refusals ends on the 503 (`C67`);
+#   - a failing `equals` against a 2 MiB string prints a capped message that says it is capped,
+#     never the two megabytes (`C60`).
+
+@constructs @edge
+test "a step whose own timeout is shorter than the answer fails and names that timeout"
+  api GET /edge/slow?ms=3000 timeout 500ms
+  expect status equals 200
+
+@constructs @edge
+test "a retry honoring Retry-After says on its own line that it retried and how long it waited"
+  let key = unique("edge-plant-retried")
+  api GET /edge/unavailable?key={key}&form=seconds&times=2
+    retry honoring "Retry-After" up to 2
+  expect status equals 200
+  expect body.refusedBefore equals 2
+
+@constructs @edge
+test "a retry budget one short of the refusals ends on the refusal"
+  let key = unique("edge-plant-short")
+  api GET /edge/unavailable?key={key}&form=seconds&times=2
+    retry honoring "Retry-After" up to 1
+  expect status equals 200
+
+@constructs @edge
+test "a failing equals against a 2 MiB string prints a capped message"
+  api GET /edge/large?kib=2048
+  expect status equals 200
+  expect body.blob equals "start-marker"

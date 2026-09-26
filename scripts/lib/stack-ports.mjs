@@ -24,6 +24,7 @@ export const PORT_DEFAULTS = Object.freeze({
   TLS: 8443, // nginx sidecar: self-signed TLS
   MTLS: 8444, // nginx sidecar: mTLS
   VULN_TLS: 8445, // nginx sidecar under VULN_MODE
+  PROXY: 8888, // `S-3d`: the tinyproxy tenant (`--profile proxy`), bound to 127.0.0.1 only
 });
 
 export function stackOffset(environ = process.env) {
@@ -49,6 +50,8 @@ export function urls(offset = stackOffset()) {
   return {
     TFLW_API_ORIGIN: `http://localhost:${p.API}`,
     TFLW_API_BASE: `http://localhost:${p.API}/v1`,
+    // `S-3d`: the same api over IPv6 loopback — `env ipv6Loopback`'s base, offset like every other.
+    TFLW_IPV6_BASE: `http://[::1]:${p.API}/v1`,
     TFLW_INVENTORY_ORIGIN: `http://localhost:${p.INVENTORY}`,
     TFLW_INVENTORY_BASE: `http://localhost:${p.INVENTORY}/v1`,
     TFLW_WEB_BASE: `http://localhost:${p.WEB}`,
@@ -59,6 +62,7 @@ export function urls(offset = stackOffset()) {
     TFLW_MTLS_BASE: `https://localhost:${p.MTLS}/v1`,
     TFLW_VULN_TLS_ORIGIN: `https://localhost:${p.VULN_TLS}`,
     TFLW_VULN_TLS_BASE: `https://localhost:${p.VULN_TLS}/v1`,
+    TFLW_PROXY_URL: `http://127.0.0.1:${p.PROXY}`,
   };
 }
 

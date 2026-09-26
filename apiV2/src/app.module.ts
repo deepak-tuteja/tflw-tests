@@ -48,6 +48,7 @@ import { LoadAdminModule } from './load-admin/load-admin.module';
 import { AdminUsersModule } from './admin-users/admin-users.module';
 import { GraphqlModule } from './graphql/graphql.module';
 import { StorefrontModule } from './storefront/storefront.module';
+import { EdgeModule } from './edge/edge.module';
 import { VulnModule, VULN_MODE_ENABLED } from './vuln/vuln.module';
 
 @Module({
@@ -92,6 +93,7 @@ import { VulnModule, VULN_MODE_ENABLED } from './vuln/vuln.module';
     HealthModule,
     GraphqlModule,
     StorefrontModule,
+    EdgeModule,
     AuthModule,
     OauthModule,
     ProfileExportModule,
