@@ -1,4 +1,4 @@
-# helper-outside-dirs.tflw — CHECK-ONLY FIXTURE (tflw `M239` `D`, `D1279`): a `use` that resolves
+# helper-outside-dirs.tflw — CHECK-ONLY FIXTURE (tflw `M239` `D`, `D1319`): a `use` that resolves
 # outside the directories `tflw.config`'s `helpers` allows — `TF083`.
 #
 # This file sits in `tests/.checkonly/`, so `../../lib/nowhere.ts` resolves to `lib/nowhere.ts` at

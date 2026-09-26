@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// tflw `M239` (`D1276`–`D1279`; this repo's `PLAN_M239_DOGFOOD_EXPANSION.md` `S-1c`): the CLI's
+// tflw `M239` (`D1316`–`D1319`; this repo's `PLAN_M239_DOGFOOD_EXPANSION.md` `S-1c`): the CLI's
 // refusals, planted — the same "script it, don't trust a one-time manual check forever" reasoning
 // as every other `*-check` phase, pointed at the things tflw is supposed to say NO to.
 //

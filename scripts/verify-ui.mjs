@@ -71,7 +71,7 @@ function startUi() {
   child.stderr.on('data', (d) => (out += d.toString()));
   let exitCode = null;
   const exited = new Promise((resolve) => child.on('exit', (code) => ((exitCode = code), resolve())));
-  // tflw `M239` `A` (`D1276`): the printed URL carries the session token, and every request below
+  // tflw `M239` `A` (`D1316`): the printed URL carries the session token, and every request below
   // sends it the way the page does — `Authorization: Bearer` — read off that line and nowhere else.
   let token = '';
   return {
@@ -127,7 +127,7 @@ function readStream(port, id, onEvent) {
     let buffered = '';
     const timer = setTimeout(() => reject(new Error(`run ${id}: no \`end\` within ${RUN_TIMEOUT_MS / 1000}s (${events.length} events so far)`)), RUN_TIMEOUT_MS);
     // `?token=`, not a header: an `EventSource` cannot set one, so the page sends the token this way
-    // on both streams (tflw `D1276`) and this reader does what the page does.
+    // on both streams (tflw `D1316`) and this reader does what the page does.
     const req = http.get({ host: '127.0.0.1', port, path: `/api/runs/${encodeURIComponent(id)}/events?token=${encodeURIComponent(TOKEN)}` }, (res) => {
       if (res.statusCode !== 200) return reject(new Error(`events: ${res.statusCode}`));
       res.setEncoding('utf8');

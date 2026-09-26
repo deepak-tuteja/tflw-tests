@@ -345,7 +345,7 @@ const CLASSIFIED = [
     why: 'dev-safe defaults matching docker-compose.yml\'s own fallbacks; no GitHub Secret is involved. Locally this is the same line README\'s Setup section documents',
   },
   { wf: 'ci.yml', job: 'regression', cmd: 'npm run refresh-tflw', name: 'Refresh tflw from the checked-out build', class: 'setup', why: 'as above, plus this repo\'s dependency install' },
-  // --- job `supply-chain` (tflw `M239` `E`, `D1280`) — two lockfiles, two audits ---------------
+  // --- job `supply-chain` (tflw `M239` `E`, `D1320`) — two lockfiles, two audits ---------------
   { wf: 'ci.yml', job: 'supply-chain', cmd: 'npm audit --audit-level=high', name: 'No high or critical advisory in the repository\'s tree', class: 'gate', local: 'npm audit --audit-level=high', why: 'the scripts\' own dependency tree, read from the lockfile against the registry; no install needed' },
   { wf: 'ci.yml', job: 'supply-chain', cmd: 'npm --prefix apiV2 audit --audit-level=high', name: 'No high or critical advisory in apiV2\'s tree', class: 'gate', local: 'npm --prefix apiV2 audit --audit-level=high', why: 'the application under test has its own lockfile; a dependency of the fixture is part of what the corpus measures, so an advisory in it is reviewed as a change to the fixture' },
   {

@@ -285,7 +285,7 @@ const FILE_FIXTURES = {
   // Coupled with its tflw half and red until that half merges (D350/D382). The local pre-flight is
   // `npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs` (D351).
   TF077: 'undeclared-env-ref.tflw',
-  // tflw `M239` `D` (`D1279`): a `use` resolving outside the directories `helpers` allows. The
+  // tflw `M239` `D` (`D1319`): a `use` resolving outside the directories `helpers` allows. The
   // fixture's path climbs to the repository root's `lib/`, which no config here names.
   TF083: 'helper-outside-dirs.tflw',
 };

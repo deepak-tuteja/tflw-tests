@@ -2730,7 +2730,7 @@ export const PLANTS = [
     run: 'uses-helpers.tflw',
     graders: ['acceptance'],
     knownAnswer:
-      'tflw `M239` `D` (`D1279`). `uses-helpers.tflw` loads `./helpers/stamp.ts` and `uses-lib.tflw` '
+      'tflw `M239` `D` (`D1319`). `uses-helpers.tflw` loads `./helpers/stamp.ts` and `uses-lib.tflw` '
       + 'loads `./lib/sign.ts`; the two configs differ by one line. With no `helpers` line the first '
       + 'is clean and the second is **`TF083`** naming `lib/sign.ts` and the one-line repair, '
       + '`helpers "./lib"`. With that line the verdicts **swap** over unchanged files, so a '

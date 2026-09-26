@@ -115,7 +115,7 @@ const PHASES = [
   // of the server, a `--tag smoke` run and a two-file run through it, a cancel, and the three
   // rows' graders. No `stackEnv`: the page runs the ordinary suite against the clean app.
   { name: 'ui-check', cmd: 'node scripts/verify-ui.mjs' },
-  // tflw `M239` `A`–`D` (`D1276`–`D1279`, this repo's `PLAN_M239_DOGFOOD_EXPANSION.md` `S-1c`): the
+  // tflw `M239` `A`–`D` (`D1316`–`D1319`, this repo's `PLAN_M239_DOGFOOD_EXPANSION.md` `S-1c`): the
   // CLI's refusals, planted. The page's boundary — the review's forged requests (a foreign
   // `Origin`, a foreign `Host`, no token, a `text/plain` body, `files` outside the root, a
   // symlink out of it, `?trace=` outside `report/`) and, beside each refusal, the same request

@@ -2815,7 +2815,7 @@ if (DIRECTIVE_IDS.some((id) => wanted(id))) {
 
     // ---- C119: `helpers` — the same two files, and which one is refused swaps with the config ----
     //
-    // tflw `M239` `D` (`D1279`). Two real modules beside two files that `use` them; under no
+    // tflw `M239` `D` (`D1319`). Two real modules beside two files that `use` them; under no
     // `helpers` line the one under `./helpers` is clean and the one under `./lib` is `TF083`,
     // and with `helpers "./lib"` the verdicts swap — a declaration REPLACES the defaults. The
     // `run --no-helpers` leg refuses the clean file too, before any request: the config points
