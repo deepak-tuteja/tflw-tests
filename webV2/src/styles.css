@@ -354,10 +354,38 @@ td {
   width: 1px;
 }
 
-/* The promo clock keeps one width whatever the time says, so masking it hides the whole change
-   (`S-3a`: a proportional digit would shift the text after it, outside the mask). */
+/* The promo board: every dimension fixed, and pinned to the viewport's corner, so its snapshot does
+   not depend on the fonts a machine has — in flow, its top was wherever the text above it ended,
+   a fractional pixel that differs by font, and the capture came out 97 px tall for a 96 px board.
+   The clock sits in a box of its own fixed size, which is what the mask paints over. */
+.promo-board {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 10;
+  width: 320px;
+  height: 96px;
+  border-radius: 8px;
+  background: #1f3a5f;
+  overflow: hidden;
+}
+.promo-board-stripe {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 64px;
+  height: 96px;
+  background: #c0392b;
+}
 .promo-clock {
-  display: inline-block;
-  min-width: 5.5em;
+  position: absolute;
+  left: 24px;
+  top: 28px;
+  width: 200px;
+  height: 40px;
+  overflow: hidden;
+  color: #ffffff;
+  font-size: 28px;
+  line-height: 40px;
   font-variant-numeric: tabular-nums;
 }

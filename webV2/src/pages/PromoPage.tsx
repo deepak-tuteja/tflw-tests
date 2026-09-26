@@ -24,13 +24,18 @@ export function PromoPage() {
   return (
     <section aria-labelledby="promo-heading" className="promo">
       <h1 id="promo-heading">This week&rsquo;s offers</h1>
-      <p>
-        Offers end Sunday at midnight. It is now{' '}
+      <p>Offers end Sunday at midnight. The time now:</p>
+      {/* The board is what the snapshot journey captures: a fixed size, drawn by CSS, with no text
+          but the clock — which is the region the mask paints over. Everything a font could move is
+          outside it, so the masked capture is the same pixels on any Linux a browser build runs
+          on (`S-3b`: the first baseline was the whole section, and Fedora and Ubuntu wrap its text
+          to different heights under one platform key). */}
+      <div className="promo-board" data-promo-board>
+        <span className="promo-board-stripe" />
         <time dateTime={now.toISOString()} className="promo-clock" data-clock>
           {now.toLocaleTimeString('en-GB')}
         </time>
-        .
-      </p>
+      </div>
       <table>
         <caption>Offers this week</caption>
         <thead>
