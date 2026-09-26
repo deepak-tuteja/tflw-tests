@@ -1,0 +1,9 @@
+# graphql-on-get.tflw — CHECK-ONLY FIXTURE (tflw `M242` `C`, `D1328`): a `body graphql` on a `GET`
+# — `TF085`. The body kind is GraphQL-over-HTTP's POST shape; on a `GET` the query is a body most
+# servers ignore, so the response would answer nothing that was asked. The repair is the method.
+#
+# Run explicitly (dot-directory — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/graphql-on-get.tflw
+test "a GraphQL query sent the wrong way"
+  api GET /graphql body graphql "{ products { id } }"
+  expect status equals 200

@@ -116,3 +116,38 @@ test "has count is an exact length, not a lower bound"
   # implemented as truthiness passes everything.
   expect body.tags not has count 1
   expect body.tags not has count 3
+
+# tflw `M242` `A` (`D1326`) — `C121`-`C123`: the count's two bounds and the emptiness test. Each
+# bound is held at its edge from both sides: an `at least` written as an exact count fails `at least
+# 1`, one written as an upper bound fails it too, and the `not` at 3 is what a `true`-stuck matcher
+# cannot pass. The same three shapes, mirrored, for `at most`.
+@constructs @matchers
+test "has count at least is a lower bound, inclusive"
+  api GET /soft-check/known-answer
+  expect status equals 200
+
+  expect body.tags has count at least 2
+  expect body.tags has count at least 1
+  expect body.tags not has count at least 3
+
+@constructs @matchers
+test "has count at most is an upper bound, inclusive"
+  api GET /soft-check/known-answer
+  expect status equals 200
+
+  expect body.tags has count at most 2
+  expect body.tags has count at most 5
+  expect body.tags not has count at most 1
+
+# `is empty` answers for strings, lists and objects; the empty list is a product search nothing
+# matches, so the known answer is the response itself rather than a field someone froze empty.
+@constructs @matchers
+test "is empty is none of a thing, and is not empty is some"
+  api GET /soft-check/known-answer
+  expect status equals 200
+
+  expect body.tags is not empty
+  expect body.label is not empty
+  api GET /products?q=zzqxv-matches-no-product
+  expect status equals 200
+  expect body is empty

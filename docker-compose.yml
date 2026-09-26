@@ -205,3 +205,19 @@ services:
       interval: 2s
       timeout: 3s
       retries: 20
+
+  # `S-4b` (tflw `M242` `F`): the OpenTelemetry Collector `tflw export otlp` is graded against —
+  # contrib distribution (it carries the file exporter), Apache-2.0 by the LICENSE files of both
+  # collector repositories, pinned. Behind a profile, so only `otel-export-check` starts it and no
+  # other phase pays for it. Root, because the file exporter writes into a host directory the
+  # phase then reads, and the image's own user owns nothing there.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    profiles: ["otel"]
+    user: "0:0"
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./ops/otel/config.yaml:/etc/otelcol/config.yaml:ro
+      - ./report/otel:/out
+    ports:
+      - "${TFLW_PORT_OTEL:-4318}:4318"

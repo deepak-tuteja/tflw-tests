@@ -1,0 +1,9 @@
+# skip-without-reason.tflw — CHECK-ONLY FIXTURE (tflw `M242` `B`, `D1327`): a `skip` whose reason
+# is blank — `TF084`. A skipped test is one the suite has stopped running, and the reason is the
+# only record of why and until when; `skip ""` is a checkbox.
+#
+# Run explicitly (dot-directory — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/skip-without-reason.tflw
+test "a test somebody stopped running" skip ""
+  api GET /health
+  expect status equals 200

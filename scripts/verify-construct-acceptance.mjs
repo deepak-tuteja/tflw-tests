@@ -1859,6 +1859,11 @@ const MATCHER_ROWS = [
   { id: 'C64', construct: 'matcher:matches-schema', name: 'matches schema validates against', negatives: ['not matches schema "ProductResponseDto"'] },
   { id: 'C65', construct: 'matcher:greater-less-than', name: 'greater than and less than are strict', negatives: ['not is greater than 42', 'not is less than 42'] },
   { id: 'C66', construct: 'matcher:has-count', name: 'has count is an exact length', negatives: ['not has count 1', 'not has count 3'] },
+  // tflw `M242` `A` (`D1326`): the count's two bounds and the emptiness test join the same plant,
+  // the same pairs and the same mutation control.
+  { id: 'C121', construct: 'matcher:has-count-at-least', name: 'has count at least is a lower bound', negatives: ['not has count at least 3'] },
+  { id: 'C122', construct: 'matcher:has-count-at-most', name: 'has count at most is an upper bound', negatives: ['not has count at most 1'] },
+  { id: 'C123', construct: 'matcher:is-empty', name: 'is empty is none of a thing', negatives: ['body.tags is not empty', 'body.label is not empty'] },
 ];
 
 if (MATCHER_ROWS.some((r) => wanted(r.id))) {
@@ -2863,6 +2868,52 @@ if (DIRECTIVE_IDS.some((id) => wanted(id))) {
     }
   } finally {
     rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+// =============================================================================
+// C124-C126 — tflw `M242`'s string forms and a skip, in a plant that also carries GraphQL
+// =============================================================================
+//
+// One plant file, `tests/.constructs/language-m242.tflw`, meant to pass with one test meant not
+// to run. Each value is a literal off the frozen known-answer payload, with a near miss beside it.
+// `capture … matching` and `body graphql` are not manifest constructs (a clause and a body kind),
+// so they are graded here as the file passing whole, against `C124`: a regression in either reddens
+// that row by name. The skip is graded on what the report says — `skipped` with its reason, `ok`,
+// no steps — and on the run: a skipped test whose body would fail must not fail the run.
+const LANGUAGE_ROWS = [
+  { id: 'C124', construct: 'generator:transform-length', name: 'length of reads what .length reads' },
+  { id: 'C125', construct: 'generator:transform-join', name: 'joined with puts a list' },
+];
+if (['C124', 'C125', 'C126'].some((id) => wanted(id))) {
+  const file = 'tests/.constructs/language-m242.tflw';
+  console.log(`\nC124-C126 — tflw M242's strings and skip (and its GraphQL and capture-matching journeys)\n  target: ${file}`);
+  const { report, output } = runCorpus(ROOT, [file]);
+  if (!report) {
+    for (const id of ['C124', 'C125', 'C126']) {
+      if (!wanted(id)) continue;
+      fail(`${id} produced no report. Is the stack up (\`node cli.mjs start\`)?\n${output.trim().split('\n').slice(-12).join('\n')}`);
+      scores.get(id).skipped = 'no report';
+    }
+  } else {
+    for (const row of LANGUAGE_ROWS) {
+      if (!wanted(row.id)) continue;
+      const test = named(report, row.name);
+      recall(row.id, test?.ok === true, `the known answer held (got ok=${test?.ok}${test?.error ? `: ${test.error}` : ''})`);
+      precision(row.id, stepsOf(test).some((st) => /\bnot\b/.test(st.source)), 'the test carries its near miss, so a form stuck at one answer cannot pass it');
+    }
+    if (wanted('C124')) {
+      for (const journey of ['capture matching takes the first group', 'a GraphQL query answers through variables']) {
+        const test = named(report, journey);
+        recall('C124', test?.ok === true, `the plant's \`${journey}\` journey passed too (got ok=${test?.ok}${test?.error ? `: ${test.error}` : ''})`);
+      }
+    }
+    if (wanted('C126')) {
+      const skipped = named(report, 'a skipped test runs nothing');
+      recall('C126', skipped?.skipped?.startsWith('planted by C126') === true, `the test is reported skipped with its reason (got ${JSON.stringify(skipped?.skipped)})`);
+      recall('C126', skipped?.ok === true && stepsOf(skipped).length === 0, 'it ran nothing: ok, and no steps');
+      precision('C126', report.skipped === 1 && report.failed === 0, `the run counts one skip and no failure, although the body would fail (got skipped=${report.skipped}, failed=${report.failed})`);
+    }
   }
 }
 

@@ -1,0 +1,46 @@
+# tflw `M242` (`D1327`-`D1329`) — `C124`-`C126`: the known answers for the string forms, a GraphQL
+# body, and a skip. Every value below is read off `GET /v1/soft-check/known-answer`'s frozen
+# payload (`tags` is `["plant", "soft-assertion"]`, `label` is `"known-answer"`) or off a product
+# search nothing matches, so each expected value is a literal and each has a near miss beside it.
+#
+# **This file is meant to pass, and one test is meant not to run.** The grader asserts both.
+
+@constructs @language
+test "length of reads what .length reads"
+  api GET /soft-check/known-answer
+  capture body.tags as tags
+  let n = length of {tags}
+  expect {n} equals 2
+  expect {n} not equals 1
+  let label = length of "known-answer"
+  expect {label} equals 12
+
+@constructs @language
+test "joined with puts a list's elements between a separator, in order"
+  api GET /soft-check/known-answer
+  capture body.tags as tags
+  let joined = {tags} joined with ", "
+  expect {joined} equals "plant, soft-assertion"
+  expect {joined} not equals "soft-assertion, plant"
+
+@constructs @language
+test "capture matching takes the first group, and the whole match without one"
+  api GET /soft-check/known-answer
+  capture body.label matching "^([a-z]+)-" as head
+  expect {head} equals "known"
+  capture body.label matching "answer$" as tail
+  expect {tail} equals "answer"
+
+@constructs @language
+test "a GraphQL query answers through variables, and an unknown field is an error"
+  api POST /graphql body graphql "query P($q: String) { products(q: $q) { id name } }" variables { q: "zzqxv-matches-no-product" } operation "P"
+  expect status equals 200
+  expect body.data.products is empty
+  api POST /graphql body graphql "{ products { nope } }"
+  expect status equals 200
+  expect body.errors has count at least 1
+
+@constructs @language
+test "a skipped test runs nothing and is reported as skipped" skip "planted by C126: the grader asserts this is reported skipped and never run"
+  api GET /soft-check/known-answer
+  expect status equals 599
