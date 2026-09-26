@@ -27,7 +27,9 @@ test "a file written on the API door is sent, asserted, run and read back"
   expect css "[data-compose-dirty]" has count 0
   press "Control+Enter"
   click css "[data-tab=run]"
-  expect text "the health check answers, in a file the page wrote" is visible
+  # The run's own section, by name — the explorer's outline row carries the same words, so a bare
+  # text match is two elements once the tree shows the new test beside the report (strict mode).
+  expect css "[data-test][data-name=\"the health check answers, in a file the page wrote\"]" is visible
 
 test "an action and a crawl are declarations the page writes"
   let token = env(TFLW_UI_TOKEN)
