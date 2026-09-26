@@ -47,6 +47,16 @@ try {
   }
   ok(`the api answers through the proxy at ${PROXY}`, up);
 
+  // The failing control runs FIRST: the sweep archives the last `report/` a phase leaves and reads
+  // it for failures, so the run that must end green is the one that writes it.
+  const direct = run({ NODE_USE_ENV_PROXY: '' });
+  // Graded on WHERE it failed, not on the resolver's word for it: the box says `ENOTFOUND`, a GitHub
+  // runner's resolver answers `EAI_AGAIN` and tflw prints a bare `fetch failed`. What the control
+  // claims is that no request reached the api — both tests fail at the request, neither at an expect.
+  const directOut = `${direct.stdout}${direct.stderr}`;
+  const refusedAtRequest = (directOut.match(/^\S+ ✗ .*\n\S+\s+request failed: \S+ http:\/\/api:4001\//gm) ?? []).length;
+  ok('control: without NODE_USE_ENV_PROXY the same run fails, every test at its request', direct.status !== 0 && refusedAtRequest === 2 && !/expected /.test(directOut), tail(direct));
+
   const logs = () => spawnSync('docker', ['compose', '--profile', 'proxy', 'logs', '--no-log-prefix', 'proxy'], { cwd: ROOT, encoding: 'utf8' }).stdout ?? '';
   const tunnels = () => (logs().match(/Request \(file descriptor \d+\): CONNECT api:4001 /g) ?? []).length;
   const before = tunnels();
@@ -61,8 +71,6 @@ try {
   const via = spawnSync('curl', ['-s', '-x', PROXY, 'http://api:4001/v1/edge/via'], { encoding: 'utf8' });
   ok('control: a proxied plain GET arrives with the proxy\'s Via', /tflw-proxy/.test(via.stdout), via.stdout);
 
-  const direct = run({ NODE_USE_ENV_PROXY: '' });
-  ok('control: without NODE_USE_ENV_PROXY the same run fails on the name', direct.status !== 0 && /ENOTFOUND|DNS/i.test(`${direct.stdout}${direct.stderr}`), tail(direct));
 
   const refused = spawnSync('curl', ['-s', '-o', '/dev/null', '-w', '%{http_code}', '-x', PROXY, 'http://webv2/'], { encoding: 'utf8' });
   ok('control: the proxy refuses a host its filter does not name (403)', refused.stdout === '403', `got ${refused.stdout}`);
