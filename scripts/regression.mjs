@@ -91,6 +91,13 @@ const PHASES = [
   ...LAYER_TAGS.map((tag) => ({ name: `--tag ${tag}`, args: ['--tag', tag] })),
   { name: '--tag smoke', args: ['--tag', 'smoke'] },
   ...AREA_TAGS.map((tag) => ({ name: `--tag smoke,${tag}`, args: ['--tag', `smoke,${tag}`] })),
+  // `S-3c` (decision 17): the five workload shapes and the threshold forms, under `tests/load/` where the
+  // LOAD door counts them — at most 5 users and 5 s each, `--workers 1` so one generator process
+  // is the whole load. Every other phase skips them (`--skip-workload`, below).
+  {
+    name: 'load-smoke',
+    cmd: [TFLW, 'run', '--no-color', ...CI_VERBOSE, '--workers', '1', 'tests/load/shapes.tflw', 'tests/load/thresholds.tflw'].join(' '),
+  },
   {
     name: 'mtls-rejection',
     cmd: [TFLW, 'run', '--no-color', ...CI_VERBOSE, '--env', 'mtlsSidecarNoCert', 'tests/.env-specific/mtls-rejection.tflw'].join(' '),
@@ -485,7 +492,7 @@ const PHASES = [
 // The re-pack seven placements have now deferred still needs the CI timings nobody has pulled — and
 // this is the eighth placement to say so.
 const PHASE_GROUPS = {
-  core: ['full suite', '--tag orderOps', '--tag smoke,catalogOps', 'demo-fail-check', '--tag orgOps', '--tag inventoryOps', 'migrate-check', 'secure-local-check', 'security-acceptance-gate', 'input-acceptance'],
+  core: ['full suite', 'load-smoke', '--tag orderOps', '--tag smoke,catalogOps', 'demo-fail-check', '--tag orgOps', '--tag inventoryOps', 'migrate-check', 'secure-local-check', 'security-acceptance-gate', 'input-acceptance'],
   tooling: ['--tag api', 'watch-check', 'ui-check', 'cli-refusals-check', 'lsp-check', 'init-check', 'refactor-check', 'pick-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check', 'security-target-check', 'sarif-acceptance', 'construct-acceptance'],
   safety: ['--tag identityOps', '--tag mixed', '--tag smoke,orderOps', '--tag adminOps', '--tag catalogOps', 'safety-flags-check', 'check-diagnostics', 'artifact-contract', 'safety-redaction-check', 'screenshot-step-check', 'otel-export-check'],
   'security-ui': ['--tag smoke,identityOps', 'cli-flags-check', '--tag smoke,adminOps', '--tag ui', 'webv2-admin-check', '--tag smoke,inventoryOps', 'logging-check', 'mtls-rejection', 'vuln-slice-hidden-check', 'second-run-check', 'ui-page'],
@@ -574,7 +581,10 @@ for (const phase of activePhases) {
     : '';
   console.log(`\n=== ${phase.name} (fresh restart${envNote}) ===\n`);
   restart(phase.stackEnv);
-  const cmd = phase.cmd ?? [TFLW, 'run', '--no-color', ...CI_VERBOSE, ...phase.args].join(' ');
+  // `S-3c` (decision 17): `tests/load/` is discovered by bare `tflw run`, so every args-shaped phase
+  // skips workloads — a load test runs there once, as the functional check it also is — and the
+  // shapes themselves run only in `load-smoke`, alone on their stack.
+  const cmd = phase.cmd ?? [TFLW, 'run', '--no-color', ...CI_VERBOSE, '--skip-workload', ...phase.args].join(' ');
   try {
     run(cmd);
     results.push({ ...phase, ok: true });

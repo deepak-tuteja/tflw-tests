@@ -5,6 +5,7 @@
 # closed the original gap here — tflw can now assert the exact bytes via `body bytes`/`matches
 # file`, not just headers/status; see the round-trip test below and TFLW-GAPS.md gap #17 (Fixed).
 
+import "../../shared/orders.tflw"
 use "../../helpers/save-temp-file.ts"
 
 before
@@ -31,10 +32,7 @@ before
 
 @orderReceipts @orders @orderOps @api
 test "a placed order's receipt is a real PDF with the right headers"
-  api POST /orders body { items: [{ productId: {productId}, quantity: 2 }] }
-    header "Authorization" is "Bearer {userAToken}"
-  expect status equals 201
-  capture body.id as orderId
+  let orderId = place order(productId, 2, userAToken)
   log "order {orderId} placed, fetching its receipt as a real PDF"
 
   api GET /orders/{orderId}/receipt

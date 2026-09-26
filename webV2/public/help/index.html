@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Help centre</title>
+    <!-- `S-3a` (decision 16): the help centre the support page embeds in an iframe — a document of
+         its own, so a journey reaches it only through `within frame`. It answers a search from its
+         own list and records whether an answer helped, with no request to anything. -->
+    <style>
+      body { font: 15px/1.5 system-ui, sans-serif; margin: 12px; color: #1b1f24; background: #fff; }
+      h1 { font-size: 1.2rem; margin: 0 0 8px; }
+      label { display: block; font-weight: 600; }
+      input { font: inherit; padding: 4px 6px; width: 100%; max-width: 320px; }
+      [hidden] { display: none; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Help centre</h1>
+      <label for="help-search">Search help</label>
+      <input id="help-search" type="search" autocomplete="off" />
+      <ul id="help-answers" aria-label="Answers">
+        <li data-topic="returns">Returns: you can return an item within 30 days of delivery.</li>
+        <li data-topic="delivery">Delivery: orders ship within two working days.</li>
+        <li data-topic="invoice">Invoices: download yours from the order page.</li>
+      </ul>
+      <p id="help-none" hidden>No answer matches that search.</p>
+      <p>
+        <button type="button" id="help-yes">This helped</button>
+        <span id="help-thanks" role="status"></span>
+      </p>
+    </main>
+    <script>
+      const search = document.getElementById('help-search');
+      const answers = [...document.querySelectorAll('#help-answers li')];
+      search.addEventListener('input', () => {
+        const needle = search.value.trim().toLowerCase();
+        let shown = 0;
+        for (const li of answers) {
+          const match = !needle || li.textContent.toLowerCase().includes(needle);
+          li.hidden = !match;
+          if (match) shown++;
+        }
+        document.getElementById('help-none').hidden = shown > 0;
+      });
+      document.getElementById('help-yes').addEventListener('click', () => {
+        document.getElementById('help-thanks').textContent = 'Thanks for telling us.';
+      });
+    </script>
+  </body>
+</html>

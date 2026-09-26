@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { apiFetch } from '../api/client';
 import type { Order } from '../types';
 
@@ -52,6 +52,16 @@ export function OrderConfirmationPage() {
         <a href={`/v1/orders/${order.id}/receipt`} target="_blank" rel="noopener noreferrer">
           View receipt (PDF)
         </a>
+      </p>
+      {/* `S-3a` (decision 16): the same PDF as a download with a filename the page chooses, so a
+          `download as` step has a real attachment to save and a name to check. */}
+      <p>
+        <a href={`/v1/orders/${order.id}/receipt`} download={`invoice-${order.id}.pdf`} data-invoice>
+          Download invoice
+        </a>
+      </p>
+      <p>
+        <Link to={`/orders/${order.id}/tracking`}>Track this order</Link>
       </p>
     </section>
   );

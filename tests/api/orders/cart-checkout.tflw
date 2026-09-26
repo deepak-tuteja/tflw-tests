@@ -5,6 +5,7 @@
 # item's stock exactly as they were — genuinely all-or-nothing, not "some items decremented
 # anyway."
 
+import "../../shared/orders.tflw"
 use "../../helpers/concurrent-cart-add.ts"
 
 before
@@ -33,10 +34,7 @@ test "cart accepts over-stock quantities; checkout enforces stock atomically, al
   capture body.id as productIdB
 
   # Cart accepts more than is in stock — no enforcement at add-time.
-  api POST /cart/items body { productId: {productIdA}, quantity: 5 }
-    header "Authorization" is "Bearer {userAToken}"
-  expect status equals 201
-  capture body.id as itemIdA
+  let itemIdA = add to cart(productIdA, 5, userAToken)
 
   api POST /cart/items body { productId: {productIdB}, quantity: 2 }
     header "Authorization" is "Bearer {userAToken}"
@@ -100,10 +98,7 @@ test "cart items are per-product: adding the same product twice accumulates quan
   expect status equals 201
   capture body.id as productId
 
-  api POST /cart/items body { productId: {productId}, quantity: 3 }
-    header "Authorization" is "Bearer {userAToken}"
-  expect status equals 201
-  capture body.id as itemId
+  let itemId = add to cart(productId, 3, userAToken)
 
   api POST /cart/items body { productId: {productId}, quantity: 4 }
     header "Authorization" is "Bearer {userAToken}"
@@ -219,10 +214,7 @@ test "another user cannot patch or delete this user's cart item"
   expect status equals 201
   capture body.id as productIdH
 
-  api POST /cart/items body { productId: {productIdH}, quantity: 1 }
-    header "Authorization" is "Bearer {userAToken}"
-  expect status equals 201
-  capture body.id as itemId
+  let itemId = add to cart(productIdH, 1, userAToken)
 
   api POST /auth/login body { email: env(USER_B_EMAIL), password: env(USER_B_PW) }
   expect status equals 200

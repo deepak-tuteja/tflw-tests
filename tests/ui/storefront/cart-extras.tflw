@@ -1,0 +1,46 @@
+# `S-3b` (decision 16): the cart's native dialogs outside the admin console — a gift message asked
+# for with `prompt()` and removed after a `confirm()` — and a checkout a keyboard can finish. One
+# file on purpose: these tests share user B's cart, and a file's tests run one after another.
+# `before` empties the cart (a 422 means it was empty already) and puts one `Bulk Item 89` in it.
+
+import "../../shared/webv2-login.tflw"
+import "../../shared/orders.tflw"
+
+before
+  api GET /products?q=Bulk%20Item%2089
+  expect status equals 200
+  capture body[0].id as productId
+  api POST /auth/login body { email: env(USER_B_EMAIL), password: env(USER_B_PW) }
+  expect status equals 200
+  capture body.accessToken as buyerToken
+  api POST /cart/checkout
+    header "Authorization" is "Bearer {buyerToken}"
+  let itemId = add to cart(productId, 1, buyerToken)
+
+@ui @orderOps
+test "a gift message is written in the browser's own prompt, and a dismissed confirm keeps it"
+  login(env(USER_B_EMAIL), env(USER_B_PW))
+  open "/cart"
+  expect text "No gift message." is visible
+  accept dialog with "Happy birthday, Ada"
+  click button "Add a gift message"
+  expect text "Happy birthday, Ada" is visible
+  dismiss dialog
+  click button "Remove gift message"
+  expect text "Happy birthday, Ada" is visible
+  accept dialog
+  click button "Remove gift message"
+  expect text "No gift message." is visible
+
+@ui @orderOps
+test "the keyboard checkout: the skip link reaches the form, Tab keeps reading order, Enter places the order"
+  login(env(USER_B_EMAIL), env(USER_B_PW))
+  open "/checkout"
+  press "Enter" on css ".skip-link"
+  fill field "Full name" with "Ada Lovelace"
+  press "Tab" on field "Full name"
+  expect css "#checkout-email:focus" is visible
+  fill field "Email" with "ada@example.test"
+  fill field "Delivery address" with "12 Analytical Row"
+  press "Enter" on field "Delivery address"
+  expect text "Order confirmed" is visible

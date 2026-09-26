@@ -14,7 +14,11 @@ import type { PaginatedProducts, Product } from '../types';
 const ROW_HEIGHT = 64;
 const OVERSCAN = 4;
 const VIEWPORT_HEIGHT = 480;
-const FETCH_PAGE_SIZE = 100;
+// `S-3a` (decision 16): the catalogue scrolls without end — it loads a page, and the next one when
+// the reader nears the bottom, until the catalogue is exhausted. A filter asks the server (`?q=`)
+// instead of searching what happens to be loaded, so a product on page 9 is one filter away.
+const FETCH_PAGE_SIZE = 25;
+const SEARCH_PAGE_SIZE = 100;
 
 export function CatalogAllPage() {
   const { user } = useAuth();
@@ -23,21 +27,58 @@ export function CatalogAllPage() {
   const { show } = useToast();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [searched, setSearched] = useState<Product[] | null>(null);
   const [filterText, setFilterText] = useState('');
   const [scrollTop, setScrollTop] = useState(0);
   const [addingId, setAddingId] = useState<string | null>(null);
 
   useEffect(() => {
     apiFetch<PaginatedProducts>(`/products?page=1&pageSize=${FETCH_PAGE_SIZE}`)
-      .then((result) => setProducts(result.data))
+      .then((result) => {
+        setProducts(result.data);
+        setTotal(result.total);
+      })
       .finally(() => setLoading(false));
   }, []);
 
-  const filtered = useMemo(() => {
-    const needle = filterText.trim().toLowerCase();
-    if (!needle) return products;
-    return products.filter((p) => p.name.toLowerCase().includes(needle));
-  }, [products, filterText]);
+  useEffect(() => {
+    const needle = filterText.trim();
+    if (!needle) {
+      setSearched(null);
+      return;
+    }
+    let live = true;
+    apiFetch<PaginatedProducts>(`/products?page=1&pageSize=${SEARCH_PAGE_SIZE}&q=${encodeURIComponent(needle)}`).then((result) => {
+      // `q` is full-text search, which matches whole words only, so the hits are unioned with what is
+      // already loaded and both are filtered by substring: a half-typed name still narrows the list.
+      if (!live) return;
+      const lower = needle.toLowerCase();
+      const byId = new Map([...result.data, ...products].map((p) => [p.id, p]));
+      setSearched([...byId.values()].filter((p) => p.name.toLowerCase().includes(lower)));
+    });
+    return () => {
+      live = false;
+    };
+  }, [filterText, products]);
+
+  const filtered = useMemo(() => searched ?? products, [products, searched]);
+  const exhausted = products.length >= total;
+
+  async function loadMore() {
+    if (loadingMore || exhausted || searched !== null) return;
+    setLoadingMore(true);
+    try {
+      const next = await apiFetch<PaginatedProducts>(`/products?page=${page + 1}&pageSize=${FETCH_PAGE_SIZE}`);
+      setProducts((prev) => [...prev, ...next.data]);
+      setPage(next.page);
+      setTotal(next.total);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   const totalHeight = filtered.length * ROW_HEIGHT;
   const firstVisible = Math.floor(scrollTop / ROW_HEIGHT);
@@ -85,9 +126,17 @@ export function CatalogAllPage() {
         <div
           className="virtual-list-viewport"
           style={{ height: VIEWPORT_HEIGHT }}
-          onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            setScrollTop(el.scrollTop);
+            if (el.scrollTop + el.clientHeight >= el.scrollHeight - 2 * ROW_HEIGHT) void loadMore();
+          }}
         >
           <div className="virtual-list-spacer" style={{ height: totalHeight }}>
+            {/* `S-3a`: the list's end, always in the DOM (the rows are virtualised, so the last row
+                is not) — scrolling it into view scrolls this viewport, and the handler above loads
+                the next page. */}
+            <div className="virtual-list-end" data-catalogue-end aria-hidden="true" style={{ top: Math.max(totalHeight - 1, 0) }} />
             {visibleRows.map((product, i) => {
               const index = startIndex + i;
               return (
@@ -111,6 +160,11 @@ export function CatalogAllPage() {
             })}
           </div>
         </div>
+      )}
+      {!loading && searched === null && (
+        <p className="catalogue-count" aria-live="polite" data-catalogue-count>
+          {loadingMore ? 'Loading more…' : exhausted ? `All ${total} products shown` : `Showing ${products.length} of ${total} — scroll for more`}
+        </p>
       )}
     </section>
   );

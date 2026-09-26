@@ -27,6 +27,10 @@ function extraAllowedContentTypes(method: string, path: string): string[] {
   if (method === 'POST' && path === '/v1/uploads') {
     return EXTRA_ALLOWED_CONTENT_TYPES['POST /v1/uploads'];
   }
+  // `S-3a` (decision 16): the account page's avatar is a multipart upload, like `/uploads`.
+  if (method === 'POST' && path === '/v1/profile/avatar') {
+    return EXTRA_ALLOWED_CONTENT_TYPES['POST /v1/uploads'];
+  }
   return [];
 }
 

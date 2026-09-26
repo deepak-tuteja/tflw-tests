@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { apiFetch, ApiError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useCart } from '../cart/CartContext';
@@ -15,7 +15,9 @@ export function CatalogPage() {
   const { addOptimistic } = useCart();
   const { show } = useToast();
   const [categories, setCategories] = useState<Category[]>([]);
-  const [categoryId, setCategoryId] = useState('');
+  // `S-3a`: the header's Shop menu links a category as `/?category=<id>`; the select starts there.
+  const [searchParams] = useSearchParams();
+  const [categoryId, setCategoryId] = useState(searchParams.get('category') ?? '');
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const [result, setResult] = useState<PaginatedProducts | null>(null);

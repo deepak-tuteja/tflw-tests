@@ -259,3 +259,133 @@ td {
   font-family: 'Render Fixture Sans', sans-serif;
   max-width: 30rem;
 }
+
+/* `S-3a` (decision 16): the storefront's new surfaces. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+}
+.skip-link:focus {
+  position: static;
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  outline: 2px solid currentColor;
+}
+
+.shop-menu {
+  position: relative;
+}
+.shop-menu-panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  min-width: 16rem;
+  padding: 0.75rem 1rem;
+  background: Canvas;
+  color: CanvasText;
+  border: 1px solid GrayText;
+  border-radius: 6px;
+}
+.shop-menu-panel ul {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+}
+.shop-menu-title {
+  font-size: 0.85rem;
+  margin: 0.25rem 0;
+}
+
+.wishlist {
+  padding-left: 1.5rem;
+}
+.wish {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.35rem 0;
+}
+.wish.pinned {
+  font-weight: 600;
+}
+.badge {
+  font-size: 0.75rem;
+  padding: 0 0.4rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+.context-menu {
+  position: fixed;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  background: Canvas;
+  color: CanvasText;
+  border: 1px solid GrayText;
+  border-radius: 6px;
+  padding: 0.25rem;
+}
+
+.help-frame {
+  border: 1px solid GrayText;
+  border-radius: 6px;
+}
+
+.gift-message {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.catalogue-count {
+  font-size: 0.9rem;
+}
+
+.error {
+  color: #b3261e;
+}
+
+.virtual-list-end {
+  position: absolute;
+  left: 0;
+  height: 1px;
+  width: 1px;
+}
+
+/* The promo board: every dimension fixed, and pinned to the viewport's corner, so its snapshot does
+   not depend on the fonts a machine has — in flow, its top was wherever the text above it ended,
+   a fractional pixel that differs by font, and the capture came out 97 px tall for a 96 px board.
+   The clock sits in a box of its own fixed size, which is what the mask paints over. */
+.promo-board {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 10;
+  width: 320px;
+  height: 96px;
+  border-radius: 8px;
+  background: #1f3a5f;
+  overflow: hidden;
+}
+.promo-board-stripe {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 64px;
+  height: 96px;
+  background: #c0392b;
+}
+.promo-clock {
+  position: absolute;
+  left: 24px;
+  top: 28px;
+  width: 200px;
+  height: 40px;
+  overflow: hidden;
+  color: #ffffff;
+  font-size: 28px;
+  line-height: 40px;
+  font-variant-numeric: tabular-nums;
+}

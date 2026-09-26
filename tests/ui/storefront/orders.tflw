@@ -1,0 +1,45 @@
+# `S-3b` (decision 16): what a buyer does with an order after placing it — follows a tracking page
+# that is slow on purpose, and downloads the invoice. The order is placed through the API in
+# `before` (setup, not assertion — decision 5), for user B on `Bulk Item 89` (99 in stock, used by
+# nothing else), so no journey here depends on what another file left in a cart.
+
+import "../../shared/webv2-login.tflw"
+import "../../shared/orders.tflw"
+
+before
+  api GET /products?q=Bulk%20Item%2089
+  expect status equals 200
+  capture body[0].id as productId
+  api POST /auth/login body { email: env(USER_B_EMAIL), password: env(USER_B_PW) }
+  expect status equals 200
+  capture body.accessToken as buyerToken
+  let orderId = place order(productId, 1, buyerToken)
+
+@ui @orderOps
+test "a slow tracking page shows its loading state, then the carrier's answer"
+  login(env(USER_B_EMAIL), env(USER_B_PW))
+  open "/orders/{orderId}/tracking?delayMs=2500"
+  expect css "[data-tracking-loading]" is visible
+  wait until css "[data-tracking-status]" is visible timeout wait 10s
+  expect text "order placed" is visible
+
+@ui @orderOps
+test "the order page leads to tracking, which answers without a delay when none is asked for"
+  login(env(USER_B_EMAIL), env(USER_B_PW))
+  open "/orders/{orderId}"
+  click text "Track this order"
+  wait until css "[data-tracking-status]" is visible
+  expect css "[data-tracking-loading]" is hidden
+  download as invoice
+    click text "Download the invoice"
+  expect {invoice} equals "receipt-{orderId}.pdf"
+
+@ui @orderOps
+test "the invoice downloads under the name the server gives it, not the link's"
+  login(env(USER_B_EMAIL), env(USER_B_PW))
+  open "/orders/{orderId}"
+  download as file
+    click text "Download invoice"
+  # The anchor asks for `invoice-<id>.pdf`; the receipt route's `Content-Disposition` names
+  # `receipt-<id>.pdf`, and the browser takes the server's name — which is the one a user gets.
+  expect {file} equals "receipt-{orderId}.pdf"

@@ -55,7 +55,7 @@ test "BROWSER, LOAD and SCANS land clean in both themes"
   expect css "[data-compose-pane]" is visible
   expect page has no a11y violations
   open "/?token={token}#/load"
-  expect css "[data-empty-door=load]" is visible
+  expect css "[data-file-row][data-open=yes]" is visible
   expect page has no a11y violations
   open "/?token={token}#/scan"
   expect css "[data-doorbar=scan]" is visible
@@ -65,7 +65,7 @@ test "BROWSER, LOAD and SCANS land clean in both themes"
   expect css "[data-compose-pane]" is visible
   expect page has no a11y violations
   open "/?token={token}#/load"
-  expect css "[data-empty-door=load]" is visible
+  expect css "[data-file-row][data-open=yes]" is visible
   expect page has no a11y violations
   open "/?token={token}#/scan"
   expect css "[data-doorbar=scan]" is visible

@@ -1,0 +1,35 @@
+# `S-3b` (decision 16): the header's Shop menu, which opens on hover, and the whole catalogue, which
+# loads its next page when the reader reaches the end of the list. Both public — no sign-in.
+
+@ui @catalogOps
+test "the Shop menu opens under a resting pointer and takes the reader to this week's offers"
+  open "/"
+  expect css "[data-shop-menu]" is hidden
+  hover button "Shop"
+  expect css "[data-shop-menu]" is visible
+  click text "This week’s offers"
+  expect text "Offers this week" is visible
+
+@ui @catalogOps
+test "a keyboard opens the Shop menu the same as a pointer, and Escape closes it"
+  open "/"
+  press "Enter" on button "Shop"
+  expect css "[data-shop-menu]" is visible
+  press "Escape"
+  expect css "[data-shop-menu]" is hidden
+
+@ui @catalogOps
+test "the whole catalogue loads its next page when the reader scrolls to the end"
+  open "/catalog/all"
+  expect text "Showing 25 of" is visible
+  scroll to css "[data-catalogue-end]"
+  wait until text "Showing 50 of" is visible
+  expect css ".virtual-list-row" has count at least 5
+
+@ui @catalogOps
+test "the Shop menu closes when the pointer leaves it"
+  open "/"
+  hover button "Shop"
+  expect css "[data-shop-menu]" is visible
+  hover css "main h1"
+  expect css "[data-shop-menu]" is hidden

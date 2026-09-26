@@ -32,14 +32,14 @@ test "every door opens from its address alone"
   expect css "[data-doorbar=scan]" is visible
   expect css "[data-file-row][data-open=yes]" is visible
 
-# **This project has no load test under `tests/`** — its load work is the perf ladder in
-# `tflw-acceptance/perf/`, a corpus of its own — so LOAD is the door with nothing behind it, and the
-# page must say so rather than draw whichever file sorted first (tflw `M240` `A`). `S-3c`'s
-# `tests/load/shapes.tflw` gives LOAD its first file, and this test becomes the landing test above.
-test "a door with nothing behind it says so, and offers a file"
+# Until `S-3c` this project had no load test under `tests/` — its load work was the perf ladder in
+# `tflw-acceptance/perf/`, a corpus of its own — and LOAD was the door with nothing behind it, which
+# this test graded (tflw `M240` `A`). `tests/load/` gave LOAD its files, so it is now a landing test
+# like the one above; the empty door has no subject in this project any more, and stays graded by
+# tflw's own page suite (`packages/cli/test/ui-page.test.ts`, `M240` `A`).
+test "the LOAD door opens the project on its load tests"
   let token = env(TFLW_UI_TOKEN)
   open "/?token={token}#/load"
   expect css "[data-doorbar=load]" is visible
-  expect css "[data-empty-door=load]" is visible
-  expect css "[data-empty-door-new]" is visible
-  expect css "[data-file-row][data-open=yes]" has count 0
+  expect css "[data-file-row][data-open=yes]" is visible
+  expect css "[data-empty-door]" has count 0

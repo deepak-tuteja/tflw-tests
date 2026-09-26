@@ -9,6 +9,8 @@
 # sorts late enough that the cached `admin` session's 5s-TTL bearer token can be stale by the
 # time these tests run. See schema-and-shape.tflw's file header for the full explanation.
 
+import "../../shared/orders.tflw"
+
 before
   api GET /categories
   expect status equals 200
@@ -59,10 +61,7 @@ test "only an admin can trigger fulfillment"
   expect status equals 200
   capture body.accessToken as userAToken
 
-  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
-    header "Authorization" is "Bearer {userAToken}"
-  expect status equals 201
-  capture body.id as orderId
+  let orderId = place order(productId, 1, userAToken)
 
   api POST /orders/{orderId}/fulfill
     header "Authorization" is "Bearer {userAToken}"

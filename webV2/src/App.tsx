@@ -18,6 +18,12 @@ import { LocatorFixturePage } from './pages/LocatorFixturePage';
 import { StepFixturePage } from './pages/StepFixturePage';
 import { DiagnoseFixturePage } from './pages/DiagnoseFixturePage';
 import { WaitFixturePage } from './pages/WaitFixturePage';
+import { AccountPage } from './pages/AccountPage';
+import { CheckoutPage } from './pages/CheckoutPage';
+import { ComparePage } from './pages/ComparePage';
+import { PromoPage } from './pages/PromoPage';
+import { TrackingPage } from './pages/TrackingPage';
+import { WishlistPage } from './pages/WishlistPage';
 
 export function App() {
   return (
@@ -37,10 +43,17 @@ export function App() {
               <Route path="step-fixture" element={<StepFixturePage />} />
               <Route path="diagnose-fixture" element={<DiagnoseFixturePage />} />
               <Route path="wait-fixture" element={<WaitFixturePage />} />
+              {/* `S-3a` (decision 16): the storefront's surfaces a user lands on. */}
+              <Route path="compare" element={<ComparePage />} />
+              <Route path="promo" element={<PromoPage />} />
               <Route element={<ProtectedRoute />}>
                 <Route path="cart" element={<CartPage />} />
                 <Route path="orders/:id" element={<OrderConfirmationPage />} />
                 <Route path="support" element={<SupportPage />} />
+                <Route path="account" element={<AccountPage />} />
+                <Route path="wishlist" element={<WishlistPage />} />
+                <Route path="checkout" element={<CheckoutPage />} />
+                <Route path="orders/:id/tracking" element={<TrackingPage />} />
               </Route>
             </Route>
           </Routes>

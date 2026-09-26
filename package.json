@@ -34,6 +34,7 @@
     "test:ui-admin": "tflw run --env webv2Admin tests/.env-specific/ui-admin/*.tflw",
     "check:acceptance": "node scripts/check-acceptance.mjs",
     "verify:fmt": "node scripts/verify-fmt.mjs",
+    "verify:journeys": "node scripts/verify-journeys.mjs",
     "regression": "node scripts/regression.mjs",
     "regression:smoke": "node scripts/regression-smoke.mjs",
     "verify:grader-reachability": "node scripts/verify-grader-reachability.mjs",

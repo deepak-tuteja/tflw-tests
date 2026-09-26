@@ -64,6 +64,14 @@ export function ProductPage() {
         Add to cart
       </button>
 
+      {/* `S-3a` (decision 16): comparison opens in its own tab, so the page the reader was on stays
+          where it was — the storefront's `switch to new tab` / `close tab` surface. */}
+      <p>
+        <a href={`/compare?ids=${product.id}`} target="_blank" rel="noopener noreferrer">
+          Compare in a new tab
+        </a>
+      </p>
+
       {status && <p role="status">{status}</p>}
       {error && <p role="alert">{error}</p>}
     </section>

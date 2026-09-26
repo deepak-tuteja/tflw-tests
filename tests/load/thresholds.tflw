@@ -1,0 +1,41 @@
+# `S-3c` (decision 17): one test per threshold form the language has — a percentile of duration
+# (the four documented percentiles), `error rate`, and a threshold scoped to one step with
+# `for "label"`. Loose on purpose: this file shows each form holding against the real stack, and a
+# latency budget tight enough to be interesting would be a flake on a shared box.
+#
+# The plan also named a `throughput` threshold. The language has none (`ThresholdMetric` is a
+# percentile duration or `error rate`), so it is recorded as a finding rather than written around.
+
+@load
+test "p50 and p90 of duration hold under a short, light load"
+  hold 3 users for 3s
+  api GET /products
+  expect status equals 200
+  threshold p50 duration is less than 2s
+  threshold p90 duration is less than 3s
+  threshold error rate is less than 5%
+
+@load
+test "p95 and p99 of duration hold under a short, light load"
+  hold 3 users for 3s
+  api GET /health
+  expect status equals 200
+  threshold p95 duration is less than 3s
+  threshold p99 duration is less than 4s
+  threshold error rate is less than 5%
+
+@load
+test "an error-rate threshold alone is a verdict"
+  run 15 iterations across 3 users
+  api GET /health
+  expect status equals 200
+  threshold error rate is less than 1%
+
+@load
+test "a threshold scoped to one step reads that step's durations only"
+  hold 2 users for 3s
+  api GET /health as "health"
+  api GET /products as "catalogue"
+  expect status equals 200
+  threshold p95 duration for "health" is less than 2s
+  threshold error rate is less than 5%

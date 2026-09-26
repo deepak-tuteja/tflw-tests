@@ -83,6 +83,11 @@ export function SupportPage() {
 
       {error && <p role="alert">{error}</p>}
 
+      {/* `S-3a` (decision 16): the help centre, embedded — its own document in a frame, so a journey
+          reaches its search and its button only through `within frame`. */}
+      <h2>Help centre</h2>
+      <iframe title="Help centre" src="/help/index.html" className="help-frame" width="100%" height="260" />
+
       <ul>
         {uploads.map((upload) => (
           <li key={upload.id}>

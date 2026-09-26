@@ -1,0 +1,54 @@
+# `S-3c` (decision 17): the five workload shapes as a project writes them — under `tests/`, where the
+# page's LOAD door and a stranger reading this suite will find them. Each is small on purpose (at
+# most 5 users or 5 rps, at most 5 s) against a cheap read, because this file shows the shapes in
+# use; the sharp known answers for what each shape does to arrival times are the conformance
+# plants (`tflw-acceptance/conformance/shapes.tflw`, `C44`–`C47`) against a zero-latency counter.
+#
+# Every other regression phase runs with `--skip-workload`; `load-smoke` runs this directory alone
+# with `--workers 1`, so these tests never share the stack with a functional phase's writes.
+
+@load
+test "a ramp reaches its target concurrency and the catalogue keeps answering"
+  ramp to 5 users over 3s
+  api GET /products
+  expect status equals 200
+  # Think-time: a user reads the page before the next request (`S-3e`). `pause` is the workload's
+  # own construct — the checker refuses it outside a workload-bearing test (`TF033`), where
+  # `wait until` is what waits for a condition.
+  pause 200ms to 500ms
+  threshold error rate is less than 5%
+
+@load
+test "a hold keeps a steady concurrency from the first second"
+  hold 3 users for 3s
+  api GET /health
+  expect status equals 200
+  pause 300ms
+  threshold error rate is less than 5%
+
+@load
+test "a step jumps between plateaus, each held for its own duration"
+  step users
+    to 2 for 2s
+    to 4 for 2s
+  api GET /products
+  expect status equals 200
+  pause 100ms to 400ms
+  threshold error rate is less than 5%
+
+@load
+test "a spike rises from a baseline, peaks and returns"
+  spike rps
+    hold 2 for 1s
+    to 5 over 1s
+    to 2 over 1s
+  api GET /health
+  expect status equals 200
+  threshold error rate is less than 5%
+
+@load
+test "a fixed count of iterations shared across the users"
+  run 20 iterations across 4 users
+  api GET /products
+  expect status equals 200
+  threshold error rate is less than 5%

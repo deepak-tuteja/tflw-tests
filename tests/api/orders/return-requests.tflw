@@ -14,6 +14,8 @@
 # its precedent. The logins stay because every test here speaks as two identities (the owner
 # submits, the admin decides) and the config declares a session for one of them.
 
+import "../../shared/orders.tflw"
+
 before
   api GET /categories
   expect status equals 200
@@ -34,10 +36,7 @@ test "an approved return request refunds the order via a real async job, polled 
   expect status equals 201
   capture body.id as productId
 
-  api POST /orders body { items: [{ productId: {productId}, quantity: 1 }] }
-    header "Authorization" is "Bearer {userAToken}"
-  expect status equals 201
-  capture body.id as orderId
+  let orderId = place order(productId, 1, userAToken)
 
   api POST /orders/{orderId}/fulfill
     header "Authorization" is "Bearer {adminToken}"
