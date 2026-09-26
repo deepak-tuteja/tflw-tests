@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { apiFetch, ApiError } from '../api/client';
 import { useCart } from '../cart/CartContext';
 import type { CartItem, Order } from '../types';
@@ -17,6 +17,7 @@ export function CartPage() {
   // semantics. New items are appended, removed ones drop out, on every cart change.
   const [order, setOrder] = useState<string[]>([]);
   const [dragId, setDragId] = useState<string | null>(null);
+  const [giftMessage, setGiftMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setOrder((prev) => {
@@ -162,7 +163,41 @@ export function CartPage() {
         </tbody>
       </table>
 
+      {/* `S-3a` (decision 16): a gift message, asked for with the browser's own `prompt()` and removed
+          only after a `confirm()` — the storefront's native dialogs outside the admin console. */}
+      <div className="gift-message">
+        {giftMessage ? (
+          <p data-gift-message>
+            Gift message: <q>{giftMessage}</q>
+          </p>
+        ) : (
+          <p data-gift-none>No gift message.</p>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            const written = window.prompt('Gift message for this order', giftMessage ?? '');
+            if (written !== null && written.trim() !== '') setGiftMessage(written.trim());
+          }}
+        >
+          {giftMessage ? 'Change gift message' : 'Add a gift message'}
+        </button>
+        {giftMessage && (
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm('Remove the gift message?')) setGiftMessage(null);
+            }}
+          >
+            Remove gift message
+          </button>
+        )}
+      </div>
+
       <p className="total">Total: ${total.toFixed(2)}</p>
+      <p>
+        <Link to="/checkout">Check out with the keyboard</Link>
+      </p>
 
       <form onSubmit={handleCheckout}>
         <div className="field">

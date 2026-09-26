@@ -84,6 +84,15 @@ const CLASSIFIED = [
   {
     wf: 'ci.yml',
     job: 'acceptance-check',
+    cmd: 'npm run verify:journeys',
+    name: 'Every browser statement has its journeys',
+    class: 'gate',
+    local: 'npm run verify:journeys',
+    why: "`S-3b`/`S-3c` (tflw `M239` arc, decisions 16 and 17). Every browser statement is used by at least three journeys under `tests/` and every workload shape by one, counted through action calls, and CONSTRUCTS.md's `## Journeys` table says how many. A journey removed below a floor is red; a count that moves is a table diff (`--write`). Static, milliseconds",
+  },
+  {
+    wf: 'ci.yml',
+    job: 'acceptance-check',
     cmd: 'npm run verify:fmt',
     name: 'The corpus is formatted',
     class: 'gate',

@@ -1,0 +1,31 @@
+# `S-3b` (decision 16): comparison opens in a tab of its own, so the product page stays where it was.
+# Public — no sign-in. `Clean Code` is a seeded product, and the comparison sets it beside another.
+
+@ui @catalogOps
+test "compare opens in a new tab, and closing it returns to the product the reader was on"
+  open "/"
+  fill field "Search" with "Clean Code"
+  click text "Clean Code"
+  expect text "Compare in a new tab" is visible
+  switch to new tab
+    click text "Compare in a new tab"
+  expect text "Compare products" is visible
+  expect css "[data-compare]" is visible
+  close tab
+  expect text "Compare in a new tab" is visible
+
+@ui @catalogOps
+test "the comparison's second product is the reader's choice"
+  open "/"
+  fill field "Search" with "Clean Code"
+  click text "Clean Code"
+  switch to new tab
+    click text "Compare in a new tab"
+  fill field "Find a product to compare" with "French Press"
+  wait until css "#compare-with option" has count 1
+  select "French Press" from field "Compare with"
+  # The name is also the select's option; the comparison is the table.
+  within css "[data-compare]"
+    expect text "French Press" is visible
+  close tab
+  expect text "Compare in a new tab" is visible

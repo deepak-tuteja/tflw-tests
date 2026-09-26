@@ -1,0 +1,41 @@
+# `S-3b` (decision 16): the wishlist, the storefront's pointer-gesture page. It starts, per browser,
+# from four seeded products in this order — Wireless Mouse, Mechanical Keyboard, The Pragmatic
+# Programmer, Clean Code — so each gesture below has a known answer. Each test is a fresh browser,
+# so each starts from that order. The gestures land on a row's handle or its price, never its centre:
+# the centre is the product's link, and a click there navigates.
+
+import "../../shared/webv2-login.tflw"
+
+@ui @catalogOps
+test "a row dragged by its handle moves to where it is dropped"
+  login(env(USER_B_EMAIL), env(USER_B_PW))
+  open "/wishlist"
+  expect css "[data-wish]" has count 4
+  expect css ".wish:first-child[data-wish='Wireless Mouse']" is visible
+  drag css "[aria-label='Drag to reorder Clean Code']" to css "[data-wish='Wireless Mouse'] .price"
+  expect css ".wish:first-child[data-wish='Clean Code']" is visible
+  double click css "[data-wish='Clean Code'] .price"
+  expect css "[data-wish='Clean Code'] [data-pinned]" is visible
+  screenshot "wishlist-reordered-and-pinned"
+
+@ui @catalogOps
+test "a right click opens the row's own menu, and its Remove takes the row away"
+  login(env(USER_B_EMAIL), env(USER_B_PW))
+  open "/wishlist"
+  right click css "[data-wish='The Pragmatic Programmer'] .price"
+  expect css "[role='menu']" is visible
+  click text "Remove from wishlist"
+  expect css "[data-wish]" has count 3
+  expect css "[data-wish='The Pragmatic Programmer']" has count 0
+
+@ui @catalogOps
+test "a double click pins a row, and the menu's Move to top lifts another"
+  login(env(USER_B_EMAIL), env(USER_B_PW))
+  open "/wishlist"
+  double click css "[data-wish='Mechanical Keyboard'] .price"
+  expect css "[data-wish='Mechanical Keyboard'] [data-pinned]" is visible
+  right click css "[data-wish='Clean Code'] .price"
+  click text "Move to top"
+  expect css ".wish:first-child[data-wish='Clean Code']" is visible
+  drag css "[aria-label='Drag to reorder Wireless Mouse']" to css "[data-wish='Clean Code'] .price"
+  expect css ".wish:first-child[data-wish='Wireless Mouse']" is visible

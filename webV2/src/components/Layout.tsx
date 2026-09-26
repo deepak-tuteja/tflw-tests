@@ -1,6 +1,7 @@
 import { Link, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useCart } from '../cart/CartContext';
+import { ShopMenu } from './ShopMenu';
 
 export function Layout() {
   const { user, logout } = useAuth();
@@ -19,11 +20,13 @@ export function Layout() {
           <Link to="/" className="brand">
             testFlow-tests storefront
           </Link>
+          <ShopMenu />
           <Link to="/cart">Cart ({itemCount})</Link>
           <Link to="/support">Support</Link>
           <Link to="/a11y-demo">Accessibility demo</Link>
           {user ? (
             <>
+              <Link to="/account">Account</Link>
               <span className="current-user">{user.email}</span>
               <button type="button" onClick={handleLogout}>
                 Log out

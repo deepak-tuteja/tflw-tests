@@ -65,6 +65,7 @@ not a subset of the truth.
 ```sh
 npm run check:acceptance
 npm run verify:fmt
+npm run verify:journeys
 npm run verify:external-targets
 npm run verify:perf-parity
 npm run verify:perf-baseline
@@ -142,6 +143,10 @@ xvfb-run -a npm run regression -- --group security-ui
   asserts the corpus *is* formatted. It never writes (`M141-01`): a red prints the `tflw fmt` line
   that fixes it. `tests/.checkonly/` is excluded by name — ten of its fixtures exist so as not to
   lex, and the rest are the diagnostics gate's inputs, whose bytes are the test.
+- **`npm run verify:journeys`** — every browser statement is used by at least three journeys under
+  `tests/` and every workload shape by one, counted through action calls; `CONSTRUCTS.md`'s
+  `## Journeys` table is the published count, held equal to the tree (`--write` regenerates it).
+  A floor only rises: a journey removed below one is red, and the fix is another journey.
 - **`npm run verify:external-targets`** — the one host this repo does not own stays fenced
   (functional API tests only: no load runs, no security scans, not on CI and not on any repeated
   schedule), and **a new external target anywhere in the repo fails until somebody writes down what

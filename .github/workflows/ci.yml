@@ -118,6 +118,13 @@ jobs:
         run: npm run verify:fmt
         working-directory: testFlow-tests
 
+      # `S-3b`/`S-3c` (tflw `M239` arc, decisions 16 and 17). Every browser statement is used by at
+      # least three journeys and every workload shape by one, and CONSTRUCTS.md's `## Journeys`
+      # table says how many. Static, milliseconds; a journey removed below a floor is red here.
+      - name: Every browser statement has its journeys
+        run: npm run verify:journeys
+        working-directory: testFlow-tests
+
       # Static, sends no request, and deliberately in the job that already walks every corpus. It
       # asserts the ruling on the one host this repo does not own — functional API tests only: no
       # load runs, no security scans, not on CI — and fails on any NEW external target that arrives

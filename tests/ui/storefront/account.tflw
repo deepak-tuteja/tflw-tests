@@ -1,0 +1,24 @@
+# `S-3b` (decision 16): the account page's avatar dropzone, a `drop file` surface whose server
+# answers — the stored name and byte count come back, and a file of the wrong type is refused (415)
+# with the server's own sentence. `payloads/avatar.png` is a real 1×1 PNG of 69 bytes, which is the
+# known answer the size echo is held to. User B, so no cart or order another journey keeps is touched.
+
+import "../../shared/webv2-login.tflw"
+
+@ui @identityOps
+test "an avatar dropped on the account page is stored, and the server echoes its name and size"
+  login(env(USER_B_EMAIL), env(USER_B_PW))
+  open "/account"
+  expect text "No avatar yet." is visible
+  drop file "../../payloads/avatar.png" onto css "[data-avatar-drop]"
+  expect css "[data-avatar-name]" is visible
+  expect text "avatar.png" is visible
+  expect text "69 bytes" is visible
+
+@ui @identityOps
+test "a file that is not an image is refused by the server, and the page shows the refusal"
+  login(env(USER_B_EMAIL), env(USER_B_PW))
+  open "/account"
+  drop file "../../payloads/sample.csv" onto css "[data-avatar-drop]"
+  expect css "[data-avatar-error]" is visible
+  expect text "an avatar is a PNG or a JPEG, not text/csv" is visible

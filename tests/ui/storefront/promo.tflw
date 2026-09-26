@@ -1,0 +1,30 @@
+# `S-3b` (decision 16): the promo page, served under a strict Content-Security-Policy (nginx's
+# `location = /promo`: this origin's scripts and styles only). The first test is tflw `M228-01`'s
+# case — an accessibility scan still works on a page that forbids injected scripts. The second is
+# `mask` earning its keep: the page carries a clock that ticks every second, so the unmasked page
+# never matches its baseline, and the masked page always does. Baselines were seeded once with
+# `tflw run --update-snapshots --only "<this test's name>"` on the box and are committed under
+# `tests/snapshots/`; an ordinary run only ever reads and compares.
+
+@ui @catalogOps
+test "the promo page, under a strict CSP, still passes an accessibility scan"
+  open "/promo"
+  expect text "Offers this week" is visible
+  expect page has no a11y violations
+
+@ui @catalogOps
+test "the promo clock is masked out of the page's snapshot, and without the mask the page never matches"
+  open "/promo"
+  expect css "[data-clock]" is visible
+  expect css "section.promo" matches snapshot "promo-masked" mask css "[data-clock]"
+  expect css "section.promo" not matches snapshot "promo-unmasked"
+
+@ui @catalogOps
+test "the offers subscription is a checkbox the reader can take back"
+  open "/promo"
+  scroll to css "[data-subscribed]"
+  tick field "Email me next week’s offers"
+  expect text "You will hear about next week’s offers." is visible
+  untick field "Email me next week’s offers"
+  expect text "You are not subscribed." is visible
+  screenshot "promo-unsubscribed"
