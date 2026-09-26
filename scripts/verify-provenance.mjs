@@ -545,7 +545,15 @@ export const MAX_PENDING_DAYS = 14;
  *
  * @type {Map<string, {pr: string, since: string, why: string}>}
  */
-export const DECLARED_PENDING = new Map([]);
+export const DECLARED_PENDING = new Map([
+  ['D1326', { pr: 'deepak-tuteja/tflw#244', since: '2026-09-26', why: 'the count bounds and `is empty`' }],
+  ['D1327', { pr: 'deepak-tuteja/tflw#244', since: '2026-09-26', why: '`skip "reason"`, `TF084` and `--tag !x`' }],
+  ['D1328', { pr: 'deepak-tuteja/tflw#244', since: '2026-09-26', why: '`body graphql` and `TF085`' }],
+  ['D1329', { pr: 'deepak-tuteja/tflw#244', since: '2026-09-26', why: '`length of`, `joined with` and a capture\'s pattern' }],
+  ['D1330', { pr: 'deepak-tuteja/tflw#244', since: '2026-09-26', why: '`--shard i/n`' }],
+  ['D1331', { pr: 'deepak-tuteja/tflw#244', since: '2026-09-26', why: '`tflw export otlp`' }],
+  ['D1332', { pr: 'deepak-tuteja/tflw#244', since: '2026-09-26', why: 'the cookbook page' }],
+]);
 
 /**
  * The pending declarations' own problems, as a pure function so `--self-test` can reach every
