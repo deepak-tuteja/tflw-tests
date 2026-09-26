@@ -30,8 +30,18 @@ export class GraphqlController {
 
   @Post()
   @HttpCode(200)
-  async execute(@Body() body: { query?: unknown; variables?: Record<string, unknown>; operationName?: string }) {
-    if (typeof body?.query !== 'string') return { errors: [{ message: 'a GraphQL request carries a `query` string' }] };
+  async execute(
+    @Body()
+    body: {
+      query?: unknown;
+      variables?: Record<string, unknown>;
+      operationName?: string;
+    },
+  ) {
+    if (typeof body?.query !== 'string')
+      return {
+        errors: [{ message: 'a GraphQL request carries a `query` string' }],
+      };
     const rootValue = {
       product: async ({ id }: { id: string }) => {
         try {
@@ -45,6 +55,12 @@ export class GraphqlController {
         return Array.isArray(found) ? found : found.data;
       },
     };
-    return graphql({ schema, source: body.query, rootValue, variableValues: body.variables ?? null, operationName: body.operationName ?? null });
+    return graphql({
+      schema,
+      source: body.query,
+      rootValue,
+      variableValues: body.variables ?? null,
+      operationName: body.operationName ?? null,
+    });
   }
 }
