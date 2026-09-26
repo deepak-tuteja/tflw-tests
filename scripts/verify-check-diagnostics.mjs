@@ -288,6 +288,10 @@ const FILE_FIXTURES = {
   // tflw `M239` `D` (`D1319`): a `use` resolving outside the directories `helpers` allows. The
   // fixture's path climbs to the repository root's `lib/`, which no config here names.
   TF083: 'helper-outside-dirs.tflw',
+  // tflw `M242` `B` (`D1327`): a `skip ""` — the reason is the only record of why a test stopped.
+  TF084: 'skip-without-reason.tflw',
+  // tflw `M242` `C` (`D1328`): `body graphql` on a `GET`, where the query would never arrive.
+  TF085: 'graphql-on-get.tflw',
 };
 
 for (const [code, file] of Object.entries(FILE_FIXTURES)) {

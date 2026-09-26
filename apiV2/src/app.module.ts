@@ -46,6 +46,7 @@ import { UploadsModule } from './uploads/uploads.module';
 import { OrgsModule } from './orgs/orgs.module';
 import { LoadAdminModule } from './load-admin/load-admin.module';
 import { AdminUsersModule } from './admin-users/admin-users.module';
+import { GraphqlModule } from './graphql/graphql.module';
 import { VulnModule, VULN_MODE_ENABLED } from './vuln/vuln.module';
 
 @Module({
@@ -88,6 +89,7 @@ import { VulnModule, VULN_MODE_ENABLED } from './vuln/vuln.module';
       }),
     }),
     HealthModule,
+    GraphqlModule,
     AuthModule,
     OauthModule,
     ProfileExportModule,
