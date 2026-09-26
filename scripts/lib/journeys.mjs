@@ -54,8 +54,14 @@ function* tflwFiles(dir) {
     const full = path.join(dir, entry);
     if (statSync(full).isDirectory()) {
       if (!SKIPPED_DIRS.has(entry)) yield* tflwFiles(full);
-    } else if (entry.endsWith('.tflw')) yield full;
+    } else if (isJourneyFile(entry)) yield full;
   }
+}
+
+// A dotfile is the ui's scratch (`.play.tflw`), gitignored, so a local count that read it would
+// disagree with CI's on a checkout that has none.
+function isJourneyFile(entry) {
+  return entry.endsWith('.tflw') && !entry.startsWith('.');
 }
 
 /** The body lines of each top-level `test` in one file's source, and of each `action` by name. */
@@ -105,7 +111,7 @@ function* allTflw(dir) {
   for (const entry of readdirSync(dir).sort()) {
     const full = path.join(dir, entry);
     if (statSync(full).isDirectory()) yield* allTflw(full);
-    else if (entry.endsWith('.tflw')) yield full;
+    else if (isJourneyFile(entry)) yield full;
   }
 }
 
