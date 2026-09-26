@@ -123,6 +123,14 @@ const PHASES = [
   // `fmt --check` red on a planted unformatted file and naming it; `migrate` rewriting a planted
   // deprecation and doing nothing on its second run. No stack, no browser.
   { name: 'cli-refusals-check', cmd: 'node scripts/verify-cli-refusals.mjs' },
+  // `S-2` (tflw `M240`; `PLAN_M239_DOGFOOD_EXPANSION.md` §3): the page tested by this project — the
+  // `.tflw` files in `tests/.tflw-ui/` (doors, tabs, keys, axe in two themes, the authoring round
+  // trip) and `lib/ui-budgets.mjs` (the first eight Tab stops, words at rest against tflw's
+  // budgets on THIS project), under one `tflw ui` serving a scratch copy. Controls: a wrong token
+  // must fail the doors file, and the token must be in no kept file. Chrome-spawning: it runs in a
+  // browser group, under the sweep's lease, never beside a model. The stack is up for the
+  // authoring file's `send` and run.
+  { name: 'ui-page', cmd: 'node scripts/verify-ui-page.mjs' },
   // `M195` S2 (`D1017`): `tflw lsp` as a process on stdio, driven by a real client
   // (`scripts/lib/lsp-client.mjs`) about this corpus — the unit suite mocks the transport, and the
   // transport was the gap. Needs no stack; pays the restart like every phase.
@@ -476,7 +484,7 @@ const PHASE_GROUPS = {
   core: ['full suite', '--tag orderOps', '--tag smoke,catalogOps', 'demo-fail-check', '--tag orgOps', '--tag inventoryOps', 'migrate-check', 'secure-local-check', 'security-acceptance-gate', 'input-acceptance'],
   tooling: ['--tag api', 'watch-check', 'ui-check', 'cli-refusals-check', 'lsp-check', 'init-check', 'refactor-check', 'pick-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check', 'security-target-check', 'sarif-acceptance', 'construct-acceptance'],
   safety: ['--tag identityOps', '--tag mixed', '--tag smoke,orderOps', '--tag adminOps', '--tag catalogOps', 'safety-flags-check', 'check-diagnostics', 'artifact-contract', 'safety-redaction-check', 'screenshot-step-check'],
-  'security-ui': ['--tag smoke,identityOps', 'cli-flags-check', '--tag smoke,adminOps', '--tag ui', 'webv2-admin-check', '--tag smoke,inventoryOps', 'logging-check', 'mtls-rejection', 'vuln-slice-hidden-check', 'second-run-check'],
+  'security-ui': ['--tag smoke,identityOps', 'cli-flags-check', '--tag smoke,adminOps', '--tag ui', 'webv2-admin-check', '--tag smoke,inventoryOps', 'logging-check', 'mtls-rejection', 'vuln-slice-hidden-check', 'second-run-check', 'ui-page'],
 };
 
 // The groups are a hand-maintained partition of PHASES, and CI runs *only* the groups (a 4-leg

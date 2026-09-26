@@ -1,0 +1,16 @@
+# `S-2c` — the product's scanner on the product: tflw's own `security violations` over the page
+# `tflw ui` serves, with the session token.
+#
+# A CRAWL IS NOT HERE, AND THAT WAS MEASURED (2026-09-26, tflw `M240` build). `crawl … seed spider
+# "/"` sent one request, which the server refused for want of a token, so the crawl failed on its
+# own honesty rule — *sent 1 request and none of them reached your application* — and tflw declared
+# the blind spot itself: the walk found no link and no form, so the origin is client-rendered and a
+# fetching spider cannot see its routes. A token in the seed would reach the shell and still find
+# nothing, and a crawl may assert only the security, authz and input-handling families, so the
+# plan's a11y-by-crawl half cannot be written at all. The page's a11y is `a11y.tflw`'s, per view.
+
+test "the page answers with the headers a scanner asks for"
+  let token = env(TFLW_UI_TOKEN)
+  api GET /?token={token}
+  expect status equals 200
+  expect response has no security violations

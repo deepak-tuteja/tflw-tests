@@ -2675,11 +2675,11 @@ if (GENERATOR_IDS.some((id) => wanted(id))) {
 // which the fetch standard blocks outright, so the "it got past the gate" leg fails identically
 // whether or not apiV2 is up.
 
-const DIRECTIVE_IDS = ['C92', 'C93', 'C94', 'C95', 'C96', 'C119'];
+const DIRECTIVE_IDS = ['C92', 'C93', 'C94', 'C95', 'C96', 'C119', 'C120'];
 
 if (DIRECTIVE_IDS.some((id) => wanted(id))) {
   const FIX = path.join(ROOT, 'tests', '.checkonly', 'config-directives');
-  console.log('\nC92-C96, C119 — the six config directives\n  target: tests/.checkonly/config-directives/ — committed configs, copied in as `tflw.config`');
+  console.log('\nC92-C96, C119, C120 — the seven config directives\n  target: tests/.checkonly/config-directives/ — committed configs, copied in as `tflw.config`');
 
   const scratch = mkdtempSync(path.join(tmpdir(), 'tflw-config-directives-'));
   const useConfig = (dir, config) => copyFileSync(path.join(FIX, config), path.join(dir, 'tflw.config'));
@@ -2841,6 +2841,25 @@ if (DIRECTIVE_IDS.some((id) => wanted(id))) {
       recall('C119', /error\[TF083\]/.test(refused) && /--no-helpers/.test(refused) && !/GET \/health/.test(refused),
         `\`run --no-helpers\` refuses the file the config allows, naming the flag, before any request (got: ${firstLine(refused)})`);
       precision('C119', clean(hchk(['uses-helpers.tflw'])), 'the same file checks clean again once the flag is gone, so what was refused was the flag and not the file');
+    }
+
+    // ---- C120: `runs keep` — a count the config states, refused where it is not one -------------
+    //
+    // tflw `M241` `E` (`D1325`). A check-tier row: the directive parses, and a count of zero — a page
+    // that forgets every run — is refused at its own line, naming it. What the page then DOES with
+    // the count (three runs listed after five) is tflw's own gate, `ui-server-boundary`, because the
+    // sibling's sweep drives no `tflw ui` run history; the row says so rather than claiming it.
+    if (wanted('C120')) {
+      const rDir = corpus('runs', ['kept.tflw'], 'runs-keep.config');
+      const rchk = (args) => runCheck(args, { cwd: rDir });
+      const keep3 = rchk(['kept.tflw']);
+      recall('C120', clean(keep3), `\`runs keep 3\` is a config \`tflw check\` reads clean (got: ${firstLine(keep3)})`);
+      useConfig(rDir, 'runs-keep-zero.config');
+      const zero = rchk(['kept.tflw']);
+      recall('C120', /error\[TF\d+\]/.test(zero) && /runs keep/.test(zero) && /tflw\.config:4/.test(zero),
+        `\`runs keep 0\` is refused at its own line, naming the directive (got: ${firstLine(zero)})`);
+      useConfig(rDir, 'helpers-default.config');
+      precision('C120', clean(rchk(['kept.tflw'])), 'the same file is clean under a config with no `runs` line, so what was refused was the count');
     }
   } finally {
     rmSync(scratch, { recursive: true, force: true });

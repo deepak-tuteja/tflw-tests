@@ -1,0 +1,72 @@
+# `S-2a` — axe on every door and tab, in the page's light and dark themes (tflw `M240` `E`). The
+# page's own gate runs the same scan on a fixture; this one runs it on this project, which is where
+# the review measured 108 violations.
+#
+# The theme is picked in the page's own control, the way a reader picks it.
+
+test "the landing has no a11y violations"
+  let token = env(TFLW_UI_TOKEN)
+  open "/?token={token}"
+  expect css "[data-landing]" is visible
+  expect page has no a11y violations
+
+test "API: every tab, in Paper"
+  let token = env(TFLW_UI_TOKEN)
+  open "/?token={token}#/api"
+  select "Paper" from field "theme"
+  expect css "[data-compose-pane]" is visible
+  expect page has no a11y violations
+  open "/?token={token}#/api/source"
+  expect css "[data-source]" is visible
+  expect page has no a11y violations
+  open "/?token={token}#/api/run"
+  expect css "[data-runstrip]" is visible
+  expect page has no a11y violations
+  open "/?token={token}#/api/auth"
+  expect css "[data-auth-identity]" is visible
+  expect page has no a11y violations
+  open "/?token={token}#/api/config"
+  expect css "[data-api-config-text]" is visible
+  expect page has no a11y violations
+
+test "API: every tab, in Terminal"
+  let token = env(TFLW_UI_TOKEN)
+  open "/?token={token}#/api"
+  select "Terminal" from field "theme"
+  expect css "[data-compose-pane]" is visible
+  expect page has no a11y violations
+  open "/?token={token}#/api/source"
+  expect css "[data-source]" is visible
+  expect page has no a11y violations
+  open "/?token={token}#/api/run"
+  expect css "[data-runstrip]" is visible
+  expect page has no a11y violations
+  open "/?token={token}#/api/auth"
+  expect css "[data-auth-identity]" is visible
+  expect page has no a11y violations
+  open "/?token={token}#/api/config"
+  expect css "[data-api-config-text]" is visible
+  expect page has no a11y violations
+
+test "BROWSER, LOAD and SCANS land clean in both themes"
+  let token = env(TFLW_UI_TOKEN)
+  open "/?token={token}#/browser"
+  select "Paper" from field "theme"
+  expect css "[data-compose-pane]" is visible
+  expect page has no a11y violations
+  open "/?token={token}#/load"
+  expect css "[data-empty-door=load]" is visible
+  expect page has no a11y violations
+  open "/?token={token}#/scan"
+  expect css "[data-doorbar=scan]" is visible
+  expect page has no a11y violations
+  select "Terminal" from field "theme"
+  open "/?token={token}#/browser"
+  expect css "[data-compose-pane]" is visible
+  expect page has no a11y violations
+  open "/?token={token}#/load"
+  expect css "[data-empty-door=load]" is visible
+  expect page has no a11y violations
+  open "/?token={token}#/scan"
+  expect css "[data-doorbar=scan]" is visible
+  expect page has no a11y violations

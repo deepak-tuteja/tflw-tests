@@ -1,0 +1,33 @@
+# `S-2a` — the five tabs over one file (tflw `M205`), each drawing its own shell on every door.
+# A tab is an address: `#/<door>/<tab>`, and the door survives the trip.
+
+test "Compose, Source, Run, Auth and Config each draw their shell on the API door"
+  let token = env(TFLW_UI_TOKEN)
+  open "/?token={token}#/api"
+  expect css "[data-tabstrip=compose]" is visible
+  expect css "[data-compose-pane]" is visible
+  click css "[data-tab=source]"
+  expect css "[data-tabstrip=source]" is visible
+  expect css "[data-source]" is visible
+  click css "[data-tab=run]"
+  expect css "[data-tabstrip=run]" is visible
+  expect css "[data-runstrip]" is visible
+  click css "[data-tab=auth]"
+  expect css "[data-tabstrip=auth]" is visible
+  expect css "[data-auth-identity]" is visible
+  click css "[data-tab=config]"
+  expect css "[data-tabstrip=config]" is visible
+  expect css "[data-api-config-text]" is visible
+  expect css "[data-doorbar=api]" is visible
+
+test "the strip is the same five on the other three doors"
+  let token = env(TFLW_UI_TOKEN)
+  open "/?token={token}#/browser/source"
+  expect css "[data-tabstrip=source]" is visible
+  expect css "[data-tab]" has count 5
+  open "/?token={token}#/load/run"
+  expect css "[data-tabstrip=run]" is visible
+  expect css "[data-tab]" has count 5
+  open "/?token={token}#/scan/config"
+  expect css "[data-tabstrip=config]" is visible
+  expect css "[data-api-config-text]" is visible

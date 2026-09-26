@@ -1,0 +1,45 @@
+# `S-2a` — the doors (tflw `M240` `A`, `D1309`; `D`, `D1314`). The landing names four doors and says
+# what a door is before it asks for a choice; each door lands on a file with its kind of work, and
+# the choice lives in the address alone, so a pasted link opens where it says.
+
+test "the landing is four doors, and it says what a door is"
+  let token = env(TFLW_UI_TOKEN)
+  open "/?token={token}"
+  expect css "[data-landing]" is visible
+  expect css "[data-door]" has count 4
+  within css "[data-door-definition]"
+    expect text "A door is a way into the same project" is visible
+  expect css "[data-door=api]" is visible
+  expect css "[data-door=browser]" is visible
+  expect css "[data-door=load]" is visible
+  expect css "[data-door=scan]" is visible
+
+test "a door opens the project on a file with its kind of work"
+  let token = env(TFLW_UI_TOKEN)
+  open "/?token={token}"
+  click css "[data-door=api]"
+  expect css "[data-doorbar=api]" is visible
+  expect css "[data-file-row][data-open=yes]" is visible
+  expect css "[data-compose-pane]" is visible
+  expect css "[data-empty-door]" has count 0
+
+test "every door opens from its address alone"
+  let token = env(TFLW_UI_TOKEN)
+  open "/?token={token}#/browser"
+  expect css "[data-doorbar=browser]" is visible
+  expect css "[data-file-row][data-open=yes]" is visible
+  open "/?token={token}#/scan"
+  expect css "[data-doorbar=scan]" is visible
+  expect css "[data-file-row][data-open=yes]" is visible
+
+# **This project has no load test under `tests/`** — its load work is the perf ladder in
+# `tflw-acceptance/perf/`, a corpus of its own — so LOAD is the door with nothing behind it, and the
+# page must say so rather than draw whichever file sorted first (tflw `M240` `A`). `S-3c`'s
+# `tests/load/shapes.tflw` gives LOAD its first file, and this test becomes the landing test above.
+test "a door with nothing behind it says so, and offers a file"
+  let token = env(TFLW_UI_TOKEN)
+  open "/?token={token}#/load"
+  expect css "[data-doorbar=load]" is visible
+  expect css "[data-empty-door=load]" is visible
+  expect css "[data-empty-door-new]" is visible
+  expect css "[data-file-row][data-open=yes]" has count 0
