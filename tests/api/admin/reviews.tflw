@@ -39,6 +39,10 @@ test "creating a review, then reading it back via the nested list"
   expect body.data has count 1
   expect body.data[0].rating equals 5
   expect body.nextCursor equals null
+  # `S-3e` (decision 24): the optional fields are `check`s — soft, so a wrong one is reported beside
+  # the others rather than hiding them, and the required ones above stay hard `expect`s.
+  check body.data[0].comment equals "Great product"
+  check body.data[0].replyText equals null
 
 @reviews @adminOps @api
 test "reviewing the same product twice is a conflict, not a duplicate row"
@@ -50,6 +54,9 @@ test "reviewing the same product twice is a conflict, not a duplicate row"
   api POST /products/{productId}/reviews body { rating: 4 }
     header "Authorization" is "Bearer {userAToken}"
   expect status equals 201
+  # A review written without a comment stores the default, not a null (`S-3e`).
+  check body.comment is empty
+  check body.replyText equals null
 
   api POST /products/{productId}/reviews body { rating: 2 }
     header "Authorization" is "Bearer {userAToken}"
@@ -93,6 +100,9 @@ test "the nested reviews list is cursor-paginated with a Link header on the next
   expect status equals 200
   expect body.data has count 2
   expect header "link" matches "rel=\"next\""
+  # Nobody has replied to a review on a fresh product, on either row of the page (`S-3e`).
+  check body.data[0].replyText equals null
+  check body.data[1].replyText equals null
   capture body.nextCursor as cursor
 
   api GET /products/{productId}/reviews?limit=2&cursor={cursor}

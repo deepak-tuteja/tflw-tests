@@ -1,0 +1,21 @@
+# Shared actions (`S-3e`, decision 24): an order and a cart line, each given back as the id the next
+# step needs. Like `catalog.tflw`'s `create product`, the bearer token is a parameter — an action
+# has no closure over its caller (SPEC §8) — so a test says whose order it is at the call.
+#
+# Each replaces a four-line block several journeys repeated verbatim. What they assert (201, the id
+# captured) is the same assertion those journeys made; the journey's own `expect`s about the order
+# or the cart stay in the journey.
+
+action place order(productId, quantity, token)
+  api POST /orders body { items: [{ productId: {productId}, quantity: {quantity} }] }
+    header "Authorization" is "Bearer {token}"
+  expect status equals 201
+  capture body.id as orderId
+  give orderId
+
+action add to cart(productId, quantity, token)
+  api POST /cart/items body { productId: {productId}, quantity: {quantity} }
+    header "Authorization" is "Bearer {token}"
+  expect status equals 201
+  capture body.id as itemId
+  give itemId
