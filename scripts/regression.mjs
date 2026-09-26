@@ -131,6 +131,10 @@ const PHASES = [
   // browser group, under the sweep's lease, never beside a model. The stack is up for the
   // authoring file's `send` and run.
   { name: 'ui-page', cmd: 'node scripts/verify-ui-page.mjs' },
+  // `S-4b` (tflw `M242` `F`, `D1331`): `tflw export otlp` against a real OpenTelemetry Collector
+  // (compose profile `otel`, started and removed by the script), its span tree compared with the
+  // run's own `results.json`; control: an export to a dead port exits 1.
+  { name: 'otel-export-check', cmd: 'node scripts/verify-otel-export.mjs' },
   // `M195` S2 (`D1017`): `tflw lsp` as a process on stdio, driven by a real client
   // (`scripts/lib/lsp-client.mjs`) about this corpus — the unit suite mocks the transport, and the
   // transport was the gap. Needs no stack; pays the restart like every phase.
@@ -483,7 +487,7 @@ const PHASES = [
 const PHASE_GROUPS = {
   core: ['full suite', '--tag orderOps', '--tag smoke,catalogOps', 'demo-fail-check', '--tag orgOps', '--tag inventoryOps', 'migrate-check', 'secure-local-check', 'security-acceptance-gate', 'input-acceptance'],
   tooling: ['--tag api', 'watch-check', 'ui-check', 'cli-refusals-check', 'lsp-check', 'init-check', 'refactor-check', 'pick-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check', 'security-target-check', 'sarif-acceptance', 'construct-acceptance'],
-  safety: ['--tag identityOps', '--tag mixed', '--tag smoke,orderOps', '--tag adminOps', '--tag catalogOps', 'safety-flags-check', 'check-diagnostics', 'artifact-contract', 'safety-redaction-check', 'screenshot-step-check'],
+  safety: ['--tag identityOps', '--tag mixed', '--tag smoke,orderOps', '--tag adminOps', '--tag catalogOps', 'safety-flags-check', 'check-diagnostics', 'artifact-contract', 'safety-redaction-check', 'screenshot-step-check', 'otel-export-check'],
   'security-ui': ['--tag smoke,identityOps', 'cli-flags-check', '--tag smoke,adminOps', '--tag ui', 'webv2-admin-check', '--tag smoke,inventoryOps', 'logging-check', 'mtls-rejection', 'vuln-slice-hidden-check', 'second-run-check', 'ui-page'],
 };
 

@@ -1,0 +1,16 @@
+# `S-4b` (tflw `M242` `F`, `D1331`): a real OpenTelemetry Collector for `tflw export otlp` to send
+# to. OTLP/HTTP in, one JSON line per export out, nothing else — the phase reads the file and
+# compares its span tree with the run's `results.json`.
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+exporters:
+  file:
+    path: /out/traces.json
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [file]

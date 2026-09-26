@@ -265,9 +265,40 @@ else:
   ok('every construct in the JSON is named in the human rendering', manifest !== null && missing.length === 0, missing.slice(0, 6).join(', '));
 }
 
+// --- tflw `M242` (`D1327`, `D1330`): `--tag !x` and `--shard i/n`, each against its control -----
+//
+// Two plant files whose tests carry `@constructs` and one of `@matchers` / `@language`. The
+// exclusion is graded against the same run without it: what disappears must be exactly the tests
+// tagged with the excluded tag. The shards are graded against the unsharded run: the two shards'
+// tests are disjoint and together are the whole — the one property a CI matrix needs.
+{
+  const files = 'tests/.constructs/matcher-discrimination.tflw tests/.constructs/language-m242.tflw';
+  const ran = () => {
+    const report = JSON.parse(readFileSync(path.join(REPORT_DIR, 'results.json'), 'utf8'));
+    return report.tests.map((t) => `${t.file}::${t.name}`).sort();
+  };
+  runPassing(`${TFLW} run ${files} --tag constructs --no-color`, '--tag control (no exclusion)');
+  const all = ran();
+  runPassing(`${TFLW} run ${files} --tag constructs,!matchers --no-color`, '--tag !matchers');
+  const kept = ran();
+  const dropped = all.filter((t) => !kept.includes(t));
+  ok('--tag !matchers keeps a strict subset of the control', kept.length > 0 && kept.every((t) => all.includes(t)) && dropped.length > 0, `${kept.length} of ${all.length}`);
+  ok('what it dropped is exactly the matcher plant', dropped.every((t) => t.includes('matcher-discrimination')) && kept.every((t) => t.includes('language-m242')), dropped.slice(0, 3).join(', '));
+
+  runPassing(`${TFLW} run ${files} --no-color`, '--shard control (unsharded)');
+  const whole = ran();
+  const one = runPassing(`${TFLW} run ${files} --shard 1/2 --no-color`, '--shard 1/2');
+  const first = ran();
+  runPassing(`${TFLW} run ${files} --shard 2/2 --no-color`, '--shard 2/2');
+  const second = ran();
+  ok('--shard names itself in the header', /shard 1\/2: 1 of 2 files/.test(one.stdout), one.stdout.split('\n').find((l) => l.includes('shard')) ?? '(no shard line)');
+  ok('the two shards are disjoint', first.every((t) => !second.includes(t)), first.filter((t) => second.includes(t)).join(', '));
+  ok('and together are the unsharded run', [...first, ...second].sort().join('|') === whole.join('|'), `${first.length} + ${second.length} against ${whole.length}`);
+}
+
 if (violations > 0) {
   console.error(`\n${violations} CLI-flag proof violation(s).`);
   process.exit(1);
 }
 
-console.log('\nAll 6 previously-unproven CLI flags behave as documented, and `docs`/`spec` print what they promise.');
+console.log('\nAll 6 previously-unproven CLI flags behave as documented, `--tag !x` and `--shard` match their controls, and `docs`/`spec` print what they promise.');
