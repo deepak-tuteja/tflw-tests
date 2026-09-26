@@ -571,7 +571,7 @@ jobs:
           path: testFlow-tests
 
       - name: Download all groups' reports
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: regression-reports-group-*
           path: testFlow-tests/report-by-phase
