@@ -195,3 +195,34 @@ test "an unsupported upload content-type is rejected with a clean 400"
     header "Authorization" is "Bearer {userAToken}"
   expect status equals 400
   expect body.detail contains "unsupported content type"
+
+# tflw `M245` — several files in one multipart request. Two parts under one repeated field name and
+# one under another, a per-file `type` and a plain form field, and the server's view of the order.
+@fileFormats @orderOps @api
+test "three files in one upload arrive as three parts, in the order written"
+  api POST /uploads/batch upload "../../payloads/sample.csv" as "files", "../../payloads/sample.pdf" as "files", "../../payloads/sample.txt" as "note" type "text/plain" form title="quarterly pack"
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 201
+  expect body.title equals "quarterly pack"
+  expect body.count equals 3
+  expect body.parts[0].field equals "files"
+  expect body.parts[0].filename equals "sample.csv"
+  expect body.parts[0].contentType equals "text/csv"
+  expect body.parts[1].field equals "files"
+  expect body.parts[1].filename equals "sample.pdf"
+  expect body.parts[1].contentType equals "application/pdf"
+  expect body.parts[2].field equals "note"
+  expect body.parts[2].contentType equals "text/plain"
+  capture body.parts[1].id as pdfId
+
+  api GET /uploads/{pdfId}
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 200
+  expect header "content-type" equals "application/pdf"
+
+@fileFormats @orderOps @api
+test "a batch with one unsupported file is refused whole, naming the file"
+  api POST /uploads/batch upload "../../payloads/sample.txt" as "files", "../../payloads/sample.png" as "files"
+    header "Authorization" is "Bearer {userAToken}"
+  expect status equals 400
+  expect body.detail contains "sample.png"
