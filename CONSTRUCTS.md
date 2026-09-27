@@ -341,6 +341,7 @@ rise; `scripts/verify-journeys.mjs` holds the table below to the tree (`--write`
 | `C124` | `length of` (`generator:transform-length`) | api | tflw `M242` `D` (`D1329`): `2` for `tags` and not `1`, `12` for `"known-answer"`; the plant's GraphQL and `capture … matching` journeys pass too | a length of the wrong thing, and a regression in the two journeys |
 | `C125` | `joined with` (`generator:transform-join`) | api | `"plant, soft-assertion"`, and not the reverse | a join that reorders or drops the separator |
 | `C126` | `skip "reason"` (`declaration:skip`) | api | tflw `M242` `B` (`D1327`): a test whose body would fail is reported `skipped` with its reason, `ok`, no steps; the run counts one skip and no failure | a skip that runs, passes, or fails the run |
+| `C127` | `signer` (`config:directive:signer`) | check | tflw `M246` (`D1345`/`D1346`): `signed.tflw` under three configs — clean under `signer.config`; `TF087` naming `{timestmp}` and suggesting `{timestamp}` under `signer-bad-placeholder.config`; `TF086` on `sign with stripe` under a config with no signer. The wire half is `tests/api/mechanics/signed-requests.tflw` against `apiV2/src/signed/`, whose verifiers share no code with tflw | a directive dropped silently, a placeholder signed as literal text, a `sign with` checked against nothing |
 
 ### `C1` — the soft assertion records a failure and keeps going
 

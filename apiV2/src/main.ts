@@ -9,7 +9,9 @@ import { toValidationProblem } from './common/validation-problem.exception';
 import { contentNegotiation } from './common/content-negotiation.middleware';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // tflw M246: `rawBody` keeps the request's bytes beside the parsed body, because a signature is
+  // over the bytes that arrived and a re-serialised object is not them (`signed/`).
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   app.use(cookieParser());
   // M30 (plan_v2.md Cluster A, decision 11): `threshold: 0` forces every compressible response
