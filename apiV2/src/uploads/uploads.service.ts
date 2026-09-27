@@ -70,7 +70,8 @@ export class UploadsService {
     ownerId: string,
     files: readonly Express.Multer.File[] | undefined,
   ): Promise<(UploadMetadata & { field: string })[]> {
-    if (!files || files.length === 0) throw new BadRequestException('at least one file is required');
+    if (!files || files.length === 0)
+      throw new BadRequestException('at least one file is required');
     for (const file of files) {
       if (!ALLOWED_CONTENT_TYPES.has(file.mimetype)) {
         throw new BadRequestException(

@@ -49,7 +49,11 @@ export class UploadsController {
     @Body() body: Record<string, unknown>,
   ) {
     const parts = await this.uploads.createMany(user.id, files);
-    return { title: typeof body.title === 'string' ? body.title : null, count: parts.length, parts };
+    return {
+      title: typeof body.title === 'string' ? body.title : null,
+      count: parts.length,
+      parts,
+    };
   }
 
   // PLAN_FILEFORMATS.md D3/Q6 — `?as=json` swaps the raw-stream response for a JSON envelope over
