@@ -86,6 +86,9 @@ services:
       JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-1h}
       JWT_SESSION_TTL: ${JWT_SESSION_TTL:-1h}
       JWT_SESSION_REFRESH_TTL: ${JWT_SESSION_REFRESH_TTL:-2h}
+      WEBHOOK_SIGNING_SECRET: ${WEBHOOK_SIGNING_SECRET:-whsec-dev-change-me}
+      SIGV4_ACCESS_KEY_ID: ${SIGV4_ACCESS_KEY_ID:-AKIDDOGFOOD}
+      SIGV4_SECRET_ACCESS_KEY: ${SIGV4_SECRET_ACCESS_KEY:-dogfood-sigv4-secret-change-me}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
       ADMIN_PW: ${ADMIN_PW:-admin-pw-123}
       USER_A_EMAIL: ${USER_A_EMAIL:-alice@example.com}

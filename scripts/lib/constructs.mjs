@@ -2842,6 +2842,24 @@ export const PLANTS = [
     catches: 'a skip that runs the body, a skip reported as a pass, and a skip that fails the run.',
     blockedOn: null,
   },
+  {
+    id: 'C127',
+    construct: 'config:directive:signer',
+    family: 'config',
+    tier: 'check',
+    title: 'a signer is read from the config, its misspelled placeholder refused, and a step naming it resolved',
+    target: '`signed.tflw` checked under `signer.config`, under `signer-bad-placeholder.config`, and under a config with no signer',
+    evidence: { file: 'tests/.checkonly/config-directives/signer.config', pattern: '^signer stripe hmac sha256 hex ', min: 1 },
+    run: 'signed.tflw',
+    graders: ['acceptance'],
+    knownAnswer:
+      'tflw `M246` (`D1345`/`D1346`). Under `signer.config` the file checks clean; under '
+      + '`signer-bad-placeholder.config` the check is `TF087` naming `{timestmp}` and suggesting `{timestamp}`; under a config '
+      + 'with no signer the same file is `TF086` on `sign with stripe`. What a signed request does on the wire is graded by '
+      + '`tests/api/mechanics/signed-requests.tflw` against `apiV2/src/signed/`, whose verifiers share no code with tflw.',
+    catches: 'a directive dropped silently, a placeholder signed as literal text, and a `sign with` checked against nothing.',
+    blockedOn: null,
+  },
 ];
 
 /**

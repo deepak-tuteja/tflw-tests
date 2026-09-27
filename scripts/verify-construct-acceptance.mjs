@@ -2680,11 +2680,11 @@ if (GENERATOR_IDS.some((id) => wanted(id))) {
 // which the fetch standard blocks outright, so the "it got past the gate" leg fails identically
 // whether or not apiV2 is up.
 
-const DIRECTIVE_IDS = ['C92', 'C93', 'C94', 'C95', 'C96', 'C119', 'C120'];
+const DIRECTIVE_IDS = ['C92', 'C93', 'C94', 'C95', 'C96', 'C119', 'C120', 'C127'];
 
 if (DIRECTIVE_IDS.some((id) => wanted(id))) {
   const FIX = path.join(ROOT, 'tests', '.checkonly', 'config-directives');
-  console.log('\nC92-C96, C119, C120 — the seven config directives\n  target: tests/.checkonly/config-directives/ — committed configs, copied in as `tflw.config`');
+  console.log('\nC92-C96, C119, C120, C127 — the eight config directives\n  target: tests/.checkonly/config-directives/ — committed configs, copied in as `tflw.config`');
 
   const scratch = mkdtempSync(path.join(tmpdir(), 'tflw-config-directives-'));
   const useConfig = (dir, config) => copyFileSync(path.join(FIX, config), path.join(dir, 'tflw.config'));
@@ -2865,6 +2865,26 @@ if (DIRECTIVE_IDS.some((id) => wanted(id))) {
         `\`runs keep 0\` is refused at its own line, naming the directive (got: ${firstLine(zero)})`);
       useConfig(rDir, 'helpers-default.config');
       precision('C120', clean(rchk(['kept.tflw'])), 'the same file is clean under a config with no `runs` line, so what was refused was the count');
+    }
+
+    // ---- C127: `signer` — a declaration the check reads, and the placeholders it owns ----------
+    //
+    // tflw `M246` (`D1345`/`D1346`). Check-tier, like C120: the config parses, a misspelled
+    // placeholder is refused where it is written rather than signed as literal text, and a step's
+    // `sign with` is resolved against the declaration — the no-signer leg is the proof it was read.
+    if (wanted('C127')) {
+      const sDir = corpus('signer', ['signed.tflw'], 'signer.config');
+      const schk = (args) => runCheck(args, { cwd: sDir });
+      const ok = schk(['signed.tflw']);
+      recall('C127', clean(ok), `a declared \`signer\` and a step signed with it check clean (got: ${firstLine(ok)})`);
+      useConfig(sDir, 'signer-bad-placeholder.config');
+      const bad = schk(['signed.tflw']);
+      recall('C127', /error\[TF087\]/.test(bad) && /\{timestmp\}/.test(bad) && /\{timestamp\}/.test(bad),
+        `a misspelled placeholder is TF087 naming it and the one it meant (got: ${firstLine(bad)})`);
+      useConfig(sDir, 'helpers-default.config');
+      const none = schk(['signed.tflw']);
+      precision('C127', /error\[TF086\]/.test(none) && /stripe/.test(none),
+        `with no signer declared the same step is TF086, so the clean leg read the declaration (got: ${firstLine(none)})`);
     }
   } finally {
     rmSync(scratch, { recursive: true, force: true });

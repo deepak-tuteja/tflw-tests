@@ -292,6 +292,9 @@ const FILE_FIXTURES = {
   TF084: 'skip-without-reason.tflw',
   // tflw `M242` `C` (`D1328`): `body graphql` on a `GET`, where the query would never arrive.
   TF085: 'graphql-on-get.tflw',
+  // tflw `M246` `B` (`D1345`): `sign with` naming no signer this project's `tflw.config` declares.
+  // Checked against the real config, which declares `stripe`, so the near miss also gets its hint.
+  TF086: 'unknown-signer.tflw',
 };
 
 for (const [code, file] of Object.entries(FILE_FIXTURES)) {
@@ -447,6 +450,11 @@ const CONFIG_FIXTURES = {
   // Coupled with its tflw half and red until that half merges (D350/D382). The local pre-flight is
   // `npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs` (D351).
   TF081: 'defaults\n  workers 2\n  workers 4\n\nenv local default\n  api "http://localhost:4001"\n',
+  // tflw `M246` `A` (`D1346`): a signer's `signs` template naming a placeholder no signer fills —
+  // `{timestmp}` for `{timestamp}`. Signing the literal text would be a wrong signature that looks
+  // like the server's bug, so the config refuses it before a run starts.
+  TF087:
+    'env local default\n  api "http://localhost:4001"\n\nsigner stripe hmac sha256 hex secret "whsec_x"\n  signs "{timestmp}.{body}"\n  header "Stripe-Signature" is "t={timestamp},v1={signature}"\n',
 };
 
 const scratchDir = mkdtempSync(path.join(tmpdir(), 'tflw-check-config-'));

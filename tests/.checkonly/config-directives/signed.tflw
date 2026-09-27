@@ -1,0 +1,8 @@
+# signed.tflw — CHECK-ONLY FIXTURE (`C127`, tflw `M246`): one request signed with `stripe`. Checked,
+# never run: under `signer.config` it is clean, and under a config that declares no signer its
+# `sign with` is `TF086`, which is the proof that the check read the declaration.
+
+test "a signed request"
+  api POST /webhooks/stripe body { id: "evt_1" }
+    sign with stripe
+  expect status equals 200
