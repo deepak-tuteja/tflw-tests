@@ -1,0 +1,12 @@
+# concurrently-one-row.tflw — CHECK-ONLY FIXTURE (tflw `M247` `E`, `D1359`): `with each concurrently`
+# over a table of one row — `TF090`, a warning. One row has nothing to run beside, so the word
+# promises a race the run cannot have; it is usually a table cut down while debugging and left so.
+#
+# Run explicitly (dot-directory — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/concurrently-one-row.tflw
+with each concurrently
+  | sku      |
+  | "LAST-1" |
+test "{sku} is reserved by one of several buyers at once"
+  api GET /health
+  expect status equals 200

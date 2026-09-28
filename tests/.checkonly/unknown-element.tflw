@@ -1,0 +1,14 @@
+# unknown-element.tflw — CHECK-ONLY FIXTURE (tflw `M247` `D`, `D1356`): a bare name where a locator
+# goes that no `element` in this file or its imports declares — `TF089`. `basketCont` is a near
+# miss of the declared `basketCount`, so the check also offers `did you mean`. The declared name is
+# used beside it, so the file tells a rule that reads the declarations from one that flags every
+# bare name on sight.
+#
+# Run explicitly (dot-directory — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/unknown-element.tflw
+element basketCount = css "[data-test=basket-count]"
+
+test "an element nobody declared"
+  open "/"
+  expect basketCount is visible
+  expect basketCont is visible

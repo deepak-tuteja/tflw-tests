@@ -1,0 +1,6 @@
+# C128's precision leg — `imported.tflw` without its `import`. The same names are now `TF089`, which
+# is the proof the clean leg read the import rather than accepting any bare name.
+test "the same names with nothing declaring them"
+  open "/"
+  click checkout
+  expect basketCount is visible

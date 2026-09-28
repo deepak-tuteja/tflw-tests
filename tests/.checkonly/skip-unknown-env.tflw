@@ -1,0 +1,10 @@
+# skip-unknown-env.tflw — CHECK-ONLY FIXTURE (tflw `M247` `B`, `D1353`): `skip "…" on env` naming
+# an env this project's `tflw.config` does not declare — `TF088`. `locl` is a near miss of `local`,
+# so the check also offers `did you mean`. Without the code the skip would never hold anywhere and
+# the test would run in the env it was written to stay out of.
+#
+# Run explicitly (dot-directory — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/skip-unknown-env.tflw
+test "a skip scoped to an env nobody declared" skip "no payments sandbox here" on env locl
+  api GET /health
+  expect status equals 200

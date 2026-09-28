@@ -1,0 +1,7 @@
+# C128 — elements declared in another file, read through `import`.
+import "./shared.tflw"
+
+test "an imported element is a locator here"
+  open "/"
+  click checkout
+  expect basketCount is visible
