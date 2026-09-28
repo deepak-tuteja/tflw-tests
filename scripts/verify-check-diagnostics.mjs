@@ -309,6 +309,12 @@ const FILE_FIXTURES = {
   // tflw `G1` (`D1381`): `together` in a plain test. A concurrent test using it correctly sits beside
   // it and checks clean.
   TF092: 'together-no-rows.tflw',
+  // tflw `G10` (`D1384`): a `rows` block under a test with no table. A tabled test with a `rows`
+  // block sits beside it and checks clean.
+  TF095: 'rows-without-table.tflw',
+  // tflw `G10` (`D1384`): a `rows` line asking a finished row about its page. A line counting the
+  // rows' statuses sits beside it and checks clean.
+  TF096: 'rows-page-subject.tflw',
 };
 
 for (const [code, file] of Object.entries(FILE_FIXTURES)) {

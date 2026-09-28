@@ -1,0 +1,16 @@
+# rows-page-subject.tflw — CHECK-ONLY FIXTURE (tflw `G10`, `D1384`): a `rows` line asking a finished
+# row about a locator — `TF096`. A row is judged after it ends, when its page is closed. The line
+# beside it counts the rows' statuses, which a finished row can answer, and checks clean.
+#
+# Run explicitly (dot-directory — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/rows-page-subject.tflw
+with each
+  | n |
+  | 1 |
+  | 2 |
+test "health {n}"
+  api GET /health
+  expect status equals 200
+rows
+  expect every row status equals 200
+  expect every row text "Healthy" is visible

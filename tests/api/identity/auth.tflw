@@ -5,8 +5,14 @@ import "../../../shared/get-profile.tflw"
 # cached `admin` session — see PROGRESS.md M14 for why); this file exercises the auth endpoints
 # themselves anyway, so an inline login was always the more natural fit here.
 
-use "../../helpers/concurrent-register.ts"
-use "../../helpers/concurrent-refresh.ts"
+# What the two races run over, made once and shared read-only (tflw `G3`): an email nobody has
+# registered, and a fresh user's refresh token nobody has rotated.
+before file
+  let raceEmail = unique email
+  let racePw = random password
+  api POST /auth/register body { name: unique("Refresh Race User"), email: unique email, password: {racePw} }
+  expect status equals 201
+  capture body.refreshToken as raceRefreshToken
 
 @auth @identityOps @smoke @api
 test "registering a new user returns a working bearer pair"
@@ -108,22 +114,41 @@ test "refreshing with a malformed token string is a clean 401, not a stack trace
   api POST /auth/refresh body { refreshToken: "" }
   expect status equals 401
 
+# Five rows register one email at once. Exactly one may win and the rest must be refused cleanly —
+# before the fix the losers hit an uncaught unique violation and surfaced as raw 500s. No route lists
+# users by email, so the race is judged by the rows' own answers in the `rows` block (tflw `G10`);
+# it was the JS helper `tests/helpers/concurrent-register.ts` until then.
 @auth @regression @identityOps @api
-test "5 concurrent registrations for the same email produce exactly 1 success, never a 500"
-  let email = unique email
+with each concurrently
+  | attempt |
+  | 1       |
+  | 2       |
+  | 3       |
+  | 4       |
+  | 5       |
+test "registration race: attempt {attempt} of 5 for one email"
+  together
+  api POST /auth/register body { name: "Register Race", email: {raceEmail}, password: {racePw} }
+  expect status is less than 500
+rows
+  expect exactly 1 row status equals 201
+  expect 4 rows status equals 409
 
-  # The call itself is the assertion — throws unless exactly 1 of the 5 concurrent requests
-  # actually registered the email and the other 4 got a clean 409 (previously they hit an
-  # uncaught unique-violation and surfaced as a raw 500).
-  let proof = assert concurrent register(email, 5)
-
+# Four rows refresh one token at once. Rotation must grant exactly one successor pair — before the
+# fix a separate liveness check and revoke let several requests each mint one. A rotated token says
+# nothing about its siblings, so the rows' answers are what is counted (tflw `G10`); it was the JS
+# helper `tests/helpers/concurrent-refresh.ts` until then.
 @auth @regression @identityOps @api
-test "4 concurrent refreshes of the same token produce exactly 1 winner, never two valid sessions"
-  api POST /auth/login body { email: env(USER_A_EMAIL), password: env(USER_A_PW) }
-  expect status equals 200
-  capture body.refreshToken as refreshToken
-
-  # The call itself is the assertion — throws unless exactly 1 of the 4 concurrent refresh
-  # requests actually rotated the token (previously a separate assertLive+revoke pair let more
-  # than one concurrent request pass the liveness check before either revoked it).
-  let proof = assert concurrent refresh(refreshToken, 4)
+with each concurrently
+  | attempt |
+  | 1       |
+  | 2       |
+  | 3       |
+  | 4       |
+test "refresh race: attempt {attempt} of 4 on one token"
+  together
+  api POST /auth/refresh body { refreshToken: {raceRefreshToken} }
+  expect status is less than 500
+rows
+  expect exactly 1 row status equals 200
+  expect 3 rows status equals 401
