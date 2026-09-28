@@ -295,6 +295,14 @@ const FILE_FIXTURES = {
   // tflw `M246` `B` (`D1345`): `sign with` naming no signer this project's `tflw.config` declares.
   // Checked against the real config, which declares `stripe`, so the near miss also gets its hint.
   TF086: 'unknown-signer.tflw',
+  // tflw `M247` `B` (`D1353`): `skip … on env` naming an env the config does not declare. Checked
+  // against the real config, which declares `local`, so the near miss `locl` also gets its hint.
+  TF088: 'skip-unknown-env.tflw',
+  // tflw `M247` `D` (`D1356`): a bare name in a locator position that no `element` declares. A
+  // declared one is used beside it, so a rule flagging every bare name would not look the same.
+  TF089: 'unknown-element.tflw',
+  // tflw `M247` `E` (`D1359`): `with each concurrently` over one row — a warning.
+  TF090: 'concurrently-one-row.tflw',
 };
 
 for (const [code, file] of Object.entries(FILE_FIXTURES)) {

@@ -2859,6 +2859,24 @@ export const PLANTS = [
       + '`tests/api/mechanics/signed-requests.tflw` against `apiV2/src/signed/`, whose verifiers share no code with tflw.',
     catches: 'a directive dropped silently, a placeholder signed as literal text, and a `sign with` checked against nothing.',
     blockedOn: null,
+  },  {
+    id: 'C128',
+    construct: 'declaration:element',
+    family: 'declaration',
+    tier: 'check',
+    title: 'an `element` name is a locator wherever one goes, read from its file or an import, and a name nothing declares is refused',
+    target: '`tests/.checkonly/elements/` checked under its own `tflw.config`: `own.tflw`, `imported.tflw`, `unimported.tflw`, `misspelt.tflw`',
+    evidence: { file: 'tests/.checkonly/elements/shared.tflw', pattern: '^element \\w+ = ', min: 2 },
+    run: 'imported.tflw',
+    graders: ['acceptance'],
+    knownAnswer:
+      'tflw `M247` `D` (`D1356`). `own.tflw` (an element in a subject, an action target and a `within` scope) and '
+      + '`imported.tflw` (two elements through `import "./shared.tflw"`) check clean; `unimported.tflw`, the same body '
+      + 'without the import, is `TF089` on `checkout` and `basketCount`; `misspelt.tflw` is `TF089` on `basketCont` '
+      + 'suggesting `basketCount`. What an element does on a real page is graded by the storefront journeys that use '
+      + '`tests/shared/storefront.tflw`\'s elements (`T-1d`).',
+    catches: 'a declaration ignored, an import whose elements never arrive, and a bare name accepted with nothing behind it.',
+    blockedOn: null,
   },
 ];
 

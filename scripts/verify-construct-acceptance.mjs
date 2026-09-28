@@ -2892,6 +2892,31 @@ if (DIRECTIVE_IDS.some((id) => wanted(id))) {
 }
 
 // =============================================================================
+// C128 — tflw `M247`'s `element`, check tier
+// =============================================================================
+//
+// Like C127: the declaration is graded where `tflw check` reads it. The two clean legs put an element
+// in each position a locator goes and through an `import`; the precision leg is the imported body
+// with the `import` removed, so a checker that accepted any bare name would go red there.
+if (wanted('C128')) {
+  const dir = path.join(ROOT, 'tests', '.checkonly', 'elements');
+  console.log('\nC128 — `element`, declared, imported, and refused when undeclared\n  target: tests/.checkonly/elements/');
+  const echk = (file) => runCheck([file], { cwd: dir });
+  const clean = (out) => /no problems found/.test(out);
+  const firstLine = (out) => out.trim().split('\n')[0] || '(no output)';
+  const own = echk('own.tflw');
+  recall('C128', clean(own), `a file's own element checks clean as subject, action target and \`within\` scope (got: ${firstLine(own)})`);
+  const imported = echk('imported.tflw');
+  recall('C128', clean(imported), `two elements read through \`import\` check clean (got: ${firstLine(imported)})`);
+  const misspelt = echk('misspelt.tflw');
+  recall('C128', /error\[TF089\]/.test(misspelt) && /basketCont/.test(misspelt) && /did you mean `basketCount`/.test(misspelt),
+    `a near miss is TF089 naming it and the name it meant (got: ${firstLine(misspelt)})`);
+  const unimported = echk('unimported.tflw');
+  precision('C128', (unimported.match(/error\[TF089\]/g) ?? []).length === 2,
+    `the imported body with no import is TF089 on both names, so the clean leg read the import (got: ${firstLine(unimported)})`);
+}
+
+// =============================================================================
 // C124-C126 — tflw `M242`'s string forms and a skip, in a plant that also carries GraphQL
 // =============================================================================
 //
