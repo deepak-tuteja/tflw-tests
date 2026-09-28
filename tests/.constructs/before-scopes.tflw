@@ -21,9 +21,9 @@
 # test rather than reused (once per test). A `before` that ran once per file and shared its scope
 # would leave all three tests asserting 1 and only the first would pass.
 #
-# The fourth claim — `before file`'s scope being *isolated* from every test — cannot be written
-# here at all, because a file that states it does not compile. It lives in
-# `check-before-file-scope-isolated.tflw`, graded by `tflw check`.
+# The fourth claim — `before file`'s values are shared with every test *read-only* (tflw `G3`; it
+# was *isolated* until then) — is a refusal, so it cannot be written in a file that runs. It lives
+# in `check-before-file-scope-read-only.tflw`, graded by `tflw check`.
 
 before file
   api POST /lifecycle/reset

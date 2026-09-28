@@ -209,34 +209,35 @@ rise; `scripts/verify-journeys.mjs` holds the table below to the tree (`--write`
 | `step:step` | workload | 1 | 1 |
 | `step:spike` | workload | 2 | 1 |
 | `step:run` | workload | 2 | 1 |
-| `step:api` | step (journeys) | 375 | 1 |
+| `step:api` | step (journeys) | 380 | 1 |
 | `step:wait` | step (journeys) | 27 | 1 |
-| `step:expect` | step (journeys) | 429 | 1 |
+| `step:expect` | step (journeys) | 434 | 1 |
 | `step:check` | step (journeys) | 5 | 1 |
-| `step:let` | step (journeys) | 114 | 1 |
+| `step:let` | step (journeys) | 113 | 1 |
 | `step:capture` | step (journeys) | 183 | 1 |
 | `step:log` | step (journeys) | 49 | 1 |
 | `step:give` | step (journeys) | 9 | 1 |
 | `step:pause` | step (journeys) | 3 | 1 |
+| `step:together` | step (journeys) | 3 | 1 |
 | `step:threshold` | step (journeys) | 10 | 1 |
 | `declaration:test` | declaration (files) | 121 | 1 |
 | `declaration:crawl` | declaration (files) | 1 | 1 |
 | `declaration:action` | declaration (files) | 5 | 1 |
 | `declaration:element` | declaration (files) | 2 | 1 |
 | `declaration:import` | declaration (files) | 33 | 1 |
-| `declaration:use` | declaration (files) | 15 | 1 |
-| `declaration:before` | declaration (files) | 59 | 1 |
+| `declaration:use` | declaration (files) | 13 | 1 |
+| `declaration:before` | declaration (files) | 58 | 1 |
 | `declaration:after` | declaration (files) | 2 | 1 |
 | `declaration:tags` | declaration (files) | 122 | 1 |
-| `declaration:with-each` | declaration (files) | 4 | 1 |
-| `declaration:as` | declaration (files) | 14 | 1 |
+| `declaration:with-each` | declaration (files) | 6 | 1 |
+| `declaration:as` | declaration (files) | 13 | 1 |
 | `declaration:skip` | declaration (files) | 4 | 1 |
 | `declaration:retry` | declaration (files) | 4 | 1 |
 | `declaration:concurrency` | declaration (files) | 1 | 1 |
-| `subject:status` | subject (journeys) | 362 | 1 |
+| `subject:status` | subject (journeys) | 365 | 1 |
 | `subject:duration` | subject (journeys) | 2 | 1 |
 | `subject:header` | subject (journeys) | 23 | 1 |
-| `subject:body` | subject (journeys) | 219 | 1 |
+| `subject:body` | subject (journeys) | 223 | 1 |
 | `subject:body-text` | subject (journeys) | 5 | 1 |
 | `subject:body-bytes` | subject (journeys) | 4 | 1 |
 | `subject:body-csv` | subject (journeys) | 3 | 1 |
@@ -248,14 +249,14 @@ rise; `scripts/verify-journeys.mjs` holds the table below to the tree (`--write`
 | `subject:response` | subject (journeys) | 5 | 1 |
 | `subject:dialog-message` | subject (journeys) | 2 | 1 |
 | `subject:dialog-type` | subject (journeys) | 1 | 1 |
-| `subject:value` | subject (journeys) | 4 | 1 |
-| `matcher:equals` | matcher (journeys) | 368 | 1 |
+| `subject:value` | subject (journeys) | 6 | 1 |
+| `matcher:equals` | matcher (journeys) | 372 | 1 |
 | `matcher:contains` | matcher (journeys) | 46 | 1 |
 | `matcher:matches-regex` | matcher (journeys) | 19 | 1 |
-| `matcher:matches-subset` | matcher (journeys) | 24 | 1 |
+| `matcher:matches-subset` | matcher (journeys) | 26 | 1 |
 | `matcher:matches-schema` | matcher (journeys) | 4 | 1 |
 | `matcher:matches-file` | matcher (journeys) | 4 | 1 |
-| `matcher:greater-less-than` | matcher (journeys) | 8 | 1 |
+| `matcher:greater-less-than` | matcher (journeys) | 11 | 1 |
 | `matcher:has-count` | matcher (journeys) | 46 | 1 |
 | `matcher:has-count-at-least` | matcher (journeys) | 2 | 1 |
 | `matcher:has-count-at-most` | matcher (journeys) | 1 | 1 |
@@ -270,22 +271,22 @@ rise; `scripts/verify-journeys.mjs` holds the table below to the tree (`--write`
 | `matcher:has-no-authorization-violations` | matcher (journeys) | 3 | 1 |
 | `matcher:has-no-input-handling-violations` | matcher (journeys) | 1 | 1 |
 | `matcher:matches-snapshot` | matcher (journeys) | 2 | 1 |
-| `generator:unique-prefix` | generator (journeys) | 169 | 1 |
-| `generator:unique-email` | generator (journeys) | 27 | 1 |
+| `generator:unique-prefix` | generator (journeys) | 166 | 1 |
+| `generator:unique-email` | generator (journeys) | 26 | 1 |
 | `generator:unique-number` | generator (journeys) | 1 | 1 |
 | `generator:unique-like` | generator (journeys) | 1 | 1 |
 | `generator:unique-uuid` | generator (journeys) | 2 | 1 |
 | `generator:random-number` | generator (journeys) | 2 | 1 |
-| `generator:random-date` | generator (journeys) | 12 | 1 |
+| `generator:random-date` | generator (journeys) | 11 | 1 |
 | `generator:random-of` | generator (journeys) | 1 | 1 |
 | `generator:random-string` | generator (journeys) | 9 | 1 |
 | `generator:random-like` | generator (journeys) | 1 | 1 |
 | `generator:random-uuid` | generator (journeys) | 22 | 1 |
-| `generator:random-password` | generator (journeys) | 24 | 1 |
+| `generator:random-password` | generator (journeys) | 23 | 1 |
 | `generator:transform-base64` | generator (journeys) | 6 | 1 |
 | `generator:transform-hex` | generator (journeys) | 1 | 1 |
-| `generator:transform-length` | generator (journeys) | 1 | 1 |
-| `generator:transform-join` | generator (journeys) | 1 | 1 |
+| `generator:transform-length` | generator (journeys) | 2 | 1 |
+| `generator:transform-join` | generator (journeys) | 2 | 1 |
 | `generator:transform-url` | generator (journeys) | 1 | 1 |
 | `config:directive:defaults` | config (config) | 1 | 1 |
 | `config:directive:env` | config (config) | 11 | 1 |
@@ -379,7 +380,7 @@ rise; `scripts/verify-journeys.mjs` holds the table below to the tree (`--write`
 | `C76` | `@tag` (`declaration:tags`) | api | four runs of one file compared against the arrival counter — unfiltered, `--tag c76alpha`, `--tag c76beta`, `--tag c76alpha,c76beta` — and what carries the row is what is **absent** from runs 2 and 3. `--exclude-tag` is run too, and must come back `unknown flag` | a `--tag` that filters nothing, filters everything, or reads only the first tag on a declaration |
 | `C77` | `action` (`declaration:action`) | api | the caller marks, the action marks, and then the caller asserts on `body` again — and reads **its own** response, although the action's request was strictly later (`FU-12`). The action's mark is required too, so the negative cannot be satisfied by a body that never ran | an `action` whose response leaks into the caller's scope, and one whose body never executed |
 | `C78` | `use` (`declaration:use`) | api | two claims, two instruments. The export returns `c78-51f2ab95`, a hash the DSL has no arithmetic to compute; and two files differing by **one** `use` line make the same bogus call, `TF037` on the one without and silence on the one with. The control is load-bearing | a `use` that imports nothing, a call that returns its argument, and a checker that "improves" `TF037` by peeking at a module it must not execute |
-| `C79` | `before` (`declaration:before`) | api | after a three-test run the server holds `c79file` at **1** and `c79each` at **3**; the three tests assert ordinals 1, 2, 3 off the bare hook's own capture. The fourth claim — `before file`'s scope sealed off — is a file that must **not** compile, graded as `TF030` | a `before file` that runs per test, a bare `before` that runs once per file, and a `before file` whose scope leaks into a test |
+| `C79` | `before` (`declaration:before`) | api | after a three-test run the server holds `c79file` at **1** and `c79each` at **3**; the three tests assert ordinals 1, 2, 3 off the bare hook's own capture. The fourth claim — `before file`'s values shared read-only (tflw `G3`; sealed off until then) — is a file where one test reads the value clean and one that binds it again is refused, graded as exactly one `TF091` | a `before file` that runs per test, a bare `before` that runs once per file, and a shared value a test can overwrite |
 | `C80` | `as` (`declaration:as`) | api | **no new fixture.** `tests/examples/sessions-explained.tflw` has been running the pair all along: the same `GET /orders/all` answers 200 in a test declared `as admin` and 401 in one with no clause. The grader requires both verdicts *and* that they came from the same request | an `as` clause that applies no credential, and one that authorizes every test in the file whether it opted in or not |
 | `C81` | `unique("prefix")` (`generator:unique-prefix`) | api | `W3-Widget-emng8w-0/-1/-2` — the prefix verbatim, then the run namespace, then three **consecutive** counter values. Identical under two seeds and **different under a moved clock**, with the counter inside it restarting at 0 either way: `M181` moved the value without moving the counter. Plus `SPEC` §7.2's bolded retry clause: three attempts, three distinct values, one mark each | a `unique("…")` that drops its prefix, repeats, became seed-derived, replays across a retried test's attempts, or went back to re-issuing the previous run's values against a column that outlives the run (`M162-01`) |
 | `C82` | `unique email` (`generator:unique-email`) | api | `user-emng8w-<n>@example.test` where `<n>` continues **`C81`'s** sequence — the plant reads `#3` because the test above it drew three prefixes — and `emng8w` is `C81`'s namespace unchanged. One counter and one namespace, shared by the whole group, and nothing in the suite said either. **This is the construct `M162-01` was measured on**: twelve of thirteen failing steps were *email already registered* | a `unique email` that repeats, stops being an address, acquires a per-construct counter or namespace and so stops being collision-safe against its siblings, or stops being collision-safe against the previous run |

@@ -2326,9 +2326,10 @@ if (wanted('C79')) {
   const plant = plantFor('declaration:before');
   console.log(`\n${plant.id} — ${plant.title}\n  target: ${plant.target}`);
 
-  // The claim no running file can make: `before file`'s scope is sealed off from every test.
-  const isolated = runCheck(['tests/.constructs/check-before-file-scope-isolated.tflw']);
-  recall('C79', /TF030/.test(isolated), `a test that reads a \`before file\` binding does not compile (got: ${isolated.trim().split('\n')[0] || 'clean'})`);
+  // The claim no running file can make: `before file`'s values are shared read-only (tflw `G3`,
+  // `D1382` — until then, sealed off from every test, and this read `TF030`).
+  const readOnly = runCheck(['tests/.constructs/check-before-file-scope-read-only.tflw']);
+  recall('C79', (readOnly.match(/TF091/g) ?? []).length === 1 && !/TF030/.test(readOnly), `a test that binds a \`before file\` name again is refused once, and the test that only reads it is not (got: ${readOnly.trim().split('\n')[0] || 'clean'})`);
 
   const { report, output } = runCorpus(ROOT, [plant.evidence.file]);
   const counts = await lifecycleCounts();

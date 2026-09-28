@@ -1701,8 +1701,8 @@ export const PLANTS = [
     construct: 'declaration:before',
     family: 'declaration',
     tier: 'api',
-    title: 'bare `before` runs per test and shares its scope; `before file` runs once and is sealed off from every test',
-    target: 'tests/.constructs/before-scopes.tflw against the arrival counter, plus check-before-file-scope-isolated.tflw under `tflw check`',
+    title: 'bare `before` runs per test and shares its scope; `before file` runs once and shares what it makes with every test, read-only (tflw `G3`)',
+    target: 'tests/.constructs/before-scopes.tflw against the arrival counter, plus check-before-file-scope-read-only.tflw under `tflw check`',
     evidence: { file: 'tests/.constructs/before-scopes.tflw', pattern: '^before file$', min: 1 },
     graders: ['acceptance'],
     knownAnswer:
