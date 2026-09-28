@@ -6,8 +6,8 @@
 # A journey rather than a `.constructs/` plant so every full run asks it: no construct row grades
 # these, and a re-score nobody re-runs goes stale the way the rows did.
 #
-# Row 11 (a quantifier into a nested array) is not here: its answer is the runtime's, recorded
-# against a real response in `tests/.gaps/nested-array-quantifier.tflw`, and the row says which.
+# Row 11 (a quantifier into a nested array) is not here: it needed a real response, and closed
+# when tflw `G8` fixed it — its proof is the last test in `tests/api/catalog/quantifiers.tflw`.
 
 @gaps @api
 test "row 12: a computed local value is assertable directly"
