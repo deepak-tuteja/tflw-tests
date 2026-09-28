@@ -109,6 +109,10 @@ test "offset pagination reports exact totals for this test's own facet"
   expect body.total equals 5
   expect body.totalPages equals 3
   expect body.data has count 2
+  # A full page holds exactly what its own `pageSize` says it does.
+  capture body.data as firstPage
+  let shown = length of {firstPage}
+  expect body.pageSize equals {shown}
 
   api GET /products?q={tag}&page=3&pageSize=2
   expect status equals 200
@@ -132,3 +136,26 @@ test "walking every page (via the JS escape hatch) sees every product exactly on
   api GET /products?q={tag}&page=1&pageSize=50
   expect status equals 200
   expect body.total equals {seen}
+
+@query @pagination @catalogOps @api
+test "an unfiltered page is bounded by its page size, however large the shared catalog has grown"
+  # Every other file in the run creates products, so the catalog's size is not this test's to
+  # know — only its ceiling is.
+  api GET /products?page=1&pageSize=5
+  expect status equals 200
+  expect body.pageSize equals 5
+  expect body.data has count at most 5
+
+@query @catalogOps @security @api
+test "a search for a term no product carries is an empty list, and the search holds up to hostile input"
+  # `unique number` is this run's own namespace and counter, digits only, so no product name any
+  # file writes (they all come from `unique("…")`) can contain it.
+  let term = unique number
+  api GET /products?q={term}
+  expect status equals 200
+  expect body is empty
+  # The same request re-sent with each hostile payload in `q` (tflw's input-handling scan) must not
+  # leak a stack frame, an SQL error or the payload back. No `security violations` line here: over
+  # plain http a JSON answer with no cookie meets none of the serious rules' preconditions, so tflw
+  # refuses it as having no power to fail (`D285`, measured) — the TLS journey is `ciphers.tflw`.
+  expect response has no input handling violations

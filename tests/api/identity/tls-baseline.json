@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "accepted": [
+    {
+      "fingerprint": "c52e553ba3b9a11b",
+      "rule": "sec/hsts-missing",
+      "endpoint": "GET /v1/health"
+    }
+  ]
+}

@@ -184,10 +184,10 @@ rise; `scripts/verify-journeys.mjs` holds the table below to the tree (`--write`
 | construct | lens | journeys | floor |
 |---|---|---|---|
 | `step:open` | browser | 66 | 3 |
-| `step:click` | browser | 59 | 3 |
+| `step:click` | browser | 55 | 3 |
 | `step:double` | browser | 3 | 3 |
 | `step:right` | browser | 3 | 3 |
-| `step:fill` | browser | 56 | 3 |
+| `step:fill` | browser | 54 | 3 |
 | `step:select` | browser | 10 | 3 |
 | `step:tick` | browser | 5 | 3 |
 | `step:untick` | browser | 3 | 3 |
@@ -204,11 +204,97 @@ rise; `scripts/verify-journeys.mjs` holds the table below to the tree (`--write`
 | `step:drop` | browser | 4 | 3 |
 | `step:screenshot` | browser | 3 | 3 |
 | `step:stub` | browser | 4 | 3 |
-| `step:ramp` | workload | 1 | 1 |
-| `step:hold` | workload | 4 | 1 |
+| `step:ramp` | workload | 2 | 1 |
+| `step:hold` | workload | 3 | 1 |
 | `step:step` | workload | 1 | 1 |
-| `step:spike` | workload | 1 | 1 |
+| `step:spike` | workload | 2 | 1 |
 | `step:run` | workload | 2 | 1 |
+| `step:api` | step (journeys) | 375 | 1 |
+| `step:wait` | step (journeys) | 27 | 1 |
+| `step:expect` | step (journeys) | 429 | 1 |
+| `step:check` | step (journeys) | 5 | 1 |
+| `step:let` | step (journeys) | 114 | 1 |
+| `step:capture` | step (journeys) | 183 | 1 |
+| `step:log` | step (journeys) | 49 | 1 |
+| `step:give` | step (journeys) | 9 | 1 |
+| `step:pause` | step (journeys) | 3 | 1 |
+| `step:threshold` | step (journeys) | 10 | 1 |
+| `declaration:test` | declaration (files) | 121 | 1 |
+| `declaration:crawl` | declaration (files) | 1 | 1 |
+| `declaration:action` | declaration (files) | 5 | 1 |
+| `declaration:element` | declaration (files) | 2 | 1 |
+| `declaration:import` | declaration (files) | 33 | 1 |
+| `declaration:use` | declaration (files) | 15 | 1 |
+| `declaration:before` | declaration (files) | 59 | 1 |
+| `declaration:after` | declaration (files) | 2 | 1 |
+| `declaration:tags` | declaration (files) | 122 | 1 |
+| `declaration:with-each` | declaration (files) | 4 | 1 |
+| `declaration:as` | declaration (files) | 14 | 1 |
+| `declaration:skip` | declaration (files) | 4 | 1 |
+| `declaration:retry` | declaration (files) | 4 | 1 |
+| `declaration:concurrency` | declaration (files) | 1 | 1 |
+| `subject:status` | subject (journeys) | 362 | 1 |
+| `subject:duration` | subject (journeys) | 2 | 1 |
+| `subject:header` | subject (journeys) | 23 | 1 |
+| `subject:body` | subject (journeys) | 219 | 1 |
+| `subject:body-text` | subject (journeys) | 5 | 1 |
+| `subject:body-bytes` | subject (journeys) | 4 | 1 |
+| `subject:body-csv` | subject (journeys) | 3 | 1 |
+| `subject:body-pdf-text` | subject (journeys) | 3 | 1 |
+| `subject:request` | subject (journeys) | 2 | 1 |
+| `subject:network-request` | subject (journeys) | 2 | 1 |
+| `subject:locator` | subject (journeys) | 64 | 1 |
+| `subject:page` | subject (journeys) | 3 | 1 |
+| `subject:response` | subject (journeys) | 5 | 1 |
+| `subject:dialog-message` | subject (journeys) | 2 | 1 |
+| `subject:dialog-type` | subject (journeys) | 1 | 1 |
+| `subject:value` | subject (journeys) | 4 | 1 |
+| `matcher:equals` | matcher (journeys) | 368 | 1 |
+| `matcher:contains` | matcher (journeys) | 46 | 1 |
+| `matcher:matches-regex` | matcher (journeys) | 19 | 1 |
+| `matcher:matches-subset` | matcher (journeys) | 24 | 1 |
+| `matcher:matches-schema` | matcher (journeys) | 4 | 1 |
+| `matcher:matches-file` | matcher (journeys) | 4 | 1 |
+| `matcher:greater-less-than` | matcher (journeys) | 8 | 1 |
+| `matcher:has-count` | matcher (journeys) | 46 | 1 |
+| `matcher:has-count-at-least` | matcher (journeys) | 2 | 1 |
+| `matcher:has-count-at-most` | matcher (journeys) | 1 | 1 |
+| `matcher:is-empty` | matcher (journeys) | 3 | 1 |
+| `matcher:has-value` | matcher (journeys) | 1 | 1 |
+| `matcher:state-word` | matcher (journeys) | 66 | 1 |
+| `matcher:connects` | matcher (journeys) | 1 | 1 |
+| `matcher:fails` | matcher (journeys) | 1 | 1 |
+| `matcher:was-made` | matcher (journeys) | 2 | 1 |
+| `matcher:has-no-a11y-violations` | matcher (journeys) | 3 | 1 |
+| `matcher:has-no-security-violations` | matcher (journeys) | 1 | 1 |
+| `matcher:has-no-authorization-violations` | matcher (journeys) | 3 | 1 |
+| `matcher:has-no-input-handling-violations` | matcher (journeys) | 1 | 1 |
+| `matcher:matches-snapshot` | matcher (journeys) | 2 | 1 |
+| `generator:unique-prefix` | generator (journeys) | 169 | 1 |
+| `generator:unique-email` | generator (journeys) | 27 | 1 |
+| `generator:unique-number` | generator (journeys) | 1 | 1 |
+| `generator:unique-like` | generator (journeys) | 1 | 1 |
+| `generator:unique-uuid` | generator (journeys) | 2 | 1 |
+| `generator:random-number` | generator (journeys) | 2 | 1 |
+| `generator:random-date` | generator (journeys) | 12 | 1 |
+| `generator:random-of` | generator (journeys) | 1 | 1 |
+| `generator:random-string` | generator (journeys) | 9 | 1 |
+| `generator:random-like` | generator (journeys) | 1 | 1 |
+| `generator:random-uuid` | generator (journeys) | 22 | 1 |
+| `generator:random-password` | generator (journeys) | 24 | 1 |
+| `generator:transform-base64` | generator (journeys) | 6 | 1 |
+| `generator:transform-hex` | generator (journeys) | 1 | 1 |
+| `generator:transform-length` | generator (journeys) | 1 | 1 |
+| `generator:transform-join` | generator (journeys) | 1 | 1 |
+| `generator:transform-url` | generator (journeys) | 1 | 1 |
+| `config:directive:defaults` | config (config) | 1 | 1 |
+| `config:directive:env` | config (config) | 11 | 1 |
+| `config:directive:session` | config (config) | 6 | 1 |
+| `config:directive:signer` | config (config) | 2 | 1 |
+| `config:directive:require` | config (config) | 5 | 1 |
+| `config:directive:exclude` | config (config) | 1 | 1 |
+| `config:directive:helpers` | config (config) | 1 | 1 |
+| `config:directive:runs` | config (config) | 1 | 1 |
 <!-- journeys:end -->
 
 ## The roster

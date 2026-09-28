@@ -9,10 +9,28 @@
 // A floor is a ratchet in one direction only: a journey removed below it is a red here, and the
 // fix is another journey, never a lower number. A table that disagrees with the tree is a red too,
 // so a count that moves is a visible diff rather than a silent one.
+//
+// `T-1a` (tflw `D1372`): every other step, declaration, subject, matcher and generator the vendored
+// build's `tflw spec --json` reports is held at one journey, and every config directive at one line
+// of the root `tflw.config`. The manifest is the id set (`D723`), so this refuses to grade on a
+// stale build exactly as `verify-construct-coverage.mjs` does, and for its reason: a build from
+// before a construct shipped does not know the construct, so the floor it is missing is not asked.
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { JOURNEY_STATEMENTS, countJourneys, testBodies } from './lib/journeys.mjs';
+import {
+  JOURNEY_STATEMENTS,
+  FAMILY_SHAPES,
+  GATED_FAMILIES,
+  GATED_CONFIG_SLOTS,
+  countJourneys,
+  countFamilies,
+  lineUses,
+  testBodies,
+  unitOf,
+} from './lib/journeys.mjs';
+import { resolveTflw } from './lib/tflw-bin.mjs';
+import { readSpec, siblingState, boxRecords, gradeProvenance, announceProvenance, GRADEABLE } from './lib/tflw-provenance.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CATALOGUE = path.join(ROOT, 'CONSTRUCTS.md');
@@ -45,12 +63,66 @@ const END = '<!-- journeys:end -->';
   }
 }
 
+// `T-1a`'s controls: a matcher is read with its strings emptied, a subject only off an assertion,
+// and a declaration mentioned in a comment is not one.
+{
+  const says = (id, line) => lineUses(FAMILY_SHAPES.get(id), line);
+  const cases = [
+    ['matcher:is-empty', '  expect text "is empty" is visible', false],
+    ['matcher:state-word', '  expect text "is empty" is visible', true],
+    ['subject:body', '  expect body text contains "ok"', false],
+    ['subject:body-text', '  expect body text contains "ok"', true],
+    ['subject:request', '  expect request to "/x" was made', false],
+    ['subject:network-request', '  expect request to "/x" was made', true],
+    ['matcher:has-count', '  expect body.items has count at most 3', false],
+    ['matcher:has-count-at-most', '  expect body.items has count at most 3', true],
+    ['matcher:equals', '  log "equals"', false],
+    ['generator:unique-email', '  # let e = unique email', false],
+  ];
+  const wrong = cases.filter(([id, line, want]) => says(id, line) !== want);
+  if (wrong.length > 0) {
+    for (const [id, line, want] of wrong) console.error(`✗ the family counter's control: ${id} on ${JSON.stringify(line)} should be ${want}`);
+    process.exit(1);
+  }
+}
+
+// --- the manifest is the id set, so provenance is a precondition --------------
+
+const { entry } = resolveTflw('released', { label: 'journeys' });
+const spec = readSpec(entry);
+const provenance = gradeProvenance(spec.build, siblingState(), undefined, boxRecords());
+announceProvenance('journeys', provenance);
+if (!GRADEABLE.has(provenance.state)) {
+  console.error(
+    `\n✗ REFUSING TO GRADE. ${provenance.summary}\n` +
+      (provenance.detail ? `${provenance.detail}\n` : '') +
+      '\n  The floors this gate asks for are the constructs that build ships. A build packed before a\n' +
+      '  construct shipped does not list it, so its floor would never be asked and the gate would be\n' +
+      '  green on the day it was built to go red (`M153b-01`, as in verify-construct-coverage.mjs).\n' +
+      '\n  Fix: npm run refresh-tflw\n',
+  );
+  process.exit(2);
+}
+
+const gated = spec.constructs.filter(
+  (c) =>
+    c.status === 'shipped' &&
+    (GATED_FAMILIES.includes(c.family) || (c.family === 'config' && GATED_CONFIG_SLOTS.includes(c.id.split(':')[1]))),
+);
+const statementIds = new Set(JOURNEY_STATEMENTS.map(([id]) => id));
+const shipped = new Set(gated.map((c) => c.id));
+const unshaped = [...shipped].filter((id) => !statementIds.has(id) && !FAMILY_SHAPES.has(id)).sort();
+const orphaned = [...FAMILY_SHAPES.keys(), ...statementIds].filter((id) => !shipped.has(id)).sort();
+
 const counts = countJourneys(path.join(ROOT, 'tests'));
+const familyCounts = countFamilies(path.join(ROOT, 'tests'), readFileSync(path.join(ROOT, 'tflw.config'), 'utf8'));
+const familyRows = [...FAMILY_SHAPES.keys()].map((id) => [id, familyCounts.get(id), 1, `${id.split(':')[0]} (${unitOf(id)})`]);
 const table = [
   START,
   '| construct | lens | journeys | floor |',
   '|---|---|---|---|',
   ...JOURNEY_STATEMENTS.map(([id, , floor, lens]) => `| \`${id}\` | ${lens} | ${counts.get(id)} | ${floor} |`),
+  ...familyRows.map(([id, n, floor, lens]) => `| \`${id}\` | ${lens} | ${n} | ${floor} |`),
   END,
 ].join('\n');
 
@@ -68,13 +140,22 @@ if (process.argv.includes('--write')) {
     process.exit(1);
   }
   writeFileSync(CATALOGUE, text.slice(0, from) + table + text.slice(to + END.length));
-  console.log(`✎ CONSTRUCTS.md's journeys table rewritten — ${JOURNEY_STATEMENTS.length} statements`);
+  console.log(`✎ CONSTRUCTS.md's journeys table rewritten — ${JOURNEY_STATEMENTS.length + FAMILY_SHAPES.size} constructs`);
   process.exit(0);
 }
 
 const problems = [];
 for (const [id, , floor] of JOURNEY_STATEMENTS) {
   if (counts.get(id) < floor) problems.push(`${id} is used by ${counts.get(id)} journey(s); its floor is ${floor} — add a journey, never lower the floor`);
+}
+for (const [id, n, floor] of familyRows) {
+  if (n < floor) problems.push(`${id} is used ${n} time(s) (${unitOf(id)}); its floor is ${floor} — use it in a real journey, never lower the floor`);
+}
+if (unshaped.length > 0) {
+  problems.push(`${unshaped.length} construct(s) \`tflw spec --json\` ships have no shape in scripts/lib/journeys.mjs, so their floor is not asked: ${unshaped.join(' ')}`);
+}
+if (orphaned.length > 0) {
+  problems.push(`${orphaned.length} shape(s) in scripts/lib/journeys.mjs name a construct \`tflw spec --json\` does not ship (renamed or retired?): ${orphaned.join(' ')}`);
 }
 if (text.slice(from, to + END.length) !== table) {
   problems.push('CONSTRUCTS.md\'s journeys table is not the count this tree gives — node scripts/verify-journeys.mjs --write, and commit the diff');
@@ -83,4 +164,4 @@ if (problems.length > 0) {
   for (const p of problems) console.error(`✗ ${p}`);
   process.exit(1);
 }
-console.log(`✓ journeys: ${JOURNEY_STATEMENTS.length} statements, each at or above its floor; the table matches the tree`);
+console.log(`✓ journeys: ${JOURNEY_STATEMENTS.length + FAMILY_SHAPES.size} constructs, each at or above its floor and each one \`tflw spec --json\` ships; the table matches the tree`);

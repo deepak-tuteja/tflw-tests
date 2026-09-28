@@ -124,12 +124,19 @@ test "the orders CSV export is a naturally-generated body csv target, admin-only
     header "Authorization" is "Bearer {userAToken}"
   expect status equals 201
   capture body.id as orderId
+  capture body.status as orderStatus
 
   api GET /orders/export
     header "Authorization" is "Bearer {adminToken}"
   expect status equals 200
   expect header "content-type" equals "text/csv; charset=utf-8"
   expect any body csv.id equals "{orderId}"
+  # The export's own column order, and this order's row in it as the export writes it: id, status,
+  # total — one 12.00 widget — before the timestamp and the owner nobody here can predict exactly.
+  let columns = ["id", "status", "total", "createdAt", "ownerEmail"] joined with ","
+  expect body text contains "{columns}"
+  let row = [{orderId}, {orderStatus}, "12.00"] joined with ","
+  expect body text contains "{row}"
 
   api GET /orders/export
     header "Authorization" is "Bearer {userAToken}"

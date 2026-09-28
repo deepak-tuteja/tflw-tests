@@ -42,6 +42,7 @@
 import "../shared/webv2-checkout.tflw"
 import "../shared/webv2-login.tflw"
 import "../../shared/root.tflw"
+import "../shared/storefront.tflw"
 
 # M50 (PLAN_WEBV2_M45.md): `after file` had zero dogfood anywhere in this suite (only `before
 # file` did, examples/hooks-explained.tflw) despite a real, genuine use existing right here — user
@@ -192,7 +193,7 @@ test "a full checkout — product page, cart, the iframe payment widget, and the
   login(env(USER_A_EMAIL), env(USER_A_PW))
   open "/products/{coId}"
   expect button "Log out" is visible
-  within css "#product-heading"
+  within productHeading
     expect text "{coName}" is visible
   fill field "Quantity" with "1"
   click button "Add to cart"
@@ -249,7 +250,7 @@ test "the payment gateway's real fetch is stubbed — a method-mismatch passes t
   open "/cart"
   stub GET "https://payments.example.test/v1/authorize" respond status 200 body { token: "tok_wrong_method" }
   stub POST "https://payments.example.test/v1/authorize" respond status 500 body { error: "gateway down" }
-  within frame css "iframe[title='Payment']"
+  within frame paymentFrame
     fill field "Card number" with "4111111111111111"
     fill field "Expiry (MM/YY)" with "12/30"
     fill field "CVC" with "123"
@@ -390,7 +391,7 @@ test "reviews: a first submission succeeds, a duplicate 409s through the shadow-
   root("{rvName}")
   within css "[aria-label='{rvName}']"
     click text "Reviews"
-  within css "star-rating:not([readonly])"
+  within starPicker
     click button "5 stars"
   fill field "Comment (optional)" with "Exactly as described."
   click button "Submit review"
@@ -410,7 +411,7 @@ test "reviews: a first submission succeeds, a duplicate 409s through the shadow-
   # and the comment are wiped and the submit is refused client-side, which is `M154h-01`'s one
   # CI failure in full.
   expect field "Comment (optional)" has value ""
-  within css "star-rating:not([readonly])"
+  within starPicker
     click button "4 stars"
   fill field "Comment (optional)" with "Still great."
   click button "Submit review"
@@ -418,12 +419,16 @@ test "reviews: a first submission succeeds, a duplicate 409s through the shadow-
   # field this test fills — so it has no second source to be confused with.
   expect text "you have already reviewed this product" is visible
 
+# `T-1d` (tflw `M247` `A`, `D1352`): a test `as shopper` opens the page already signed in — the
+# session's cookies are seeded into the browser — so the UI `login()` is gone from the five
+# journeys here that only READ once signed in. The four that write through the page (add to cart,
+# pay, reorder, upload) keep it: the storefront sends a CSRF token only a UI login stores
+# (`webV2/src/api/client.ts`), so a seeded page is signed in but cannot write.
 @mixed
-test "the virtualized catalog filters through a placeholder-only field down to one row"
-  login(env(USER_A_EMAIL), env(USER_A_PW))
+test "the virtualized catalog filters through a placeholder-only field down to one row" as shopper
   open "/catalog/all"
   fill field "Filter products…" with "Bulk Item 100"
-  expect css ".virtual-list-row" has count 1
+  expect virtualRow has count 1
   expect text "Bulk Item 100" is visible
 
 @mixed
@@ -435,22 +440,21 @@ test "the support page's drop-zone accepts a real file, surviving a per-render d
   expect text "sample.csv" is visible
 
 @mixed
-test "the Category <select> really filters the catalog, combined with Search"
+test "the Category <select> really filters the catalog, combined with Search" as shopper
   # M40 (PLAN_WEBV2_M40.md): closes the `select "…" from field` gap — CatalogPage.tsx's Category
   # <select> (a real <label>-associated element, tier 1) was never exercised by any test. Combined
   # with Search rather than asserted alone, so a wrong category genuinely proves 0 results and the
   # right one proves 1 — not just "the dropdown didn't error".
-  login(env(USER_A_EMAIL), env(USER_A_PW))
   open "/"
   select "Books" from field "Category"
   fill field "Search" with "Wireless Mouse"
-  expect css ".product-grid li" has count 0
+  expect productCard has count 0
   select "Electronics" from field "Category"
-  expect css ".product-grid li" has count 1
+  expect productCard has count 1
   expect text "Wireless Mouse" is visible
 
 @mixed
-test "double click and right click are real, distinct browser events — not just two clicks"
+test "double click and right click are real, distinct browser events — not just two clicks" as shopper
   # M40: closes the zero-use gap for both steps. `double click`'s two clicks land at the *same*
   # screen coordinate (Playwright resolves the target position once, not per-click) — the first
   # opens the Quick View modal, whose full-viewport `.modal-overlay` (styles.css) then covers that
@@ -461,7 +465,6 @@ test "double click and right click are real, distinct browser events — not jus
   # changes between them, not a single coalesced "double-click" gesture. A right click never
   # dispatches a `click` event at all (browsers reserve it for `contextmenu`) — the add-to-cart
   # toast never appearing is what proves that, not an assumption.
-  login(env(USER_A_EMAIL), env(USER_A_PW))
   open "/"
   fill field "Search" with "Bulk Item 5"
   within css "[aria-label='Bulk Item 5']"
@@ -515,16 +518,16 @@ test "the render fixture: a masked snapshot absorbs a real checkbox change, unma
   # `tests/snapshots/webv2-storefront/…` are the product of that one-time seed; every ordinary
   # `tflw run` after that only ever reads and compares.
   open "/render-fixture"
-  expect css "section[aria-labelledby='render-fixture-heading']" matches snapshot "render-fixture-unmasked"
+  expect renderFixture matches snapshot "render-fixture-unmasked"
   tick field "Subscribe to updates"
-  expect css "section[aria-labelledby='render-fixture-heading']" not matches snapshot "render-fixture-unmasked"
+  expect renderFixture not matches snapshot "render-fixture-unmasked"
   untick field "Subscribe to updates"
-  expect css "section[aria-labelledby='render-fixture-heading']" matches snapshot "render-fixture-masked" mask field "Subscribe to updates" mask css "section[aria-labelledby='render-fixture-heading'] img"
+  expect renderFixture matches snapshot "render-fixture-masked" mask field "Subscribe to updates" mask renderFixtureImage
   tick field "Subscribe to updates"
-  expect css "section[aria-labelledby='render-fixture-heading']" matches snapshot "render-fixture-masked" mask field "Subscribe to updates" mask css "section[aria-labelledby='render-fixture-heading'] img"
+  expect renderFixture matches snapshot "render-fixture-masked" mask field "Subscribe to updates" mask renderFixtureImage
 
 @mixed
-test "the order confirmation page's receipt link genuinely opens a second browser tab"
+test "the order confirmation page's receipt link genuinely opens a second browser tab" as shopper
   # M43 (PLAN_WEBV2_M40.md decision 5): closes the `switch to new tab`/`switch to tab N`/`close tab`
   # gap — GET /orders/:id/receipt (M32) was already real and owner-scoped, just unconsumed by any
   # UI; wired up as a `target="_blank"` link on OrderConfirmationPage.tsx (nginx proxies `/v1/*`
@@ -548,7 +551,6 @@ test "the order confirmation page's receipt link genuinely opens a second browse
   expect status equals 201
   capture body.id as orderId
 
-  login(env(USER_A_EMAIL), env(USER_A_PW))
   open "/orders/{orderId}"
   expect text "Order confirmed" is visible
   switch to new tab
@@ -608,11 +610,10 @@ test "the cart's Remove confirm() dialog: dismiss keeps the item, accept removes
   expect body.items has count 0
 
 @mixed
-test "the happy-path product and catalog pages have no accessibility violations"
+test "the happy-path product and catalog pages have no accessibility violations" as shopper
   api GET /products?q=Bulk%20Item%20100&pageSize=1
   expect status equals 200
   capture body[0].id as bulk100Id
-  login(env(USER_A_EMAIL), env(USER_A_PW))
   open "/products/{bulk100Id}"
   expect page has no a11y violations
   open "/"

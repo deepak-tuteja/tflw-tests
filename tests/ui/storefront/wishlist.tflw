@@ -5,6 +5,7 @@
 # the centre is the product's link, and a click there navigates.
 
 import "../../shared/webv2-login.tflw"
+import "../../shared/storefront.tflw"
 
 @ui @catalogOps
 test "a row dragged by its handle moves to where it is dropped"
@@ -14,7 +15,7 @@ test "a row dragged by its handle moves to where it is dropped"
   expect css ".wish:first-child[data-wish='Wireless Mouse']" is visible
   drag css "[aria-label='Drag to reorder Clean Code']" to css "[data-wish='Wireless Mouse'] .price"
   expect css ".wish:first-child[data-wish='Clean Code']" is visible
-  double click css "[data-wish='Clean Code'] .price"
+  double click cleanCodePrice
   expect css "[data-wish='Clean Code'] [data-pinned]" is visible
   screenshot "wishlist-reordered-and-pinned"
 
@@ -34,8 +35,8 @@ test "a double click pins a row, and the menu's Move to top lifts another"
   open "/wishlist"
   double click css "[data-wish='Mechanical Keyboard'] .price"
   expect css "[data-wish='Mechanical Keyboard'] [data-pinned]" is visible
-  right click css "[data-wish='Clean Code'] .price"
+  right click cleanCodePrice
   click text "Move to top"
   expect css ".wish:first-child[data-wish='Clean Code']" is visible
-  drag css "[aria-label='Drag to reorder Wireless Mouse']" to css "[data-wish='Clean Code'] .price"
+  drag css "[aria-label='Drag to reorder Wireless Mouse']" to cleanCodePrice
   expect css ".wish:first-child[data-wish='Wireless Mouse']" is visible

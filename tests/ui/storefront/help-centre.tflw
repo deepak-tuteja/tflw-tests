@@ -3,12 +3,13 @@
 # sign-in; user B, whose cart and orders nothing here touches.
 
 import "../../shared/webv2-login.tflw"
+import "../../shared/storefront.tflw"
 
 @ui @identityOps
 test "the embedded help centre answers a search inside its own frame"
   login(env(USER_B_EMAIL), env(USER_B_PW))
   open "/support"
-  within frame css "iframe[title='Help centre']"
+  within frame helpFrame
     fill field "Search help" with "invoice"
     expect text "Invoices: download yours from the order page." is visible
     expect text "Returns: you can return an item within 30 days of delivery." is hidden
@@ -17,7 +18,7 @@ test "the embedded help centre answers a search inside its own frame"
 test "the help centre's feedback is recorded inside the frame, not on the page around it"
   login(env(USER_B_EMAIL), env(USER_B_PW))
   open "/support"
-  within frame css "iframe[title='Help centre']"
+  within frame helpFrame
     click button "This helped"
     expect text "Thanks for telling us." is visible
   expect css "#support-heading" is visible

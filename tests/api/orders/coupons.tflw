@@ -69,7 +69,8 @@ test "a coupon below its minimum order amount is rejected"
   expect status equals 201
   capture body.accessToken as shopperToken
 
-  let code = unique("MINAMOUNT")
+  # A code shaped the way a shop prints one; `unique like` fills the `#`s from the run's counter.
+  let code = unique like "MIN-######"
   let futureDate = random date between today + 2 days and today + 365 days
   api POST /coupons body { code: {code}, type: "fixed", value: 5, expiresAt: "{futureDate}", minOrderAmount: 100, usageLimit: 10 }
     header "Authorization" is "Bearer {adminToken}"
