@@ -635,6 +635,26 @@ six-run guard. So the convention above stands unchanged — `D819` is still a co
 class is wider than what two runs can see. What changed is that its cheapest member stopped being
 one.
 
+## A new construct owes, in order
+
+When tflw ships a construct — a statement, a declaration, a subject, a matcher, a directive — it owes
+five things, in this order, and the later ones are this repository's (tflw `D1376`):
+
+1. **tflw: a lang golden, a checker case and a printer-corpus line** — the construct parses, is
+   refused where it is wrong, and prints back.
+2. **tflw: a runtime known-answer** — it does what SPEC says against a fixture that states the answer.
+3. **tflw: one use in `examples/storefront`** — an adopter's first sight of it runs.
+4. **Here: one journey in `tests/`** — a real test against this stack that would fail if the
+   construct did nothing. `verify:journeys` holds the roster (`CONSTRUCTS.md`), so a construct with no
+   journey is red here, not merely missing.
+5. **Here, and only if step 4 cannot state it: a `.constructs` plant** — a known answer no journey
+   can reach (a mutation's `stale`, a timing, a refusal the language forbids you to write). A plant is
+   never the first proof, because a plant graded against a fixture is the thing step 4 exists to
+   avoid.
+
+The order is the point: each step is cheaper to fix than the one after it, and a construct that
+reaches step 4 without step 2 fails here for a reason that is tflw's to find.
+
 ## The cross-repo pair — the gate that belongs to two repositories
 
 ```sh
