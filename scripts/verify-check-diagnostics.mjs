@@ -303,6 +303,12 @@ const FILE_FIXTURES = {
   TF089: 'unknown-element.tflw',
   // tflw `M247` `E` (`D1359`): `with each concurrently` over one row — a warning.
   TF090: 'concurrently-one-row.tflw',
+  // tflw `G3` (`D1382`): a test binding again a name `before file` shares read-only. A test reading
+  // it as it is sits beside it, so a rule refusing every use of a shared name would not look the same.
+  TF091: 'file-value-rebound.tflw',
+  // tflw `G1` (`D1381`): `together` in a plain test. A concurrent test using it correctly sits beside
+  // it and checks clean.
+  TF092: 'together-no-rows.tflw',
 };
 
 for (const [code, file] of Object.entries(FILE_FIXTURES)) {

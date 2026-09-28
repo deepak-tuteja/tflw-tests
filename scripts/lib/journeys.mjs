@@ -173,6 +173,8 @@ export const FAMILY_SHAPES = new Map([
   ['step:log', /^\s+log\s/],
   ['step:give', /^\s+give\s/],
   ['step:pause', /^\s+pause\s/],
+  // tflw `G1` (`D1381`): the rows of a concurrent table meet here; a bare word on its own line.
+  ['step:together', /^\s+together\s*$/],
   ['step:threshold', /^\s+threshold\s/],
 
   ['declaration:test', { file: /^test\s+"/m }],
