@@ -6,11 +6,14 @@ import { User } from '../entities/user.entity';
 import { TokensService } from '../auth/tokens.service';
 import { parseDurationMs } from '../auth/ms';
 import { OauthTokenDto } from './dto/oauth-token.dto';
+import { OauthCodeService } from './oauth-code.service';
 
 export interface OauthTokenResponse {
   access_token: string;
   token_type: 'Bearer';
   expires_in: number;
+  /** The code and refresh grants only (tflw `M248`); a client-credentials grant has no refresh. */
+  refresh_token?: string;
   scope?: string;
 }
 
@@ -35,6 +38,7 @@ export class OauthService {
     @InjectRepository(User) private readonly users: Repository<User>,
     private readonly tokens: TokensService,
     private readonly config: ConfigService,
+    private readonly codeFlow: OauthCodeService,
   ) {}
 
   private clients(): OauthClient[] {
@@ -62,6 +66,9 @@ export class OauthService {
   }
 
   async token(dto: OauthTokenDto): Promise<OauthTokenResponse> {
+    // tflw `M248`: the code grant and its refresh belong to the public client, in their own service.
+    if (dto.grant_type === 'authorization_code') return this.codeFlow.exchange(dto);
+    if (dto.grant_type === 'refresh_token') return this.codeFlow.refresh(dto);
     const client = this.clients().find((c) => c.id === dto.client_id);
     if (!client || client.secret !== dto.client_secret) {
       throw new UnauthorizedException('invalid client_id or client_secret');

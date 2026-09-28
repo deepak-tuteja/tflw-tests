@@ -11,6 +11,8 @@ const EXTRA_ALLOWED_CONTENT_TYPES: Record<string, string[]> = {
   'POST /v1/auth/login': ['application/x-www-form-urlencoded'],
   'POST /v1/products/:id/image': ['multipart/form-data'],
   'POST /v1/oauth/token': ['application/x-www-form-urlencoded'],
+  // tflw `M248` (T-2): the consent page's form, posted by a browser.
+  'POST /v1/oauth/authorize': ['application/x-www-form-urlencoded'],
   'POST /v1/uploads': ['multipart/form-data'],
   'POST /v1/uploads/batch': ['multipart/form-data'],
 };
@@ -24,6 +26,9 @@ function extraAllowedContentTypes(method: string, path: string): string[] {
   }
   if (method === 'POST' && path === '/v1/oauth/token') {
     return EXTRA_ALLOWED_CONTENT_TYPES['POST /v1/oauth/token'];
+  }
+  if (method === 'POST' && path === '/v1/oauth/authorize') {
+    return EXTRA_ALLOWED_CONTENT_TYPES['POST /v1/oauth/authorize'];
   }
   if (method === 'POST' && path === '/v1/uploads') {
     return EXTRA_ALLOWED_CONTENT_TYPES['POST /v1/uploads'];
