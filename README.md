@@ -148,7 +148,7 @@ across all three layers together), `@smoke` alone, each `smoke,<area>` cross-axi
 of `*-check`/`*-rejection` phases proving specific CLI verbs/flags/fixtures that ad-hoc manual runs
 used to be the only evidence for: `mtls-rejection`, `safety-redaction-check`, `demo-fail-check`,
 `cli-flags-check`, `migrate-check`, `watch-check`, `safety-flags-check`, `check-diagnostics`,
-`pick-check`, `logging-check`, `report-overflow-check`, `ui-admin-check` (E2 + E3's own
+`pick-check`, `record-check` (a `record` session driven through `--cdp-port`, its steps checked, run and compared with a golden), `logging-check`, `report-overflow-check`, `ui-admin-check` (E2 + E3's own
 `orgs.tflw`), `webv2-admin-check` (pre-E3 housekeeping, + E3's own `orgs-mixed.tflw`) — and then
 `perf-ladder`, the one phase that is **local-only and never runs in CI**: the measured half of
 the perf gate, which needs `fedora-box`, k6 and exclusive use of the machine, and reports
