@@ -93,6 +93,11 @@ const EXPECTED = [
   // reads, from here, like a quiet policy change nobody made.
   { path: 'durations.rule', is: 'D809', witness: `durations?.rule`, reads: BANDS },
   { path: 'durations.maxRelativeError', is: 0.0477, witness: `durations?.maxRelativeError`, reads: BANDS },
+  // tflw `M249` (`D1362`, `D1369`) / `T-3` — the sweep's archive check reads the directory every run
+  // keeps itself in, and the key `tflw merge` names its inputs by. Both would fail that check with a
+  // message about a missing run or a wrong count if renamed; these rows say which name moved.
+  { path: 'report.keptRuns', is: 'runs', witness: "const KEPT_RUNS_DIR = 'runs'", reads: 'scripts/lib/archive-check.mjs' },
+  { path: 'results.mergedFrom', is: 'mergedFrom', witness: 'merged.mergedFrom', reads: 'scripts/lib/archive-check.mjs' },
 ];
 
 const problems = [];

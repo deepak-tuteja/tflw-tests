@@ -577,6 +577,33 @@ jobs:
           path: testFlow-tests/report-by-phase
           merge-multiple: true
 
+      # tflw `M249` `C` (`D1369`) / `T-3`: the four groups' passing phases as ONE report, by `tflw
+      # merge` rather than side by side. It needs the tflw under test, built the way each leg builds it.
+      # A phase whose failure is by design (`junit-by-design.xml`) is left out, exactly as the leg's
+      # own archive check leaves it out, or every sweep would merge into a failure it means to hold.
+      - name: Checkout tflw (testFlow)
+        uses: actions/checkout@v7
+        with:
+          repository: deepak-tuteja/tflw
+          path: testFlow
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Install tflw workspace deps
+        run: npm ci
+        working-directory: testFlow
+
+      - name: Refresh tflw from the checked-out build
+        run: npm run refresh-tflw
+        working-directory: testFlow-tests
+
+      - name: Merge every group's passing phases into one report
+        if: always()
+        working-directory: testFlow-tests
+        run: npm run merge-phases
+
       # decision 9: surfaces pass/fail inline in the Actions run summary / PR checks, not just a
       # bare red X on the job.
       #
@@ -615,6 +642,13 @@ jobs:
         with:
           name: regression-reports
           path: testFlow-tests/report-by-phase/
+
+      - name: Upload the merged report (one run, every passing phase)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: regression-report-merged
+          path: testFlow-tests/report-merged/
 
   # Two lockfiles, two audits (the repository's scripts and the application under test), on every
   # push — the same rule as tflw's own workflow, for the same reason: a runner that installs this

@@ -6,7 +6,9 @@
 //
 // `--forbid-insecure`/`--evidence` are out of scope here — this script only covers the six flags
 // the M29 audit found with zero durable proof anywhere: `--failed`, `--bail`, `--format ndjson`,
-// `--now`, `--log-file`, `--no-timestamps`. (M47/PLAN_WEBV2_M45.md: the claim this comment used to
+// `--now`, `--log-file`, `--no-timestamps`. **Since tflw `M249` the list of what a verb takes is
+// tflw's manifest, not this sentence**: `tflw run --help` prints `run`'s rows of `CLI_FLAGS`, and the
+// last block below asks it for these six. The six are still the ones this file proves *behave*. (M47/PLAN_WEBV2_M45.md: the claim this comment used to
 // make — that `--forbid-insecure`/`--evidence` already had durable coverage elsewhere — was false;
 // neither was actually invoked/proven anywhere. Real coverage now lives in
 // `scripts/verify-safety-flags.mjs`, its own file since both are safety/policy knobs.)
@@ -296,9 +298,23 @@ else:
   ok('and together are the unsharded run', [...first, ...second].sort().join('|') === whole.join('|'), `${first.length} + ${second.length} against ${whole.length}`);
 }
 
+// tflw `M249` `E` (K1) / `T-3`: the flags this file proves, asked of `tflw run --help` — which since
+// `M249` prints `run`'s flags from tflw's own manifest (`CLI_FLAGS`), so a flag that works and that
+// the help leaves out is a gap this script can now see. And `--no-keep` (`M249` `A`), the flag that
+// arrived with it. The global help is one line per verb; `run`'s flags are not on it.
+{
+  const help = run(`${TFLW} run --help`);
+  ok('`tflw run --help` exits 0', help.status === 0);
+  const wanted = ['--failed', '--bail', '--format', '--now', '--log-file', '--no-timestamps', '--tag', '--shard', '--no-keep'];
+  const missing = wanted.filter((f) => !help.stdout.includes(f));
+  ok('`tflw run --help` names every run flag this file proves, and --no-keep', missing.length === 0, `missing: ${missing.join(', ')}`);
+  const global = run(`${TFLW} --help`);
+  ok('`tflw --help` lists verbs, and leaves their flags to `<verb> --help`', /^  tflw run +\S/m.test(global.stdout) && !global.stdout.includes('--no-timestamps'), global.stdout.split('\n').slice(0, 6).join(' | '));
+}
+
 if (violations > 0) {
   console.error(`\n${violations} CLI-flag proof violation(s).`);
   process.exit(1);
 }
 
-console.log('\nAll 6 previously-unproven CLI flags behave as documented, `--tag !x` and `--shard` match their controls, and `docs`/`spec` print what they promise.');
+console.log('\nAll 6 previously-unproven CLI flags behave as documented and are in `run --help`, `--tag !x` and `--shard` match their controls, and `docs`/`spec` print what they promise.');

@@ -354,6 +354,17 @@ const CLASSIFIED = [
     why: 'dev-safe defaults matching docker-compose.yml\'s own fallbacks; no GitHub Secret is involved. Locally this is the same line README\'s Setup section documents',
   },
   { wf: 'ci.yml', job: 'regression', cmd: 'npm run refresh-tflw', name: 'Refresh tflw from the checked-out build', class: 'setup', why: 'as above, plus this repo\'s dependency install' },
+  // --- job `merge-reports` (tflw `M249` `C`, `D1369` / `T-3`) — one report out of four legs ----------
+  { wf: 'ci.yml', job: 'merge-reports', cmd: 'npm ci', name: 'Install tflw workspace deps', class: 'setup', why: 'the tflw monorepo, for the same reason every leg installs it: `tflw merge` is graded from the checked-out build' },
+  { wf: 'ci.yml', job: 'merge-reports', cmd: 'npm run refresh-tflw', name: 'Refresh tflw from the checked-out build', class: 'setup', why: 'packs that build into this repository, as each leg does' },
+  {
+    wf: 'ci.yml',
+    job: 'merge-reports',
+    cmd: 'npm run merge-phases',
+    name: 'Merge every group\'s passing phases into one report',
+    class: 'ci-only',
+    why: 'its input is the four legs\' downloaded archives, which only this job ever holds; a contributor\'s single sweep is already merged by the leg itself (`scripts/lib/archive-check.mjs`, graded inside `npm run regression`), so the local form of this claim is the sweep, not this command',
+  },
   // --- job `supply-chain` (tflw `M239` `E`, `D1320`) — two lockfiles, two audits ---------------
   { wf: 'ci.yml', job: 'supply-chain', cmd: 'npm audit --audit-level=high', name: 'No high or critical advisory in the repository\'s tree', class: 'gate', local: 'npm audit --audit-level=high', why: 'the scripts\' own dependency tree, read from the lockfile against the registry; no install needed' },
   { wf: 'ci.yml', job: 'supply-chain', cmd: 'npm --prefix apiV2 audit --audit-level=high', name: 'No high or critical advisory in apiV2\'s tree', class: 'gate', local: 'npm --prefix apiV2 audit --audit-level=high', why: 'the application under test has its own lockfile; a dependency of the fixture is part of what the corpus measures, so an advisory in it is reviewed as a change to the fixture' },
