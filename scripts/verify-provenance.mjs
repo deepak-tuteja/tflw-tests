@@ -546,10 +546,6 @@ export const MAX_PENDING_DAYS = 14;
  * @type {Map<string, {pr: string, since: string, why: string}>}
  */
 export const DECLARED_PENDING = new Map([
-  ['D1362', { pr: 'deepak-tuteja/tflw#260', since: '2026-09-29', why: "every run kept, and a test's history" }],
-  ['D1369', { pr: 'deepak-tuteja/tflw#260', since: '2026-09-29', why: '`tflw merge`' }],
-  ['D1370', { pr: 'deepak-tuteja/tflw#260', since: '2026-09-29', why: '`tflw doctor`' }],
-  ['M249', { pr: 'deepak-tuteja/tflw#260', since: '2026-09-29', why: 'the milestone T-3 dogfoods' }],
 ]);
 
 /**
