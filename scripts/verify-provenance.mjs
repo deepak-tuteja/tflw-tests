@@ -545,11 +545,7 @@ export const MAX_PENDING_DAYS = 14;
  *
  * @type {Map<string, {pr: string, since: string, why: string}>}
  */
-export const DECLARED_PENDING = new Map([
-  ['D1372', { pr: 'deepak-tuteja/tflw#257', since: '2026-09-29', why: 'cited by the T-1 journeys; lifted into DECISIONS.md by the citation re-pin on #257' }],
-  ['D1381', { pr: 'deepak-tuteja/tflw#257', since: '2026-09-29', why: '`together`, the rows\' barrier, and `TF092`' }],
-  ['D1382', { pr: 'deepak-tuteja/tflw#257', since: '2026-09-29', why: '`before file` values shared read-only, and `TF091`' }],
-]);
+export const DECLARED_PENDING = new Map([]);
 
 /**
  * The pending declarations' own problems, as a pure function so `--self-test` can reach every
