@@ -21,7 +21,7 @@
 // A chrome-spawning phase: on the box it runs under the sweep's lease like the browser groups, and
 // never beside a model.
 import { spawn, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -93,6 +93,10 @@ const suite = path.join(scratch, 'suite');
 const ui = (() => {
   for (const m of COPIED) if (existsSync(path.join(ROOT, m))) cpSync(path.join(ROOT, m), path.join(project, m), { recursive: true });
   cpSync(SUITE, suite, { recursive: true });
+  // `T-4`: linked, not copied — the page's trace viewer is the project's own `playwright-core`
+  // (tflw `traceViewerDir`), so a copy without it has no "open trace" to offer, correctly. A real
+  // project has its `node_modules` beside its tests; the page writes only project files.
+  symlinkSync(path.join(ROOT, 'node_modules'), path.join(project, 'node_modules'), 'dir');
   return startUi(project);
 })();
 try {
