@@ -1,0 +1,19 @@
+# `T-4` (tflw `D1373`) — SCANS' view of this project's one crawl (`tests/scans/api-surface.tflw`).
+# `verify-ui-page.mjs` runs the crawl on the copy before this suite and hands its kept run over as
+# `TFLW_T4_REPORT` with the other evidence. On the ordinary stack the crawl is clean — its rules
+# judge every response and find nothing — so what is drawn is the findings block's verdict, the rule
+# census and the coverage the crawl reached. A finding row and its remediation text need the
+# planted weaknesses (`VULN_MODE=1`), which this phase's stack does not run; tflw's own `ui-page`
+# gates that row on its fixture.
+
+test "the crawl's report on the SCANS door says what it judged, by rule, and how far it reached"
+  let token = env(TFLW_UI_TOKEN)
+  let run = env(TFLW_T4_REPORT)
+  open "/?token={token}#/scan/run"
+  click css "[data-report-row=\"{run}\"]"
+  expect css "[data-report=\"{run}\"]" is visible
+  expect css "[data-findings]" is visible
+  expect css "[data-scan-coverage]" is visible
+  # The census is folded under *which rules ran*; opening it is the reader's gesture.
+  click css "[data-scan-coverage] > summary"
+  expect css "[data-scan-census]" has count at least 1

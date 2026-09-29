@@ -1,0 +1,8 @@
+# `T-4` — copied into the project copy by `verify-ui-page.mjs` and run once at `--evidence full`
+# before the page suite, so `report.tflw` has a failing browser test whose trace was kept. It fails on
+# purpose: the storefront never shows this sentence. Never run by the ordinary suite — it lives under
+# `tests/.tflw-ui/`, a dot-directory, and the copy puts it under another one.
+
+test "the storefront is searched for a word it never shows"
+  open "/"
+  expect text "a sentence this storefront never shows" is visible

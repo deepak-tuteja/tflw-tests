@@ -1,0 +1,21 @@
+# `T-4` (tflw `D1373`) — the Run tab over the whole of this project, every test the discovered tree
+# holds: the run starts from the page and streams, Cancel stops it, and the partial report it keeps
+# says it was cancelled and is narrowed by the same filter strip a finished one is. The run is
+# stopped at its first finished test, so the phase pays for a handful of tests and not for all of
+# them — what is under test is the page over a project this size, not the project.
+
+test "the whole project runs from the page, is cancelled, and its partial report is kept and narrowed"
+  let token = env(TFLW_UI_TOKEN)
+  open "/?token={token}#/api/run"
+  expect css "[data-runstrip]" is visible
+  click css "[data-run]"
+  wait until css "[data-live] [data-test]" has count at least 1 timeout wait 120s
+  click css "[data-cancel]"
+  wait until css "[data-run-exit][data-run-status=cancelled]" is visible timeout wait 120s
+  within css "[data-run-exit]"
+    expect text "cancelled from this page" is visible
+  expect css "[data-report]" is visible
+  expect css "[data-report-filter]" is visible
+  fill css "[data-filter-text]" with "no test is named like this"
+  expect css "[data-report-narrowed]" is visible
+  expect css "[data-report] [data-test]" has count 0

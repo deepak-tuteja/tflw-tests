@@ -21,7 +21,7 @@
 // A chrome-spawning phase: on the box it runs under the sweep's lease like the browser groups, and
 // never beside a model.
 import { spawn, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -98,7 +98,8 @@ const ui = (() => {
 try {
   const { base, token } = await ui.listening();
   console.log(`tflw ui serving a copy of this project at ${base}`);
-  const env = { TFLW_UI_URL: base, TFLW_UI_TOKEN: token };
+  // `TFLW_T4_REPORT` is replaced by the evidence run's id below; `check` and the control need only a value.
+  const env = { TFLW_UI_URL: base, TFLW_UI_TOKEN: token, TFLW_T4_REPORT: 'none' };
 
   const checked = tflw(suite, env, 'check', '--no-color');
   ok('`tflw check` over the page suite is clean', checked.status === 0 && /no problems found/.test(checked.out), checked.out.slice(0, 600));
@@ -107,9 +108,40 @@ try {
   const forged = tflw(suite, { ...env, TFLW_UI_TOKEN: 'not-this-session' }, 'run', '--no-color', 'doors.tflw');
   ok('control: the doors file FAILS with a wrong token', forged.status !== 0 && /FAIL/.test(forged.out), forged.out.slice(-600));
 
-  const run = tflw(suite, env, 'run', '--no-color');
+  // `T-4` (tflw `D1373`) — the evidence `report.tflw` and `scans.tflw` read, kept on the copy before
+  // the suite starts: a failing API step (the demo-fail file), a failing browser test with its trace
+  // (`fixtures/`, copied into the project under a dot-directory so no ordinary run meets it), and the
+  // project's one crawl, all at `--evidence full`. The run fails by design; what is checked is that
+  // it was kept, and its id is what the two files open.
+  mkdirSync(path.join(project, 'tests', '.t4'), { recursive: true });
+  cpSync(path.join(SUITE, 'fixtures', 'failing-browser.tflw'), path.join(project, 'tests', '.t4', 'failing-browser.tflw'));
+  const evidence = tflw(project, {}, 'run', '--no-color', '--evidence', 'full', 'tests/.demo-fail/bad-assertion.tflw', 'tests/.t4/failing-browser.tflw', 'tests/scans/api-surface.tflw');
+  const keptEvidence = /kept: report\/runs\/(\S+)/.exec(evidence.out)?.[1] ?? null;
+  ok('the evidence run for the report and scan shapes was kept', keptEvidence !== null, evidence.out.slice(-1500));
+  const suiteEnv = { ...env, TFLW_T4_REPORT: keptEvidence ?? 'none' };
+
+  // One worker: the files share one project and one server, and a Compose write racing a run from
+  // the Run tab would be a test of the harness. `follow.tflw` is not in this run — it runs below,
+  // alone, beside the shell run it follows.
+  const suiteFiles = readdirSync(SUITE).filter((f) => f.endsWith('.tflw') && f !== 'follow.tflw').sort();
+  const run = tflw(suite, suiteEnv, 'run', '--no-color', '--workers', '1', ...suiteFiles);
   const tally = /(\d+) passed[^\n]*?(\d+) failed/.exec(run.out) ?? /PASS (\d+)[^\n]*FAIL (\d+)/.exec(run.out);
-  ok(`the page suite passes against this project${tally ? ` (${tally[0]})` : ''}`, run.status === 0, run.out.slice(-2000));
+  // Whole on a red: eight files' worth of steps, and the step that failed is rarely in the tail.
+  ok(`the page suite passes against this project${tally ? ` (${tally[0]})` : ''}`, run.status === 0, run.out);
+
+  // `follow.tflw`: a `tflw run` started from a shell on the copy, and the page following it (tflw G15,
+  // `D1392`). The shell run is started first and awaited after, so the file meets it mid-flight.
+  const shell = spawn('node', [CLI_ENTRY, 'run', '--no-color', 'tests/load/shapes.tflw'], { cwd: project, env: { ...process.env, FORCE_COLOR: '0' }, stdio: 'ignore' });
+  const shellExit = new Promise((resolve) => shell.on('exit', (code) => resolve(code)));
+  const followed = tflw(suite, suiteEnv, 'run', '--no-color', 'follow.tflw');
+  const shellCode = await shellExit;
+  ok('the page followed a run started from a shell to its end', followed.status === 0, followed.out);
+  ok('and that shell run was a real one that finished', shellCode === 0 || shellCode === 1, `exit ${shellCode}`);
+
+  // What the page wrote into the copy is still a project `tflw check` accepts (`config.tflw` saved
+  // the config, `compose-edit.tflw` two test files).
+  const projectChecked = tflw(project, {}, 'check', '--no-color');
+  ok('`tflw check` over the copy the page wrote into is clean', projectChecked.status === 0, projectChecked.out.slice(-1200));
 
   const leaks = filesCarrying(path.join(suite, 'report'), token);
   ok('the token is in no file the run kept', leaks.length === 0, leaks.join(', '));
