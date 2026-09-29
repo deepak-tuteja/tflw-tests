@@ -209,9 +209,9 @@ rise; `scripts/verify-journeys.mjs` holds the table below to the tree (`--write`
 | `step:step` | workload | 1 | 1 |
 | `step:spike` | workload | 2 | 1 |
 | `step:run` | workload | 2 | 1 |
-| `step:api` | step (journeys) | 381 | 1 |
+| `step:api` | step (journeys) | 383 | 1 |
 | `step:wait` | step (journeys) | 27 | 1 |
-| `step:expect` | step (journeys) | 435 | 1 |
+| `step:expect` | step (journeys) | 437 | 1 |
 | `step:check` | step (journeys) | 5 | 1 |
 | `step:let` | step (journeys) | 111 | 1 |
 | `step:capture` | step (journeys) | 182 | 1 |
@@ -220,7 +220,7 @@ rise; `scripts/verify-journeys.mjs` holds the table below to the tree (`--write`
 | `step:pause` | step (journeys) | 3 | 1 |
 | `step:together` | step (journeys) | 5 | 1 |
 | `step:threshold` | step (journeys) | 10 | 1 |
-| `declaration:test` | declaration (files) | 121 | 1 |
+| `declaration:test` | declaration (files) | 122 | 1 |
 | `declaration:crawl` | declaration (files) | 1 | 1 |
 | `declaration:action` | declaration (files) | 5 | 1 |
 | `declaration:element` | declaration (files) | 2 | 1 |
@@ -228,17 +228,17 @@ rise; `scripts/verify-journeys.mjs` holds the table below to the tree (`--write`
 | `declaration:use` | declaration (files) | 12 | 1 |
 | `declaration:before` | declaration (files) | 59 | 1 |
 | `declaration:after` | declaration (files) | 2 | 1 |
-| `declaration:tags` | declaration (files) | 122 | 1 |
+| `declaration:tags` | declaration (files) | 123 | 1 |
 | `declaration:with-each` | declaration (files) | 7 | 1 |
 | `declaration:rows` | declaration (files) | 1 | 1 |
-| `declaration:as` | declaration (files) | 13 | 1 |
+| `declaration:as` | declaration (files) | 14 | 1 |
 | `declaration:skip` | declaration (files) | 4 | 1 |
 | `declaration:retry` | declaration (files) | 4 | 1 |
 | `declaration:concurrency` | declaration (files) | 1 | 1 |
-| `subject:status` | subject (journeys) | 366 | 1 |
+| `subject:status` | subject (journeys) | 368 | 1 |
 | `subject:duration` | subject (journeys) | 2 | 1 |
 | `subject:header` | subject (journeys) | 23 | 1 |
-| `subject:body` | subject (journeys) | 223 | 1 |
+| `subject:body` | subject (journeys) | 225 | 1 |
 | `subject:body-text` | subject (journeys) | 5 | 1 |
 | `subject:body-bytes` | subject (journeys) | 4 | 1 |
 | `subject:body-csv` | subject (journeys) | 3 | 1 |
@@ -251,7 +251,7 @@ rise; `scripts/verify-journeys.mjs` holds the table below to the tree (`--write`
 | `subject:dialog-message` | subject (journeys) | 2 | 1 |
 | `subject:dialog-type` | subject (journeys) | 1 | 1 |
 | `subject:value` | subject (journeys) | 6 | 1 |
-| `matcher:equals` | matcher (journeys) | 371 | 1 |
+| `matcher:equals` | matcher (journeys) | 373 | 1 |
 | `matcher:contains` | matcher (journeys) | 46 | 1 |
 | `matcher:matches-regex` | matcher (journeys) | 19 | 1 |
 | `matcher:matches-subset` | matcher (journeys) | 26 | 1 |
@@ -291,7 +291,7 @@ rise; `scripts/verify-journeys.mjs` holds the table below to the tree (`--write`
 | `generator:transform-url` | generator (journeys) | 1 | 1 |
 | `config:directive:defaults` | config (config) | 1 | 1 |
 | `config:directive:env` | config (config) | 11 | 1 |
-| `config:directive:session` | config (config) | 6 | 1 |
+| `config:directive:session` | config (config) | 7 | 1 |
 | `config:directive:signer` | config (config) | 2 | 1 |
 | `config:directive:require` | config (config) | 5 | 1 |
 | `config:directive:exclude` | config (config) | 1 | 1 |
