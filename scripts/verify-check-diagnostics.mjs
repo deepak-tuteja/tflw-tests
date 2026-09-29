@@ -475,6 +475,17 @@ const CONFIG_FIXTURES = {
   // like the server's bug, so the config refuses it before a run starts.
   TF087:
     'env local default\n  api "http://localhost:4001"\n\nsigner stripe hmac sha256 hex secret "whsec_x"\n  signs "{timestmp}.{body}"\n  header "Stripe-Signature" is "t={timestamp},v1={signature}"\n',
+  // tflw `M248` (`D1354`): `session … oauth2 code`, a sign-in through the browser. **`TF093`** is a
+  // step in that sign-in which makes a request of its own — here the `api POST` a hand-written
+  // session would have used, which is exactly the habit the code is for: the token comes from the
+  // code exchange, and a login request in the body would go out without the session it establishes.
+  TF093:
+    'env local default\n  api "http://localhost:4001/v1"\n\nsession sso oauth2 code\n  authorize url "/oauth/authorize"\n  token url "/oauth/token"\n  client id "tflw-sso-cli"\n  redirect "http://127.0.0.1:0/callback"\n  api POST /auth/login body { email: "a@a.test", password: "x" }\n  click button "Allow"\n',
+  // **`TF094`**: the redirect is where the code goes, so it must be this machine over plain `http`.
+  // The fixture is the realistic mistake — a web client's registered callback copied over, which
+  // would hand the code to a server tflw is not listening on.
+  TF094:
+    'env local default\n  api "http://localhost:4001/v1"\n\nsession sso oauth2 code\n  authorize url "/oauth/authorize"\n  token url "/oauth/token"\n  client id "tflw-sso-cli"\n  redirect "https://shop.example.com/oauth/callback"\n  click button "Allow"\n',
 };
 
 const scratchDir = mkdtempSync(path.join(tmpdir(), 'tflw-check-config-'));

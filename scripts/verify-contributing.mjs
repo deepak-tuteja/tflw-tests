@@ -649,6 +649,27 @@ if (sibling !== null) {
   }
 }
 
+// --- 6b. *a new construct owes*, in order (tflw `D1376`, this repo's `T-5d`) -----------------------
+
+// The five steps are held by their order, not their wording: each is found by the phrase that names
+// its artefact, and each must come after the one before it. A reordered list is the defect this
+// catches — the order is the section's whole claim.
+{
+  const start = contributing.indexOf('## A new construct owes, in order');
+  const section = start === -1 ? '' : contributing.slice(start, contributing.indexOf('\n## ', start + 1));
+  const steps = ['lang golden', 'runtime known-answer', '`examples/storefront`', 'one journey in `tests/`', '`.constructs` plant'];
+  if (start === -1) {
+    fail('CONTRIBUTING.md has no "## A new construct owes, in order" section (tflw D1376) — the list of what a construct owes, which both repositories carry');
+  } else {
+    const at = steps.map((phrase) => section.indexOf(phrase));
+    const missing = steps.filter((_, i) => at[i] === -1);
+    const outOfOrder = at.some((pos, i) => i > 0 && pos !== -1 && at[i - 1] !== -1 && pos < at[i - 1]);
+    if (missing.length > 0) fail(`"A new construct owes" no longer names ${missing.map((m) => JSON.stringify(m)).join(', ')} — each of the five steps is held by the phrase naming its artefact`);
+    else if (outOfOrder) fail('"A new construct owes" lists its five steps out of order — the order (golden → known-answer → example → journey → plant) is the section\'s claim');
+    else console.log('✓ CONTRIBUTING.md states what a new construct owes, all five steps, in order');
+  }
+}
+
 // --- 7. every job is bounded in time --------------------------------------------------------------
 
 // `M143c`. Not a claim about CONTRIBUTING.md, and the only check here that is not — it lives in this

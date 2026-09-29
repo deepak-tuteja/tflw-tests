@@ -1,0 +1,19 @@
+# sso.tflw — tflw `M248` (D1354) / this repo's `T-2`: a session that signs in through a browser.
+#
+# `session sso` (tflw.config) is `oauth2 code`: tflw opens apiV2's `/oauth/authorize` with a PKCE
+# challenge and a `state`, signs in as USER_A on the consent page, takes the code at a loopback
+# redirect and exchanges it with the verifier. Nothing below logs in — the tests only say `as sso`.
+# The wrong-`state` and wrong-verifier controls are tflw's own known answers
+# (`packages/runtime/test/oauth2-code.test.ts`); this file is the journey against a real consent page.
+
+@auth @sessions @oauth2 @identityOps @api
+test "a shopper signed in through the consent page is that shopper" as sso
+  api GET /auth/profile
+  expect status equals 200
+  expect body.email equals env(USER_A_EMAIL)
+
+@auth @sessions @oauth2 @identityOps @api
+test "the same sign-in carries a second test, with no second consent" as sso
+  api GET /users/me
+  expect status equals 200
+  expect body.email equals env(USER_A_EMAIL)
