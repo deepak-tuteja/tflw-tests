@@ -185,6 +185,8 @@ const PHASES = [
   // deliberately manual by design), but launching + a clean Ctrl+C exit now is, same "script it"
   // reasoning as watch-check/migrate-check above.
   { name: 'pick-check', cmd: 'node scripts/verify-pick.mjs' },
+  // `T-5a` (tflw `G12`, `D1385`): `record`, driven through `--cdp-port` — the recording checks, runs and equals a golden.
+  { name: 'record-check', cmd: 'node scripts/verify-record.mjs' },
   // tflw `M249` `D` (`D1370`) / `T-3`: `tflw doctor --json` under four envs (plain, TLS, mTLS with a
   // client certificate, the proxy env with and without `NODE_USE_ENV_PROXY`), and its exit 1 in a
   // directory with no config. Offline by construction — it pays the restart like every phase.
@@ -511,7 +513,7 @@ const PHASES = [
 // this is the eighth placement to say so.
 const PHASE_GROUPS = {
   core: ['full suite', 'load-smoke', '--tag orderOps', '--tag smoke,catalogOps', 'demo-fail-check', '--tag orgOps', '--tag inventoryOps', 'migrate-check', 'secure-local-check', 'security-acceptance-gate', 'input-acceptance'],
-  tooling: ['--tag api', 'watch-check', 'ui-check', 'cli-refusals-check', 'lsp-check', 'init-check', 'refactor-check', 'pick-check', 'doctor-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check', 'security-target-check', 'sarif-acceptance', 'construct-acceptance'],
+  tooling: ['--tag api', 'watch-check', 'ui-check', 'cli-refusals-check', 'lsp-check', 'init-check', 'refactor-check', 'pick-check', 'record-check', 'doctor-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check', 'security-target-check', 'sarif-acceptance', 'construct-acceptance'],
   safety: ['ipv6-check', '--tag identityOps', '--tag mixed', '--tag smoke,orderOps', '--tag adminOps', '--tag catalogOps', 'safety-flags-check', 'check-diagnostics', 'artifact-contract', 'safety-redaction-check', 'screenshot-step-check', 'otel-export-check', 'proxy-check'],
   'security-ui': ['--tag smoke,identityOps', 'cli-flags-check', '--tag smoke,adminOps', '--tag ui', 'webv2-admin-check', '--tag smoke,inventoryOps', 'logging-check', 'mtls-rejection', 'vuln-slice-hidden-check', 'second-run-check', 'slow-excluded-check', 'ui-page'],
 };
