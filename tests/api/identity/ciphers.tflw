@@ -1,0 +1,17 @@
+# ciphers.tflw — `T-1b` (tflw `D1372`): `probe ciphers` on the dogfood's own TLS sidecar, which
+# offers only what nginx's defaults offer. `tflw-acceptance/security/ciphers.tflw` is the positive
+# (8445, a listener that offers `NULL-SHA256`); this is the journey a team would actually write —
+# *our* listener, nothing weak in its offer, and the test says so.
+#
+# `env secureLocal` grants the probe and names `tls-baseline.json`, which accepts the sidecar's one
+# known serious finding — no HSTS header, on purpose, because the security corpus's positives are
+# built on it. Accepted by fingerprint, so a *second* serious finding (a weak suite in the offer)
+# still fails this line. Skipped under `env local`, which never reaches the sidecar.
+#
+#   npm run test:secure-local
+
+@security @tls @identityOps @api
+test "our TLS listener offers no weak suite" skip "only the TLS sidecar has an offer to probe, and env secureLocal addresses it" on env local
+  api GET /health
+  expect status equals 200
+  expect response has no serious security violations

@@ -12,7 +12,7 @@ import "../../shared/webv2-admin-login.tflw"
 @ui @adminOps @orgOps
 test "the Organizations list shows both seeded orgs, and the create-org form adds a new one to it"
   adminLogin(env(ADMIN_EMAIL), env(ADMIN_PW))
-  within css "nav"
+  within adminNav
     click text "Organizations"
   expect text "Acme Corp" is visible
   expect text "Globex Inc" is visible

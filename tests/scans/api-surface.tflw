@@ -1,0 +1,32 @@
+# api-surface.tflw — `T-1b` (tflw `D1372`): the one `crawl` in the discovered tree. The documented
+# API and every request this run's own tests made, re-issued under each other declared principal,
+# with the authorization family judging every response. `tflw-acceptance/security/crawl.tflw` is the
+# graded corpus (planted leaks, `VULN_MODE=1`); this is the journey — the clean app, walked as a
+# customer, and nothing leaking is the answer.
+#
+# **Why not the storefront's spider, which the plan named.** Measured before writing it: the
+# storefront is client-rendered, so a fetching spider reads one shell and no link (tflw declares
+# that blind spot itself, and `tests/.tflw-ui/scan.tflw` records the same for the page); and the
+# only families a crawl may assert are security, authorization and input handling. On that shell
+# the security family either has no applicable rule at the critical floor (no cookie, no CORS
+# header — `D285` fails that) or fires `csp-missing`, which the security corpus's spider test uses
+# as its positive control. Authorization is the family with something to say about every route.
+#
+# **`expect`, and the first run is why it can be.** It reached 14 routes of the clean app and failed
+# six as having *no power to fail*: `/health`, a profile avatar, an empty list — bodies with no root
+# `id` give the authorization rules nothing to read. A crawl reaches routes a document chose, so some
+# always have that shape, and `D285` judged per response made a hard assertion over any real API
+# unwritable. tflw's `M247-02` (gap `G4`) asks `D285` of the surface instead: such a route reports
+# *not applicable on this route*, and the assertion fails only if it applied on none.
+#
+# `/vuln/**` is excluded: under `VULN_MODE=1` it holds the corpus's planted leaks, which are
+# `crawl.tflw`'s to grade, not this file's. `probe mutating` is not granted in `env local`, so every
+# synthesized write is enumerated, disclosed and not sent. Tagged `@scan`, which no smoke tier names.
+
+@scan @authz
+crawl "the documented API and this run's traffic, walked as a customer" as peer
+  seed openapi root "/openapi.json"
+  seed traffic
+  exclude "/v1/vuln/**"
+  exclude "/v1/contract-demo/*"
+  expect response has no critical authorization violations

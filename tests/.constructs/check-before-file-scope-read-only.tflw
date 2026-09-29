@@ -1,0 +1,25 @@
+# `M154g` step 2d / `C79`, the read-only half. **Never run — only `tflw check`ed.**
+#
+# Until tflw `G3` (`D1382`) this file proved `before file`'s scope was sealed off from every test: a
+# test reading its binding was `TF030`. `G3` reversed that on purpose — what `before file` makes is
+# now shared with every test, read-only — so the claim no running file can make moved with it: a
+# test may READ the shared value (the first test checks clean), and a test that BINDS it again is
+# refused before any runtime (`TF091`, the second test). One file, one refusal, on the one line that
+# rebinds; a rule refusing every read would put a second one on the first test.
+#
+# `before-scopes.tflw` is the running side: the bare `before` there captures the same way and its
+# binding is read by all three tests.
+
+before file
+  api POST /lifecycle/reset
+  expect status equals 200
+  capture body.count as fromFileScope
+
+@constructs @declarations
+test "reads a binding that `before file` made, as every test may"
+  expect {fromFileScope} is greater than -1
+
+@constructs @declarations
+test "binds the shared name again, which no test may"
+  let fromFileScope = 2
+  expect {fromFileScope} equals 2

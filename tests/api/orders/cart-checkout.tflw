@@ -6,7 +6,32 @@
 # anyway."
 
 import "../../shared/orders.tflw"
-use "../../helpers/concurrent-cart-add.ts"
+
+# The cart race's shopper and product, made once and read by every row and by the test that judges
+# the race (tflw `G3`): one cart, seeded with one unit, that five rows add to at once.
+before file
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as cartRaceCategoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as cartRaceAdminToken
+
+  let cartRaceEmail = unique email
+  let cartRacePw = random password
+  api POST /auth/register body { name: "Cart Race Shopper", email: {cartRaceEmail}, password: {cartRacePw} }
+  expect status equals 201
+  capture body.accessToken as cartRaceToken
+
+  api POST /products body { name: unique("Cart Race Widget"), price: 5, stock: 100, categoryId: {cartRaceCategoryId} }
+    header "Authorization" is "Bearer {cartRaceAdminToken}"
+  expect status equals 201
+  capture body.id as cartRaceProductId
+
+  api POST /cart/items body { productId: {cartRaceProductId}, quantity: 1 }
+    header "Authorization" is "Bearer {cartRaceToken}"
+  expect status equals 201
 
 before
   api GET /categories
@@ -267,23 +292,28 @@ test "deleting an already-removed cart item a second time is a clean 404"
     header "Authorization" is "Bearer {userAToken}"
   expect status equals 404
 
+# Five rows add one unit each to the same cart at once. Each row signs in first (the `before` hook),
+# so the adds wait at `together` and leave together. Was a JS helper
+# (`tests/helpers/concurrent-cart-add.ts`) until tflw `G1`/`G3`.
 @cart @regression @orderOps @api
-test "N concurrent add-item requests for the same product never lose an update"
-  let shopperEmail = unique email
-  let shopperPw = random password
-  api POST /auth/register body { name: "Cart Race Shopper", email: {shopperEmail}, password: {shopperPw} }
-  expect status equals 201
-  capture body.accessToken as shopperToken
-
-  api POST /products body { name: unique("Cart Race Widget"), price: 5, stock: 100, categoryId: {categoryId} }
-    header "Authorization" is "Bearer {adminToken}"
-  expect status equals 201
-  capture body.id as raceProductId
-
-  api POST /cart/items body { productId: {raceProductId}, quantity: 1 }
-    header "Authorization" is "Bearer {shopperToken}"
+with each concurrently
+  | add |
+  | 1   |
+  | 2   |
+  | 3   |
+  | 4   |
+  | 5   |
+test "cart race: add {add} of 5 for the same product is accepted"
+  together
+  api POST /cart/items body { productId: {cartRaceProductId}, quantity: 1 }
+    header "Authorization" is "Bearer {cartRaceToken}"
   expect status equals 201
 
-  # The call itself is the assertion: 5 concurrent +1 requests on top of the seeded 1 must land
-  # on exactly 6, not fewer (a read-modify-write race previously clobbered concurrent writers).
-  let proof = assert concurrent cart add(shopperToken, raceProductId, 5, 1, 6)
+# One seeded unit plus five concurrent adds is six. A read-modify-write increment loses some of the
+# five, which is the lost update this race exists to catch.
+@cart @regression @orderOps @api
+test "the cart race lost no update"
+  api GET /cart
+    header "Authorization" is "Bearer {cartRaceToken}"
+  expect status equals 200
+  expect any body.items matches subset { productId: "{cartRaceProductId}", quantity: 6 }

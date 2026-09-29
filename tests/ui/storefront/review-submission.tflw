@@ -5,6 +5,7 @@
 # without ever hitting that product's own "already reviewed" state.
 
 import "../../shared/webv2-login.tflw"
+import "../../shared/storefront.tflw"
 
 before
   api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
@@ -23,7 +24,7 @@ before
 test "submitting a star-rating review through the shadow-DOM widget shows it in the list"
   login(env(USER_A_EMAIL), env(USER_A_PW))
   open "/products/{productId}/reviews"
-  within css "star-rating:not([readonly])"
+  within starPicker
     click button "4 stars"
   fill field "Comment (optional)" with "Solid, does the job."
   click button "Submit review"

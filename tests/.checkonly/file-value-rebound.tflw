@@ -1,0 +1,18 @@
+# file-value-rebound.tflw — CHECK-ONLY FIXTURE (tflw `G3`, `D1382`): a test binding again a name
+# `before file` made — `TF091`. What `before file` binds is shared, read-only, by every test in the
+# file; a second binding would make the name mean two values depending on where it was read. The
+# other test reads the shared value as it is, so a rule refusing every read would not look the same.
+#
+# Run explicitly (dot-directory — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/file-value-rebound.tflw
+before file
+  let raceCode = unique("RACE")
+
+test "reads the shared code"
+  api GET /coupons/{raceCode}
+  expect status is less than 500
+
+test "binds the shared code again"
+  let raceCode = unique("OTHER")
+  api GET /coupons/{raceCode}
+  expect status is less than 500

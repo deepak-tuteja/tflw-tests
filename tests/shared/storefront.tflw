@@ -1,0 +1,28 @@
+# storefront.tflw — `T-1d` (tflw `M247` `D`, `D1356`): the storefront's parts that no accessible
+# role or label reaches, named once. Each was a `css` escape repeated across journeys; a journey now
+# imports this file and says `within starPicker` where it said the selector, so a markup change is
+# one edit here and a misspelling is `TF089` at check time rather than a timeout at run time.
+#
+# Only parts with no `button`/`field`/`text`/`list` spelling belong here — an element is the escape,
+# named, not a replacement for the four locators that read the page the way a person does.
+
+# The header's shop menu, a `<details>` with no accessible name of its own.
+element shopMenu = css "[data-shop-menu]"
+# One product card in the catalog grid.
+element productCard = css ".product-grid li"
+# One row of the catalog's virtualised list.
+element virtualRow = css ".virtual-list-row"
+# The review form's star picker — the read-only stars beside each review are the same element.
+element starPicker = css "star-rating:not([readonly])"
+# The product page's heading, which the page names by id for its skip link.
+element productHeading = css "#product-heading"
+# The render fixture: a section labelled by its heading, and the image inside it.
+element renderFixture = css "section[aria-labelledby='render-fixture-heading']"
+element renderFixtureImage = css "section[aria-labelledby='render-fixture-heading'] img"
+# The wishlist's price for its seeded book, the one row every wishlist journey reads.
+element cleanCodePrice = css "[data-wish='Clean Code'] .price"
+# The two embedded frames: the payment provider's and the help centre's.
+element paymentFrame = css "iframe[title='Payment']"
+element helpFrame = css "iframe[title='Help centre']"
+# The header's log-in link, as opposed to the form's own "Log in" button.
+element navLogIn = css "nav a:text-is('Log in')"

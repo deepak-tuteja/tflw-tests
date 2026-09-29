@@ -105,7 +105,7 @@ const PHASES = [
   },
   {
     name: 'mtls-rejection',
-    cmd: [TFLW, 'run', '--no-color', ...CI_VERBOSE, '--env', 'mtlsSidecarNoCert', 'tests/.env-specific/mtls-rejection.tflw'].join(' '),
+    cmd: [TFLW, 'run', '--no-color', ...CI_VERBOSE, '--env', 'mtlsSidecarNoCert', 'tests/api/identity/mtls-rejection.tflw'].join(' '),
   },
   { name: 'safety-redaction-check', cmd: 'node scripts/verify-redaction.mjs' },
   // M29 (plan_v2.md Part R, coverage audit): the tests/.demo-fail/ set and 6 previously-unproven
@@ -218,7 +218,7 @@ const PHASES = [
   // sidecar — `--env secureLocal`, same reason `mtls-rejection` needs its own `--env`.
   {
     name: 'secure-local-check',
-    cmd: [TFLW, 'run', '--no-color', ...CI_VERBOSE, '--env', 'secureLocal', 'tests/.env-specific/secure-local.tflw'].join(' '),
+    cmd: [TFLW, 'run', '--no-color', ...CI_VERBOSE, '--env', 'secureLocal', 'tests/api/identity/secure-local.tflw', 'tests/api/identity/ciphers.tflw'].join(' '),
   },
   // `security-target-check` is the only phase that needs the stack itself brought up differently
   // (`VULN_MODE=1`, the fixture slice — Tier 1's hygiene routes plus, since M130a, Tier 2's
@@ -399,6 +399,12 @@ const PHASES = [
     name: 'second-run-check',
     cmd: 'node scripts/verify-second-run.mjs',
   },
+  // `T-1d` (tflw `D1327`, `D1353`): `--tag ui,!slow` — the exclusion form a CI job writes to keep its
+  // slow tests out, since tflw `M247` withdrew `--skip-tag` — asserted by count against the tree.
+  {
+    name: 'slow-excluded-check',
+    cmd: 'node scripts/verify-tag-exclusion.mjs',
+  },
   // `M154h` (`D758`, `D761`). The perf ladder, measured — and the **only** phase in this file that
   // deliberately does not run in CI.
   //
@@ -502,7 +508,7 @@ const PHASE_GROUPS = {
   core: ['full suite', 'load-smoke', '--tag orderOps', '--tag smoke,catalogOps', 'demo-fail-check', '--tag orgOps', '--tag inventoryOps', 'migrate-check', 'secure-local-check', 'security-acceptance-gate', 'input-acceptance'],
   tooling: ['--tag api', 'watch-check', 'ui-check', 'cli-refusals-check', 'lsp-check', 'init-check', 'refactor-check', 'pick-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check', 'security-target-check', 'sarif-acceptance', 'construct-acceptance'],
   safety: ['ipv6-check', '--tag identityOps', '--tag mixed', '--tag smoke,orderOps', '--tag adminOps', '--tag catalogOps', 'safety-flags-check', 'check-diagnostics', 'artifact-contract', 'safety-redaction-check', 'screenshot-step-check', 'otel-export-check', 'proxy-check'],
-  'security-ui': ['--tag smoke,identityOps', 'cli-flags-check', '--tag smoke,adminOps', '--tag ui', 'webv2-admin-check', '--tag smoke,inventoryOps', 'logging-check', 'mtls-rejection', 'vuln-slice-hidden-check', 'second-run-check', 'ui-page'],
+  'security-ui': ['--tag smoke,identityOps', 'cli-flags-check', '--tag smoke,adminOps', '--tag ui', 'webv2-admin-check', '--tag smoke,inventoryOps', 'logging-check', 'mtls-rejection', 'vuln-slice-hidden-check', 'second-run-check', 'slow-excluded-check', 'ui-page'],
 };
 
 // The groups are a hand-maintained partition of PHASES, and CI runs *only* the groups (a 4-leg

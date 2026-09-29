@@ -1,3 +1,7 @@
+# `@slow` (`T-1d`, tflw `D1353`): both tests write an order or a cart through the page and are the UI
+# tier's two longest (1.1 s and 1.0 s on the box, 2026-09-28); `slow-excluded-check` runs the tier
+# without them, and asserts it ran every other `@ui` test.
+#
 # `S-3b` (decision 16): the cart's native dialogs outside the admin console — a gift message asked
 # for with `prompt()` and removed after a `confirm()` — and a checkout a keyboard can finish. One
 # file on purpose: these tests share user B's cart, and a file's tests run one after another.
@@ -17,22 +21,28 @@ before
     header "Authorization" is "Bearer {buyerToken}"
   let itemId = add to cart(productId, 1, buyerToken)
 
-@ui @orderOps
-test "a gift message is written in the browser's own prompt, and a dismissed confirm keeps it"
+@ui @orderOps @slow
+# `sequential` (tflw `D1372`, `T-1a`): the header comment's "these tests share user B's cart" is
+# a scheduling fact, so it is declared rather than left to the file's order.
+test "a gift message is written in the browser's own prompt, and a dismissed confirm keeps it" sequential
   login(env(USER_B_EMAIL), env(USER_B_PW))
   open "/cart"
   expect text "No gift message." is visible
   accept dialog with "Happy birthday, Ada"
   click button "Add a gift message"
+  # The two dialogs this flow raises are different kinds, and the page's promise depends on it:
+  # a `prompt` takes the text, a `confirm` only guards the removal.
+  expect dialog type equals "prompt"
   expect text "Happy birthday, Ada" is visible
   dismiss dialog
   click button "Remove gift message"
+  expect dialog type equals "confirm"
   expect text "Happy birthday, Ada" is visible
   accept dialog
   click button "Remove gift message"
   expect text "No gift message." is visible
 
-@ui @orderOps
+@ui @orderOps @slow
 test "the keyboard checkout: the skip link reaches the form, Tab keeps reading order, Enter places the order"
   login(env(USER_B_EMAIL), env(USER_B_PW))
   open "/checkout"

@@ -1,0 +1,21 @@
+# together-no-rows.tflw — CHECK-ONLY FIXTURE (tflw `G1`, `D1381`): `together` in a test whose rows do
+# not run at once — `TF092`. The barrier is where a `with each concurrently` table's rows meet; in a
+# plain test there is nothing to wait for, so a race written this way would pass without one. The
+# concurrent test beside it uses `together` where it belongs and checks clean.
+#
+# Run explicitly (dot-directory — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/together-no-rows.tflw
+with each concurrently
+  | buyer |
+  | "a"   |
+  | "b"   |
+test "{buyer} races"
+  api GET /health
+  together
+  api GET /health
+  expect status equals 200
+
+test "nothing to meet"
+  together
+  api GET /health
+  expect status equals 200

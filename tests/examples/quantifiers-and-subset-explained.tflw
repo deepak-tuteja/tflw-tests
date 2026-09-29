@@ -2,9 +2,8 @@
 # they find an array, then apply the rest of the path per element; `matches subset {...}` checks
 # only the listed keys (extra keys on the actual object are ignored). Composed together, they
 # correlate multiple fields on the *same* array element in one statement — see order-items.tflw
-# for the "looks right, isn't" trap two independent `any`s fall into, and
-# tests/.gaps/nested-array-quantifier.tflw for where quantifying stops working (a *second*
-# nested array).
+# for the "looks right, isn't" trap two independent `any`s fall into, and quantifiers.tflw for a
+# path that crosses a *second*, nested array (tflw `G8`: every array crossed fans out).
 
 before
   api GET /categories

@@ -1,0 +1,16 @@
+# `step:together` (tflw `G1`, `D1381`, SPEC §4.4). Two rows of one concurrent test, one of which does
+# ~2.5 s of setup (`/after/2500` answers 503 until 2.5 s after it was first asked) before the racing
+# step. The racing step is `arrival-server.mjs`'s `/gate`, which releases two holders as a pair and a
+# lone holder alone after 1.5 s. With the barrier both rows leave it at once and meet in the gate;
+# its twin `together-apart.tflw` differs by the one `together` line and nothing else.
+
+with each concurrently
+  | wait |
+  | 0    |
+  | 2500 |
+test "row {wait} races for the gate"
+  wait until api GET /after/{wait}
+    expect status equals 200
+  together
+  api GET /gate
+  expect status equals 200
