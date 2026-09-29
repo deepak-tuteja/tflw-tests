@@ -546,6 +546,7 @@ export const MAX_PENDING_DAYS = 14;
  * @type {Map<string, {pr: string, since: string, why: string}>}
  */
 export const DECLARED_PENDING = new Map([
+  ['D1385', { pr: 'deepak-tuteja/tflw#261', since: '2026-09-29', why: '`--cdp-port` on record and pick, which record-check drives' }],
 ]);
 
 /**
