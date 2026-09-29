@@ -3032,7 +3032,7 @@ if (['C99', 'C67', 'C60'].some((id) => wanted(id))) {
 // condition asked for — that condition named apiV2 as the address and `D745` had already answered
 // why the address is wrong.
 
-const KEY_IDS = ['C97', 'C98', 'C99', 'C100', 'C101', 'C102', 'C103', 'C104', 'C118'];
+const KEY_IDS = ['C97', 'C98', 'C99', 'C100', 'C101', 'C102', 'C103', 'C104', 'C118', 'C129'];
 
 // `C93`'s run-time leg lives in this block too (`M189c`): its four `check` legs stay in the
 // directives block above, and the one that needs the wire is here beside `C98`'s, because the
@@ -3287,6 +3287,26 @@ if (KEY_IDS.some((id) => wanted(id)) || wanted('C93')) {
         'both legs ran under `workers 1`, so the file-concurrency axis is pinned and the header modifier is the only difference');
       precision('C104', /PASS 2\/2/.test(parOut) && /PASS 2\/2/.test(seqOut),
         'both files are green, so `sequential` is serializing rather than failing');
+    }
+
+    // `C129` — `together` (tflw `G1`, `D1381`), on the same rendezvous. `C104`'s pair arrives at
+    // the gate together because nothing delays either; here one row does 2.5 s of setup first, so
+    // the gate can only see a pair if the barrier held the quick row back for the slow one.
+    if (wanted('C129')) {
+      const tDir = corpus('together', ['together-met.tflw', 'together-apart.tflw'], 'workers-one.config');
+      await arrivals('__reset');
+      const metOut = runRun(['together-met.tflw'], { cwd: tDir });
+      const metPeak = await peak();
+      await arrivals('__reset');
+      const apartOut = runRun(['together-apart.tflw'], { cwd: tDir });
+      const apartPeak = await peak();
+
+      recall('C129', metPeak.peakWaiting === 2 && metPeak.gatePaired === 2 && metPeak.gateAlone === 0,
+        `with \`together\` the quick row waited for the slow one and both met in the gate (got: ${JSON.stringify(metPeak)})`);
+      recall('C129', apartPeak.peakWaiting === 1 && apartPeak.gateAlone === 2,
+        `without it the quick row reached the gate 2.5 s early and each waited alone (got: ${JSON.stringify(apartPeak)})`);
+      precision('C129', /PASS 2\/2/.test(metOut) && /PASS 2\/2/.test(apartOut),
+        'both files are green, so the watermark is the only thing that moved');
     }
 
     // ---- C118: `baseline`, the three directions and the control that makes them mean anything ----

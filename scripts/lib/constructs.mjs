@@ -2878,6 +2878,26 @@ export const PLANTS = [
     catches: 'a declaration ignored, an import whose elements never arrive, and a bare name accepted with nothing behind it.',
     blockedOn: null,
   },
+  {
+    id: 'C129',
+    construct: 'step:together',
+    family: 'step',
+    tier: 'api',
+    title: 'the rows of a concurrent test leave the barrier at once, however long each one\'s setup took',
+    target: '`arrival-server.mjs`\'s `/gate` rendezvous, after one row\'s 2.5 s of setup (`/after/2500`) and the other\'s none',
+    evidence: { file: 'tests/.constructs/config-keys/together-met.tflw', pattern: '^\\s*together$', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'tflw `M247` `G1` (`D1381`). One row waits 2.5 s for `/after/2500` before the racing step and the '
+      + 'other waits for nothing; the racing step is `/gate`, which releases two holders as a pair and '
+      + 'a lone one alone after 1.5 s. With `together` both rows reach the gate at once: watermark **2**, '
+      + 'released as a pair. `together-apart.tflw`, the same file without that one line, reaches **1** '
+      + 'and each row waits out the gate alone. Both files pass under `workers 1`, so the barrier is the '
+      + 'only thing that moved. The journeys\' own races (`coupons.tflw`, `cart-checkout.tflw`) are judged '
+      + 'by the state they leave, which a race that happened to line up would also leave.',
+    catches: 'a `together` parsed and ignored, and a barrier that waits for the first row rather than for every row.',
+    blockedOn: null,
+  },
 ];
 
 /**

@@ -1,0 +1,14 @@
+# `step:together`'s control (tflw `G1`, `D1381`). `together-met.tflw` without its `together` line:
+# the row with no setup reaches `/gate` 2.5 s before the other, waits out the gate's 1.5 s alone, and
+# the second arrives to an empty gate. Both rows pass, so the only thing that moves between the two
+# files is whether anybody was ever in the gate at the same time as somebody else.
+
+with each concurrently
+  | wait |
+  | 0    |
+  | 2500 |
+test "row {wait} races for the gate"
+  wait until api GET /after/{wait}
+    expect status equals 200
+  api GET /gate
+  expect status equals 200
