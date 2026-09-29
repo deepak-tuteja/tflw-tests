@@ -3032,7 +3032,7 @@ if (['C99', 'C67', 'C60'].some((id) => wanted(id))) {
 // condition asked for — that condition named apiV2 as the address and `D745` had already answered
 // why the address is wrong.
 
-const KEY_IDS = ['C97', 'C98', 'C99', 'C100', 'C101', 'C102', 'C103', 'C104', 'C118', 'C129'];
+const KEY_IDS = ['C97', 'C98', 'C99', 'C100', 'C101', 'C102', 'C103', 'C104', 'C118', 'C129', 'C130'];
 
 // `C93`'s run-time leg lives in this block too (`M189c`): its four `check` legs stay in the
 // directives block above, and the one that needs the wire is here beside `C98`'s, because the
@@ -3307,6 +3307,37 @@ if (KEY_IDS.some((id) => wanted(id)) || wanted('C93')) {
         `without it the quick row reached the gate 2.5 s early and each waited alone (got: ${JSON.stringify(apartPeak)})`);
       precision('C129', /PASS 2\/2/.test(metOut) && /PASS 2\/2/.test(apartOut),
         'both files are green, so the watermark is the only thing that moved');
+    }
+
+    // `C130` — `rows` (tflw `G10`, `D1384`). `/after/0` and `/after/600000` give three rows two
+    // different last responses and let each row pass, so what the block counts is visible only in its
+    // own entry. Read from `results.json`, not the summary line: a block that went green by judging
+    // nothing and one that judged every row are the same `PASS` count.
+    if (wanted('C130')) {
+      const rDir = corpus('rows', ['rows-counted.tflw', 'rows-miscounted.tflw'], 'workers-one.config');
+      const entries = () => JSON.parse(readIn(rDir, 'report', 'results.json') || '{"tests":[]}').tests;
+      const rowsEntry = (tests) => tests.find((t) => / — rows$/.test(t.name));
+      const rowEntries = (tests) => tests.filter((t) => !/ — rows$/.test(t.name));
+
+      await arrivals('__reset');
+      runRun(['rows-counted.tflw'], { cwd: rDir });
+      const counted = entries();
+      const cBlock = rowsEntry(counted);
+      recall('C130', cBlock?.ok === true && cBlock.steps.length === 3 && cBlock.steps.every((s) => s.ok)
+        && /\(row 1\)/.test(cBlock.steps[0].detail ?? '') && /\(rows 2, 3\)/.test(cBlock.steps[1].detail ?? ''),
+        `the right counts hold, one step per line, naming row 1 as the 200 and rows 2, 3 as the 503s (got: ${JSON.stringify(cBlock?.steps?.map((s) => [s.ok, s.detail]))})`);
+
+      await arrivals('__reset');
+      runRun(['rows-miscounted.tflw'], { cwd: rDir });
+      const mis = entries();
+      const mBlock = rowsEntry(mis);
+      const shape = mBlock?.steps?.map((s) => `${s.kind}:${s.ok}`).join(' ');
+      recall('C130', mBlock?.ok === false && shape === 'check:false expect:true expect:false'
+        && /expected exactly 2 of 3 row\(s\) to match, but 1 did \(row 1\)/.test(mBlock.steps[0].detail ?? ''),
+        `the wrong counts fail: the \`check\` names row 1 and the block goes on, the failed \`expect\` ends it before line 4 (got: ${shape}; ${mBlock?.steps?.[0]?.detail})`);
+      precision('C130', rowEntries(counted).length === 3 && rowEntries(counted).every((t) => t.ok)
+        && rowEntries(mis).length === 3 && rowEntries(mis).every((t) => t.ok),
+        'all three rows pass on their own in both files, so the verdict is the block\'s alone');
     }
 
     // ---- C118: `baseline`, the three directions and the control that makes them mean anything ----

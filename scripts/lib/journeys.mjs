@@ -187,6 +187,8 @@ export const FAMILY_SHAPES = new Map([
   ['declaration:after', { file: /^after(\s+file)?\s*$/m }],
   ['declaration:tags', { file: /^@[\w-]/m }],
   ['declaration:with-each', { file: /^with each\b/m }],
+  // tflw `G10` (`D1384`): a `rows` block sits at column 0 directly under its test.
+  ['declaration:rows', { file: /^rows\s*$/m }],
   ['declaration:as', { file: header(String.raw`.*\bas\s+\w`) }],
   ['declaration:skip', { file: header(String.raw`.*\bskip\s+"`) }],
   ['declaration:retry', { file: header(String.raw`.*\bretry\s+\d`) }],

@@ -2897,6 +2897,24 @@ export const PLANTS = [
       + 'by the state they leave, which a race that happened to line up would also leave.',
     catches: 'a `together` parsed and ignored, and a barrier that waits for the first row rather than for every row.',
     blockedOn: null,
+  },  {
+    id: 'C130',
+    construct: 'declaration:rows',
+    family: 'declaration',
+    tier: 'api',
+    title: 'a `rows` block counts the rows whose last response satisfies a line, and names them',
+    target: '`arrival-server.mjs`\'s `/after/<ms>`: `/after/0` is a 200 at once and `/after/600000` a 503, three rows asking once each',
+    evidence: { file: 'tests/.constructs/config-keys/rows-counted.tflw', pattern: '^rows$', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'tflw `M247` `G10` (`D1384`). One row\'s last response is a 200 and two are 503s, and every row passes '
+      + 'on its own, so the counts exist only in the block. `rows-counted.tflw` holds `exactly 1 row` 200, '
+      + '`2 rows` 503 and `no rows` 500: one extra entry, *"… — rows"*, green, whose steps name rows 1 and '
+      + '2, 3. `rows-miscounted.tflw` opens with a `check` for two 200s, which fails naming row 1 and lets '
+      + 'the block go on; the `expect` after it passes; the next `expect` (every row a 200) fails and ends '
+      + 'the block, so the fourth line is never a step. The three row entries stay green in both files.',
+    catches: 'a block that judges one row, or the first response rather than the last; a count compared the wrong way; a failed `check` that stops the block, or a failed `expect` that does not.',
+    blockedOn: null,
   },
 ];
 
