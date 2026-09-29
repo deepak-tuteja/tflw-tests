@@ -22,12 +22,23 @@
 # put this 150 ms workload beside `self-report.tflw`'s two-second one and the window is no longer
 # short, and the plant silently stops testing the floor.
 #
+# **The rate is made, not found (2026-09-29).** As first written the plant's CPU reading was startup
+# cost alone, and that is a property of the host: 110–116% on the box, 97% pinned to one core, and
+# 84% then 89% on a GitHub runner — under the 90, so the grader's precondition failed and `C45` went
+# red on `main` twice with nothing wrong in tflw. More users or a shorter window change nothing
+# (measured: 1/2/4 users and 150/50/20 ms all read the same). So each iteration now spends 60 ms in
+# a busy wait (`helpers/spin.ts`): the window is then mostly CPU by construction, and the run still
+# ends well inside the 300 ms floor.
+#
 # The other three saturation mutations have no plant here and cannot have one — see
 # `CONSTRUCTS.md`'s drawdown table for the reason, which is tflw's own.
+
+use "./helpers/spin.ts"
 
 @constructs @selfreport
 test "a run too short to mean anything does not call itself saturated, however its rate reads"
   hold 1 users for 150ms
+  let spun = spin for(60)
   api GET /selfreport-closed
   expect status equals 200
   threshold error rate is less than 1%
