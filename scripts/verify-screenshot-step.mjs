@@ -52,10 +52,11 @@ if (step?.screenshot?.base64) {
 // one anyway — and `--update-snapshots` rewrites a baseline the board no longer matches.
 
 const PROMO = 'tests/ui/storefront/promo.tflw';
-const PROMO_TEST = 'the promo clock is masked out of the page';
+// `--only` takes the declared name exactly, so the whole of it.
+const PROMO_TEST = "the promo clock is masked out of the page's snapshot, and without the mask the page never matches";
 const runPromo = (flags) =>
   spawnSync(`${TFLW} run --only "${PROMO_TEST}" --no-color ${flags} ${PROMO}`, { cwd: ROOT, shell: true, encoding: 'utf8' });
-const promoResult = () => JSON.parse(readFileSync(RESULTS_PATH, 'utf8')).tests.find((t) => t.name.startsWith(PROMO_TEST));
+const promoResult = () => JSON.parse(readFileSync(RESULTS_PATH, 'utf8')).tests.find((t) => t.name === PROMO_TEST);
 
 // 1. `--trace` on a run that passes: the archive exists, is a zip, and holds a Playwright trace.
 const traced = runPromo('--trace');
