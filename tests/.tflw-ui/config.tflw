@@ -1,0 +1,22 @@
+# `T-4` (tflw `D1373`) — Config on this project's own `tflw.config`, 338 lines of envs, sessions,
+# services and authorized targets: a line the config dialect refuses is underlined as it is typed,
+# taking it back clears the mark, and a harmless edit is saved. `verify-ui-page.mjs` then runs
+# `tflw check` over the copy the page wrote into, so *saved* also means *still a valid project*.
+# Typed a key at a time: the page's editor is the thing under test, and `fill` would replace the
+# whole document rather than edit it.
+
+test "Config underlines a bad line as it is typed, clears it when it is taken back, and saves"
+  let token = env(TFLW_UI_TOKEN)
+  open "/?token={token}#/api/config"
+  expect css "[data-api-config-text]" is visible
+  expect css "[data-api-config-text] [data-editor-diagnostic]" has count 0
+  click css "[data-api-config-text]"
+  press "Control+End"
+  press "x"
+  wait until css "[data-api-config-text] [data-editor-diagnostic]" is visible
+  press "Backspace"
+  wait until css "[data-api-config-text] [data-editor-diagnostic]" has count 0
+  press "#"
+  press "Enter"
+  click css "[data-api-config-save]"
+  expect css "[data-api-config-saved]" is visible

@@ -1,0 +1,12 @@
+# `T-4` (tflw `D1373`, `D1392`) — a `tflw run` started from a shell against the copy, and the page's
+# Run tab following it to its end without a click. `verify-ui-page.mjs` starts the shell run (the
+# five load shapes, about fifteen seconds) and then runs this file alone, so nothing else is running
+# when the page is asked what is. The page learns of the run from its five-second list poll and the
+# run's own `report/.running.json` (tflw G15).
+
+test "a run started from a shell is drawn live on the Run tab and ends as a kept report"
+  let token = env(TFLW_UI_TOKEN)
+  open "/?token={token}#/load/run"
+  wait until css "[data-live]" is visible timeout wait 30s
+  wait until css "[data-live] [data-test]" has count at least 1 timeout wait 60s
+  wait until css "[data-report]" is visible timeout wait 120s

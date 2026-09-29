@@ -1,0 +1,59 @@
+# `T-4` (tflw `D1373`) — Compose on this project's own tests, not on a fixture: a real API test is
+# edited, trimmed, reordered, sent and asserted from its response, and a real browser test is trimmed
+# and reordered, all through the page and written with ⌘S.
+#
+# Rows are addressed by line, because a row's line is the one handle the page gives it. So each one
+# is checked by its text first: an edit to the file under test fails here by name, never by acting
+# on the wrong row. The edits are made bottom-up where a removal would move the rows above.
+
+test "an API test is edited, trimmed, reordered, sent and asserted from its response"
+  let token = env(TFLW_UI_TOKEN)
+  open "/?token={token}#/api/compose/tests/api/edge/transport.tflw/L70"
+  within css "[data-seq-line=\"74\"]"
+    expect text "/edge/brotli" is visible
+  within css "[data-seq-line=\"78\"]"
+    expect text "/edge/chunked" is visible
+  # Edit: the third request's path.
+  click css "[data-seq-line=\"78\"] > [data-seq-pick]"
+  fill css "input[data-request-path]" with "/edge/chunked?from=the-page"
+  # Trim: the chunked body's assertion goes.
+  within css "[data-seq-line=\"80\"]"
+    expect text "body.chunks" is visible
+  click css "[data-seq-line=\"80\"] > [data-seq-remove]"
+  # Reorder: the chunked request moves above the brotli one, its status check with it (tflw G13).
+  click css "[data-seq-line=\"78\"] > [data-seq-move=up]"
+  within css "[data-seq-line=\"74\"]"
+    expect text "/edge/chunked?from=the-page" is visible
+  # Send the brotli request, now at 76, and write an assertion from what came back.
+  click css "[data-seq-line=\"76\"] > [data-seq-pick]"
+  click css "[data-compose-send=this]"
+  expect css "[data-compose-response=\"200\"]" is visible
+  click css "[data-compose-response]"
+  tick css "[data-tick=greeting]"
+  click css "[data-compose-verify]"
+  click css "[data-compose-write]"
+  expect css "[data-compose-dirty]" has count 0
+  # Read back from the file, on a fresh load.
+  open "/?token={token}#/api/compose/tests/api/edge/transport.tflw/L70"
+  within css "[data-seq-line=\"74\"]"
+    expect text "/edge/chunked?from=the-page" is visible
+  within css "[data-seq-line=\"76\"]"
+    expect text "/edge/brotli" is visible
+  expect text "body.chunks" is hidden
+
+test "a browser test is trimmed and reordered on the BROWSER door"
+  let token = env(TFLW_UI_TOKEN)
+  open "/?token={token}#/browser/compose/tests/ui/storefront/navigation.tflw/L16"
+  within css "[data-seq-line=\"20\"]"
+    expect text "Escape" is visible
+  within css "[data-seq-line=\"21\"]"
+    expect text "shopMenu" is visible
+  click css "[data-seq-line=\"21\"] > [data-seq-remove]"
+  press "Alt+ArrowUp" on css "[data-seq-line=\"20\"] > [data-seq-pick]"
+  within css "[data-seq-line=\"19\"]"
+    expect text "Escape" is visible
+  press "Control+S"
+  expect css "[data-compose-dirty]" has count 0
+  open "/?token={token}#/browser/compose/tests/ui/storefront/navigation.tflw/L16"
+  within css "[data-seq-line=\"19\"]"
+    expect text "Escape" is visible
