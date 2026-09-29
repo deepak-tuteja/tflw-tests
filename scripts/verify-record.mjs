@@ -16,7 +16,7 @@
 //
 // `--update` rewrites the golden from this run, for a deliberate change to what the recorder prints.
 import { spawn, spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -108,7 +108,11 @@ ok('the gestures were recorded (a fill per field and the click)', steps.length >
 const recorded = `test "a recorded sign-in attempt"\n${steps.map((l) => `  ${l}`).join('\n')}\n`;
 const scratch = mkdtempSync(path.join(tmpdir(), 'tflw-record-'));
 try {
+  // `.env` because the config's `require env` refuses a run without it (the first box run's red),
+  // and the certificates so its `cert`/`key` lines name files that exist — `verify-refactor`'s set.
   copyFileSync(path.join(ROOT, 'tflw.config'), path.join(scratch, 'tflw.config'));
+  if (existsSync(path.join(ROOT, '.env'))) copyFileSync(path.join(ROOT, '.env'), path.join(scratch, '.env'));
+  if (existsSync(path.join(ROOT, 'nginx', 'certs'))) cpSync(path.join(ROOT, 'nginx', 'certs'), path.join(scratch, 'nginx', 'certs'), { recursive: true });
   writeFileSync(path.join(scratch, 'recorded.tflw'), recorded);
   const check = spawnSync('node', [CLI_ENTRY, 'check', 'recorded.tflw'], { cwd: scratch, encoding: 'utf8' });
   ok('`tflw check` accepts the recording', check.status === 0, `${check.stdout}${check.stderr}\n--- recorded.tflw ---\n${recorded}`);
