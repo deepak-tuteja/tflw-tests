@@ -1,10 +1,27 @@
-import { Body, Controller, Get, Header, Post, Query, Res, UnauthorizedException } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Header,
+  Post,
+  Query,
+  Res,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
 import type { Response } from 'express';
-import { OauthAuthorizeFormDto, OauthAuthorizeQueryDto } from './dto/oauth-authorize.dto';
+import {
+  OauthAuthorizeFormDto,
+  OauthAuthorizeQueryDto,
+} from './dto/oauth-authorize.dto';
 import { OauthCodeService, type AuthorizeRequest } from './oauth-code.service';
 
-const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const esc = (s: string): string =>
+  s
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 
 /** The consent page: a sign-in form that carries the authorize request forward as hidden fields. */
 function consentPage(req: AuthorizeRequest, note?: string): string {
@@ -54,13 +71,24 @@ export class OauthAuthorizeController {
   }
 
   @Post()
-  async decide(@Body() form: OauthAuthorizeFormDto, @Res() res: Response): Promise<void> {
+  async decide(
+    @Body() form: OauthAuthorizeFormDto,
+    @Res() res: Response,
+  ): Promise<void> {
     try {
       res.redirect(302, await this.code.decide(form));
     } catch (err) {
       if (!(err instanceof UnauthorizedException)) throw err;
       // Wrong credentials: the same page again, with the reason — the client learns nothing.
-      res.status(401).type('html').send(consentPage(this.code.validate(form), 'That email and password do not match an account.'));
+      res
+        .status(401)
+        .type('html')
+        .send(
+          consentPage(
+            this.code.validate(form),
+            'That email and password do not match an account.',
+          ),
+        );
     }
   }
 }

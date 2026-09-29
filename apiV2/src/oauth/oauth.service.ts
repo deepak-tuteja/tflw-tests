@@ -67,7 +67,8 @@ export class OauthService {
 
   async token(dto: OauthTokenDto): Promise<OauthTokenResponse> {
     // tflw `M248`: the code grant and its refresh belong to the public client, in their own service.
-    if (dto.grant_type === 'authorization_code') return this.codeFlow.exchange(dto);
+    if (dto.grant_type === 'authorization_code')
+      return this.codeFlow.exchange(dto);
     if (dto.grant_type === 'refresh_token') return this.codeFlow.refresh(dto);
     const client = this.clients().find((c) => c.id === dto.client_id);
     if (!client || client.secret !== dto.client_secret) {

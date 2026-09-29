@@ -1,4 +1,10 @@
-import { IsIn, IsOptional, IsString, MinLength, ValidateIf } from 'class-validator';
+import {
+  IsIn,
+  IsOptional,
+  IsString,
+  MinLength,
+  ValidateIf,
+} from 'class-validator';
 
 // The token endpoint's three grants (RFC 6749 §4.4, §4.1.3, §6); `whitelist`/`forbidNonWhitelisted`
 // (main.ts) reject anything else, same as every other DTO in this app. Each grant's own fields are
@@ -13,7 +19,10 @@ export class OauthTokenDto {
   @MinLength(1)
   client_id: string;
 
-  @ValidateIf((o: OauthTokenDto) => o.grant_type === 'client_credentials' || o.client_secret !== undefined)
+  @ValidateIf(
+    (o: OauthTokenDto) =>
+      o.grant_type === 'client_credentials' || o.client_secret !== undefined,
+  )
   @IsString()
   @MinLength(1)
   client_secret?: string;

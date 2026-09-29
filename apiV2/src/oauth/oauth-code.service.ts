@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { createHash, randomBytes } from 'node:crypto';
@@ -7,7 +11,10 @@ import { User } from '../entities/user.entity';
 import { AuthService } from '../auth/auth.service';
 import { TokensService } from '../auth/tokens.service';
 import { parseDurationMs } from '../auth/ms';
-import { OauthAuthorizeFormDto, OauthAuthorizeQueryDto } from './dto/oauth-authorize.dto';
+import {
+  OauthAuthorizeFormDto,
+  OauthAuthorizeQueryDto,
+} from './dto/oauth-authorize.dto';
 import { OauthTokenDto } from './dto/oauth-token.dto';
 import type { OauthTokenResponse } from './oauth.service';
 
@@ -69,7 +76,10 @@ export class OauthCodeService {
   /** Every check an authorize request must pass before a page is shown to anyone. Throws with the
    * reason; per RFC 6749 §4.1.2.1 a bad client or redirect is never redirected to. */
   validate(q: OauthAuthorizeQueryDto): AuthorizeRequest {
-    if (q.client_id !== this.publicClientId()) throw new BadRequestException(`unknown client_id ${JSON.stringify(q.client_id ?? '')}`);
+    if (q.client_id !== this.publicClientId())
+      throw new BadRequestException(
+        `unknown client_id ${JSON.stringify(q.client_id ?? '')}`,
+      );
     const redirectUri = q.redirect_uri ?? '';
     let url: URL;
     try {
@@ -78,13 +88,26 @@ export class OauthCodeService {
       throw new BadRequestException('redirect_uri is not a URL');
     }
     if (url.protocol !== 'http:' || !LOOPBACK_HOSTS.has(url.hostname)) {
-      throw new BadRequestException('redirect_uri must be a loopback http URL (127.0.0.1, localhost or [::1])');
+      throw new BadRequestException(
+        'redirect_uri must be a loopback http URL (127.0.0.1, localhost or [::1])',
+      );
     }
-    if (q.response_type !== 'code') throw new BadRequestException('response_type must be "code"');
-    if (q.code_challenge_method !== 'S256') throw new BadRequestException('code_challenge_method must be "S256"');
-    if (!q.code_challenge || !/^[A-Za-z0-9_-]{43}$/.test(q.code_challenge)) throw new BadRequestException('code_challenge must be a base64url SHA-256 (43 characters)');
+    if (q.response_type !== 'code')
+      throw new BadRequestException('response_type must be "code"');
+    if (q.code_challenge_method !== 'S256')
+      throw new BadRequestException('code_challenge_method must be "S256"');
+    if (!q.code_challenge || !/^[A-Za-z0-9_-]{43}$/.test(q.code_challenge))
+      throw new BadRequestException(
+        'code_challenge must be a base64url SHA-256 (43 characters)',
+      );
     if (!q.state) throw new BadRequestException('state is required');
-    return { clientId: q.client_id, redirectUri, challenge: q.code_challenge, state: q.state, ...(q.scope ? { scope: q.scope } : {}) };
+    return {
+      clientId: q.client_id,
+      redirectUri,
+      challenge: q.code_challenge,
+      state: q.state,
+      ...(q.scope ? { scope: q.scope } : {}),
+    };
   }
 
   /** The consent form's answer. Returns where to send the browser: the redirect with a code, or
@@ -95,11 +118,24 @@ export class OauthCodeService {
     const target = new URL(req.redirectUri);
     if (form.decision === 'deny') {
       target.searchParams.set('error', 'access_denied');
-      target.searchParams.set('error_description', 'the user denied the request');
+      target.searchParams.set(
+        'error_description',
+        'the user denied the request',
+      );
     } else {
-      const user = await this.auth.validateCredentials(form.email ?? '', form.password ?? '');
+      const user = await this.auth.validateCredentials(
+        form.email ?? '',
+        form.password ?? '',
+      );
       const code = randomBytes(24).toString('base64url');
-      this.codes.set(code, { clientId: req.clientId, redirectUri: req.redirectUri, challenge: req.challenge, userId: user.id, ...(req.scope ? { scope: req.scope } : {}), expiresAt: Date.now() + CODE_TTL_MS });
+      this.codes.set(code, {
+        clientId: req.clientId,
+        redirectUri: req.redirectUri,
+        challenge: req.challenge,
+        userId: user.id,
+        ...(req.scope ? { scope: req.scope } : {}),
+        expiresAt: Date.now() + CODE_TTL_MS,
+      });
       target.searchParams.set('code', code);
     }
     target.searchParams.set('state', req.state);
@@ -107,31 +143,57 @@ export class OauthCodeService {
   }
 
   async exchange(dto: OauthTokenDto): Promise<OauthTokenResponse> {
-    if (dto.client_id !== this.publicClientId()) throw new UnauthorizedException('invalid client_id');
+    if (dto.client_id !== this.publicClientId())
+      throw new UnauthorizedException('invalid client_id');
     const issued = this.codes.get(dto.code ?? '');
     // Single use whatever happens next: a code presented twice is refused both times after the first.
     this.codes.delete(dto.code ?? '');
-    if (!issued || issued.expiresAt < Date.now()) throw new BadRequestException('invalid_grant: the code is unknown, used or expired');
-    if (issued.clientId !== dto.client_id || issued.redirectUri !== dto.redirect_uri) {
-      throw new BadRequestException('invalid_grant: the code was issued to another client or redirect_uri');
+    if (!issued || issued.expiresAt < Date.now())
+      throw new BadRequestException(
+        'invalid_grant: the code is unknown, used or expired',
+      );
+    if (
+      issued.clientId !== dto.client_id ||
+      issued.redirectUri !== dto.redirect_uri
+    ) {
+      throw new BadRequestException(
+        'invalid_grant: the code was issued to another client or redirect_uri',
+      );
     }
-    const challenge = createHash('sha256').update(dto.code_verifier ?? '', 'ascii').digest('base64url');
-    if (challenge !== issued.challenge) throw new BadRequestException('invalid_grant: code_verifier does not match the code_challenge');
+    const challenge = createHash('sha256')
+      .update(dto.code_verifier ?? '', 'ascii')
+      .digest('base64url');
+    if (challenge !== issued.challenge)
+      throw new BadRequestException(
+        'invalid_grant: code_verifier does not match the code_challenge',
+      );
     return this.issue(issued.userId, issued.clientId, issued.scope);
   }
 
   async refresh(dto: OauthTokenDto): Promise<OauthTokenResponse> {
     const held = this.refreshTokens.get(dto.refresh_token ?? '');
     this.refreshTokens.delete(dto.refresh_token ?? '');
-    if (!held || held.clientId !== dto.client_id) throw new BadRequestException('invalid_grant: the refresh token is unknown or already used');
+    if (!held || held.clientId !== dto.client_id)
+      throw new BadRequestException(
+        'invalid_grant: the refresh token is unknown or already used',
+      );
     return this.issue(held.userId, held.clientId, held.scope);
   }
 
-  private async issue(userId: string, clientId: string, scope?: string): Promise<OauthTokenResponse> {
+  private async issue(
+    userId: string,
+    clientId: string,
+    scope?: string,
+  ): Promise<OauthTokenResponse> {
     const user = await this.users.findOneOrFail({ where: { id: userId } });
-    if (user.deactivatedAt) throw new UnauthorizedException('account has been deactivated');
+    if (user.deactivatedAt)
+      throw new UnauthorizedException('account has been deactivated');
     const refresh = randomBytes(24).toString('base64url');
-    this.refreshTokens.set(refresh, { clientId, userId, ...(scope ? { scope } : {}) });
+    this.refreshTokens.set(refresh, {
+      clientId,
+      userId,
+      ...(scope ? { scope } : {}),
+    });
     return {
       access_token: this.tokens.signAccessTokenWithTtl(user, this.ttl()),
       token_type: 'Bearer',
