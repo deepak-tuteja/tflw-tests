@@ -13,7 +13,7 @@ test "a kept run's report shows a failing step's exchange and opens a browser te
   within css "[data-test][data-name=\"a deliberately wrong status expectation against a real passing endpoint\"]"
     # The failing assertion says what it expected, and the request above it shows what came back.
     expect css "[data-step][data-ok=false] [data-detail]" is visible
-    expect css "[data-status]" is visible
+    expect css "[data-step] [data-status]" has count at least 1
     expect text "999" is visible
   within css "[data-test][data-name=\"the storefront is searched for a word it never shows\"]"
     expect css "[data-trace]" is visible

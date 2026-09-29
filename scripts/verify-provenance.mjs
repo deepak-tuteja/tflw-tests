@@ -546,6 +546,9 @@ export const MAX_PENDING_DAYS = 14;
  * @type {Map<string, {pr: string, since: string, why: string}>}
  */
 export const DECLARED_PENDING = new Map([
+  ['D1373', { pr: 'deepak-tuteja/tflw#264', since: '2026-09-29', why: 'the page tested on eight shapes of this project (T-4)' }],
+  ['D1392', { pr: 'deepak-tuteja/tflw#264', since: '2026-09-29', why: 'a run started from a shell is followed by the page, which follow.tflw drives' }],
+  ['D1393', { pr: 'deepak-tuteja/tflw#264', since: '2026-09-29', why: 're-read from disk after a refused save, which source-conflict.tflw drives' }],
 ]);
 
 /**
