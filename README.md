@@ -151,7 +151,7 @@ used to be the only evidence for: `mtls-rejection`, `safety-redaction-check`, `d
 `pick-check`, `record-check` (a `record` session driven through `--cdp-port`, its steps checked, run and compared with a golden), `logging-check`, `report-overflow-check`, `ui-admin-check` (E2 + E3's own
 `orgs.tflw`), `webv2-admin-check` (pre-E3 housekeeping, + E3's own `orgs-mixed.tflw`) — and then
 `perf-ladder`, the one phase that is **local-only and never runs in CI**: the measured half of
-the perf gate, which needs `fedora-box`, k6 and exclusive use of the machine, and reports
+the perf gate, which needs a dedicated perf machine, k6 and exclusive use of the machine, and reports
 `⊘ skipped` anywhere else rather than a pass. Six of its eight rungs drive apiV2 and two drive a
 managed echo target it starts itself, so it takes the same fresh restart as everything else. Each
 phase runs on its own fresh Docker restart (`scripts/regression.mjs`; restarting every phase isn't
