@@ -7,7 +7,7 @@
 test "a kept run's report shows a failing step's exchange and opens a browser test's trace in the page"
   let token = env(TFLW_UI_TOKEN)
   let run = env(TFLW_T4_REPORT)
-  open "/?token={token}#/api/run"
+  open "/?token={token}#/run?kind=api"
   click css "[data-report-row=\"{run}\"]"
   expect css "[data-report=\"{run}\"]" is visible
   within css "[data-test][data-name=\"a deliberately wrong status expectation against a real passing endpoint\"]"

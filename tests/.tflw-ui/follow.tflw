@@ -6,7 +6,7 @@
 
 test "a run started from a shell is drawn live on the Run tab and ends as a kept report"
   let token = env(TFLW_UI_TOKEN)
-  open "/?token={token}#/load/run"
+  open "/?token={token}#/run?kind=load"
   wait until css "[data-live]" is visible timeout wait 30s
   wait until css "[data-live] [data-test]" has count at least 1 timeout wait 60s
   wait until css "[data-report]" is visible timeout wait 120s

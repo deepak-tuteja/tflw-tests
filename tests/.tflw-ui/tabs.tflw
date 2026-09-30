@@ -1,9 +1,10 @@
-# `S-2a` — the five tabs over one file (tflw `M205`), each drawing its own shell on every door.
-# A tab is an address: `#/<door>/<tab>`, and the door survives the trip.
+# `S-2a` — the three stages over one file (tflw `M205`), and the two project facts the header opens
+# as panels (tflw `M254`, `D1400`/`D1401`). A tab or a panel is an address — `#/<tab>` with the kind
+# chip in the query — and the chip survives the trip.
 
-test "Compose, Source, Run, Auth and Config each draw their shell on the API door"
+test "Compose, Source, Run, Auth and Config each draw their shell under the API chip"
   let token = env(TFLW_UI_TOKEN)
-  open "/?token={token}#/api"
+  open "/?token={token}#/?kind=api"
   expect css "[data-tabstrip=compose]" is visible
   expect css "[data-compose-pane]" is visible
   click css "[data-tab=source]"
@@ -12,22 +13,23 @@ test "Compose, Source, Run, Auth and Config each draw their shell on the API doo
   click css "[data-tab=run]"
   expect css "[data-tabstrip=run]" is visible
   expect css "[data-runstrip]" is visible
-  click css "[data-tab=auth]"
+  click css "[data-header-panel=auth]"
   expect css "[data-tabstrip=auth]" is visible
   expect css "[data-auth-identity]" is visible
-  click css "[data-tab=config]"
+  click css "[data-header-panel=config]"
   expect css "[data-tabstrip=config]" is visible
   expect css "[data-api-config-text]" is visible
-  expect css "[data-doorbar=api]" is visible
+  expect css "[data-kind-chips=api]" is visible
 
-test "the strip is the same five on the other three doors"
+test "the strip is the same three, and the header the same two words, under the other three chips"
   let token = env(TFLW_UI_TOKEN)
-  open "/?token={token}#/browser/source"
+  open "/?token={token}#/source?kind=browser"
   expect css "[data-tabstrip=source]" is visible
-  expect css "[data-tab]" has count 5
-  open "/?token={token}#/load/run"
+  expect css "[data-tab]" has count 3
+  expect css "[data-header-panel]" has count 2
+  open "/?token={token}#/run?kind=load"
   expect css "[data-tabstrip=run]" is visible
-  expect css "[data-tab]" has count 5
-  open "/?token={token}#/scan/config"
+  expect css "[data-tab]" has count 3
+  open "/?token={token}#/config?kind=scan"
   expect css "[data-tabstrip=config]" is visible
   expect css "[data-api-config-text]" is visible

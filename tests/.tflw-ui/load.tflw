@@ -1,13 +1,15 @@
 # `T-4` (tflw `D1373`) — LOAD's view of this project's own workload file after a `--workers 1` run
-# (`tests/load/shapes.tflw`, five shapes): the run is started from the LOAD door with one worker,
+# (`tests/load/shapes.tflw`, five shapes): the run is started under the LOAD chip with one worker,
 # and the report it keeps draws each workload's shape, its charts, and every threshold with its
 # verdict. The run takes as long as its shapes do, so the waits are the workload's length.
 
-test "a workload run from the LOAD door draws its shapes, its charts and its thresholds' verdicts"
+test "a workload run under the LOAD chip draws its shapes, its charts and its thresholds' verdicts"
   let token = env(TFLW_UI_TOKEN)
-  open "/?token={token}#/load/run"
+  open "/?token={token}#/run?kind=load"
   expect css "[data-runstrip]" is visible
   fill css "[data-search]" with "tests/load/shapes.tflw"
+  # `workers` sits in the header's `more…` since tflw `M254` (`D1400`).
+  click css "[data-run-more] summary"
   fill css "[data-workers]" with "1"
   click css "[data-run]"
   # Five workloads, five shapes — one per test in the file.

@@ -9,7 +9,7 @@
 test "the crawl's report on the SCANS door says what it judged, by rule, and how far it reached"
   let token = env(TFLW_UI_TOKEN)
   let run = env(TFLW_T4_REPORT)
-  open "/?token={token}#/scan/run"
+  open "/?token={token}#/run?kind=scan"
   click css "[data-report-row=\"{run}\"]"
   expect css "[data-report=\"{run}\"]" is visible
   expect css "[data-findings]" is visible
