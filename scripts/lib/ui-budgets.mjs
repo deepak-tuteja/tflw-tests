@@ -17,10 +17,12 @@
 import { chromium } from 'playwright';
 
 export const BUDGET = { shell: 250, compose: 250, auth: 200, run: 150 };
-const THEIRS = 'code, pre, kbd, input, textarea, select, option, .cm-editor, .seq-text, [data-files], [data-user-data], .tip, [data-legend], [data-test], [data-finding], [data-finding-gone]';
+const THEIRS = 'code, pre, kbd, input, textarea, select, option, .cm-editor, .seq-text, [data-files], [data-user-data], .tip, [data-legend], [data-test], [data-tree-test], [data-finding], [data-finding-gone]';
 // tflw `M254` (`D1402`): no landing — the first view is the shell at rest, which is Compose on the
 // file the page opens on.
-const READY = { shell: '[data-compose-pane], [data-empty-door]', compose: '[data-compose-pane], [data-empty-door]', run: '[data-runs]', auth: '[data-api-auth]' };
+// tflw `M257` (`D1409`): the run list is behind a picker, so the picker is what is drawn; the older
+// `[data-runs]` stays in the union for a tflw build before it.
+const READY = { shell: '[data-compose-pane], [data-empty-door]', compose: '[data-compose-pane], [data-empty-door]', run: '[data-run-picker], [data-runs]', auth: '[data-api-auth]' };
 const DOORS = ['api', 'browser', 'load', 'scan'];
 /** Flipped with tflw `M241` `E` (`D1325`), which built the floors this measures — see the header. */
 const JUDGE_SIZES = true;
