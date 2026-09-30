@@ -1,0 +1,45 @@
+# `S-2a` — the kinds (tflw `M254`, `D1399`–`D1403`, `D1413`; until then the doors, `M240` `A`). There
+# is no landing: the page opens on the shell, the four kinds are chips over the file list — each the
+# count and the filter in one — and a chip lives in the address alone, so a pasted link opens where
+# it says, and a link from before the chips opens with its door's kind on.
+
+test "the page opens on the shell, with the kinds as chips and no landing"
+  let token = env(TFLW_UI_TOKEN)
+  open "/?token={token}"
+  expect css "[data-header]" is visible
+  expect css "[data-kind-chip]" has count 5
+  expect css "[data-kind-chips=all]" is visible
+  expect css "[data-file-row][data-open=yes]" is visible
+  expect css "[data-compose-pane]" is visible
+  expect css "[data-landing]" has count 0
+
+test "a chip lives in the address, and ▶ runs what it shows"
+  let token = env(TFLW_UI_TOKEN)
+  open "/?token={token}#/?kind=load"
+  expect css "[data-kind-chips=load]" is visible
+  expect css "[data-run][data-run-narrowing=kind]" is visible
+  click css "[data-kind-chip=all]"
+  expect css "[data-kind-chips=all]" is visible
+  expect css "[data-run][data-run-narrowing=none]" is visible
+
+test "every door's old address opens with that kind's chip on"
+  let token = env(TFLW_UI_TOKEN)
+  open "/?token={token}#/browser"
+  expect css "[data-kind-chips=browser]" is visible
+  expect css "[data-file-row][data-open=yes]" is visible
+  open "/?token={token}#/scan"
+  expect css "[data-kind-chips=scan]" is visible
+  expect css "[data-file-row][data-open=yes]" is visible
+
+# Until `S-3c` this project had no load test under `tests/` — LOAD was the door with nothing behind
+# it. `tests/load/` gave it its files, so the LOAD chip lists them, and its count is not zero.
+test "the LOAD chip lists this project's load tests"
+  let token = env(TFLW_UI_TOKEN)
+  open "/?token={token}#/?kind=load"
+  expect css "[data-kind-chips=load]" is visible
+  expect css "[data-kind-chip=load] [data-kind-count='0']" has count 0
+  # By path: the open file stays listed whatever it holds (tflw `M254`), so a bare row match meets
+  # the file the page opened on beside the two load files.
+  expect css "[data-file-row='tests/load/shapes.tflw']" is visible
+  expect css "[data-file-row='tests/load/thresholds.tflw']" is visible
+  expect css "[data-empty-door]" has count 0

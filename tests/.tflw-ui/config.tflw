@@ -7,7 +7,7 @@
 
 test "Config underlines a bad line as it is typed, clears it when it is taken back, and saves"
   let token = env(TFLW_UI_TOKEN)
-  open "/?token={token}#/api/config"
+  open "/?token={token}#/config?kind=api"
   expect css "[data-api-config-text]" is visible
   expect css "[data-api-config-text] [data-editor-diagnostic]" has count 0
   click css "[data-api-config-text]"

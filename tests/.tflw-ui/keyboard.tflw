@@ -4,8 +4,8 @@
 
 test "? opens the legend of the keys, and Escape closes it"
   let token = env(TFLW_UI_TOKEN)
-  open "/?token={token}#/api"
-  expect css "[data-doorbar=api]" is visible
+  open "/?token={token}#/?kind=api"
+  expect css "[data-kind-chips=api]" is visible
   press "?"
   expect css "[data-legend]" is visible
   expect css "[data-legend-key]" has count 6
@@ -14,22 +14,25 @@ test "? opens the legend of the keys, and Escape closes it"
 
 test "/ reaches search from anywhere but a field"
   let token = env(TFLW_UI_TOKEN)
-  open "/?token={token}#/api"
-  expect css "[data-doorbar=api]" is visible
+  open "/?token={token}#/?kind=api"
+  expect css "[data-kind-chips=api]" is visible
   press "/"
   expect css "[data-search]:focus" is visible
 
 test "Control+S writes a dirty draft from inside a field"
   let token = env(TFLW_UI_TOKEN)
-  open "/?token={token}#/browser"
-  expect css "[data-doorbar=browser]" is visible
+  # Named, not landed on: since tflw `M254` (`D1402`) the page opens on the file you had open, else
+  # the one declaring the most — never on a file chosen for the chip — so a test that needs a page
+  # file names one.
+  open "/?token={token}#/compose/tests/ui/storefront/navigation.tflw?kind=browser"
+  expect css "[data-kind-chips=browser]" is visible
   click css "[data-seq-add=click]"
   select "text" from css "[data-script=click] [data-locator-kind]"
   fill css "[data-script=click] [data-locator-value]" with "Saved by key"
   expect css "[data-compose-dirty]" is visible
   press "Control+S" on css "[data-script=click] [data-locator-value]"
   expect css "[data-compose-dirty]" has count 0
-  # Read back on the door rather than on Source: since tflw `M241` Source is an editor that draws
+  # Read back on Compose rather than on Source: since tflw `M241` Source is an editor that draws
   # only the lines in view, and this project's browser file is longer than the view.
-  open "/?token={token}#/browser"
+  open "/?token={token}#/compose/tests/ui/storefront/navigation.tflw?kind=browser"
   expect text "Saved by key" is visible

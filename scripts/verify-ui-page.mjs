@@ -5,7 +5,7 @@
 //
 // WHAT IS SERVED. A scratch copy of this project, never the tree: the keyboard file writes a draft
 // through the page with ⌘S, and a page that can write can write here. The copy is what
-// `verify-refactor.mjs` copies — what `tflw run` resolves from the root — so the doors count this
+// `verify-refactor.mjs` copies — what `tflw run` resolves from the root — so the kind chips count this
 // project's own tests and the budgets are measured on the project the review measured.
 //
 // WHERE THE SUITE RUNS. `tests/.tflw-ui/` is copied beside the project and run there, so its
@@ -14,7 +14,7 @@
 // read with `env(…)` so the redactor hides it).
 //
 // THE CONTROLS, so a green is a verdict and not an outage:
-//   - the same `doors.tflw` with a wrong token must FAIL — the page then serves the one-sentence
+//   - the same `kinds.tflw` with a wrong token must FAIL — the page then serves the one-sentence
 //     page a token-less visit gets, and a suite that passed anyway would be passing on nothing;
 //   - the token string must appear nowhere under the suite's `report/` (the plan's §6 risk 2).
 //
@@ -109,8 +109,8 @@ try {
   ok('`tflw check` over the page suite is clean', checked.status === 0 && /no problems found/.test(checked.out), checked.out.slice(0, 600));
 
   // The control first: a wrong token must fail, or the real run below proves nothing.
-  const forged = tflw(suite, { ...env, TFLW_UI_TOKEN: 'not-this-session' }, 'run', '--no-color', 'doors.tflw');
-  ok('control: the doors file FAILS with a wrong token', forged.status !== 0 && /FAIL/.test(forged.out), forged.out.slice(-600));
+  const forged = tflw(suite, { ...env, TFLW_UI_TOKEN: 'not-this-session' }, 'run', '--no-color', 'kinds.tflw');
+  ok('control: the kinds file FAILS with a wrong token', forged.status !== 0 && /FAIL/.test(forged.out), forged.out.slice(-600));
 
   // `T-4` (tflw `D1373`) — the evidence `report.tflw` and `scans.tflw` read, kept on the copy before
   // the suite starts: a failing API step (the demo-fail file), a failing browser test with its trace

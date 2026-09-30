@@ -6,7 +6,7 @@
 
 test "the whole project runs from the page, is cancelled, and its partial report is kept and narrowed"
   let token = env(TFLW_UI_TOKEN)
-  open "/?token={token}#/api/run"
+  open "/?token={token}#/run?kind=api"
   expect css "[data-runstrip]" is visible
   click css "[data-run]"
   wait until css "[data-live] [data-test]" has count at least 1 timeout wait 120s

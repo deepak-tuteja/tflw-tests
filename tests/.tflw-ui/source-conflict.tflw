@@ -10,7 +10,7 @@
 test "a draft meets a write from outside: refused on Source, the disk untouched, and re-read on the word"
   let token = env(TFLW_UI_TOKEN)
   let path = "tests/api/edge/transport.tflw"
-  open "/?token={token}#/api/compose/{path}/L62"
+  open "/?token={token}#/compose/{path}/L62?kind=api"
   within css "[data-seq-line=\"65\"]"
     expect text "/edge/empty-ok" is visible
   click css "[data-seq-line=\"65\"] > [data-seq-move=up]"

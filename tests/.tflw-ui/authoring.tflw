@@ -8,7 +8,7 @@
 
 test "a file written on the API door is sent, asserted, run and read back"
   let token = env(TFLW_UI_TOKEN)
-  open "/?token={token}#/api"
+  open "/?token={token}#/?kind=api"
   click css "[data-compose-new-file]"
   fill field "file path" with "tests/api/written-in-the-page.tflw"
   fill field "test name" with "the health check answers, in a file the page wrote"
@@ -33,12 +33,12 @@ test "a file written on the API door is sent, asserted, run and read back"
 
 test "an action and a crawl are declarations the page writes"
   let token = env(TFLW_UI_TOKEN)
-  open "/?token={token}#/api/compose/tests/api/written-in-the-page.tflw"
+  open "/?token={token}#/compose/tests/api/written-in-the-page.tflw?kind=api"
   click css "[data-compose-new-action]"
   fill css "input[data-band-name]" with "checkHealth"
   click css "[data-compose-write]"
   expect css "[data-compose-dirty]" has count 0
-  open "/?token={token}#/scan/compose/tests/api/written-in-the-page.tflw"
+  open "/?token={token}#/compose/tests/api/written-in-the-page.tflw?kind=scan"
   click css "[data-compose-new-crawl]"
   fill css "input[data-crawl-name]" with "walked by the page"
   click css "[data-compose-write]"

@@ -8,7 +8,7 @@
 
 test "an API test is edited, trimmed, reordered, sent and asserted from its response"
   let token = env(TFLW_UI_TOKEN)
-  open "/?token={token}#/api/compose/tests/api/edge/transport.tflw/L70"
+  open "/?token={token}#/compose/tests/api/edge/transport.tflw/L70?kind=api"
   within css "[data-seq-line=\"74\"]"
     expect text "/edge/brotli" is visible
   within css "[data-seq-line=\"78\"]"
@@ -34,7 +34,7 @@ test "an API test is edited, trimmed, reordered, sent and asserted from its resp
   click css "[data-compose-write]"
   expect css "[data-compose-dirty]" has count 0
   # Read back from the file, on a fresh load.
-  open "/?token={token}#/api/compose/tests/api/edge/transport.tflw/L70"
+  open "/?token={token}#/compose/tests/api/edge/transport.tflw/L70?kind=api"
   within css "[data-seq-line=\"74\"]"
     expect text "/edge/chunked?from=the-page" is visible
   within css "[data-seq-line=\"76\"]"
@@ -43,7 +43,7 @@ test "an API test is edited, trimmed, reordered, sent and asserted from its resp
 
 test "a browser test is trimmed and reordered on the BROWSER door"
   let token = env(TFLW_UI_TOKEN)
-  open "/?token={token}#/browser/compose/tests/ui/storefront/navigation.tflw/L16"
+  open "/?token={token}#/compose/tests/ui/storefront/navigation.tflw/L16?kind=browser"
   within css "[data-seq-line=\"20\"]"
     expect text "Escape" is visible
   within css "[data-seq-line=\"21\"]"
@@ -54,6 +54,6 @@ test "a browser test is trimmed and reordered on the BROWSER door"
     expect text "Escape" is visible
   press "Control+S"
   expect css "[data-compose-dirty]" has count 0
-  open "/?token={token}#/browser/compose/tests/ui/storefront/navigation.tflw/L16"
+  open "/?token={token}#/compose/tests/ui/storefront/navigation.tflw/L16?kind=browser"
   within css "[data-seq-line=\"19\"]"
     expect text "Escape" is visible
