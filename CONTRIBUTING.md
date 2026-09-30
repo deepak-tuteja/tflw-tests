@@ -164,15 +164,15 @@ xvfb-run -a npm run regression -- --group security-ui
   three runners.
 - **`npm run verify:perf-baseline`** — the static half of the perf regression gate. Every rung with
   a co-runner has a row in `tflw-acceptance/perf/baseline.json`, no row names a rung that does not
-  exist, and no band spans more than 3x. The *comparison* runs on `fedora-box`, because a ratio
+  exist, and no band spans more than 3x. The *comparison* runs on a dedicated perf machine, because a ratio
   needs a measurement; what is checked here is the document. **It is no longer a scheduled run.**
-  `D733` put the measurement on a nightly timer, and that timer is disarmed (`D754`) — the box was
+  `D733` put the measurement on a nightly timer, and that timer is disarmed (`D754`) — the machine was
   asleep or powered off at 04:30 on all three nights measured, so the job would have fired 0 of 3
   times, and `Persistent=false` meant each miss was skipped in silence. The measurement now rides
   the sweep as its `perf-ladder` phase (`D758`), and can still be run alone with
   `npm run perf:conformance`. `D750` records why the bands are ratios of tflw to its co-runner **in the same run**
-  rather than absolute numbers — absolutes on that box move with thermal state, the 2.4 GHz link and
-  whoever else holds the lease, so a gate on them is a flake generator until it is widened into
+  rather than absolute numbers — absolutes on that machine move with thermal state, its network link and
+  whoever else holds its lease, so a gate on them is a flake generator until it is widened into
   vacuity. Until the ladder is next run in anger the bands are `null` and the gate says so out loud;
   the rule with teeth from day one is the error-rate ceiling, which needs no calibration and is the
   bound whose absence let a rung report PASS at a 100% error rate on 2026-08-05.
@@ -258,8 +258,8 @@ xvfb-run -a npm run regression -- --group security-ui
   `scripts/` and asserts the corpus does not grade it, because this gate read the working tree until
   `M178a` and so was green here and red in CI in the same commit.
 
-  This paragraph said **three** files and named `exec.mjs` among them, and said **seven** controls,
-  for as long as `M178a` had been merged — that milestone dropped `exec.mjs` from `EXEMPT` (a file
+  This paragraph said **three** files and named an untracked driver script among them, and said **seven** controls,
+  for as long as `M178a` had been merged — that milestone dropped that script from `EXEMPT` (a file
   the repository does not track cannot be an unreachable grader in it) and added the eighth control,
   and the sentence did not move. `verify:contributing` matches command strings and deliberately does
   not read sentences, so nothing could see it. `D767`, in the prose of the gate whose own milestone
@@ -360,7 +360,7 @@ xvfb-run -a npm run regression -- --group security-ui
   nothing about coverage. It only keeps a hand-maintained table from drifting away from the
   measurement it annotates, which is the seam `D767` keeps finding.
   The census itself is in `tflw-acceptance/mutation/` and is a measurement with a date on it, not a
-  baseline. Re-running it needs the box, the stack and about seven hours: `npm run
+  baseline. Re-running it needs the perf machine, the stack and about seven hours: `npm run
   discover:mutation-kills`.
   **What this gate cannot tell you, stated because it is the interesting half.** It compares two
   committed files, so it never re-measures a kill. If tflw's session scoping regressed tomorrow,
@@ -373,7 +373,7 @@ xvfb-run -a npm run regression -- --group security-ui
   tflw's registry size and this repository's graded-plant count — against the live ones, naming any
   drift. That line informs and does not fail, because a mutation added in tflw is the right change
   and reddening this repository's CI for it would leave the person who tripped it with a
-  seven-hour box run as their only remedy.
+  seven-hour census run as their only remedy.
 - **`npm run verify:kill-detail:self-test`** — **the producer behind `kill-detail.json` still reads
   the grader's page the way `read-mutation-matrix.mjs` expects.** Until `M188b` (`D968`) nothing in
   either tree wrote that file: the census kept the grader's page per killing mutation as an
@@ -387,12 +387,12 @@ xvfb-run -a npm run regression -- --group security-ui
   which the sweep now checks before recording any `assertion` kill — `M190`'s one false kill was a
   timing plant answering a co-tenant's render, not the mutation.
 - **`npm run verify:contention:self-test`** and **`npm run verify:exec-argv:self-test`** — **the
-  two refusals the overnight census taught** (`M190b`, `D991`/`D992`). The sweep asks the box
+  two refusals the overnight census taught** (`M190b`, `D991`/`D992`). The sweep asks the perf machine's instrument
   before its baseline and before each window close (`statsctl tenants`, `statsctl check`) and
   refuses beside a render in flight, a running model server or a memory stall; the driver refuses
   a command whose last token is `&`, because a detached child held it and its lease open all night
   (`M190-03`). Both decisions are pure functions shown to fire on the incidents' own shapes.
-  Milliseconds, no box, no render.
+  Milliseconds, no perf machine, no render.
 - **`npm run verify:reach:self-test`**, **`npm run verify:reach-verdicts:self-test`** and
   **`npm run verify:reach-verdicts`** — **the census's `survived` is split into what the roster
   never executes and what it executes without asserting, and the hand-read half of that split is
@@ -407,7 +407,7 @@ xvfb-run -a npm run regression -- --group security-ui
   stamp and refuses to write at all unless three controls behave: every named function V8 reports
   maps to a source line carrying its name (the offsets are the file's own), every `assertion` kill
   in `kill-detail.json` reads reached by the plant it killed, and every `lsp-server` survivor reads
-  unreached. Needs the box and the stack, like the census; `--only` runs are stamped partial.
+  unreached. Needs the perf machine and the stack, like the census; `--only` runs are stamped partial.
   **Reached is necessary, never sufficient** — a region is usually a whole `if` and its guard line
   running says nothing about its body — so the reached survivors are the ones a person reads, in
   `reach-verdicts.json`: `not-asserted` (the dogfood is shallow there; a row is filed per construct
@@ -452,7 +452,7 @@ xvfb-run -a npm run regression -- --group security-ui
   discriminating while this gate stayed green. A consumer whose cases are *all* regression guards
   is refused for the same reason — it would print a page of ticks and demonstrate no repair.
   The second consumer is the one with the larger blast radius: a typo'd `--dry-run` there used to
-  spend the box's whole lease on a full measured run the operator had explicitly asked not to
+  spend the perf machine's whole lease on a full measured run the operator had explicitly asked not to
   happen, and a typo'd `--in-sweep` wrote over the scheduled run's `latest.json` with a
   working-tree number.
   A contributor gate rather than ci-only because it is milliseconds, needs no stack, and the person
@@ -506,9 +506,9 @@ xvfb-run -a npm run regression -- --group security-ui
   corpora **in both directions**: a stale pin makes tflw's index publish entries nothing asks for,
   and this is the only place in either repository that can see both sides.
 
-  **This is one of the few gates that cannot run on fedora-box, and it now says so rather than
-  guessing.** Its corpus is `git ls-files '*.md'`, and `scripts/exec.mjs` copies files, not history
-  — the box's working tree has a `.git` skeleton with no index, so git answers *zero tracked files*
+  **This is one of the few gates that cannot run from a copy of the tree, and it now says so rather
+  than guessing.** Its corpus is `git ls-files '*.md'`, and a tree copied without its history — an
+  rsync that leaves a `.git` skeleton with no index — makes git answer *zero tracked files*
   without failing. That answer used to make every check below vacuous in the same direction, and
   the gate then reported tflw's entire pin as stale with a remedy attached: re-pin it. The remedy
   was wrong, and following it would have discarded a correct pin to satisfy a tree that could not
@@ -556,7 +556,7 @@ this decision expires. That is the condition; it is deliberately not tied to a m
   run that pins `--now`, which pins the namespace with it. **That residue is measured, and it got
   smaller by one member.** The list above used to carry a third — *"rows that accumulate until a
   count assertion reads the previous run's (`M181`/`D935`)"* — and the measurement that put it there
-  (`M181e`, 2026-09-07, on the build box) was three consecutive whole-suite runs on one stack going
+  (`M181e`, 2026-09-07) was three consecutive whole-suite runs on one stack going
   **323/323, 323/323, 322/323**, the one failure a `wait until` reading rows the earlier runs left
   behind (`M181-01`). It was **one test**, not a class: `tickets.tflw`'s collection wait counted
   `?assignedTo=<agent>&slaBreached=true` against a *seeded* agent, so it was counting every prior
@@ -577,19 +577,18 @@ this decision expires. That is the condition; it is deliberately not tied to a m
   with no guard to a document that is about not doing that.
   **`perf-ladder` is the one phase CI never runs** (`D758`). It is the *measured* half of the perf
   gate — the ladder's seven rungs plus the functional leg, `node scripts/perf-conformance.mjs
-  --profile sweep --in-sweep` — and it needs what a GitHub runner cannot give it: `fedora-box`, k6,
+  --profile sweep --in-sweep` — and it needs what a GitHub runner cannot give it: a dedicated perf machine, k6,
   and exclusive use of the machine. The bands it is judged against are ratios of tflw to its
-  co-runner taken under a whole-box lease (`D750`), so a number from a shared runner is not
+  co-runner taken under a whole-machine lease (`D750`), so a number from a shared runner is not
   comparable to them at all. The breaking-point `curve` tier is deliberately left out of the phase
   (`D760`): it is the longest leg and the one most sensitive to a neighbour, and a gate people start
   skipping is worth less than a smaller gate they keep running. On any other machine the phase prints
   its reason and reports `⊘ skipped` — never a pass (`D761`), because a green line that measured
-  nothing is how a perf gate goes a month without running and nobody notices. To include it, sweep
-  through the box: `node scripts/exec.mjs exec -- npm run regression`, which takes the box lock the
-  phase then inherits rather than deadlocking against — `boxlock.sh` is a whole-box mutex and is not
-  reentrant, so the phase *verifies* the inherited lease instead of taking a second one or waiving it
+  nothing is how a perf gate goes a month without running and nobody notices. To include it, sweep on
+  that machine under its lease, which the phase then inherits rather than deadlocking against — the
+  lease is a whole-machine mutex and is not reentrant, so the phase *verifies* the inherited lease instead of taking a second one or waiving it
   (`D759`). It measures your working tree, dirty or not, and writes to
-  `~/tflw-perf/results/sweep/` rather than over the `latest.json` that reports the box's own state.
+  `~/tflw-perf/results/sweep/` rather than over the `latest.json` that reports the machine's own scheduled run.
 
   For a fast local pass there is `npm run regression:smoke`: one Docker restart, `--tag smoke` plus
   the cheapest restart-agnostic checks. It is **not** a substitute for the sweep and is not a gate.
@@ -676,7 +675,7 @@ This section lives here, in the repo where the failure actually happens, and tfl
 [`CONTRIBUTING.md`](https://github.com/deepak-tuteja/tflw/blob/main/CONTRIBUTING.md) points at it rather than repeating it. Two homes
 for one command become one correct home and one stale one.
 
-### `BREAKING:`, and the box run that reads it (`M154f`)
+### `BREAKING:`, and the perf run that reads it (`M154f`)
 
 **Two things changed here, and neither of them is enforcement.** "Nothing automatic catches this"
 above was true for nine milestones and is now half-true, which is worth stating precisely rather
@@ -688,7 +687,7 @@ removed from the manifest, a grammar change. Nothing checks that you wrote it �
 complaint `M124-03` makes about the pre-push-hook shape, and it applies to a convention just as
 much.
 
-What reads it is the box's `perf-conformance` run — **on demand or as the sweep's `perf-ladder`
+What reads it is the perf machine's `perf-conformance` run — **on demand or as the sweep's `perf-ladder`
 phase, no longer nightly** (`D754`, `D758`) — whose **functional leg** packs tflw from
 its live `origin/main` into its own checkout and runs the four gates whose ground truth is that
 binary: `verify-check-diagnostics.mjs` (the code seam), `verify-construct-coverage.mjs` (the
@@ -757,23 +756,55 @@ against the real tree. The two halves are not redundant and neither replaces the
 Between the two merges this repo's `main` is red. That window is accepted and is the reason to push
 both branches in one command rather than two.
 
-## Where these actually run — and the part nothing checks
+**Merge this repository's PRs with a merge commit, never a squash** (`D1397`): tflw pins a commit of
+the PR branch, and a squash leaves that commit outside `main`'s history, so tflw's
+`verify:sibling-pin` goes red with *not an ancestor*. A branch that cites a tflw decision not yet on
+tflw's `main` declares it in `DECLARED_PENDING` (`scripts/verify-provenance.mjs`, `D943`); drop
+those entries in the commit before the PR merges.
+
+## The stack's envs, the sweep, and what tflw reads from here
 
 > **This section is not guarded.** Everything above is held to `.github/workflows/`. What follows
 > has no CI counterpart to compare against, so it can go stale and nothing will say so.
 
-The sweep is ~35 minutes with a Docker stack behind it, and on this project it runs on a Fedora box
-over SSH rather than on the laptop, through `scripts/exec.mjs` — which is **untracked by decision**
-and which a fresh clone will not have. Without it, run the gates locally; nothing above needs the
-box.
+**The envs.** `tflw.config` declares one env per blast radius — a test that points somewhere unusual
+gets an env nothing else uses, so a mistake in it cannot reach the rest of the suite.
 
-Two traps worth writing down, both of which have cost a real debugging session:
+| env | what it points at |
+|---|---|
+| `local` (default) | the stack as `start` brings it up: apiV2, webV2, the inventory service |
+| `webv2Admin` | the admin SPA — `web` is one base URL per env, so the second UI needs its own |
+| `ipv6Loopback` | apiV2 through `[::1]`, the base URL an IPv6-first host writes |
+| `viaProxy` | apiV2 through an HTTP proxy (`proxy-check`, `NODE_USE_ENV_PROXY=1`) |
+| `secureLocal` | nginx's TLS sidecar on `:8443`, the pentest arc's target |
+| `mtlsSidecar` | nginx's `:8444`, which requires a client certificate — and gets one |
+| `mtlsSidecarNoCert` | the same listener without the certificate, so the refusal is asserted |
+| `safetyRedaction` | an endpoint whose PII must reach the report masked |
+| `allowHostsBlocked` | a reachable host `allow hosts` does not list (`.demo-fail/`) |
+| `unreachableHost` | a port nothing listens on — a connection-layer failure by construction |
+| `logConfig` | `log` destinations and levels set in the config, which flags then override |
 
-- **[tflw](https://github.com/deepak-tuteja/tflw) has its own `scripts/exec.mjs`, and your working directory decides which one
-  runs** — and therefore which copy on the box. Driving the wrong one produces `MODULE_NOT_FOUND`
-  for a script that plainly exists.
-- **A trailing `| tail` makes the pipeline's exit status `tail`'s.** The shell reports success while
-  the log says the run failed. Read the log, not the summary line.
+`VULN_MODE=1 node cli.mjs start` is the one switch that changes what the target *is*: without it
+the vulnerable slice answers `404`, which is what `vuln-slice-hidden-check` asserts; with it, the
+pentest arc's plants exist (`VULNS.md`). The sweep starts the stack the way each phase needs it.
+
+**Which tflw.** The sweep grades the **vendored** tflw in `node_modules/tflw` unless `TFLW_BIN`
+names another entry, and its first printed line says which it graded. To grade a tflw branch, name
+its build: `TFLW_BIN=../testFlow/packages/cli/dist/cli.cjs npm run regression`.
+
+**The whole sweep at once.** `node scripts/regression.mjs --parallel-groups` runs the four groups
+concurrently — one stack, one tree copy and one port offset each — which on a machine with room for
+four stacks takes the sweep from ~42 minutes to the longest group's. `--list-phases` prints the
+phases and their groups as JSON.
+
+**Regenerating what tflw reads from here.** tflw pins two generated files of this repository:
+`npm run refresh:check-coverage` (`scripts/check-fixture-coverage.json`) and
+`node scripts/verify-journeys.mjs --write` (`CONSTRUCTS.md`'s journeys table). Regenerate both
+against the tflw build the change pairs with, never by hand, and commit them with the change; tflw
+then re-pins this repository (`node scripts/refresh-sibling-citations.mjs --pr <N>` there).
+
+**A trailing `| tail` makes the pipeline's exit status `tail`'s.** The shell reports success while
+the log says the run failed. Read the log, not the summary line.
 
 `.env` here holds **real credentials** for the local stack. It is gitignored and stays that way; so
 do the `.env` files under `tflw-acceptance/`.
