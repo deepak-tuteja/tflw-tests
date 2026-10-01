@@ -22,6 +22,9 @@ test "an API test is edited, trimmed, reordered, sent and asserted from its resp
   click css "[data-seq-line=\"80\"] > [data-seq-remove]"
   # Reorder: the chunked request moves above the brotli one, its status check with it (tflw G13).
   click css "[data-seq-line=\"78\"] > [data-seq-move=up]"
+  # A picked row IS its editor (tflw D1405), so its words are field values, not text; Escape leaves
+  # it for the test, and the row is read at rest.
+  press "Escape" on css "[data-seq-line=\"74\"] > [data-seq-pick]"
   within css "[data-seq-line=\"74\"]"
     expect text "/edge/chunked?from=the-page" is visible
   # Send the brotli request, now at 76, and write an assertion from what came back.
@@ -50,6 +53,7 @@ test "a browser test is trimmed and reordered on the BROWSER door"
     expect text "shopMenu" is visible
   click css "[data-seq-line=\"21\"] > [data-seq-remove]"
   press "Alt+ArrowUp" on css "[data-seq-line=\"20\"] > [data-seq-pick]"
+  press "Escape" on css "[data-seq-line=\"19\"] > [data-seq-pick]"
   within css "[data-seq-line=\"19\"]"
     expect text "Escape" is visible
   press "Control+S"
