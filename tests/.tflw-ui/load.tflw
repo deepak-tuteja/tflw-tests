@@ -1,7 +1,8 @@
 # `T-4` (tflw `D1373`) — LOAD's view of this project's own workload file after a `--workers 1` run
 # (`tests/load/shapes.tflw`, five shapes): the run is started under the LOAD chip with one worker,
-# and the report it keeps draws each workload's shape, its charts, and every threshold with its
-# verdict. The run takes as long as its shapes do, so the waits are the workload's length.
+# and the report it keeps holds each workload as a row of the run's tree; the one picked draws its
+# shape, its charts, and every threshold with its verdict. The run takes as long as its shapes do,
+# so the waits are the workload's length.
 
 test "a workload run under the LOAD chip draws its shapes, its charts and its thresholds' verdicts"
   let token = env(TFLW_UI_TOKEN)
@@ -12,7 +13,11 @@ test "a workload run under the LOAD chip draws its shapes, its charts and its th
   click css "[data-run-more] summary"
   fill css "[data-workers]" with "1"
   click css "[data-run]"
-  # Five workloads, five shapes — one per test in the file.
-  wait until css "[data-report] [data-workload-shape]" has count 5 timeout wait 180s
+  # Five workloads, five rows in the run's tree — one per test in the file (tflw `D1409`).
+  wait until css "[data-report] [data-tree-test]" has count 5 timeout wait 180s
+  # The tree draws one test at a time; a name in its filter opens the group the test is in.
+  fill css "[data-filter-text]" with "a ramp reaches its target concurrency"
+  click css "[data-tree-test][data-name=\"a ramp reaches its target concurrency and the catalogue keeps answering\"]"
+  expect css "[data-report] [data-workload-shape]" has count 1
   expect css "[data-report] [data-chart]" has count at least 1
   expect css "[data-report] [data-threshold]" has count at least 1
