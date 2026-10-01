@@ -80,8 +80,9 @@ const focused = (page) =>
     const el = document.activeElement;
     if (el === null || el === document.body) return null;
     // The theme picker sits inside the header's facts group but is not in its roving set — a
-    // `<select>` answers the arrows itself (tflw `Header.tsx`) — so it is its own stop.
-    const strip = el.matches('[data-theme-select]') ? 'theme' : el.closest('.files.tree') ? 'tree' : el.closest('[data-kind-chips]') ? 'chips' : el.closest('.header-facts') ? 'facts' : el.closest('[data-header]') ? 'header' : el.closest('[data-tabstrip]') ? 'tabstrip' : el.matches('[data-search]') ? 'search' : 'other';
+    // `<select>` answers the arrows itself (tflw `Header.tsx`) — so it is its own stop, and so is
+    // the `compact` switch beside it (tflw `D1411`): both are the picker's, not the facts'.
+    const strip = el.closest('.theme-pick') ? 'theme' : el.closest('.files.tree') ? 'tree' : el.closest('[data-kind-chips]') ? 'chips' : el.closest('.header-facts') ? 'facts' : el.closest('[data-header]') ? 'header' : el.closest('[data-tabstrip]') ? 'tabstrip' : el.matches('[data-search]') ? 'search' : 'other';
     // A form control is named by its label (wrapping or `for=`), never by its options' text.
     const labelled = el.labels && el.labels.length > 0 ? [...el.labels].map((l) => l.textContent).join(' ') : null;
     const name = (el.getAttribute('aria-label') ?? labelled ?? el.textContent ?? '').replace(/\s+/g, ' ').trim() || el.getAttribute('title') || '';
