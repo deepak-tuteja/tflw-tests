@@ -226,15 +226,18 @@ else:
 
 // --- `tflw docs` and `tflw spec` (`M195` S4) ------------------------------------------------------
 //
-// Two read-only verbs no phase had ever run as a process. `docs` prints SPEC.md cheatsheet sections
-// cut at build time (`gen-docs.mjs`); `spec` prints the construct manifest, whose `--json` form
+// Two read-only verbs no phase had ever run as a process. `docs` prints the docs site's Guide and
+// Reference pages, rendered at build time (`gen-docs.mjs`; SPEC.md's sections until tflw `M263`);
+// `spec` prints the construct manifest, whose `--json` form
 // `check-diagnostics` already reads through `readSpec` — so what is graded here is the half nobody
 // read: the index lists topics that each open, an unknown topic is refused with a suggestion, and
 // the human `spec` rendering names the same count of constructs the JSON carries.
 {
   const index = run(`${TFLW} docs`);
   ok('`tflw docs` with no topic exits 0 and prints the index', index.status === 0 && /^tflw docs <topic>/.test(index.stdout), index.stdout.slice(0, 120));
-  ok('the index says where the full SPEC lives (`FU-17`)', /the full SPEC lives at https?:\/\//.test(index.stdout));
+  // `FU-17` asked that the index say where the source of what it prints lives; since tflw `M263` that
+  // source is the docs site, and the index names it.
+  ok('the index says where the same pages live on the web (`FU-17`, tflw `M263`)', /the same pages, with pictures, are at https?:\/\//.test(index.stdout));
   // A topic line is an indented slug, optionally followed by its title; group headings are flush left.
   const topics = index.stdout.split('\n').map((l) => /^  ([a-z0-9-]+)(?:\s|$)/.exec(l)?.[1]).filter(Boolean);
   ok(`the index lists topics — ${topics.length}, \`matchers\` among them`, topics.length >= 20 && topics.includes('matchers'), topics.slice(0, 8).join(', '));
