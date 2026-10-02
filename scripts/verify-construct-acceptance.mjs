@@ -3398,9 +3398,10 @@ if (KEY_IDS.some((id) => wanted(id)) || wanted('C93')) {
       await arrivals('__reset');
     }
 
-    // ---- C102: four artifacts, and nothing left behind -----------------------------------------
+    // ---- C102: three artifacts, and nothing left behind ----------------------------------------
+    // Four until tflw stopped writing `.last-run.json`, a record nothing in tflw read any more.
     if (wanted('C102')) {
-      const ARTIFACTS = ['report.html', 'results.json', 'junit.xml', '.last-run.json'];
+      const ARTIFACTS = ['report.html', 'results.json', 'junit.xml'];
       const rDir = corpus('report', ['one-step.tflw'], 'report-custom.config');
       runRun([], { cwd: rDir });
       const custom = ARTIFACTS.filter((f) => existsSync(path.join(rDir, 'artifacts', 'custom', f)));
@@ -3412,10 +3413,10 @@ if (KEY_IDS.some((id) => wanted(id)) || wanted('C93')) {
       const dflt = ARTIFACTS.filter((f) => existsSync(path.join(rDir, 'report', f)));
       const strayCustom = existsSync(path.join(rDir, 'artifacts'));
 
-      recall('C102', custom.length === 4,
-        `all four artifacts were written under \`artifacts/custom\`, a nested directory the run created (got: ${custom.join(', ') || 'none'})`);
-      recall('C102', dflt.length === 4,
-        `and all four land in \`report/\` when the key is removed and nothing else changes (got: ${dflt.join(', ') || 'none'})`);
+      recall('C102', custom.length === ARTIFACTS.length,
+        `all three artifacts were written under \`artifacts/custom\`, a nested directory the run created (got: ${custom.join(', ') || 'none'})`);
+      recall('C102', dflt.length === ARTIFACTS.length,
+        `and all three land in \`report/\` when the key is removed and nothing else changes (got: ${dflt.join(', ') || 'none'})`);
       // A key that copied rather than moved would leave a stale `report/results.json` behind, which
       // every other plant in this gate reads — so this half is a guard on the instrument too.
       precision('C102', !strayDefault, '`report/` was not written at all under the custom key, so the artifacts moved rather than being copied');
