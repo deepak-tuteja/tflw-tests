@@ -2303,15 +2303,15 @@ export const PLANTS = [
     construct: 'config:key:report',
     family: 'config',
     tier: 'api',
-    title: 'all four artifacts move together, and nothing is left behind at the default location',
+    title: 'all three artifacts move together, and nothing is left behind at the default location',
     target: 'one green run, twice — the identical corpus with and without the key',
     evidence: { file: 'tests/.constructs/config-keys/report-custom.config', pattern: '^\\s*report "artifacts/custom"\\s*$', min: 1 },
     run: 'one-step.tflw',
     graders: ['acceptance', 'coverage'],
     knownAnswer:
-      'With `report "artifacts/custom"` the run writes `report.html`, `results.json`, `junit.xml` and '
-      + '`.last-run.json` into that nested directory — created, not required to exist — and **`report/` '
-      + 'is not written at all**. With the key removed and nothing else changed, the same four land in '
+      'With `report "artifacts/custom"` the run writes `report.html`, `results.json` and `junit.xml` '
+      + 'into that nested directory — created, not required to exist — and **`report/` '
+      + 'is not written at all**. With the key removed and nothing else changed, the same three land in '
       + '`report/`. Both halves are needed: a key that moved `report.html` alone would satisfy any '
       + 'assertion that only looked for the file the CLI prints, and a key that copied rather than '
       + 'moved would leave a stale `report/results.json` that every other plant in this gate reads. '
