@@ -2149,6 +2149,32 @@ export const PLANTS = [
     catches: 'a `require env` that only guards the variables something interpolates, a refusal that arrives after the first request instead of before it, the check-time note regressing to silence or hardening into a refusal that would break `tflw check` in a secretless CI job, and a note printed unconditionally rather than for the variables actually unset.',
     blockedOn: null,
   },
+  // tflw `M266` (`D1422`/`D1426`/`D1428`) — `require env` as an **`env` block key**. `C95` grades the
+  // top-level directive; this is the same grammar inside one env, and the claim is the scope: the
+  // requirement belongs to the block it is written in. Graded in `C95`'s corpus and for its reason —
+  // port 9, so no leg depends on a stack.
+  {
+    id: 'C131',
+    construct: 'config:key:require',
+    family: 'config',
+    tier: 'check',
+    title: 'a secret one env requires is not asked of another, and the refusal names the env that asked',
+    target: '`require-per-env.config` — `env two` requires and reads `C131_TOKEN`, `env one` does neither, over an `api` base on a port the fetch standard blocks',
+    evidence: { file: 'tests/.checkonly/config-directives/require-per-env.config', pattern: '^  require env C131_TOKEN$', min: 1 },
+    run: 'kept.tflw',
+    graders: ['acceptance'],
+    knownAnswer:
+      'Five legs over one config. **`--env one`, unset:** the run is not refused — it reaches the ' +
+      'transport and dies at port 9, so the variable was never asked for. **`--env two`, unset:** ' +
+      'refused before a socket exists, naming `C131_TOKEN (required by env two)` — the env is in the ' +
+      'message because the line that asked is in that block. **`--env two`, set:** past the gate and ' +
+      'dead at port 9, which is what tells "refused" from "ran and failed". **`tflw check --env two`** ' +
+      'prints *1 of 1 not set here* naming it, and **`tflw check --env one`** prints no note at all: ' +
+      'the note counts what the selected env requires, so it and the run\'s refusal still cannot ' +
+      'disagree. The first leg is the one a block key read as a top-level line would fail.',
+    catches: 'a block `require env` flattened into every env (the first leg refused), one dropped entirely (the second leg passes the gate), a refusal that does not say which env asked, and a check note that counts every env\'s names or none.',
+    blockedOn: null,
+  },
   {
     id: 'C96',
     construct: 'config:directive:exclude',

@@ -2681,11 +2681,11 @@ if (GENERATOR_IDS.some((id) => wanted(id))) {
 // which the fetch standard blocks outright, so the "it got past the gate" leg fails identically
 // whether or not apiV2 is up.
 
-const DIRECTIVE_IDS = ['C92', 'C93', 'C94', 'C95', 'C96', 'C119', 'C120', 'C127'];
+const DIRECTIVE_IDS = ['C92', 'C93', 'C94', 'C95', 'C96', 'C119', 'C120', 'C127', 'C131'];
 
 if (DIRECTIVE_IDS.some((id) => wanted(id))) {
   const FIX = path.join(ROOT, 'tests', '.checkonly', 'config-directives');
-  console.log('\nC92-C96, C119, C120, C127 — the eight config directives\n  target: tests/.checkonly/config-directives/ — committed configs, copied in as `tflw.config`');
+  console.log('\nC92-C96, C119, C120, C127, C131 — the eight config directives and `require env` in an env block\n  target: tests/.checkonly/config-directives/ — committed configs, copied in as `tflw.config`');
 
   const scratch = mkdtempSync(path.join(tmpdir(), 'tflw-config-directives-'));
   const useConfig = (dir, config) => copyFileSync(path.join(FIX, config), path.join(dir, 'tflw.config'));
@@ -2802,6 +2802,30 @@ if (DIRECTIVE_IDS.some((id) => wanted(id))) {
       const checkedSet = runCheck(['kept.tflw'], { cwd: reqDir, env: { C95_TOKEN: 'c95', C95_UNUSED: 'c95' } });
       precision('C95', clean(checkedSet) && !/require env:/.test(checkedSet),
         `and with both set the note is absent entirely — it reports *unset*, never *declared*, so it cannot be satisfied by a line printed unconditionally (got: ${firstLine(checkedSet)})`);
+    }
+
+    // ---- C131: `require env` in an `env` block — tflw `M266` --------------------------------
+    //
+    // `C95`'s corpus and `C95`'s port 9, so "refused before it started" is told from "ran and
+    // failed" with no stack. The first leg carries the row: a block requirement flattened into every
+    // env would refuse `--env one` too, and every other leg would still pass.
+    if (wanted('C131')) {
+      const peDir = corpus('require-per-env', ['kept.tflw'], 'require-per-env.config');
+      const unsetOne = runRun(['--env', 'one'], { cwd: peDir });
+      recall('C131', !/missing required environment variable/.test(unsetOne) && /blocked-ports/.test(unsetOne),
+        `\`--env one\` with \`C131_TOKEN\` unset is not refused — it reaches the transport and dies at port 9, so nothing asked for it (got: ${firstLine(unsetOne)})`);
+      const unsetTwo = runRun(['--env', 'two'], { cwd: peDir });
+      recall('C131', /missing required environment variable: C131_TOKEN \(required by env two\)/.test(unsetTwo),
+        `\`--env two\` unset is refused before a socket exists, naming the env whose block asked (got: ${firstLine(unsetTwo)})`);
+      const setTwo = runRun(['--env', 'two'], { cwd: peDir, env: { C131_TOKEN: 'c131' } });
+      precision('C131', !/missing required environment variable/.test(setTwo) && /blocked-ports/.test(setTwo),
+        'with it set the same run passes the gate and dies at port 9, so the refusal above was about the variable and not the env');
+      const noteTwo = runCheck(['--env', 'two', 'kept.tflw'], { cwd: peDir });
+      recall('C131', clean(noteTwo) && /require env: 1 of 1 not set here \(C131_TOKEN\)/.test(noteTwo),
+        `\`tflw check --env two\` notes the one name that env requires (got: ${firstLine(noteTwo)})`);
+      const noteOne = runCheck(['--env', 'one', 'kept.tflw'], { cwd: peDir });
+      precision('C131', clean(noteOne) && !/require env:/.test(noteOne),
+        `and \`--env one\` prints no note at all — the note counts the selected env's names, as the run's refusal does (got: ${firstLine(noteOne)})`);
     }
 
     // ---- C96: discovery skips the folder, an explicit path does not --------------------------

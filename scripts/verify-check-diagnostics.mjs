@@ -486,6 +486,9 @@ const CONFIG_FIXTURES = {
   // would hand the code to a server tflw is not listening on.
   TF094:
     'env local default\n  api "http://localhost:4001/v1"\n\nsession sso oauth2 code\n  authorize url "/oauth/authorize"\n  token url "/oauth/token"\n  client id "tflw-sso-cli"\n  redirect "https://shop.example.com/oauth/callback"\n  click button "Allow"\n',
+  // tflw `M266` (`D1429`): an `env` block's `require env` repeating a name the top-level line already
+  // requires under every env — a warning, since the run is the same and the line only misleads.
+  TF097: 'require env C266_TOKEN\n\nenv local default\n  api "http://localhost:4001"\n  require env C266_TOKEN\n',
 };
 
 const scratchDir = mkdtempSync(path.join(tmpdir(), 'tflw-check-config-'));
@@ -495,6 +498,18 @@ try {
     const out = runCheck([], { cwd: scratchDir });
     ok(`${code}: a scratch tflw.config reports ${code}`, reports(code, out), out.trim().split('\n')[0]);
   }
+  // tflw `M266` (`D1424`): `TF077` asks whether a name is declared **for where it is read**. `env one`
+  // reads a secret only `env two` requires, so it is refused, and the message names the env that
+  // does require it — the placement wording, not the "nothing declares it" one. The control is the
+  // same config with the read moved into `env two`, which checks clean.
+  const perEnv = (readIn) =>
+    `env one default\n  api "http://localhost:4001"\n${readIn === 'one' ? '  header "X-C266" is env(C266_TOKEN)\n' : ''}\nenv two\n  api "http://localhost:4001"\n  require env C266_TOKEN\n${readIn === 'two' ? '  header "X-C266" is env(C266_TOKEN)\n' : ''}`;
+  writeFileSync(path.join(scratchDir, 'tflw.config'), perEnv('one'));
+  const misplaced = runCheck([], { cwd: scratchDir });
+  ok('TF077: an env reading a secret only another env requires names that env', reports('TF077', misplaced) && misplaced.includes('only `env two` requires it'), misplaced.trim().split('\n')[0]);
+  writeFileSync(path.join(scratchDir, 'tflw.config'), perEnv('two'));
+  const placed = runCheck([], { cwd: scratchDir });
+  ok('TF077: the same read inside the env that requires it is clean', !reports('TF077', placed), placed.trim().split('\n')[0]);
 } finally {
   rmSync(scratchDir, { recursive: true, force: true });
 }
