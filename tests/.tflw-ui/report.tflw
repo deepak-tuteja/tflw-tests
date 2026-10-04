@@ -1,0 +1,26 @@
+# `T-4` (tflw `D1373`) — the in-page report of a run this project kept. `verify-ui-page.mjs` makes the
+# run before this suite starts, on the copy, at `--evidence full`: the demo-fail file's wrong status
+# (`tests/.demo-fail/bad-assertion.tflw`) and a browser test that looks for text the storefront does
+# not have, so the report holds a failing API step with its request and response and a failing
+# browser test with its trace. The kept run's id arrives as `TFLW_T4_REPORT`.
+
+test "a kept run's report shows a failing step's exchange and opens a browser test's trace in the page"
+  let token = env(TFLW_UI_TOKEN)
+  let run = env(TFLW_T4_REPORT)
+  open "/?token={token}#/run?kind=api"
+  # The runs are behind the picker, and a run is a tree by verdict (tflw D1409): a test is picked
+  # from the tree and drawn on the right.
+  click css "[data-run-picker] > summary"
+  click css "[data-report-row=\"{run}\"]"
+  expect css "[data-report=\"{run}\"]" is visible
+  click css "[data-tree-test][data-name=\"a deliberately wrong status expectation against a real passing endpoint\"]"
+  within css "[data-test][data-name=\"a deliberately wrong status expectation against a real passing endpoint\"]"
+    # The failing assertion says what it expected, and the request above it shows what came back.
+    expect css "[data-step][data-ok=false] [data-detail]" is visible
+    expect css "[data-step] [data-status]" has count at least 1
+    expect text "expected status to equal 999, but got 200" has count at least 1
+  click css "[data-tree-test][data-name=\"the storefront is searched for a word it never shows\"]"
+  within css "[data-test][data-name=\"the storefront is searched for a word it never shows\"]"
+    expect css "[data-trace]" is visible
+    click css "[data-open-trace]"
+  expect css "[data-trace-frame]" is visible

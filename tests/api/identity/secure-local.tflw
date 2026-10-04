@@ -9,16 +9,17 @@
 # Two assertions now cost nothing and fail loudly if the sidecar, the cert regeneration or the
 # 8443 listener ever stops working.
 #
-# Own file under `tests/.env-specific/` — same discovery-exclusion mechanism as
-# `mtls-rejection.tflw`, and for the same reason: `expect header "server" matches "nginx"` is only
-# true *through* the sidecar. Under the default `env local` this file would hit the api directly,
-# get no `Server` header at all, and fail.
+# `expect header "server" matches "nginx"` is only true *through* the sidecar: under the default
+# `env local` this file would hit the api directly, get no `Server` header at all, and fail. It
+# lived in `tests/.env-specific/` for that reason alone until tflw `M247` (`D1353`) gave the
+# language a way to say so — each test is `skip "…" on env local`, so bare discovery reports it
+# skipped with the reason, and `secure-local-check` runs it where it means something.
 #
-#   npx tflw run --env secureLocal tests/.env-specific/secure-local.tflw
+#   npx tflw run --env secureLocal tests/api/identity/secure-local.tflw tests/api/identity/ciphers.tflw
 #   (or: npm run test:secure-local)
 
 @auth @tls @identityOps @api
-test "the 8443 sidecar serves the same api over TLS"
+test "the 8443 sidecar serves the same api over TLS" skip "only true through the TLS sidecar, which env secureLocal addresses" on env local
   api GET /health
   expect status equals 200
   # Proves the request actually went through nginx rather than resolving to the plaintext backend:
@@ -28,7 +29,7 @@ test "the 8443 sidecar serves the same api over TLS"
   expect header "server" matches "nginx"
 
 @auth @tls @sessions @identityOps @api
-test "the session cookie carries Secure over TLS"
+test "the session cookie carries Secure over TLS" skip "only true through the TLS sidecar, which env secureLocal addresses" on env local
   # The dogfood-side regression guard for M128a's first real fix. Before it, `res.cookie()` in
   # apiV2/src/auth/auth.service.ts set HttpOnly/SameSite/Max-Age/Path and no `Secure`, so the
   # session cookie came back unprotected over exactly this listener. The flag is conditional on the
@@ -44,10 +45,28 @@ test "the session cookie carries Secure over TLS"
 # client negotiates HTTP/1.1 against it, and must get the same answers it got before h2 was on —
 # text outside ASCII included, since a framing change is where an encoding goes wrong.
 @tls @edge @api
-test "an HTTP/2-capable TLS front still answers tflw's client, which speaks HTTP/1.1"
+test "an HTTP/2-capable TLS front still answers tflw's client, which speaks HTTP/1.1" skip "only true through the TLS sidecar, which env secureLocal addresses" on env local
   api GET /edge/unicode
   expect status equals 200
   expect body.city equals "Łódź"
   api GET /edge/chunked
   expect status equals 200
   expect body.chunks has count 3
+
+# `T-1e` (the whole-product review's D5, *cookie attributes across hosts*): tflw's jar files a cookie
+# under the origin that set it — `scheme://host:port` (SPEC §3.3) — and honours `Domain=` by host.
+# The sidecar and the plain listener are two origins of one host and one app, so this is both rules
+# on the real stack, and the first run is what said so: `/edge/cookies` sets three host-only cookies
+# and one with `Domain=localhost`. The host-only three stay with the TLS origin; the domain cookie
+# reaches the same host on another port and scheme, as its `Domain` says. A browser would send all
+# four (RFC 6265 ignores ports) — the narrowing is tflw's, deliberate, and now pinned.
+@tls @sessions @identityOps @api
+test "host-only cookies stay with the origin that set them, and a Domain cookie crosses to the same host on another port" skip "only true through the TLS sidecar, which env secureLocal addresses" on env local
+  api GET /edge/cookies
+  expect status equals 200
+  api GET /edge/cookies/echo
+  expect body.cookie contains "edge_secure=3"
+  expect body.cookie contains "edge_domain=4"
+  api plain GET /edge/cookies/echo
+  expect status equals 200
+  expect body.cookie equals "edge_domain=4"

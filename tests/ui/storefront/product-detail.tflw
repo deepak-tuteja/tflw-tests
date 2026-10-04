@@ -5,12 +5,14 @@
 # `api` step in the test body (decision 5) — the seed catalog already has a stable, uniquely-named
 # product to search for.
 
+import "../../shared/storefront.tflw"
+
 @ui @catalogOps
 test "opening a product from its catalog row shows its name, price, and stock"
   open "/"
   fill field "Search" with "Mechanical Keyboard"
   click text "Mechanical Keyboard"
-  within css "#product-heading"
+  within productHeading
     expect text "Mechanical Keyboard" is visible
   expect text "$79.99" is visible
   expect text "40 in stock" is visible

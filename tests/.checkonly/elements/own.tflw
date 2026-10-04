@@ -1,0 +1,8 @@
+# C128 — a file's own `element`, used in an action, a subject and a `within` scope.
+element savedList = list "Saved for later"
+
+test "the file's own element is a locator everywhere one goes"
+  open "/"
+  expect savedList is visible
+  within savedList
+    click button "Remove"

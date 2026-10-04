@@ -1,0 +1,4 @@
+# C128 — the declarations `imported.tflw` reads through `import`, as a project's
+# `shared/elements.tflw` would hold them.
+element basketCount = css "[data-test=basket-count]"
+element checkout = button "Checkout"

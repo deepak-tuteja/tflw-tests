@@ -17,11 +17,11 @@
     "refresh-tflw": "node scripts/refresh-tflw.mjs",
     "test": "tflw run",
     "test:mtls": "tflw run --env mtlsSidecar tests/api/identity/mtls.tflw",
-    "test:mtls-rejection": "tflw run --env mtlsSidecarNoCert tests/.env-specific/mtls-rejection.tflw",
+    "test:mtls-rejection": "tflw run --env mtlsSidecarNoCert tests/api/identity/mtls-rejection.tflw",
     "test:safety": "tflw run --env safetyRedaction tests/api/identity/safety-redaction.tflw",
     "test:logging": "tflw run --env logConfig tests/api/mechanics/logging.tflw",
     "test:unreachable-host": "tflw run --env unreachableHost tests/.env-specific/unreachable-host.tflw",
-    "test:secure-local": "tflw run --env secureLocal tests/.env-specific/secure-local.tflw",
+    "test:secure-local": "tflw run --env secureLocal tests/api/identity/secure-local.tflw tests/api/identity/ciphers.tflw",
     "verify:security-target": "node scripts/verify-security-target.mjs",
     "verify:vuln-slice-hidden": "node scripts/verify-vuln-slice-hidden.mjs",
     "verify:security-acceptance": "node scripts/verify-security-acceptance.mjs",
@@ -74,7 +74,8 @@
     "verify:reach-verdicts": "node scripts/verify-reach-verdicts.mjs",
     "verify:reach-verdicts:self-test": "node scripts/lib/reach-verdicts.mjs --self-test",
     "verify:contention:self-test": "node scripts/lib/box-contention.mjs --self-test",
-    "verify:exec-argv:self-test": "node scripts/lib/exec-argv.mjs --self-test"
+    "verify:exec-argv:self-test": "node scripts/lib/exec-argv.mjs --self-test",
+    "merge-phases": "node scripts/merge-phases.mjs"
   },
   "dependencies": {
     "tflw": "file:vendor/tflw-0.1.0.tgz"

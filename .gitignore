@@ -1,6 +1,7 @@
 node_modules/
 report/
 report-by-phase/
+report-merged/
 *.log
 .env
 vendor/*.tgz

@@ -1,0 +1,6 @@
+# C128 — a near miss of a declared name: `TF089` with the name it meant.
+element basketCount = css "[data-test=basket-count]"
+
+test "a misspelt element"
+  open "/"
+  expect basketCont is visible

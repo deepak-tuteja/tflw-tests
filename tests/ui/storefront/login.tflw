@@ -5,6 +5,8 @@
 # previously-untested gap this file closes. No `api` step appears in any test body below (decision
 # 5) — only real UI interactions and assertions on what the page renders.
 
+import "../../shared/storefront.tflw"
+
 @ui @identityOps
 test "logging in via the UI form grants access, and logging out returns to a logged-out state"
   open "/login"
@@ -18,7 +20,7 @@ test "logging in via the UI form grants access, and logging out returns to a log
   # the storefront's own `Log in` nav link and the login form's `Log in` submit button render the
   # same text simultaneously once logged out on this very page — `css` sidesteps that ambiguity
   # (SPEC §9.3's own escape hatch) rather than a bare `text "Log in"`/`button "Log in"` guess.
-  expect css "nav a:text-is('Log in')" is visible
+  expect navLogIn is visible
 
 @ui @identityOps
 test "a wrong password shows an inline error and leaves the user logged out"
@@ -29,4 +31,4 @@ test "a wrong password shows an inline error and leaves the user logged out"
   click button "Log in"
   expect text "invalid email or password" is visible
   expect button "Log out" is hidden
-  expect css "nav a:text-is('Log in')" is visible
+  expect navLogIn is visible

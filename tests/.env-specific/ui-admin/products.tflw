@@ -15,7 +15,7 @@ before
 @ui @adminOps @catalogOps
 test "the Search field alone narrows the products list down to one row"
   adminLogin(env(ADMIN_EMAIL), env(ADMIN_PW))
-  within css "nav"
+  within adminNav
     click text "Products / Moderation"
   fill field "Search" with "Mechanical Keyboard"
   click button "Filter"
@@ -25,7 +25,7 @@ test "the Search field alone narrows the products list down to one row"
 @ui @adminOps @catalogOps
 test "the products list's pagination genuinely moves between pages"
   adminLogin(env(ADMIN_EMAIL), env(ADMIN_PW))
-  within css "nav"
+  within adminNav
     click text "Products / Moderation"
   expect text "Page 1 of" is visible
   # a bare `text "{page1FirstName}"` is a substring match (SPEC §9.3) — "Bulk Item 1" alone would

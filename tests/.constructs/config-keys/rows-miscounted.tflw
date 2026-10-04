@@ -1,0 +1,18 @@
+# `declaration:rows`' red half (tflw `G10`, `D1384`). `rows-counted.tflw`'s three rows under a block
+# whose first line claims two 200s. It is a `check`, so it fails and the block goes on: the second
+# line runs and passes, and the third, an `expect` that is also wrong, fails and ends the block before
+# the fourth, which is never run. Every row still passes on its own.
+
+with each
+  | ms     |
+  | 0      |
+  | 600000 |
+  | 600000 |
+test "row {ms} asks once"
+  api GET /after/{ms}
+  expect status is less than 600
+rows
+  check exactly 2 rows status equals 200
+  expect 2 rows status equals 503
+  expect every row status equals 200
+  expect no rows status equals 500

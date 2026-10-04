@@ -2326,9 +2326,10 @@ if (wanted('C79')) {
   const plant = plantFor('declaration:before');
   console.log(`\n${plant.id} — ${plant.title}\n  target: ${plant.target}`);
 
-  // The claim no running file can make: `before file`'s scope is sealed off from every test.
-  const isolated = runCheck(['tests/.constructs/check-before-file-scope-isolated.tflw']);
-  recall('C79', /TF030/.test(isolated), `a test that reads a \`before file\` binding does not compile (got: ${isolated.trim().split('\n')[0] || 'clean'})`);
+  // The claim no running file can make: `before file`'s values are shared read-only (tflw `G3`,
+  // `D1382` — until then, sealed off from every test, and this read `TF030`).
+  const readOnly = runCheck(['tests/.constructs/check-before-file-scope-read-only.tflw']);
+  recall('C79', (readOnly.match(/TF091/g) ?? []).length === 1 && !/TF030/.test(readOnly), `a test that binds a \`before file\` name again is refused once, and the test that only reads it is not (got: ${readOnly.trim().split('\n')[0] || 'clean'})`);
 
   const { report, output } = runCorpus(ROOT, [plant.evidence.file]);
   const counts = await lifecycleCounts();
@@ -2680,11 +2681,11 @@ if (GENERATOR_IDS.some((id) => wanted(id))) {
 // which the fetch standard blocks outright, so the "it got past the gate" leg fails identically
 // whether or not apiV2 is up.
 
-const DIRECTIVE_IDS = ['C92', 'C93', 'C94', 'C95', 'C96', 'C119', 'C120'];
+const DIRECTIVE_IDS = ['C92', 'C93', 'C94', 'C95', 'C96', 'C119', 'C120', 'C127', 'C131'];
 
 if (DIRECTIVE_IDS.some((id) => wanted(id))) {
   const FIX = path.join(ROOT, 'tests', '.checkonly', 'config-directives');
-  console.log('\nC92-C96, C119, C120 — the seven config directives\n  target: tests/.checkonly/config-directives/ — committed configs, copied in as `tflw.config`');
+  console.log('\nC92-C96, C119, C120, C127, C131 — the eight config directives and `require env` in an env block\n  target: tests/.checkonly/config-directives/ — committed configs, copied in as `tflw.config`');
 
   const scratch = mkdtempSync(path.join(tmpdir(), 'tflw-config-directives-'));
   const useConfig = (dir, config) => copyFileSync(path.join(FIX, config), path.join(dir, 'tflw.config'));
@@ -2803,6 +2804,30 @@ if (DIRECTIVE_IDS.some((id) => wanted(id))) {
         `and with both set the note is absent entirely — it reports *unset*, never *declared*, so it cannot be satisfied by a line printed unconditionally (got: ${firstLine(checkedSet)})`);
     }
 
+    // ---- C131: `require env` in an `env` block — tflw `M266` --------------------------------
+    //
+    // `C95`'s corpus and `C95`'s port 9, so "refused before it started" is told from "ran and
+    // failed" with no stack. The first leg carries the row: a block requirement flattened into every
+    // env would refuse `--env one` too, and every other leg would still pass.
+    if (wanted('C131')) {
+      const peDir = corpus('require-per-env', ['kept.tflw'], 'require-per-env.config');
+      const unsetOne = runRun(['--env', 'one'], { cwd: peDir });
+      recall('C131', !/missing required environment variable/.test(unsetOne) && /blocked-ports/.test(unsetOne),
+        `\`--env one\` with \`C131_TOKEN\` unset is not refused — it reaches the transport and dies at port 9, so nothing asked for it (got: ${firstLine(unsetOne)})`);
+      const unsetTwo = runRun(['--env', 'two'], { cwd: peDir });
+      recall('C131', /missing required environment variable: C131_TOKEN \(required by env two\)/.test(unsetTwo),
+        `\`--env two\` unset is refused before a socket exists, naming the env whose block asked (got: ${firstLine(unsetTwo)})`);
+      const setTwo = runRun(['--env', 'two'], { cwd: peDir, env: { C131_TOKEN: 'c131' } });
+      precision('C131', !/missing required environment variable/.test(setTwo) && /blocked-ports/.test(setTwo),
+        'with it set the same run passes the gate and dies at port 9, so the refusal above was about the variable and not the env');
+      const noteTwo = runCheck(['--env', 'two', 'kept.tflw'], { cwd: peDir });
+      recall('C131', clean(noteTwo) && /require env: 1 of 1 not set here \(C131_TOKEN\)/.test(noteTwo),
+        `\`tflw check --env two\` notes the one name that env requires (got: ${firstLine(noteTwo)})`);
+      const noteOne = runCheck(['--env', 'one', 'kept.tflw'], { cwd: peDir });
+      precision('C131', clean(noteOne) && !/require env:/.test(noteOne),
+        `and \`--env one\` prints no note at all — the note counts the selected env's names, as the run's refusal does (got: ${firstLine(noteOne)})`);
+    }
+
     // ---- C96: discovery skips the folder, an explicit path does not --------------------------
     if (wanted('C96')) {
       const exDir = corpus('exclude', ['kept.tflw', path.join('excluded', 'skipped.tflw')], 'exclude-on.config');
@@ -2866,9 +2891,54 @@ if (DIRECTIVE_IDS.some((id) => wanted(id))) {
       useConfig(rDir, 'helpers-default.config');
       precision('C120', clean(rchk(['kept.tflw'])), 'the same file is clean under a config with no `runs` line, so what was refused was the count');
     }
+
+    // ---- C127: `signer` — a declaration the check reads, and the placeholders it owns ----------
+    //
+    // tflw `M246` (`D1345`/`D1346`). Check-tier, like C120: the config parses, a misspelled
+    // placeholder is refused where it is written rather than signed as literal text, and a step's
+    // `sign with` is resolved against the declaration — the no-signer leg is the proof it was read.
+    if (wanted('C127')) {
+      const sDir = corpus('signer', ['signed.tflw'], 'signer.config');
+      const schk = (args) => runCheck(args, { cwd: sDir });
+      const ok = schk(['signed.tflw']);
+      recall('C127', clean(ok), `a declared \`signer\` and a step signed with it check clean (got: ${firstLine(ok)})`);
+      useConfig(sDir, 'signer-bad-placeholder.config');
+      const bad = schk(['signed.tflw']);
+      recall('C127', /error\[TF087\]/.test(bad) && /\{timestmp\}/.test(bad) && /\{timestamp\}/.test(bad),
+        `a misspelled placeholder is TF087 naming it and the one it meant (got: ${firstLine(bad)})`);
+      useConfig(sDir, 'helpers-default.config');
+      const none = schk(['signed.tflw']);
+      precision('C127', /error\[TF086\]/.test(none) && /stripe/.test(none),
+        `with no signer declared the same step is TF086, so the clean leg read the declaration (got: ${firstLine(none)})`);
+    }
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
+}
+
+// =============================================================================
+// C128 — tflw `M247`'s `element`, check tier
+// =============================================================================
+//
+// Like C127: the declaration is graded where `tflw check` reads it. The two clean legs put an element
+// in each position a locator goes and through an `import`; the precision leg is the imported body
+// with the `import` removed, so a checker that accepted any bare name would go red there.
+if (wanted('C128')) {
+  const dir = path.join(ROOT, 'tests', '.checkonly', 'elements');
+  console.log('\nC128 — `element`, declared, imported, and refused when undeclared\n  target: tests/.checkonly/elements/');
+  const echk = (file) => runCheck([file], { cwd: dir });
+  const clean = (out) => /no problems found/.test(out);
+  const firstLine = (out) => out.trim().split('\n')[0] || '(no output)';
+  const own = echk('own.tflw');
+  recall('C128', clean(own), `a file's own element checks clean as subject, action target and \`within\` scope (got: ${firstLine(own)})`);
+  const imported = echk('imported.tflw');
+  recall('C128', clean(imported), `two elements read through \`import\` check clean (got: ${firstLine(imported)})`);
+  const misspelt = echk('misspelt.tflw');
+  recall('C128', /error\[TF089\]/.test(misspelt) && /basketCont/.test(misspelt) && /did you mean `basketCount`/.test(misspelt),
+    `a near miss is TF089 naming it and the name it meant (got: ${firstLine(misspelt)})`);
+  const unimported = echk('unimported.tflw');
+  precision('C128', (unimported.match(/error\[TF089\]/g) ?? []).length === 2,
+    `the imported body with no import is TF089 on both names, so the clean leg read the import (got: ${firstLine(unimported)})`);
 }
 
 // =============================================================================
@@ -2986,7 +3056,7 @@ if (['C99', 'C67', 'C60'].some((id) => wanted(id))) {
 // condition asked for — that condition named apiV2 as the address and `D745` had already answered
 // why the address is wrong.
 
-const KEY_IDS = ['C97', 'C98', 'C99', 'C100', 'C101', 'C102', 'C103', 'C104', 'C118'];
+const KEY_IDS = ['C97', 'C98', 'C99', 'C100', 'C101', 'C102', 'C103', 'C104', 'C118', 'C129', 'C130'];
 
 // `C93`'s run-time leg lives in this block too (`M189c`): its four `check` legs stay in the
 // directives block above, and the one that needs the wire is here beside `C98`'s, because the
@@ -3243,6 +3313,57 @@ if (KEY_IDS.some((id) => wanted(id)) || wanted('C93')) {
         'both files are green, so `sequential` is serializing rather than failing');
     }
 
+    // `C129` — `together` (tflw `G1`, `D1381`), on the same rendezvous. `C104`'s pair arrives at
+    // the gate together because nothing delays either; here one row does 2.5 s of setup first, so
+    // the gate can only see a pair if the barrier held the quick row back for the slow one.
+    if (wanted('C129')) {
+      const tDir = corpus('together', ['together-met.tflw', 'together-apart.tflw'], 'workers-one.config');
+      await arrivals('__reset');
+      const metOut = runRun(['together-met.tflw'], { cwd: tDir });
+      const metPeak = await peak();
+      await arrivals('__reset');
+      const apartOut = runRun(['together-apart.tflw'], { cwd: tDir });
+      const apartPeak = await peak();
+
+      recall('C129', metPeak.peakWaiting === 2 && metPeak.gatePaired === 2 && metPeak.gateAlone === 0,
+        `with \`together\` the quick row waited for the slow one and both met in the gate (got: ${JSON.stringify(metPeak)})`);
+      recall('C129', apartPeak.peakWaiting === 1 && apartPeak.gateAlone === 2,
+        `without it the quick row reached the gate 2.5 s early and each waited alone (got: ${JSON.stringify(apartPeak)})`);
+      precision('C129', /PASS 2\/2/.test(metOut) && /PASS 2\/2/.test(apartOut),
+        'both files are green, so the watermark is the only thing that moved');
+    }
+
+    // `C130` — `rows` (tflw `G10`, `D1384`). `/after/0` and `/after/600000` give three rows two
+    // different last responses and let each row pass, so what the block counts is visible only in its
+    // own entry. Read from `results.json`, not the summary line: a block that went green by judging
+    // nothing and one that judged every row are the same `PASS` count.
+    if (wanted('C130')) {
+      const rDir = corpus('rows', ['rows-counted.tflw', 'rows-miscounted.tflw'], 'workers-one.config');
+      const entries = () => JSON.parse(readIn(rDir, 'report', 'results.json') || '{"tests":[]}').tests;
+      const rowsEntry = (tests) => tests.find((t) => / — rows$/.test(t.name));
+      const rowEntries = (tests) => tests.filter((t) => !/ — rows$/.test(t.name));
+
+      await arrivals('__reset');
+      runRun(['rows-counted.tflw'], { cwd: rDir });
+      const counted = entries();
+      const cBlock = rowsEntry(counted);
+      recall('C130', cBlock?.ok === true && cBlock.steps.length === 3 && cBlock.steps.every((s) => s.ok)
+        && /\(row 1\)/.test(cBlock.steps[0].detail ?? '') && /\(rows 2, 3\)/.test(cBlock.steps[1].detail ?? ''),
+        `the right counts hold, one step per line, naming row 1 as the 200 and rows 2, 3 as the 503s (got: ${JSON.stringify(cBlock?.steps?.map((s) => [s.ok, s.detail]))})`);
+
+      await arrivals('__reset');
+      runRun(['rows-miscounted.tflw'], { cwd: rDir });
+      const mis = entries();
+      const mBlock = rowsEntry(mis);
+      const shape = mBlock?.steps?.map((s) => `${s.kind}:${s.ok}`).join(' ');
+      recall('C130', mBlock?.ok === false && shape === 'check:false expect:true expect:false'
+        && /expected exactly 2 of 3 row\(s\) to match, but 1 did \(row 1\)/.test(mBlock.steps[0].detail ?? ''),
+        `the wrong counts fail: the \`check\` names row 1 and the block goes on, the failed \`expect\` ends it before line 4 (got: ${shape}; ${mBlock?.steps?.[0]?.detail})`);
+      precision('C130', rowEntries(counted).length === 3 && rowEntries(counted).every((t) => t.ok)
+        && rowEntries(mis).length === 3 && rowEntries(mis).every((t) => t.ok),
+        'all three rows pass on their own in both files, so the verdict is the block\'s alone');
+    }
+
     // ---- C118: `baseline`, the three directions and the control that makes them mean anything ----
     // `M212`, discharging tflw's `M234-04`. Until this block no run in this repository changed its
     // verdict when tflw's baseline key worked or broke: the security corpus reads its accepted set in
@@ -3301,9 +3422,10 @@ if (KEY_IDS.some((id) => wanted(id)) || wanted('C93')) {
       await arrivals('__reset');
     }
 
-    // ---- C102: four artifacts, and nothing left behind -----------------------------------------
+    // ---- C102: three artifacts, and nothing left behind ----------------------------------------
+    // Four until tflw stopped writing `.last-run.json`, a record nothing in tflw read any more.
     if (wanted('C102')) {
-      const ARTIFACTS = ['report.html', 'results.json', 'junit.xml', '.last-run.json'];
+      const ARTIFACTS = ['report.html', 'results.json', 'junit.xml'];
       const rDir = corpus('report', ['one-step.tflw'], 'report-custom.config');
       runRun([], { cwd: rDir });
       const custom = ARTIFACTS.filter((f) => existsSync(path.join(rDir, 'artifacts', 'custom', f)));
@@ -3315,10 +3437,10 @@ if (KEY_IDS.some((id) => wanted(id)) || wanted('C93')) {
       const dflt = ARTIFACTS.filter((f) => existsSync(path.join(rDir, 'report', f)));
       const strayCustom = existsSync(path.join(rDir, 'artifacts'));
 
-      recall('C102', custom.length === 4,
-        `all four artifacts were written under \`artifacts/custom\`, a nested directory the run created (got: ${custom.join(', ') || 'none'})`);
-      recall('C102', dflt.length === 4,
-        `and all four land in \`report/\` when the key is removed and nothing else changes (got: ${dflt.join(', ') || 'none'})`);
+      recall('C102', custom.length === ARTIFACTS.length,
+        `all three artifacts were written under \`artifacts/custom\`, a nested directory the run created (got: ${custom.join(', ') || 'none'})`);
+      recall('C102', dflt.length === ARTIFACTS.length,
+        `and all three land in \`report/\` when the key is removed and nothing else changes (got: ${dflt.join(', ') || 'none'})`);
       // A key that copied rather than moved would leave a stale `report/results.json` behind, which
       // every other plant in this gate reads — so this half is a guard on the instrument too.
       precision('C102', !strayDefault, '`report/` was not written at all under the custom key, so the artifacts moved rather than being copied');

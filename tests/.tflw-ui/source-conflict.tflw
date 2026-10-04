@@ -1,0 +1,39 @@
+# `T-4` (tflw `D1373`) — a draft on this project's file meets a write from outside the page. The
+# write is refused and says why, the disk keeps what the other editor wrote, and *re-read from disk*
+# (tflw G14, `D1393`) shows it and drops the draft. The other editor is this suite itself, through
+# the server's own file route with the file's current etag — the same route and the same guard the
+# page uses, so the conflict is the real one.
+#
+# It edits the test above line 70 of `transport.tflw`; `compose-edit.tflw` edits the one below it,
+# and appending a comment at the file's end moves neither.
+
+test "a draft meets a write from outside: refused on Source, the disk untouched, and re-read on the word"
+  let token = env(TFLW_UI_TOKEN)
+  let path = "tests/api/edge/transport.tflw"
+  open "/?token={token}#/compose/{path}/L62?kind=api"
+  within css "[data-seq-line=\"65\"]"
+    expect text "/edge/empty-ok" is visible
+  click css "[data-seq-line=\"65\"] > [data-seq-move=up]"
+  expect css "[data-compose-dirty]" is visible
+  # Another editor writes the file after the page read it.
+  api GET /api/file?path={path}
+    header "Authorization" is "Bearer {token}"
+  expect status equals 200
+  capture body.etag as etag
+  capture body.text as text
+  api PUT /api/file body { path: {path}, text: "{text}# written from outside the page by T-4\n" }
+    header "Authorization" is "Bearer {token}"
+    header "If-Match" is "{etag}"
+  expect status equals 200
+  # ⌘S from Source: the draft is the one Compose made — they are two views of one buffer.
+  click css "[data-tab=source]"
+  press "Control+S"
+  expect css "[data-source-problem]" is visible
+  within css "[data-source-problem]"
+    expect text "changed on disk since this page read it" is visible
+  api GET /api/file?path={path}
+    header "Authorization" is "Bearer {token}"
+  expect body.text contains "written from outside the page by T-4"
+  click css "[data-source-reread]"
+  expect css "[data-source-problem]" has count 0
+  expect css "[data-compose-dirty]" has count 0

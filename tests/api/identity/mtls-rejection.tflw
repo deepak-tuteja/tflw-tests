@@ -21,7 +21,7 @@
 #   (or: npm run test:mtls-rejection)
 
 @auth @mtls @identityOps
-test "a request without a client cert is rejected by the mTLS-requiring listener"
+test "a request without a client cert is rejected by the mTLS-requiring listener" skip "needs the mTLS listener with no client cert, which env mtlsSidecarNoCert addresses" on env local
   api GET /health
   expect status equals 400
   expect body text contains "No required SSL certificate was sent"

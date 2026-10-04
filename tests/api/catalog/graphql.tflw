@@ -1,0 +1,46 @@
+# graphql.tflw — `T-1b` (tflw `D1372`): the catalog through apiV2's GraphQL route, in a journey.
+# `tests/.constructs/language-m242.tflw` proves `body graphql`'s known answer once (`C125`); this is
+# the same surface used the way a client uses it — a query by variables, the REST route asked the
+# same question, and the error shape a malformed query gets. `apiV2/src/graphql/` serves the same
+# `ProductsService` the REST routes do, which is what makes the cross-check below a claim.
+
+before
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as categoryId
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as adminToken
+
+@graphql @catalogOps @api
+test "a product created over REST is found by a GraphQL search, with the fields the query asked for"
+  let name = unique("GraphQL Lamp")
+  api POST /products body { name: {name}, price: 42, stock: 3, categoryId: {categoryId} }
+    header "Authorization" is "Bearer {adminToken}"
+  expect status equals 201
+  capture body.id as productId
+
+  api POST /graphql body graphql "query Find($q: String) { products(q: $q) { id name stock } }" variables { q: {name} } operation "Find"
+  expect status equals 200
+  expect body.data.products has count 1
+  expect body.data.products[0].id equals {productId}
+  expect body.data.products[0].stock equals 3
+
+  api POST /graphql body graphql "query One($id: ID!) { product(id: $id) { name price } }" variables { id: {productId} } operation "One"
+  expect status equals 200
+  expect body.data.product.name equals {name}
+  # `price` is a `String!` in the schema: the column is `numeric`, and the REST route answers the
+  # same string, which is the point of asking both.
+  expect body.data.product.price equals "42.00"
+  api GET /products/{productId}
+  expect status equals 200
+  expect body.price equals "42.00"
+
+@graphql @catalogOps @api
+test "a query naming a field the schema lacks is answered 200 with errors and no data"
+  api POST /graphql body graphql "{ products { sku } }"
+  # GraphQL-over-HTTP's `application/json` convention: a validation failure is a 200 whose body says
+  # so, which is exactly what a status-only check would call a success.
+  expect status equals 200
+  expect body.errors has count at least 1
+  expect body.errors[0].message contains "sku"

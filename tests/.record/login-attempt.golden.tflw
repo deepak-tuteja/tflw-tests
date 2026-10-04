@@ -1,0 +1,5 @@
+test "a recorded sign-in attempt"
+  open "/login"
+  fill css "#email" with "nobody@example.com"
+  fill css "#password" with "not-the-password"
+  click button "Log in"

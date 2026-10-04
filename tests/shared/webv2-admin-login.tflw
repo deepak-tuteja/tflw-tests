@@ -8,6 +8,10 @@
 # the server session round-trips through `GET /` (server.js's `requireAuth` + `currentUser` locals)
 # — not just "the click landed".
 
+# `T-1d` (tflw `D1356`): the console's one navigation landmark. Every admin journey imports this
+# file for the login, so the name travels with it.
+element adminNav = css "nav"
+
 action adminLogin(email, password)
   open "/login"
   fill form

@@ -31,7 +31,7 @@ before
 @ui @adminOps
 test "replying to a review through the product detail's moderation form"
   adminLogin(env(ADMIN_EMAIL), env(ADMIN_PW))
-  within css "nav"
+  within adminNav
     click text "Products / Moderation"
   fill field "Search" with "{productName}"
   click button "Filter"

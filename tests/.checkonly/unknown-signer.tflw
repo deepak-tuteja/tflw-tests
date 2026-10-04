@@ -1,0 +1,12 @@
+# unknown-signer.tflw — CHECK-ONLY FIXTURE (tflw `M246` `B`, `D1345`): a `sign with` naming a signer
+# `tflw.config` does not declare — `TF086`. `strpe` is a near miss of the config's `stripe`, so the
+# check also has to offer `did you mean`, which is the diagnostic's whole value in the case that
+# actually happens. Without the code the step would go out unsigned and the webhook's 400 would
+# read as the server refusing a good signature.
+#
+# Run explicitly (dot-directory — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/unknown-signer.tflw
+test "a webhook signed by a signer nobody declared"
+  api POST /webhooks/stripe body { id: "evt_1" }
+    sign with strpe
+  expect status equals 200

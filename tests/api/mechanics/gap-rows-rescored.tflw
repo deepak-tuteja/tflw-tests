@@ -1,0 +1,31 @@
+# gap-rows-rescored.tflw — `T-1e` (tflw `D1359`): known answers for three `TFLW-GAPS.md` rows that were
+# written against an older tflw and never re-scored. Each value is read off
+# `GET /v1/soft-check/known-answer`'s frozen payload (`tags` is `["plant", "soft-assertion"]`,
+# `label` is `"known-answer"`), so every expected value is a literal with a near miss beside it.
+#
+# A journey rather than a `.constructs/` plant so every full run asks it: no construct row grades
+# these, and a re-score nobody re-runs goes stale the way the rows did.
+#
+# Row 11 (a quantifier into a nested array) is not here: it needed a real response, and closed
+# when tflw `G8` fixed it — its proof is the last test in `tests/api/catalog/quantifiers.tflw`.
+
+@gaps @api
+test "row 12: a computed local value is assertable directly"
+  let n = length of "known-answer"
+  expect {n} equals 12
+  expect {n} not equals 11
+  api GET /soft-check/known-answer
+  capture body.tags as tags
+  let joined = {tags} joined with "+"
+  expect {joined} equals "plant+soft-assertion"
+
+@gaps @api
+test "row 18: equals takes an inline array or object literal"
+  api GET /soft-check/known-answer
+  expect body.tags equals ["plant", "soft-assertion"]
+  expect body.tags not equals ["soft-assertion", "plant"]
+  capture body.tags as tags
+  expect {tags} equals ["plant", "soft-assertion"]
+  # And the object form, over the whole payload: every key, exact, with one field off beside it.
+  expect body equals { label: "known-answer", truthy: 4, falsy: 2, price: 42, currency: "EUR", inStock: true, tags: ["plant", "soft-assertion"] }
+  expect body not equals { label: "known-answer", truthy: 4, falsy: 2, price: 42, currency: "USD", inStock: true, tags: ["plant", "soft-assertion"] }

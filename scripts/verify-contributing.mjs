@@ -354,6 +354,17 @@ const CLASSIFIED = [
     why: 'dev-safe defaults matching docker-compose.yml\'s own fallbacks; no GitHub Secret is involved. Locally this is the same line README\'s Setup section documents',
   },
   { wf: 'ci.yml', job: 'regression', cmd: 'npm run refresh-tflw', name: 'Refresh tflw from the checked-out build', class: 'setup', why: 'as above, plus this repo\'s dependency install' },
+  // --- job `merge-reports` (tflw `M249` `C`, `D1369` / `T-3`) — one report out of four legs ----------
+  { wf: 'ci.yml', job: 'merge-reports', cmd: 'npm ci', name: 'Install tflw workspace deps', class: 'setup', why: 'the tflw monorepo, for the same reason every leg installs it: `tflw merge` is graded from the checked-out build' },
+  { wf: 'ci.yml', job: 'merge-reports', cmd: 'npm run refresh-tflw', name: 'Refresh tflw from the checked-out build', class: 'setup', why: 'packs that build into this repository, as each leg does' },
+  {
+    wf: 'ci.yml',
+    job: 'merge-reports',
+    cmd: 'npm run merge-phases',
+    name: 'Merge every group\'s passing phases into one report',
+    class: 'ci-only',
+    why: 'its input is the four legs\' downloaded archives, which only this job ever holds; a contributor\'s single sweep is already merged by the leg itself (`scripts/lib/archive-check.mjs`, graded inside `npm run regression`), so the local form of this claim is the sweep, not this command',
+  },
   // --- job `supply-chain` (tflw `M239` `E`, `D1320`) — two lockfiles, two audits ---------------
   { wf: 'ci.yml', job: 'supply-chain', cmd: 'npm audit --audit-level=high', name: 'No high or critical advisory in the repository\'s tree', class: 'gate', local: 'npm audit --audit-level=high', why: 'the scripts\' own dependency tree, read from the lockfile against the registry; no install needed' },
   { wf: 'ci.yml', job: 'supply-chain', cmd: 'npm --prefix apiV2 audit --audit-level=high', name: 'No high or critical advisory in apiV2\'s tree', class: 'gate', local: 'npm --prefix apiV2 audit --audit-level=high', why: 'the application under test has its own lockfile; a dependency of the fixture is part of what the corpus measures, so an advisory in it is reviewed as a change to the fixture' },
@@ -646,6 +657,27 @@ if (sibling !== null) {
     fail('tflw\'s CONTRIBUTING.md points here for the cross-repo pair and this file does not document it — the pointer resolves to nothing');
   } else {
     console.log('✓ tflw\'s CONTRIBUTING.md points here for the cross-repo pair, and the section it points at exists');
+  }
+}
+
+// --- 6b. *a new construct owes*, in order (tflw `D1376`, this repo's `T-5d`) -----------------------
+
+// The five steps are held by their order, not their wording: each is found by the phrase that names
+// its artefact, and each must come after the one before it. A reordered list is the defect this
+// catches — the order is the section's whole claim.
+{
+  const start = contributing.indexOf('## A new construct owes, in order');
+  const section = start === -1 ? '' : contributing.slice(start, contributing.indexOf('\n## ', start + 1));
+  const steps = ['lang golden', 'runtime known-answer', '`examples/storefront`', 'one journey in `tests/`', '`.constructs` plant'];
+  if (start === -1) {
+    fail('CONTRIBUTING.md has no "## A new construct owes, in order" section (tflw D1376) — the list of what a construct owes, which both repositories carry');
+  } else {
+    const at = steps.map((phrase) => section.indexOf(phrase));
+    const missing = steps.filter((_, i) => at[i] === -1);
+    const outOfOrder = at.some((pos, i) => i > 0 && pos !== -1 && at[i - 1] !== -1 && pos < at[i - 1]);
+    if (missing.length > 0) fail(`"A new construct owes" no longer names ${missing.map((m) => JSON.stringify(m)).join(', ')} — each of the five steps is held by the phrase naming its artefact`);
+    else if (outOfOrder) fail('"A new construct owes" lists its five steps out of order — the order (golden → known-answer → example → journey → plant) is the section\'s claim');
+    else console.log('✓ CONTRIBUTING.md states what a new construct owes, all five steps, in order');
   }
 }
 

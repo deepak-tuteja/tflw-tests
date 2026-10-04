@@ -292,6 +292,29 @@ const FILE_FIXTURES = {
   TF084: 'skip-without-reason.tflw',
   // tflw `M242` `C` (`D1328`): `body graphql` on a `GET`, where the query would never arrive.
   TF085: 'graphql-on-get.tflw',
+  // tflw `M246` `B` (`D1345`): `sign with` naming no signer this project's `tflw.config` declares.
+  // Checked against the real config, which declares `stripe`, so the near miss also gets its hint.
+  TF086: 'unknown-signer.tflw',
+  // tflw `M247` `B` (`D1353`): `skip … on env` naming an env the config does not declare. Checked
+  // against the real config, which declares `local`, so the near miss `locl` also gets its hint.
+  TF088: 'skip-unknown-env.tflw',
+  // tflw `M247` `D` (`D1356`): a bare name in a locator position that no `element` declares. A
+  // declared one is used beside it, so a rule flagging every bare name would not look the same.
+  TF089: 'unknown-element.tflw',
+  // tflw `M247` `E` (`D1359`): `with each concurrently` over one row — a warning.
+  TF090: 'concurrently-one-row.tflw',
+  // tflw `G3` (`D1382`): a test binding again a name `before file` shares read-only. A test reading
+  // it as it is sits beside it, so a rule refusing every use of a shared name would not look the same.
+  TF091: 'file-value-rebound.tflw',
+  // tflw `G1` (`D1381`): `together` in a plain test. A concurrent test using it correctly sits beside
+  // it and checks clean.
+  TF092: 'together-no-rows.tflw',
+  // tflw `G10` (`D1384`): a `rows` block under a test with no table. A tabled test with a `rows`
+  // block sits beside it and checks clean.
+  TF095: 'rows-without-table.tflw',
+  // tflw `G10` (`D1384`): a `rows` line asking a finished row about its page. A line counting the
+  // rows' statuses sits beside it and checks clean.
+  TF096: 'rows-page-subject.tflw',
 };
 
 for (const [code, file] of Object.entries(FILE_FIXTURES)) {
@@ -447,6 +470,25 @@ const CONFIG_FIXTURES = {
   // Coupled with its tflw half and red until that half merges (D350/D382). The local pre-flight is
   // `npm run refresh-tflw && node scripts/verify-check-diagnostics.mjs` (D351).
   TF081: 'defaults\n  workers 2\n  workers 4\n\nenv local default\n  api "http://localhost:4001"\n',
+  // tflw `M246` `A` (`D1346`): a signer's `signs` template naming a placeholder no signer fills —
+  // `{timestmp}` for `{timestamp}`. Signing the literal text would be a wrong signature that looks
+  // like the server's bug, so the config refuses it before a run starts.
+  TF087:
+    'env local default\n  api "http://localhost:4001"\n\nsigner stripe hmac sha256 hex secret "whsec_x"\n  signs "{timestmp}.{body}"\n  header "Stripe-Signature" is "t={timestamp},v1={signature}"\n',
+  // tflw `M248` (`D1354`): `session … oauth2 code`, a sign-in through the browser. **`TF093`** is a
+  // step in that sign-in which makes a request of its own — here the `api POST` a hand-written
+  // session would have used, which is exactly the habit the code is for: the token comes from the
+  // code exchange, and a login request in the body would go out without the session it establishes.
+  TF093:
+    'env local default\n  api "http://localhost:4001/v1"\n\nsession sso oauth2 code\n  authorize url "/oauth/authorize"\n  token url "/oauth/token"\n  client id "tflw-sso-cli"\n  redirect "http://127.0.0.1:0/callback"\n  api POST /auth/login body { email: "a@a.test", password: "x" }\n  click button "Allow"\n',
+  // **`TF094`**: the redirect is where the code goes, so it must be this machine over plain `http`.
+  // The fixture is the realistic mistake — a web client's registered callback copied over, which
+  // would hand the code to a server tflw is not listening on.
+  TF094:
+    'env local default\n  api "http://localhost:4001/v1"\n\nsession sso oauth2 code\n  authorize url "/oauth/authorize"\n  token url "/oauth/token"\n  client id "tflw-sso-cli"\n  redirect "https://shop.example.com/oauth/callback"\n  click button "Allow"\n',
+  // tflw `M266` (`D1429`): an `env` block's `require env` repeating a name the top-level line already
+  // requires under every env — a warning, since the run is the same and the line only misleads.
+  TF097: 'require env C266_TOKEN\n\nenv local default\n  api "http://localhost:4001"\n  require env C266_TOKEN\n',
 };
 
 const scratchDir = mkdtempSync(path.join(tmpdir(), 'tflw-check-config-'));
@@ -456,6 +498,18 @@ try {
     const out = runCheck([], { cwd: scratchDir });
     ok(`${code}: a scratch tflw.config reports ${code}`, reports(code, out), out.trim().split('\n')[0]);
   }
+  // tflw `M266` (`D1424`): `TF077` asks whether a name is declared **for where it is read**. `env one`
+  // reads a secret only `env two` requires, so it is refused, and the message names the env that
+  // does require it — the placement wording, not the "nothing declares it" one. The control is the
+  // same config with the read moved into `env two`, which checks clean.
+  const perEnv = (readIn) =>
+    `env one default\n  api "http://localhost:4001"\n${readIn === 'one' ? '  header "X-C266" is env(C266_TOKEN)\n' : ''}\nenv two\n  api "http://localhost:4001"\n  require env C266_TOKEN\n${readIn === 'two' ? '  header "X-C266" is env(C266_TOKEN)\n' : ''}`;
+  writeFileSync(path.join(scratchDir, 'tflw.config'), perEnv('one'));
+  const misplaced = runCheck([], { cwd: scratchDir });
+  ok('TF077: an env reading a secret only another env requires names that env', reports('TF077', misplaced) && misplaced.includes('only `env two` requires it'), misplaced.trim().split('\n')[0]);
+  writeFileSync(path.join(scratchDir, 'tflw.config'), perEnv('two'));
+  const placed = runCheck([], { cwd: scratchDir });
+  ok('TF077: the same read inside the env that requires it is clean', !reports('TF077', placed), placed.trim().split('\n')[0]);
 } finally {
   rmSync(scratchDir, { recursive: true, force: true });
 }

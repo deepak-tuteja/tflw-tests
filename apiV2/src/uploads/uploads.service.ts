@@ -60,6 +60,40 @@ export class UploadsService {
     return toMetadata(saved);
   }
 
+  /**
+   * `POST /uploads/batch` (tflw `M245`) — several files in one multipart request, stored in the
+   * order they arrived. Every file is validated before any is saved, so a batch with one
+   * unsupported file stores nothing: a test that sends three and gets a 400 can trust that none of
+   * the three exists.
+   */
+  async createMany(
+    ownerId: string,
+    files: readonly Express.Multer.File[] | undefined,
+  ): Promise<(UploadMetadata & { field: string })[]> {
+    if (!files || files.length === 0)
+      throw new BadRequestException('at least one file is required');
+    for (const file of files) {
+      if (!ALLOWED_CONTENT_TYPES.has(file.mimetype)) {
+        throw new BadRequestException(
+          `unsupported content type "${file.mimetype}" on "${file.originalname}" — allowed: ${Array.from(ALLOWED_CONTENT_TYPES).join(', ')}`,
+        );
+      }
+    }
+    const out: (UploadMetadata & { field: string })[] = [];
+    for (const file of files) {
+      const saved = await this.uploads.save(
+        this.uploads.create({
+          ownerId,
+          filename: file.originalname,
+          contentType: file.mimetype as UploadContentType,
+          data: file.buffer,
+        }),
+      );
+      out.push({ field: file.fieldname, ...toMetadata(saved) });
+    }
+    return out;
+  }
+
   async findOneScoped(id: string, requester: AuthedUser): Promise<Upload> {
     const upload = await this.uploads.findOne({ where: { id } });
     if (!upload) throw new NotFoundException('upload not found');

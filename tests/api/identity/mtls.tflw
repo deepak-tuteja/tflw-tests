@@ -20,13 +20,13 @@
 # proving the real feature end-to-end against a real reverse proxy instead.
 
 @auth @mtls @identityOps @api
-test "a plain unauthenticated request reaches the real api through the mTLS-requiring listener"
+test "a plain unauthenticated request reaches the real api through the mTLS-requiring listener" skip "under env local this reaches the plain backend and proves nothing about mTLS" on env local
   api GET /health
   expect status equals 200
   expect body.status equals "ok"
 
 @auth @mtls @identityOps @api
-test "the `admin` session logs in and authenticates a real request through the mTLS-requiring listener" as admin
+test "the `admin` session logs in and authenticates a real request through the mTLS-requiring listener" as admin skip "under env local this reaches the plain backend and proves nothing about mTLS" on env local
   api GET /auth/profile
   expect status equals 200
   expect body.role equals "admin"

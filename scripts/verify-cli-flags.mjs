@@ -6,7 +6,9 @@
 //
 // `--forbid-insecure`/`--evidence` are out of scope here — this script only covers the six flags
 // the M29 audit found with zero durable proof anywhere: `--failed`, `--bail`, `--format ndjson`,
-// `--now`, `--log-file`, `--no-timestamps`. (M47/PLAN_WEBV2_M45.md: the claim this comment used to
+// `--now`, `--log-file`, `--no-timestamps`. **Since tflw `M249` the list of what a verb takes is
+// tflw's manifest, not this sentence**: `tflw run --help` prints `run`'s rows of `CLI_FLAGS`, and the
+// last block below asks it for these six. The six are still the ones this file proves *behave*. (M47/PLAN_WEBV2_M45.md: the claim this comment used to
 // make — that `--forbid-insecure`/`--evidence` already had durable coverage elsewhere — was false;
 // neither was actually invoked/proven anywhere. Real coverage now lives in
 // `scripts/verify-safety-flags.mjs`, its own file since both are safety/policy knobs.)
@@ -224,15 +226,18 @@ else:
 
 // --- `tflw docs` and `tflw spec` (`M195` S4) ------------------------------------------------------
 //
-// Two read-only verbs no phase had ever run as a process. `docs` prints SPEC.md cheatsheet sections
-// cut at build time (`gen-docs.mjs`); `spec` prints the construct manifest, whose `--json` form
+// Two read-only verbs no phase had ever run as a process. `docs` prints the docs site's Guide and
+// Reference pages, rendered at build time (`gen-docs.mjs`; SPEC.md's sections until tflw `M263`);
+// `spec` prints the construct manifest, whose `--json` form
 // `check-diagnostics` already reads through `readSpec` — so what is graded here is the half nobody
 // read: the index lists topics that each open, an unknown topic is refused with a suggestion, and
 // the human `spec` rendering names the same count of constructs the JSON carries.
 {
   const index = run(`${TFLW} docs`);
   ok('`tflw docs` with no topic exits 0 and prints the index', index.status === 0 && /^tflw docs <topic>/.test(index.stdout), index.stdout.slice(0, 120));
-  ok('the index says where the full SPEC lives (`FU-17`)', /the full SPEC lives at https?:\/\//.test(index.stdout));
+  // `FU-17` asked that the index say where the source of what it prints lives; since tflw `M263` that
+  // source is the docs site, and the index names it.
+  ok('the index says where the same pages live on the web (`FU-17`, tflw `M263`)', /the same pages, with pictures, are at https?:\/\//.test(index.stdout));
   // A topic line is an indented slug, optionally followed by its title; group headings are flush left.
   const topics = index.stdout.split('\n').map((l) => /^  ([a-z0-9-]+)(?:\s|$)/.exec(l)?.[1]).filter(Boolean);
   ok(`the index lists topics — ${topics.length}, \`matchers\` among them`, topics.length >= 20 && topics.includes('matchers'), topics.slice(0, 8).join(', '));
@@ -296,9 +301,23 @@ else:
   ok('and together are the unsharded run', [...first, ...second].sort().join('|') === whole.join('|'), `${first.length} + ${second.length} against ${whole.length}`);
 }
 
+// tflw `M249` `E` (K1) / `T-3`: the flags this file proves, asked of `tflw run --help` — which since
+// `M249` prints `run`'s flags from tflw's own manifest (`CLI_FLAGS`), so a flag that works and that
+// the help leaves out is a gap this script can now see. And `--no-keep` (`M249` `A`), the flag that
+// arrived with it. The global help is one line per verb; `run`'s flags are not on it.
+{
+  const help = run(`${TFLW} run --help`);
+  ok('`tflw run --help` exits 0', help.status === 0);
+  const wanted = ['--failed', '--bail', '--format', '--now', '--log-file', '--no-timestamps', '--tag', '--shard', '--no-keep'];
+  const missing = wanted.filter((f) => !help.stdout.includes(f));
+  ok('`tflw run --help` names every run flag this file proves, and --no-keep', missing.length === 0, `missing: ${missing.join(', ')}`);
+  const global = run(`${TFLW} --help`);
+  ok('`tflw --help` lists verbs, and leaves their flags to `<verb> --help`', /^  tflw run +\S/m.test(global.stdout) && !global.stdout.includes('--no-timestamps'), global.stdout.split('\n').slice(0, 6).join(' | '));
+}
+
 if (violations > 0) {
   console.error(`\n${violations} CLI-flag proof violation(s).`);
   process.exit(1);
 }
 
-console.log('\nAll 6 previously-unproven CLI flags behave as documented, `--tag !x` and `--shard` match their controls, and `docs`/`spec` print what they promise.');
+console.log('\nAll 6 previously-unproven CLI flags behave as documented and are in `run --help`, `--tag !x` and `--shard` match their controls, and `docs`/`spec` print what they promise.');

@@ -1,0 +1,21 @@
+# rows-without-table.tflw — CHECK-ONLY FIXTURE (tflw `G10`, `D1384`): a `rows` block under a test with
+# no `with each` table — `TF095`. One run has nothing to count across. The tabled test beside it has
+# a `rows` block where it belongs and checks clean.
+#
+# Run explicitly (dot-directory — see bad-keyword.tflw's header for why):
+#   npx tflw check tests/.checkonly/rows-without-table.tflw
+with each
+  | n |
+  | 1 |
+  | 2 |
+test "health {n}"
+  api GET /health
+  expect status equals 200
+rows
+  expect every row status equals 200
+
+test "health once"
+  api GET /health
+  expect status equals 200
+rows
+  expect exactly 1 row status equals 200

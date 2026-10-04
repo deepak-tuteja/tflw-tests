@@ -16,13 +16,17 @@
 //      measured 106–201 small targets per view and one 10 px glyph, printed and not judged.
 import { chromium } from 'playwright';
 
-export const BUDGET = { landing: 120, compose: 250, auth: 200, run: 150 };
-const THEIRS = 'code, pre, kbd, input, textarea, select, option, .cm-editor, .seq-text, [data-files], [data-user-data], .tip, [data-legend], [data-test], [data-finding], [data-finding-gone]';
-const READY = { landing: '[data-doors]', compose: '[data-compose-pane], [data-empty-door]', run: '[data-runs]', auth: '[data-api-auth]' };
+export const BUDGET = { shell: 250, compose: 250, auth: 200, run: 150 };
+const THEIRS = 'code, pre, kbd, input, textarea, select, option, .cm-editor, .seq-text, [data-files], [data-user-data], .tip, [data-legend], [data-test], [data-tree-test], [data-finding], [data-finding-gone]';
+// tflw `M254` (`D1402`): no landing — the first view is the shell at rest, which is Compose on the
+// file the page opens on.
+// tflw `M257` (`D1409`): the run list is behind a picker, so the picker is what is drawn; the older
+// `[data-runs]` stays in the union for a tflw build before it.
+const READY = { shell: '[data-compose-pane], [data-empty-door]', compose: '[data-compose-pane], [data-empty-door]', run: '[data-run-picker], [data-runs]', auth: '[data-api-auth]' };
 const DOORS = ['api', 'browser', 'load', 'scan'];
 /** Flipped with tflw `M241` `E` (`D1325`), which built the floors this measures — see the header. */
 const JUDGE_SIZES = true;
-const VIEWS = [['', 'landing'], ...DOORS.flatMap((d) => [[d, 'compose'], [d, 'auth'], [d, 'run']])];
+const VIEWS = [['', 'shell'], ...DOORS.flatMap((d) => [[d, 'compose'], [d, 'auth'], [d, 'run']])];
 
 /** Words a reader meets without opening anything, and not their own. */
 const wordsAtRest = (page) =>
@@ -75,9 +79,10 @@ const focused = (page) =>
   page.evaluate(() => {
     const el = document.activeElement;
     if (el === null || el === document.body) return null;
-    // The theme picker sits inside the door bar's element but is not in its roving set — a
-    // `<select>` answers the arrows itself (tflw `DoorBar.tsx`) — so it is its own stop.
-    const strip = el.matches('[data-theme-select]') ? 'theme' : el.closest('.files.tree') ? 'tree' : el.closest('[data-doorbar]') ? 'doorbar' : el.closest('[data-tabstrip]') ? 'tabstrip' : el.matches('[data-search]') ? 'search' : 'other';
+    // The theme picker sits inside the header's facts group but is not in its roving set — a
+    // `<select>` answers the arrows itself (tflw `Header.tsx`) — so it is its own stop, and so is
+    // the `compact` switch beside it (tflw `D1411`): both are the picker's, not the facts'.
+    const strip = el.closest('.theme-pick') ? 'theme' : el.closest('.files.tree') ? 'tree' : el.closest('[data-kind-chips]') ? 'chips' : el.closest('.header-facts') ? 'facts' : el.closest('[data-header]') ? 'header' : el.closest('[data-tabstrip]') ? 'tabstrip' : el.matches('[data-search]') ? 'search' : 'other';
     // A form control is named by its label (wrapping or `for=`), never by its options' text.
     const labelled = el.labels && el.labels.length > 0 ? [...el.labels].map((l) => l.textContent).join(' ') : null;
     const name = (el.getAttribute('aria-label') ?? labelled ?? el.textContent ?? '').replace(/\s+/g, ' ').trim() || el.getAttribute('title') || '';
@@ -93,12 +98,12 @@ export async function measureBudgets(base, token) {
   try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     const goto = async (door, tab) => {
-      await page.goto(`${base}/?token=${token}${door === '' ? '' : `#/${door}/${tab}`}`);
+      await page.goto(`${base}/?token=${token}${door === '' ? '' : `#/${tab}?kind=${door}`}`);
       await page.reload();
       await page.locator(READY[tab]).first().waitFor();
     };
 
-    // 1. The first eight Tab stops, from a fresh load of the API door.
+    // 1. The first eight Tab stops, from a fresh load under the API chip.
     await goto('api', 'compose');
     await page.locator('.files.tree [data-open="yes"]').first().waitFor();
     const stops = [];
@@ -107,19 +112,19 @@ export async function measureBudgets(base, token) {
       stops.push(await focused(page));
     }
     const shown = stops.map((s, i) => `${i + 1}. ${s === null ? '(nothing)' : `${s.strip} ${s.what} “${s.name.slice(0, 30)}”`}`).join('\n      ');
-    console.log(`the first eight Tab stops on the API door:\n      ${shown}`);
-    const twice = ['tree', 'doorbar', 'tabstrip'].filter((strip) => stops.filter((s) => s?.strip === strip).length > 1);
-    judge('Tab: the explorer, the door bar and the tab strip are one stop each in the first eight', twice.length === 0, `twice: ${twice.join(', ')}`);
+    console.log(`the first eight Tab stops under the API chip:\n      ${shown}`);
+    const twice = ['chips', 'tree', 'facts', 'tabstrip'].filter((strip) => stops.filter((s) => s?.strip === strip).length > 1);
+    judge('Tab: the kind chips, the explorer, the header’s facts and the tab strip are one stop each in the first eight', twice.length === 0, `twice: ${twice.join(', ')}`);
     const nameless = stops.filter((s) => s !== null && s.name === '').map((s) => s.what);
     judge('Tab: every one of the first eight stops has a name', stops.every((s) => s !== null) && nameless.length === 0, `nameless: ${nameless.join(', ') || 'a stop landed on nothing'}`);
     const si = stops.findIndex((s) => s?.strip === 'search');
     const ti = stops.findIndex((s) => s?.strip === 'tree');
-    judge('Tab: search comes before the file list, which comes before the door bar', si !== -1 && ti > si && stops.findIndex((s) => s?.strip === 'doorbar') > ti, `search ${si + 1}, tree ${ti + 1}`);
+    judge('Tab: search comes before the file list, which comes before the header', si !== -1 && ti > si && stops.findIndex((s) => s?.strip === 'header' || s?.strip === 'facts') > ti, `search ${si + 1}, tree ${ti + 1}`);
 
     // 2 and 3. Words at rest, and small things, per view.
     for (const [door, tab] of VIEWS) {
       await goto(door, tab);
-      const where = door === '' ? 'landing' : `${door}/${tab}`;
+      const where = door === '' ? 'shell' : `${door}/${tab}`;
       const { n, text } = await wordsAtRest(page);
       judge(`words at rest: ${where} ${n} ≤ ${BUDGET[tab]}`, n <= BUDGET[tab], `“${text.slice(0, 240)}…”`);
       const { targets, texts } = await smallThings(page);

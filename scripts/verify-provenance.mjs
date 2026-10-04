@@ -35,7 +35,7 @@
 // (`D511`): tflw merges first, then this repo, chained.
 
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -545,7 +545,8 @@ export const MAX_PENDING_DAYS = 14;
  *
  * @type {Map<string, {pr: string, since: string, why: string}>}
  */
-export const DECLARED_PENDING = new Map([]);
+export const DECLARED_PENDING = new Map([
+]);
 
 /**
  * The pending declarations' own problems, as a pure function so `--self-test` can reach every
@@ -952,6 +953,28 @@ function main() {
         : `  ${DECLARED_PENDING.size} declared PENDING (D943) — not demanded of the pin, picked up by tflw's next refresh, expiring in ${MAX_PENDING_DAYS} days:`,
     );
     for (const [id, d] of DECLARED_PENDING) codeLines.push(`    ${id.padEnd(6)} ${d.pr} since ${d.since} — ${d.why}`);
+  }
+
+  // --- 5. `T-1f` (tflw `D1360`): the cookbook's *kept true by* files are this repository's --------
+  // tflw's patterns page says, section by section, which file here runs that shape on every change.
+  // That claim is about this tree, so this tree is where it is held: a plant moved or deleted here
+  // makes the page cite nothing, and it goes red on the change that did it, not on tflw's next edit.
+  const cookbook = join(SIBLING, 'packages', 'docs-site', 'guide', 'patterns.md');
+  let keptTrue = 0;
+  if (existsSync(cookbook)) {
+    const page = readFileSync(cookbook, 'utf8');
+    for (const sentence of page.matchAll(/Kept true by([\s\S]*?)\.(?:\s|$)/g)) {
+      for (const [, cited] of sentence[1].matchAll(/`([^`\s]+)`/g)) {
+        if (!cited.includes('/') && cited !== 'tflw.config') continue;
+        keptTrue++;
+        if (!existsSync(join(ROOT, cited))) {
+          problems.push(`tflw's patterns page says \`${cited}\` keeps one of its sections true, and there is no such file here. Restore it, or change the page's *kept true by* line in the same pair (D511).`);
+        }
+      }
+    }
+    codeLines.push(`  cookbook (T-1f): ${keptTrue} file(s) tflw's patterns page names as keeping a section true, each present here.`);
+  } else {
+    codeLines.push('  cookbook (T-1f): the tflw checkout has no guide/patterns.md, so no *kept true by* line was asked.');
   }
 
   if (problems.length) {

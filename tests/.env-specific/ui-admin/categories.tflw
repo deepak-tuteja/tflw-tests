@@ -10,7 +10,7 @@ test "the categories tree renders its seeded 3-level hierarchy"
   adminLogin(env(ADMIN_EMAIL), env(ADMIN_PW))
   # the dashboard's own link list repeats the same nav text (`dashboard.tflw`'s own note) — scope
   # the click to the persistent top nav specifically to avoid that ambiguity.
-  within css "nav"
+  within adminNav
     click text "Categories"
   expect css "h1:text-is('Categories')" is visible
   expect text "Electronics" is visible

@@ -1701,8 +1701,8 @@ export const PLANTS = [
     construct: 'declaration:before',
     family: 'declaration',
     tier: 'api',
-    title: 'bare `before` runs per test and shares its scope; `before file` runs once and is sealed off from every test',
-    target: 'tests/.constructs/before-scopes.tflw against the arrival counter, plus check-before-file-scope-isolated.tflw under `tflw check`',
+    title: 'bare `before` runs per test and shares its scope; `before file` runs once and shares what it makes with every test, read-only (tflw `G3`)',
+    target: 'tests/.constructs/before-scopes.tflw against the arrival counter, plus check-before-file-scope-read-only.tflw under `tflw check`',
     evidence: { file: 'tests/.constructs/before-scopes.tflw', pattern: '^before file$', min: 1 },
     graders: ['acceptance'],
     knownAnswer:
@@ -2149,6 +2149,32 @@ export const PLANTS = [
     catches: 'a `require env` that only guards the variables something interpolates, a refusal that arrives after the first request instead of before it, the check-time note regressing to silence or hardening into a refusal that would break `tflw check` in a secretless CI job, and a note printed unconditionally rather than for the variables actually unset.',
     blockedOn: null,
   },
+  // tflw `M266` (`D1422`/`D1426`/`D1428`) — `require env` as an **`env` block key**. `C95` grades the
+  // top-level directive; this is the same grammar inside one env, and the claim is the scope: the
+  // requirement belongs to the block it is written in. Graded in `C95`'s corpus and for its reason —
+  // port 9, so no leg depends on a stack.
+  {
+    id: 'C131',
+    construct: 'config:key:require',
+    family: 'config',
+    tier: 'check',
+    title: 'a secret one env requires is not asked of another, and the refusal names the env that asked',
+    target: '`require-per-env.config` — `env two` requires and reads `C131_TOKEN`, `env one` does neither, over an `api` base on a port the fetch standard blocks',
+    evidence: { file: 'tests/.checkonly/config-directives/require-per-env.config', pattern: '^  require env C131_TOKEN$', min: 1 },
+    run: 'kept.tflw',
+    graders: ['acceptance'],
+    knownAnswer:
+      'Five legs over one config. **`--env one`, unset:** the run is not refused — it reaches the ' +
+      'transport and dies at port 9, so the variable was never asked for. **`--env two`, unset:** ' +
+      'refused before a socket exists, naming `C131_TOKEN (required by env two)` — the env is in the ' +
+      'message because the line that asked is in that block. **`--env two`, set:** past the gate and ' +
+      'dead at port 9, which is what tells "refused" from "ran and failed". **`tflw check --env two`** ' +
+      'prints *1 of 1 not set here* naming it, and **`tflw check --env one`** prints no note at all: ' +
+      'the note counts what the selected env requires, so it and the run\'s refusal still cannot ' +
+      'disagree. The first leg is the one a block key read as a top-level line would fail.',
+    catches: 'a block `require env` flattened into every env (the first leg refused), one dropped entirely (the second leg passes the gate), a refusal that does not say which env asked, and a check note that counts every env\'s names or none.',
+    blockedOn: null,
+  },
   {
     id: 'C96',
     construct: 'config:directive:exclude',
@@ -2303,15 +2329,15 @@ export const PLANTS = [
     construct: 'config:key:report',
     family: 'config',
     tier: 'api',
-    title: 'all four artifacts move together, and nothing is left behind at the default location',
+    title: 'all three artifacts move together, and nothing is left behind at the default location',
     target: 'one green run, twice — the identical corpus with and without the key',
     evidence: { file: 'tests/.constructs/config-keys/report-custom.config', pattern: '^\\s*report "artifacts/custom"\\s*$', min: 1 },
     run: 'one-step.tflw',
     graders: ['acceptance', 'coverage'],
     knownAnswer:
-      'With `report "artifacts/custom"` the run writes `report.html`, `results.json`, `junit.xml` and '
-      + '`.last-run.json` into that nested directory — created, not required to exist — and **`report/` '
-      + 'is not written at all**. With the key removed and nothing else changed, the same four land in '
+      'With `report "artifacts/custom"` the run writes `report.html`, `results.json` and `junit.xml` '
+      + 'into that nested directory — created, not required to exist — and **`report/` '
+      + 'is not written at all**. With the key removed and nothing else changed, the same three land in '
       + '`report/`. Both halves are needed: a key that moved `report.html` alone would satisfy any '
       + 'assertion that only looked for the file the CLI prints, and a key that copied rather than '
       + 'moved would leave a stale `report/results.json` that every other plant in this gate reads. '
@@ -2840,6 +2866,80 @@ export const PLANTS = [
     graders: ['acceptance'],
     knownAnswer: 'the report carries `skipped` with the reason, `ok` and no steps; the run counts one skip and no failure.',
     catches: 'a skip that runs the body, a skip reported as a pass, and a skip that fails the run.',
+    blockedOn: null,
+  },
+  {
+    id: 'C127',
+    construct: 'config:directive:signer',
+    family: 'config',
+    tier: 'check',
+    title: 'a signer is read from the config, its misspelled placeholder refused, and a step naming it resolved',
+    target: '`signed.tflw` checked under `signer.config`, under `signer-bad-placeholder.config`, and under a config with no signer',
+    evidence: { file: 'tests/.checkonly/config-directives/signer.config', pattern: '^signer stripe hmac sha256 hex ', min: 1 },
+    run: 'signed.tflw',
+    graders: ['acceptance'],
+    knownAnswer:
+      'tflw `M246` (`D1345`/`D1346`). Under `signer.config` the file checks clean; under '
+      + '`signer-bad-placeholder.config` the check is `TF087` naming `{timestmp}` and suggesting `{timestamp}`; under a config '
+      + 'with no signer the same file is `TF086` on `sign with stripe`. What a signed request does on the wire is graded by '
+      + '`tests/api/mechanics/signed-requests.tflw` against `apiV2/src/signed/`, whose verifiers share no code with tflw.',
+    catches: 'a directive dropped silently, a placeholder signed as literal text, and a `sign with` checked against nothing.',
+    blockedOn: null,
+  },  {
+    id: 'C128',
+    construct: 'declaration:element',
+    family: 'declaration',
+    tier: 'check',
+    title: 'an `element` name is a locator wherever one goes, read from its file or an import, and a name nothing declares is refused',
+    target: '`tests/.checkonly/elements/` checked under its own `tflw.config`: `own.tflw`, `imported.tflw`, `unimported.tflw`, `misspelt.tflw`',
+    evidence: { file: 'tests/.checkonly/elements/shared.tflw', pattern: '^element \\w+ = ', min: 2 },
+    run: 'imported.tflw',
+    graders: ['acceptance'],
+    knownAnswer:
+      'tflw `M247` `D` (`D1356`). `own.tflw` (an element in a subject, an action target and a `within` scope) and '
+      + '`imported.tflw` (two elements through `import "./shared.tflw"`) check clean; `unimported.tflw`, the same body '
+      + 'without the import, is `TF089` on `checkout` and `basketCount`; `misspelt.tflw` is `TF089` on `basketCont` '
+      + 'suggesting `basketCount`. What an element does on a real page is graded by the storefront journeys that use '
+      + '`tests/shared/storefront.tflw`\'s elements (`T-1d`).',
+    catches: 'a declaration ignored, an import whose elements never arrive, and a bare name accepted with nothing behind it.',
+    blockedOn: null,
+  },
+  {
+    id: 'C129',
+    construct: 'step:together',
+    family: 'step',
+    tier: 'api',
+    title: 'the rows of a concurrent test leave the barrier at once, however long each one\'s setup took',
+    target: '`arrival-server.mjs`\'s `/gate` rendezvous, after one row\'s 2.5 s of setup (`/after/2500`) and the other\'s none',
+    evidence: { file: 'tests/.constructs/config-keys/together-met.tflw', pattern: '^\\s*together$', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'tflw `M247` `G1` (`D1381`). One row waits 2.5 s for `/after/2500` before the racing step and the '
+      + 'other waits for nothing; the racing step is `/gate`, which releases two holders as a pair and '
+      + 'a lone one alone after 1.5 s. With `together` both rows reach the gate at once: watermark **2**, '
+      + 'released as a pair. `together-apart.tflw`, the same file without that one line, reaches **1** '
+      + 'and each row waits out the gate alone. Both files pass under `workers 1`, so the barrier is the '
+      + 'only thing that moved. The journeys\' own races (`coupons.tflw`, `cart-checkout.tflw`) are judged '
+      + 'by the state they leave, which a race that happened to line up would also leave.',
+    catches: 'a `together` parsed and ignored, and a barrier that waits for the first row rather than for every row.',
+    blockedOn: null,
+  },  {
+    id: 'C130',
+    construct: 'declaration:rows',
+    family: 'declaration',
+    tier: 'api',
+    title: 'a `rows` block counts the rows whose last response satisfies a line, and names them',
+    target: '`arrival-server.mjs`\'s `/after/<ms>`: `/after/0` is a 200 at once and `/after/600000` a 503, three rows asking once each',
+    evidence: { file: 'tests/.constructs/config-keys/rows-counted.tflw', pattern: '^rows$', min: 1 },
+    graders: ['acceptance', 'coverage'],
+    knownAnswer:
+      'tflw `M247` `G10` (`D1384`). One row\'s last response is a 200 and two are 503s, and every row passes '
+      + 'on its own, so the counts exist only in the block. `rows-counted.tflw` holds `exactly 1 row` 200, '
+      + '`2 rows` 503 and `no rows` 500: one extra entry, *"… — rows"*, green, whose steps name rows 1 and '
+      + '2, 3. `rows-miscounted.tflw` opens with a `check` for two 200s, which fails naming row 1 and lets '
+      + 'the block go on; the `expect` after it passes; the next `expect` (every row a 200) fails and ends '
+      + 'the block, so the fourth line is never a step. The three row entries stay green in both files.',
+    catches: 'a block that judges one row, or the first response rather than the last; a count compared the wrong way; a failed `check` that stops the block, or a failed `expect` that does not.',
     blockedOn: null,
   },
 ];

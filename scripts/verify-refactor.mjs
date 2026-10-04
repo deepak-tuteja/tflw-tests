@@ -41,7 +41,10 @@ function tflw(cwd, ...args) {
   return { status: r.status, out: (r.stdout ?? '') + (r.stderr ?? '') };
 }
 
-/** Every hint `check` prints, in order: id, the files it touches, the action it proposes. */
+/** Every hint `check` prints, in order: id, the files it touches, the action it proposes. Since
+ *  `T-1d` (tflw `M247` `D`, `D1356`) that includes the element hints — a locator escape written in
+ *  two files or more, proposed as one `element` declaration. They continue the one `RF` sequence
+ *  after the action hints, and `refactor apply` takes their ids the same way. */
 function hintsOf(checkOut) {
   const hints = [];
   const re = /reuse\[(RF\d+)\]:[^]*?= apply:/g;
@@ -50,7 +53,12 @@ function hintsOf(checkOut) {
     const files = [...new Set([...block.matchAll(/^\s*--> (\S+):\d+/gm)].map((x) => x[1]))];
     const actionFile = /= proposed: action .+ in (\S+)/.exec(block)?.[1];
     const actionName = /= proposed: action (.+?)\(/.exec(block)?.[1];
-    if (files.length && actionFile && actionName) hints.push({ id: m[1], files, actionFile, actionName });
+    if (files.length && actionFile && actionName) hints.push({ kind: 'action', id: m[1], files, actionFile, actionName });
+  }
+  const elementRe = /^(RF\d+) — `[^\n]*` is written in \d+ files? \(\d+ sites?\):\n((?:    \S+:\d+\n)+)  proposed, in (\S+):\n    element (\w+) = /gm;
+  for (const m of checkOut.matchAll(elementRe)) {
+    const files = [...new Set([...m[2].matchAll(/^    (\S+):\d+$/gm)].map((x) => x[1]))];
+    hints.push({ kind: 'element', id: m[1], files, actionFile: m[3], actionName: m[4] });
   }
   return hints;
 }
@@ -110,15 +118,18 @@ try {
     }
     const updated = /updated: (.+)$/m.exec(r.out)?.[1]?.split(', ') ?? [];
     const namedFiles = [...h.files].sort();
-    ok(`round ${round}: \`refactor apply ${h.id}\` extracted ${h.actionName} into ${h.actionFile} and updated exactly the files the hint named`,
-      new RegExp(`applied ${h.id}: extracted`).test(r.out) && JSON.stringify([...updated].sort()) === JSON.stringify(namedFiles) && existsSync(path.join(dir, h.actionFile)),
+    const verb = h.kind === 'element' ? `declared \`element ${h.actionName} = ` : 'extracted';
+    ok(`round ${round}: \`refactor apply ${h.id}\` ${h.kind === 'element' ? 'declared element' : 'extracted'} ${h.actionName} into ${h.actionFile} and updated exactly the files the hint named`,
+      r.out.includes(`applied ${h.id}: ${verb}`) && JSON.stringify([...updated].sort()) === JSON.stringify(namedFiles) && existsSync(path.join(dir, h.actionFile)),
       r.out.slice(0, 300));
     for (const f of h.files) {
       touched.add(f);
       const text = readFileSync(path.join(dir, f), 'utf8');
-      if (!(/^import "/m.test(text) && text.includes(`${h.actionName}(`))) ok(`${f} imports the action file and calls ${h.actionName}`, false);
+      // An action is called (`name(`); an element is written bare where the escape was.
+      const uses = h.kind === 'element' ? new RegExp(`\\b${h.actionName}\\b`).test(text) : text.includes(`${h.actionName}(`);
+      if (!(/^import "/m.test(text) && uses)) ok(`${f} imports ${h.actionFile} and uses ${h.actionName}`, false);
     }
-    applied.push({ id: h.id, round, actionName: h.actionName, actionFile: h.actionFile, files: h.files.length });
+    applied.push({ kind: h.kind, id: h.id, round, actionName: h.actionName, actionFile: h.actionFile, files: h.files.length });
     const again = tflw(dir, 'check', '--no-color');
     const next = hintsOf(again.out);
     console.log(`  round ${round}: ${h.id} → action ${h.actionName} (${h.files.length} file(s)); ${next.length} hint(s) remain`);
@@ -136,6 +147,9 @@ try {
   ok(`every hint the pass offers is one the checker accepts — ${refused.length} refused (M195-01, fixed M196)`, refused.length === 0,
     refused.map((x) => `${x.id}: ${x.why}`).join('; '));
   ok(`the fixpoint is reached — \`tflw check\` offers no reuse hint after ${applied.length} apply(s)`, remaining.length === 0 && applied.length > 0);
+  // `T-1d`: the element path is exercised, not only parsed. The real tree keeps two escapes the
+  // checker offers as elements (`.review-list`, `.drop-zone`) so this phase has one to take.
+  ok(`element hints are taken too — ${applied.filter((a) => a.kind === 'element').length} applied`, applied.some((a) => a.kind === 'element'));
 
   const after = tflw(dir, 'check', '--no-color');
   ok('`tflw check` over the copy is clean at the fixpoint', after.status === 0 && /no problems found/.test(after.out), after.out.slice(0, 300));

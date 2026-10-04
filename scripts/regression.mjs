@@ -36,7 +36,8 @@
 // milestone did not remove.
 import { rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { tflwCommand } from './lib/tflw-bin.mjs';
+import { tflwArgv, tflwCommand } from './lib/tflw-bin.mjs';
+import { checkArchive } from './lib/archive-check.mjs';
 
 /** **`released`, and this is the loudest declaration of it in the repo.** The sweep is
  *  this project's primary dogfood gate, and until M141 it opened every phase with a literal
@@ -45,7 +46,7 @@ import { tflwCommand } from './lib/tflw-bin.mjs';
  *  nothing anywhere said so (`M115-03`). The program is unchanged; the question is now declared
  *  and the entry is printed once per run. To sweep a branch build instead, set `TFLW_BIN`. */
 const TFLW = tflwCommand('released', { label: 'regression' });
-import { ARCHIVE_DIR, CI_VERBOSE, archivePhaseReport, passedPhasesWithFailingJunit, restart, run } from './lib/regression-shared.mjs';
+import { ARCHIVE_DIR, CI_VERBOSE, archivePhaseReport, passedPhasesWithFailingJunit, restart, run, slug } from './lib/regression-shared.mjs';
 
 // PLAN_CI.md decision 9 wants every phase's report.html/junit.xml/results.json uploaded, not just
 // a green run's — but every phase writes to the same `report/`, and the next phase's restart
@@ -105,7 +106,7 @@ const PHASES = [
   },
   {
     name: 'mtls-rejection',
-    cmd: [TFLW, 'run', '--no-color', ...CI_VERBOSE, '--env', 'mtlsSidecarNoCert', 'tests/.env-specific/mtls-rejection.tflw'].join(' '),
+    cmd: [TFLW, 'run', '--no-color', ...CI_VERBOSE, '--env', 'mtlsSidecarNoCert', 'tests/api/identity/mtls-rejection.tflw'].join(' '),
   },
   { name: 'safety-redaction-check', cmd: 'node scripts/verify-redaction.mjs' },
   // M29 (plan_v2.md Part R, coverage audit): the tests/.demo-fail/ set and 6 previously-unproven
@@ -184,6 +185,12 @@ const PHASES = [
   // deliberately manual by design), but launching + a clean Ctrl+C exit now is, same "script it"
   // reasoning as watch-check/migrate-check above.
   { name: 'pick-check', cmd: 'node scripts/verify-pick.mjs' },
+  // `T-5a` (tflw `G12`, `D1385`): `record`, driven through `--cdp-port` — the recording checks, runs and equals a golden.
+  { name: 'record-check', cmd: 'node scripts/verify-record.mjs' },
+  // tflw `M249` `D` (`D1370`) / `T-3`: `tflw doctor --json` under four envs (plain, TLS, mTLS with a
+  // client certificate, the proxy env with and without `NODE_USE_ENV_PROXY`), and its exit 1 in a
+  // directory with no config. Offline by construction — it pays the restart like every phase.
+  { name: 'doctor-check', cmd: 'node scripts/verify-doctor.mjs' },
   // M51 (PLAN_LOG_CONSUME.md): --log-output/--log-level had zero proof anywhere in this suite —
   // a genuine, never-closed gap, not a stale claim. Same "script it, don't trust a one-time manual
   // check forever" reasoning as every other *-check phase above.
@@ -218,7 +225,7 @@ const PHASES = [
   // sidecar — `--env secureLocal`, same reason `mtls-rejection` needs its own `--env`.
   {
     name: 'secure-local-check',
-    cmd: [TFLW, 'run', '--no-color', ...CI_VERBOSE, '--env', 'secureLocal', 'tests/.env-specific/secure-local.tflw'].join(' '),
+    cmd: [TFLW, 'run', '--no-color', ...CI_VERBOSE, '--env', 'secureLocal', 'tests/api/identity/secure-local.tflw', 'tests/api/identity/ciphers.tflw'].join(' '),
   },
   // `security-target-check` is the only phase that needs the stack itself brought up differently
   // (`VULN_MODE=1`, the fixture slice — Tier 1's hygiene routes plus, since M130a, Tier 2's
@@ -399,6 +406,12 @@ const PHASES = [
     name: 'second-run-check',
     cmd: 'node scripts/verify-second-run.mjs',
   },
+  // `T-1d` (tflw `D1327`, `D1353`): `--tag ui,!slow` — the exclusion form a CI job writes to keep its
+  // slow tests out, since tflw `M247` withdrew `--skip-tag` — asserted by count against the tree.
+  {
+    name: 'slow-excluded-check',
+    cmd: 'node scripts/verify-tag-exclusion.mjs',
+  },
   // `M154h` (`D758`, `D761`). The perf ladder, measured — and the **only** phase in this file that
   // deliberately does not run in CI.
   //
@@ -500,9 +513,9 @@ const PHASES = [
 // this is the eighth placement to say so.
 const PHASE_GROUPS = {
   core: ['full suite', 'load-smoke', '--tag orderOps', '--tag smoke,catalogOps', 'demo-fail-check', '--tag orgOps', '--tag inventoryOps', 'migrate-check', 'secure-local-check', 'security-acceptance-gate', 'input-acceptance'],
-  tooling: ['--tag api', 'watch-check', 'ui-check', 'cli-refusals-check', 'lsp-check', 'init-check', 'refactor-check', 'pick-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check', 'security-target-check', 'sarif-acceptance', 'construct-acceptance'],
+  tooling: ['--tag api', 'watch-check', 'ui-check', 'cli-refusals-check', 'lsp-check', 'init-check', 'refactor-check', 'pick-check', 'record-check', 'doctor-check', 'ui-admin-check', '--tag smoke,orgOps', '--tag smoke', 'report-overflow-check', 'security-target-check', 'sarif-acceptance', 'construct-acceptance'],
   safety: ['ipv6-check', '--tag identityOps', '--tag mixed', '--tag smoke,orderOps', '--tag adminOps', '--tag catalogOps', 'safety-flags-check', 'check-diagnostics', 'artifact-contract', 'safety-redaction-check', 'screenshot-step-check', 'otel-export-check', 'proxy-check'],
-  'security-ui': ['--tag smoke,identityOps', 'cli-flags-check', '--tag smoke,adminOps', '--tag ui', 'webv2-admin-check', '--tag smoke,inventoryOps', 'logging-check', 'mtls-rejection', 'vuln-slice-hidden-check', 'second-run-check', 'ui-page'],
+  'security-ui': ['--tag smoke,identityOps', 'cli-flags-check', '--tag smoke,adminOps', '--tag ui', 'webv2-admin-check', '--tag smoke,inventoryOps', 'logging-check', 'mtls-rejection', 'vuln-slice-hidden-check', 'second-run-check', 'slow-excluded-check', 'ui-page'],
 };
 
 // The groups are a hand-maintained partition of PHASES, and CI runs *only* the groups (a 4-leg
@@ -649,6 +662,17 @@ if (contradictory.length > 0) {
   }
   process.exit(1);
 }
+
+// tflw `M249` `A`/`C` / `T-3` — every phase kept its own run, and the passing phases merge into one
+// run that is their sum (`scripts/lib/archive-check.mjs`). Here, after the junit check above, because
+// both read the same archive and both are claims about runs this sweep really made.
+const archive = checkArchive(ARCHIVE_DIR, tflwArgv('released', { label: 'regression' }), results.map((r) => ({ ...r, name: slug(r.name) })));
+if (archive.problems.length > 0) {
+  console.log(`\n✗ the archive: ${archive.problems.length} problem(s)`);
+  for (const p of archive.problems) console.log(`    - ${p}`);
+  process.exit(1);
+}
+console.log(`\n✓ every phase kept its run (${archive.kept} kept), and \`tflw merge\` over ${archive.merged} passing phases is their sum`);
 
 const measured = results.length - skippedPhases.length;
 console.log(`\nAll ${measured} phases passed${skippedPhases.length > 0 ? ` (${skippedPhases.length} skipped)` : ''}.`);

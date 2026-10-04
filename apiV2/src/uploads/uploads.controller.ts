@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Get,
   Param,
@@ -8,10 +9,11 @@ import {
   Res,
   StreamableFile,
   UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { AnyFilesInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { UploadsService } from './uploads.service';
@@ -33,6 +35,25 @@ export class UploadsController {
     @UploadedFile() file: Express.Multer.File | undefined,
   ) {
     return this.uploads.create(user.id, file);
+  }
+
+  // tflw `M245` — several files in one request, under any field names, a name allowed to repeat.
+  // `AnyFilesInterceptor` keeps multer's arrival order, so `parts` answers "did the parts go out in
+  // the order the test wrote them", and each part names the field it came under.
+  @Post('batch')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(AnyFilesInterceptor({ limits: { files: 10 } }))
+  async createBatch(
+    @CurrentUser() user: AuthedUser,
+    @UploadedFiles() files: Express.Multer.File[] | undefined,
+    @Body() body: Record<string, unknown>,
+  ) {
+    const parts = await this.uploads.createMany(user.id, files);
+    return {
+      title: typeof body.title === 'string' ? body.title : null,
+      count: parts.length,
+      parts,
+    };
   }
 
   // PLAN_FILEFORMATS.md D3/Q6 — `?as=json` swaps the raw-stream response for a JSON envelope over

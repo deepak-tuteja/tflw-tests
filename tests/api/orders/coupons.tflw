@@ -1,11 +1,14 @@
 # coupons.tflw — M15 kitchen-sink (plan_v2.md Part H): the four independent coupon failure
-# reasons validated atomically at cart checkout, one successful discounted checkout, and the
-# concurrent-oversell proof from decision 2 (stock: 3, 5 concurrent order requests -> exactly 3
-# succeed, 2 get 409). The last one turned out to need the JS escape hatch: `tflw run --workers`
-# parallelizes whole FILES against each other (packages/cli/src/cli.ts's `runWithConcurrency`
-# dispatches one schedulable unit per file), never individual tests/rows within one file, so
-# there's no native way to fire N concurrent requests from a single test — new finding,
-# TFLW-GAPS.md gap #13, proven in tests/helpers/concurrent-orders.ts.
+# reasons validated atomically at cart checkout, one successful discounted checkout, and two races:
+# the concurrent-oversell proof from decision 2 (stock 3, five concurrent orders -> exactly 3 sell)
+# and a one-use coupon three shoppers check out with at once (exactly 1 redeems).
+#
+# The races were JS helpers (`tests/helpers/concurrent-orders.ts`, `concurrent-coupon-redeem.ts`)
+# from M15 until tflw `M247`: TFLW-GAPS.md gap #13 first (no way to fire N requests at once from one
+# test), then `G1`/`G3` (each row's setup spread the racing requests apart, and a value made once
+# before the race could not reach the rows). Now each race is a `with each concurrently` table whose
+# rows set up, meet at `together` and fire at once, over a product and a coupon `before file` makes
+# once and shares read-only; the test after each table judges the race by the state it left.
 #
 # Each cart-touching test registers its own fresh shopper (`unique email`) rather than reusing
 # `USER_A_EMAIL` — a cart is only ever cleared by a *successful* checkout, so a shared identity
@@ -13,8 +16,31 @@
 # and silently pollute the next test's subtotal (found the hard way: the discount test's expected
 # 4.00 came back 6.00 the first time, from two earlier tests' rejected-checkout leftovers).
 
-use "../../helpers/concurrent-orders.ts"
-use "../../helpers/concurrent-coupon-redeem.ts"
+# What the two races run over, made once and read by every row and by the test that judges each race.
+before file
+  api GET /categories
+  expect status equals 200
+  capture body[0].id as raceCategoryId
+
+  api POST /auth/login body { email: env(ADMIN_EMAIL), password: env(ADMIN_PW) }
+  expect status equals 200
+  capture body.accessToken as raceAdminToken
+
+  api POST /products body { name: unique("Oversell Widget"), price: 5, stock: 3, categoryId: {raceCategoryId} }
+    header "Authorization" is "Bearer {raceAdminToken}"
+  expect status equals 201
+  capture body.id as oversellProductId
+
+  let raceCode = unique("RACELIMIT")
+  let raceExpiry = random date between today + 2 days and today + 365 days
+  api POST /coupons body { code: {raceCode}, type: "fixed", value: 1, expiresAt: "{raceExpiry}", minOrderAmount: 0, usageLimit: 1 }
+    header "Authorization" is "Bearer {raceAdminToken}"
+  expect status equals 201
+
+  api POST /products body { name: unique("Coupon Race Widget"), price: 20, stock: 10, categoryId: {raceCategoryId} }
+    header "Authorization" is "Bearer {raceAdminToken}"
+  expect status equals 201
+  capture body.id as raceProductId
 
 before
   api GET /categories
@@ -69,7 +95,8 @@ test "a coupon below its minimum order amount is rejected"
   expect status equals 201
   capture body.accessToken as shopperToken
 
-  let code = unique("MINAMOUNT")
+  # A code shaped the way a shop prints one; `unique like` fills the `#`s from the run's counter.
+  let code = unique like "MIN-######"
   let futureDate = random date between today + 2 days and today + 365 days
   api POST /coupons body { code: {code}, type: "fixed", value: 5, expiresAt: "{futureDate}", minOrderAmount: 100, usageLimit: 10 }
     header "Authorization" is "Bearer {adminToken}"
@@ -175,17 +202,28 @@ test "a valid coupon discounts a successful checkout"
   expect body.couponCode equals "{code}"
   expect body.discountAmount equals "4.00"
 
+# Five rows order one unit each of a product with three in stock. Each row signs in first (the
+# `before` hook), which is setup, so the orders wait at `together` and leave at once.
 @coupons @concurrency @regression @orderOps @api
-test "5 concurrent order requests against stock 3 produce exactly 3 successes and 2 conflicts"
-  api POST /products body { name: unique("Oversell Widget"), price: 5, stock: 3, categoryId: {categoryId} }
+with each concurrently
+  | attempt |
+  | 1       |
+  | 2       |
+  | 3       |
+  | 4       |
+  | 5       |
+test "oversell race: order {attempt} of 5 against stock 3 is sold or refused, never a 500"
+  together
+  api POST /orders body { items: [{ productId: {oversellProductId}, quantity: 1 }] }
     header "Authorization" is "Bearer {adminToken}"
-  expect status equals 201
-  capture body.id as productId
+  expect status is less than 500
 
-  # The call itself is the assertion (see file header + helper for why this needs the escape
-  # hatch) — throws, failing the test, if the observed split isn't exactly 3 succeeded / 2
-  # conflicted.
-  let proof = assert concurrent oversell(adminToken, productId, 5, 3)
+# Stock 0 is exactly three sales: an unguarded decrement ends below zero, and a lost update above it.
+@coupons @concurrency @regression @orderOps @api
+test "the oversell race sold exactly the 3 in stock"
+  api GET /products/{oversellProductId}
+  expect status equals 200
+  expect body.stock equals 0
 
 @coupons @crud @orderOps @api
 test "creating a coupon with malformed or missing fields is a clean 422"
@@ -255,47 +293,37 @@ test "creating a coupon with an already-used code is a clean 409, not a silent o
   expect status equals 409
   expect body.detail contains "already exists"
 
+# Three shoppers, each with one unit of the race product in their own cart, check out at once with
+# a one-use coupon. Registering and filling the cart is each row's setup; the checkouts wait at
+# `together`.
 @coupons @concurrency @regression @orderOps @api
-test "3 concurrent checkouts against a usageLimit:1 coupon produce exactly 1 success and 2 conflicts"
-  let code = unique("RACELIMIT")
-  let futureDate = random date between today + 2 days and today + 365 days
-  api POST /coupons body { code: {code}, type: "fixed", value: 1, expiresAt: "{futureDate}", minOrderAmount: 0, usageLimit: 1 }
+with each concurrently
+  | shopper |
+  | "A"     |
+  | "B"     |
+  | "C"     |
+test "coupon race: shopper {shopper} checks out with the one-use coupon"
+  let email = unique email
+  let pw = random password
+  api POST /auth/register body { name: "Coupon Race {shopper}", email: {email}, password: {pw} }
+  expect status equals 201
+  capture body.accessToken as shopperToken
+  api POST /cart/items body { productId: {raceProductId}, quantity: 1 }
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status equals 201
+  together
+  api POST /cart/checkout body { couponCode: {raceCode} }
+    header "Authorization" is "Bearer {shopperToken}"
+  expect status is less than 500
+
+# A refused checkout rolls its whole order back, so the product's stock counts the checkouts that
+# went through: one. `usedCount` alone would miss a lost update, which leaves it at 1 after three.
+@coupons @concurrency @regression @orderOps @api
+test "the coupon race redeemed the coupon exactly once"
+  api GET /products/{raceProductId}
+  expect status equals 200
+  expect body.stock equals 9
+  api GET /coupons
     header "Authorization" is "Bearer {adminToken}"
-  expect status equals 201
-
-  api POST /products body { name: unique("Coupon Race Widget"), price: 20, stock: 10, categoryId: {categoryId} }
-    header "Authorization" is "Bearer {adminToken}"
-  expect status equals 201
-  capture body.id as raceProductId
-
-  let shopperAEmail = unique email
-  let shopperAPw = random password
-  api POST /auth/register body { name: "Coupon Race A", email: {shopperAEmail}, password: {shopperAPw} }
-  expect status equals 201
-  capture body.accessToken as shopperAToken
-  api POST /cart/items body { productId: {raceProductId}, quantity: 1 }
-    header "Authorization" is "Bearer {shopperAToken}"
-  expect status equals 201
-
-  let shopperBEmail = unique email
-  let shopperBPw = random password
-  api POST /auth/register body { name: "Coupon Race B", email: {shopperBEmail}, password: {shopperBPw} }
-  expect status equals 201
-  capture body.accessToken as shopperBToken
-  api POST /cart/items body { productId: {raceProductId}, quantity: 1 }
-    header "Authorization" is "Bearer {shopperBToken}"
-  expect status equals 201
-
-  let shopperCEmail = unique email
-  let shopperCPw = random password
-  api POST /auth/register body { name: "Coupon Race C", email: {shopperCEmail}, password: {shopperCPw} }
-  expect status equals 201
-  capture body.accessToken as shopperCToken
-  api POST /cart/items body { productId: {raceProductId}, quantity: 1 }
-    header "Authorization" is "Bearer {shopperCToken}"
-  expect status equals 201
-
-  # The call itself is the assertion — throws unless exactly 1 of the 3 concurrent checkouts
-  # actually redeemed the usageLimit:1 coupon (proving OrdersService.applyCoupon's atomic
-  # conditional-update pattern, the same mechanism M15 already proved for stock).
-  let proof = assert concurrent coupon redeem(shopperAToken, shopperBToken, shopperCToken, code)
+  expect status equals 200
+  expect any body matches subset { code: "{raceCode}", usedCount: 1 }

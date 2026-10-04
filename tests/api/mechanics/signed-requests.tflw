@@ -1,0 +1,71 @@
+# signed-requests.tflw — tflw M246 (D1344–D1349): a request whose credential is a signature over
+# the request itself. Two receivers in `apiV2/src/signed/`: a Stripe-shaped webhook (HMAC over
+# "<t>.<raw body>", five-minute tolerance, 400 on any refusal) and an IAM-shaped route (AWS SigV4,
+# 403 on any refusal). Each negative is the override that produces it, and each asserts the
+# receiver's own reason, so a test passing for the wrong refusal is a failure here.
+
+@api @signing
+test "a signed webhook is accepted, and the receiver reads the payload it verified"
+  api POST /webhooks/stripe body { id: "evt_1", type: "invoice.paid" }
+    sign with stripe
+  expect status equals 200
+  expect body.received equals true
+  expect body.id equals "evt_1"
+
+@api @signing
+test "the webhook refuses an unsigned request"
+  api POST /webhooks/stripe body { id: "evt_1" }
+  expect status equals 400
+  expect body.detail contains "missing Stripe-Signature"
+
+@api @signing
+test "the webhook refuses a signature made with the wrong key"
+  api POST /webhooks/stripe body { id: "evt_1" }
+    sign with stripe secret "not-the-secret"
+  expect status equals 400
+  expect body.detail contains "does not match"
+
+@api @signing
+test "the webhook refuses a replayed timestamp"
+  api POST /webhooks/stripe body { id: "evt_1" }
+    sign with stripe at now - 10 minutes
+  expect status equals 400
+  expect body.detail contains "tolerance"
+
+@api @signing
+test "the webhook refuses a body changed after signing"
+  api POST /webhooks/stripe body { amount: 100 }
+    sign with stripe then body { amount: 1 }
+  expect status equals 400
+  expect body.detail contains "does not match"
+
+@api @signing
+test "a SigV4-signed read with a query string is accepted"
+  api GET /signed/orders?status=paid&limit=5
+    sign with aws
+  expect status equals 200
+  expect body.signed equals true
+
+@api @signing
+test "a SigV4-signed write covers its body"
+  api POST /signed/orders body { sku: "W3", qty: 2 }
+    sign with aws
+  expect status equals 201
+  expect body.created.sku equals "W3"
+
+@api @signing
+test "an IAM-style route refuses a SigV4 signature made with the wrong secret"
+  api GET /signed/orders
+    sign with aws secret "not-the-secret"
+  expect status equals 403
+  expect body.detail contains "does not match"
+
+@api @signing
+test "a session signed with aws signs every request, and one step's own line overrides it" as iam
+  api GET /signed/orders
+  expect status equals 200
+  api POST /signed/orders body { sku: "W3" }
+  expect status equals 201
+  api GET /signed/orders
+    sign with aws secret "not-the-secret"
+  expect status equals 403
