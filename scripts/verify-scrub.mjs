@@ -52,9 +52,10 @@ const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
  * true, silently, and only ever in the failing-open direction.
  */
 export const EXEMPT = [
-  // `apiV2/package-lock.json` had an entry here until tflw `M268`: its one specimen was the address in
-  // `glob` 10's own deprecation message, and removing apiV2's jest toolchain removed `glob` 10.
-  { file: 'inventory-service/package-lock.json', rules: ['email'], why: "npm's published registry metadata for a transitive dependency — recorded by the registry, not written here" },
+  // `apiV2/package-lock.json` had an entry here until tflw `M268`, and `inventory-service/package-lock.json`
+  // until `M268b`: each one's only specimen was the address in `glob` 10's own deprecation message,
+  // and removing each service's unused jest toolchain removed `glob` 10. The list is empty, and stays
+  // a list so the next exemption has a place to go with its reason.
 ];
 
 const BINARY = /\.(png|jpe?g|gif|ico|webp|bmp|woff2?|ttf|eot|otf|pdf|zip|gz|tgz|wasm|mp4|webm|mp3|wav|ogg)$/i;

@@ -650,12 +650,15 @@ jobs:
           name: regression-report-merged
           path: testFlow-tests/report-merged/
 
-  # Two lockfiles, two audits (the repository's scripts and the application under test), on every
-  # push: a runner that installs this tree should not install a known advisory without CI saying
-  # so. At MODERATE since tflw `M268` (`D1451`): apiV2 is an application the corpus runs whole, and
-  # a high-only gate is how a moderate `js-yaml` sat in its tree with every check green.
+  # One audit per committed lockfile (the repository's scripts and the four applications the stack
+  # builds), on every push: a runner that installs this tree should not install a known advisory
+  # without CI saying so. At MODERATE since tflw `M268` (`D1451`): each application runs whole, and
+  # a high-only gate is how a moderate `js-yaml` sat in apiV2's tree with every check green. Five
+  # lockfiles since `M268b` (`D1454`): the other three were never named here, and switching
+  # Dependabot's alerts on found 30 advisories in them. `verify:lockfiles` fails when a committed
+  # lockfile has no step below, no Dependabot entry or no place in the deprecation scan.
   supply-chain:
-    name: audit (root + apiV2)
+    name: audit (every lockfile)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -668,3 +671,13 @@ jobs:
         run: npm audit --audit-level=moderate
       - name: No moderate-or-worse advisory in apiV2's tree
         run: npm --prefix apiV2 audit --audit-level=moderate
+      - name: No moderate-or-worse advisory in inventory-service's tree
+        run: npm --prefix inventory-service audit --audit-level=moderate
+      - name: No moderate-or-worse advisory in webV2's tree
+        run: npm --prefix webV2 audit --audit-level=moderate
+      - name: No moderate-or-worse advisory in webV2/admin's tree
+        run: npm --prefix webV2/admin audit --audit-level=moderate
+      - name: Every committed lockfile is audited, scanned and watched
+        run: npm run verify:lockfiles
+      - name: The lockfile coverage gate's controls
+        run: npm run verify:lockfiles:self-test

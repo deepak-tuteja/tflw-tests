@@ -79,6 +79,11 @@ npm run verify:grader-reachability
 npm run verify:grader-reachability:self-test
 npm audit --audit-level=moderate
 npm --prefix apiV2 audit --audit-level=moderate
+npm --prefix inventory-service audit --audit-level=moderate
+npm --prefix webV2 audit --audit-level=moderate
+npm --prefix webV2/admin audit --audit-level=moderate
+npm run verify:lockfiles
+npm run verify:lockfiles:self-test
 npm run verify:sibling-pin-landed:self-test
 npm run verify:build-provenance:self-test
 npm run verify:bundle-identity:self-test
@@ -184,8 +189,9 @@ xvfb-run -a npm run regression -- --group security-ui
   it covers as data (`D875`), and this gate imports them through the same `siblingRoot()` used for
   tflw's mutation registry — a second copy would be two implementations of one grammar with nothing
   holding them together (`D882`). So it needs the sibling checkout and **does not skip without it**,
-  exactly like the two gates around it. Two exemptions, both lockfiles holding npm's own published
-  maintainer metadata, and each is checked for still exempting something (`D883`). The build host's
+  exactly like the two gates around it. It has no exemptions today: the two it had were lockfiles
+  holding npm's own published maintainer metadata, and each went when its specimen did (`M268`,
+  `M268b`), because an exemption is checked for still exempting something (`D883`). The build host's
   name is outside its corpus by decision (`D876`): it is named 45 times here on purpose and none of
   them is a finding. It arrived with 37 real hits, 25 being the build account's absolute home path
   in five committed perf artifacts, published since `M160d`.
@@ -531,7 +537,8 @@ found by running this page's own list for the first time, three days after the p
 been **deleted rather than filled in**, and this paragraph is the deliverable of that change —
 without it, the next person reads the diff as coverage quietly dropped and puts it back. `M268` took
 the runner itself out (jest, ts-jest, supertest, `@nestjs/testing`): nothing used it, and its
-coverage chain pinned a deprecated `glob` that no upstream release has moved off.
+coverage chain pinned a deprecated `glob` that no upstream release has moved off. `M268b` did the
+same to `inventory-service`, which had the runner and no test file either.
 
 **apiV2 is a dogfood target, not a product.** It exists to give tflw something realistic to point at,
 and it is expected to keep being rewritten as tflw grows: new auth shapes, new error surfaces, new

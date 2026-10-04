@@ -88,11 +88,11 @@ async function seed() {
       [north, def.north],
       [south, def.south],
     ] as const) {
-      let level = await stockLevelRepo.findOne({
+      const level = await stockLevelRepo.findOne({
         where: { productId, warehouseId: warehouse.id },
       });
       if (!level) {
-        level = await stockLevelRepo.save(
+        await stockLevelRepo.save(
           stockLevelRepo.create({
             productId,
             warehouseId: warehouse.id,
