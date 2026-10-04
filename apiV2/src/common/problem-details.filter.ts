@@ -52,19 +52,35 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       );
     }
 
-    res
-      .status(status)
-      .type('application/problem+json')
-      .json({
-        type: 'about:blank',
-        title: STATUS_TITLES[status] ?? 'Error',
-        status,
-        detail,
-        ...(exception instanceof ValidationProblemException
-          ? { errors: exception.errors }
-          : {}),
-      });
+    writeProblem(
+      res,
+      status,
+      detail,
+      exception instanceof ValidationProblemException
+        ? exception.errors
+        : undefined,
+    );
   }
+}
+
+/** The one place the problem+json body is written — the filter above, and the not-found fallback
+ * `main.ts` installs for paths outside the `/v1` prefix, which never reach a Nest filter. */
+export function writeProblem(
+  res: Response,
+  status: number,
+  detail: string,
+  errors?: unknown,
+): void {
+  res
+    .status(status)
+    .type('application/problem+json')
+    .json({
+      type: 'about:blank',
+      title: STATUS_TITLES[status] ?? 'Error',
+      status,
+      detail,
+      ...(errors !== undefined ? { errors } : {}),
+    });
 }
 
 function extractDetail(exception: HttpException): string {
