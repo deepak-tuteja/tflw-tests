@@ -365,9 +365,12 @@ const CLASSIFIED = [
     class: 'ci-only',
     why: 'its input is the four legs\' downloaded archives, which only this job ever holds; a contributor\'s single sweep is already merged by the leg itself (`scripts/lib/archive-check.mjs`, graded inside `npm run regression`), so the local form of this claim is the sweep, not this command',
   },
-  // --- job `supply-chain` (tflw `M239` `E`, `D1320`) — two lockfiles, two audits ---------------
-  { wf: 'ci.yml', job: 'supply-chain', cmd: 'npm audit --audit-level=high', name: 'No high or critical advisory in the repository\'s tree', class: 'gate', local: 'npm audit --audit-level=high', why: 'the scripts\' own dependency tree, read from the lockfile against the registry; no install needed' },
-  { wf: 'ci.yml', job: 'supply-chain', cmd: 'npm --prefix apiV2 audit --audit-level=high', name: 'No high or critical advisory in apiV2\'s tree', class: 'gate', local: 'npm --prefix apiV2 audit --audit-level=high', why: 'the application under test has its own lockfile; a dependency of the fixture is part of what the corpus measures, so an advisory in it is reviewed as a change to the fixture' },
+  // --- job `supply-chain` (tflw `M239` `E`, `D1320`; at moderate since tflw `M268`, `D1451`) ----
+  { wf: 'ci.yml', job: 'supply-chain', cmd: 'npm audit --audit-level=moderate', name: 'No moderate-or-worse advisory in the repository\'s tree', class: 'gate', local: 'npm audit --audit-level=moderate', why: 'the scripts\' own dependency tree, read from the lockfile against the registry; no install needed' },
+  { wf: 'ci.yml', job: 'supply-chain', cmd: 'npm --prefix apiV2 audit --audit-level=moderate', name: 'No moderate-or-worse advisory in apiV2\'s tree', class: 'gate', local: 'npm --prefix apiV2 audit --audit-level=moderate', why: 'the application under test has its own lockfile; a dependency of the fixture is part of what the corpus measures, so an advisory in it is reviewed as a change to the fixture. Moderate, not high (`D1451`): a high-only gate passed apiV2\'s moderate `js-yaml` for as long as it was there' },
+  // --- deps-weekly.yml, job `deprecations` (tflw `M268` `D`, `D1448`) ---------------------------
+  { wf: 'deps-weekly.yml', job: 'deprecations', cmd: 'npm run verify:deprecations', name: 'No deprecated package in either lockfile', class: 'ci-only', why: 'scheduled for Mondays and run by hand, never on a pull request (`D1448`): a deprecation published upstream is not something a contributor\'s change caused, so it is not a pre-push obligation. The command runs locally as written, and the job is where its red is meant to land' },
+  { wf: 'deps-weekly.yml', job: 'deprecations', cmd: 'npm run verify:deprecations:self-test', name: 'The deprecation scan\'s controls', class: 'ci-only', why: 'the controls for the scan above, on the same schedule (`D922`): a deprecated version, an allowlist entry with no reason or a stale one, a 404, a lookup that throws twice and a locked version the registry lacks each fail; a 503 is retried once; one live lookup against the real registry' },
   {
     wf: 'ci.yml',
     job: 'regression',
