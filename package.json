@@ -48,6 +48,8 @@
     "verify:contributing": "node scripts/verify-contributing.mjs",
     "verify:deprecations": "node scripts/verify-deprecations.mjs",
     "verify:deprecations:self-test": "node scripts/verify-deprecations.mjs --self-test",
+    "verify:lockfiles": "node scripts/verify-lockfiles.mjs",
+    "verify:lockfiles:self-test": "node scripts/verify-lockfiles.mjs --self-test",
     "verify:scrub": "node scripts/verify-scrub.mjs",
     "verify:sweep-size": "node scripts/verify-sweep-size.mjs",
     "verify:argv-contract": "node scripts/verify-argv-contract.mjs",

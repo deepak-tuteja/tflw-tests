@@ -86,7 +86,16 @@
     "M169d1",
     "M169d2",
     "M169d3",
-    "M169d4"
+    "M169d4",
+    "M212",
+    "M239",
+    "M240",
+    "M242",
+    "M247",
+    "M248",
+    "M249",
+    "M250",
+    "M253"
   ],
   "unresolvable": {
     "D999": "`verify-notation-parity.mjs` — the fabricated identifier `M183c`'s reading-layer control injects into tflw's reading to prove the comparison fires in the *other* direction: something tflw takes that nothing here cites even loosely. It has to be an id nobody anchors, and writing it down is what makes this repository cite it — the self-reference family `M164-12` names, where a gate that reads a corpus is in that corpus. tflw declares the same identifier for the same purpose in `gen-decisions.test.mjs`, which is two independent readings agreeing (`D711`). Not hidden behind a runtime concatenation: a declaration a reader can check beats a citation the grammar cannot see (`D860`)",

@@ -2,7 +2,8 @@ name: Dependencies, weekly
 
 # tflw `M268` `D` (`D1448`). Neither `npm audit` nor Dependabot reads the registry's `deprecated`
 # field, so a package its author has withdrawn sits in a lockfile with every other gate green. This
-# asks the registry about every locked name@version in both lockfiles (the scripts' and apiV2's), on
+# asks the registry about every locked name@version in every committed lockfile (five since `M268b`,
+# `D1454`; `verify-lockfiles.mjs` holds the list and fails CI when a lockfile is missing from it), on
 # a Monday and by hand — never per pull request, because a deprecation published upstream must not
 # turn an unrelated change red. Exceptions live in `scripts/deprecations-allowlist.json`, each with
 # its reason.
@@ -16,7 +17,7 @@ permissions:
 
 jobs:
   deprecations:
-    name: no deprecated package in either lockfile
+    name: no deprecated package in any lockfile
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -24,8 +25,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-      # Node's own `fetch` and the two lockfiles; nothing to install.
-      - name: No deprecated package in either lockfile
+      # Node's own `fetch` and the lockfiles; nothing to install.
+      - name: No deprecated package in any lockfile
         run: npm run verify:deprecations
       - name: The deprecation scan's controls
         run: npm run verify:deprecations:self-test

@@ -2,7 +2,11 @@ import { NestFactory } from "@nestjs/core";
 import { ValidationPipe } from "@nestjs/common";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { AppModule } from "./app.module";
-import { ProblemDetailsFilter } from "./common/problem-details.filter";
+import {
+  ProblemDetailsFilter,
+  writeProblem,
+} from "./common/problem-details.filter";
+import type { Request, Response } from "express";
 import { toValidationProblem } from "./common/validation-problem.exception";
 
 async function bootstrap() {
@@ -30,6 +34,15 @@ async function bootstrap() {
   SwaggerModule.setup("docs", app, document, {
     jsonDocumentUrl: "openapi.json",
   });
+
+  // NestJS 12's Express adapter registers its not-found handler under the global prefix only, so a
+  // path outside `/v1` fell through to Express's own HTML "Cannot GET" page. Every error here is
+  // problem+json — the contract apiV2 and the corpus read — so the routes are mounted first (`init`)
+  // and this answers whatever none of them matched, with the same body Nest 11 gave.
+  await app.init();
+  app.use((req: Request, res: Response) =>
+    writeProblem(res, 404, `Cannot ${req.method} ${req.path}`),
+  );
 
   const port = process.env.PORT ?? 4002;
   await app.listen(port);

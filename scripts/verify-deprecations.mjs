@@ -1,11 +1,13 @@
 #!/usr/bin/env node
-// tflw `M268` `D` (`D1448`) — no deprecated package in either lockfile.
+// tflw `M268` `D` (`D1448`) — no deprecated package in any lockfile this repository commits.
 //
 // Neither `npm audit` nor Dependabot reads the registry's `deprecated` field, so a package its own
 // author has withdrawn sits in a tree with every gate green. Measured 2026-10-04: two in `apiV2`
 // (`eslint` 9, out of support; `glob` 10 under jest's coverage chain), found only by asking the
 // registry about every locked `name@version`. This is that question, committed — the same script
-// as tflw's `scripts/verify-deprecations.mjs`, run here over this repository's two lockfiles.
+// as tflw's `scripts/verify-deprecations.mjs`, run here over this repository's lockfiles — all five
+// since `M268b` (`D1454`), read from `verify-lockfiles.mjs`, which fails when a committed lockfile is
+// missing from that list.
 //
 // It runs weekly and by hand (`.github/workflows/deps-weekly.yml`), never per pull request: a
 // deprecation published upstream must not turn an unrelated pull request red.
@@ -17,12 +19,13 @@
 // `file:` dependency the registry cannot answer for; it is named and not looked up.
 //
 // Usage:  node scripts/verify-deprecations.mjs [lockfile …]   (relative to the repository root;
-//                                                            default: both lockfiles)
+//                                                            default: every lockfile in LOCKFILES)
 //         node scripts/verify-deprecations.mjs --self-test
 
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { LOCKFILES } from './verify-lockfiles.mjs';
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const ALLOWLIST = join(ROOT, 'scripts', 'deprecations-allowlist.json');
@@ -198,7 +201,7 @@ async function selfTest() {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (process.argv.includes('--self-test')) process.exit(await selfTest());
   const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
-  const lockfiles = args.length ? args : ['package-lock.json', 'apiV2/package-lock.json'];
+  const lockfiles = args.length ? args : LOCKFILES;
   const allowlist = JSON.parse(readFileSync(ALLOWLIST, 'utf8'));
   process.exit(await run({ lockfiles, allowlist }));
 }
