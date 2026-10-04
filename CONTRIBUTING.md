@@ -77,8 +77,8 @@ npm run verify:provenance
 npm run verify:provenance:self-test
 npm run verify:grader-reachability
 npm run verify:grader-reachability:self-test
-npm audit --audit-level=high
-npm --prefix apiV2 audit --audit-level=high
+npm audit --audit-level=moderate
+npm --prefix apiV2 audit --audit-level=moderate
 npm run verify:sibling-pin-landed:self-test
 npm run verify:build-provenance:self-test
 npm run verify:bundle-identity:self-test
@@ -529,7 +529,9 @@ xvfb-run -a npm run regression -- --group security-ui
 `jest --passWithNoTests` over a tree with no test files: a gate green unconditionally (`M138b-01`,
 found by running this page's own list for the first time, three days after the page existed). It has
 been **deleted rather than filled in**, and this paragraph is the deliverable of that change —
-without it, the next person reads the diff as coverage quietly dropped and puts it back.
+without it, the next person reads the diff as coverage quietly dropped and puts it back. `M268` took
+the runner itself out (jest, ts-jest, supertest, `@nestjs/testing`): nothing used it, and its
+coverage chain pinned a deprecated `glob` that no upstream release has moved off.
 
 **apiV2 is a dogfood target, not a product.** It exists to give tflw something realistic to point at,
 and it is expected to keep being rewritten as tflw grows: new auth shapes, new error surfaces, new

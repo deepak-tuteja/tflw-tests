@@ -35,7 +35,10 @@ A vulnerability in **tflw itself** — the CLI, the page, the runtime — belong
 
 ## Dependencies
 
-CI runs `npm audit --audit-level=high` for the repository and for `apiV2`, and Dependabot opens a
-weekly grouped pull request for npm and for GitHub Actions, merged by hand against the regression
+CI runs `npm audit --audit-level=moderate` for the repository and for `apiV2`, and Dependabot opens
+a weekly grouped pull request for npm and for GitHub Actions, merged by hand against the regression
 sweep: the application's dependencies are part of what the corpus measures, so a bump is reviewed
-as a change to the fixture and not only as a change to a version.
+as a change to the fixture and not only as a change to a version. Once a week a scheduled job also
+asks the registry whether any locked package in either tree has been deprecated by its author,
+which neither the audit nor Dependabot reports. An advisory or a deprecation is fixed by moving to
+a version without it, not by an `overrides` entry.

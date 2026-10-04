@@ -651,8 +651,9 @@ jobs:
           path: testFlow-tests/report-merged/
 
   # Two lockfiles, two audits (the repository's scripts and the application under test), on every
-  # push — the same rule as tflw's own workflow, for the same reason: a runner that installs this
-  # tree should not install a known high-or-critical advisory without CI saying so.
+  # push: a runner that installs this tree should not install a known advisory without CI saying
+  # so. At MODERATE since tflw `M268` (`D1451`): apiV2 is an application the corpus runs whole, and
+  # a high-only gate is how a moderate `js-yaml` sat in its tree with every check green.
   supply-chain:
     name: audit (root + apiV2)
     runs-on: ubuntu-latest
@@ -663,7 +664,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - name: No high or critical advisory in the repository's tree
-        run: npm audit --audit-level=high
-      - name: No high or critical advisory in apiV2's tree
-        run: npm --prefix apiV2 audit --audit-level=high
+      - name: No moderate-or-worse advisory in the repository's tree
+        run: npm audit --audit-level=moderate
+      - name: No moderate-or-worse advisory in apiV2's tree
+        run: npm --prefix apiV2 audit --audit-level=moderate
