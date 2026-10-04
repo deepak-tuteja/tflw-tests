@@ -41,8 +41,8 @@ const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 /**
  * Files this sweep does not read, per rule, with the reason kept here (`D883`).
  *
- * This repository's list, not the sibling's, because the corpus is this repository's. Both entries
- * are npm's own registry metadata: a lockfile records the maintainer address the registry publishes
+ * This repository's list, not the sibling's, because the corpus is this repository's. Each entry
+ * is npm's own registry metadata: a lockfile records the maintainer address the registry publishes
  * for each package, which is not this repository's text to edit and not this repository's leak. The
  * alternative — an allow-list entry for that address in the shared rule — would blind the email rule
  * in **both** repositories to a real address, to excuse a file in one of them.
@@ -52,8 +52,9 @@ const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
  * true, silently, and only ever in the failing-open direction.
  */
 export const EXEMPT = [
-  { file: 'apiV2/package-lock.json', rules: ['email'], why: "npm's published maintainer metadata for a transitive dependency — recorded by the registry, not written here" },
-  { file: 'inventory-service/package-lock.json', rules: ['email'], why: "the same, in this service's own lockfile" },
+  // `apiV2/package-lock.json` had an entry here until tflw `M268`: its one specimen was the address in
+  // `glob` 10's own deprecation message, and removing apiV2's jest toolchain removed `glob` 10.
+  { file: 'inventory-service/package-lock.json', rules: ['email'], why: "npm's published registry metadata for a transitive dependency — recorded by the registry, not written here" },
 ];
 
 const BINARY = /\.(png|jpe?g|gif|ico|webp|bmp|woff2?|ttf|eot|otf|pdf|zip|gz|tgz|wasm|mp4|webm|mp3|wav|ogg)$/i;
